@@ -341,15 +341,71 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * 上次的旧配置（表现：测试设了 mock 模型，实际跑的却是之前配的 mimo/ollama，
  * mock 服务器一个请求都收不到）。
  */
+/**
+ * **打包态 Windows：数据目录跟随安装目录**（`<安装目录>\WArmyData`）。
+ * 安装器允许用户选择安装目录，所以数据不再固定在 `%APPDATA%`。
+ * 命令行显式给的 `--user-data-dir` 仍然优先（验收脚本/多实例隔离必须这样）。
+ * 开发态保持 `%APPDATA%\@warmy\app-shell`，避免把源码目录当成数据目录。
+ */
+const QIAN_YI_TIAO_GUO = new Set([
+  'Cache', 'Code Cache', 'GPUCache', 'DawnGraphiteCache', 'DawnWebGPUCache',
+  'GrShaderCache', 'ShaderCache', 'GraphiteDawnCache', 'blob_storage',
+  'Session Storage', 'Local Storage', 'Network', 'Service Worker', 'Crashpad',
+  'component_crx_cache', 'optimization_guide_model_store', 'Local State', 'Preferences',
+  'DIPS', 'DIPS-wal', 'Shared Dictionary', 'SharedStorage', 'TransportSecurity',
+  'Trust Tokens', 'Trust Tokens-journal', 'OriginTrials', 'Extension State',
+  'Extensions', 'Local Extension Settings', 'Sync Extension Settings',
+  'declarative_performance_observer.db', 'declarative_performance_observer.db-journal',
+  'Network Persistent State', 'DevToolsActivePort', 'SingletonLock', 'SingletonCookie',
+  'SingletonSocket', 'lockfile', 'LOG', 'LOG.old',
+]);
+/** 首次从旧 %APPDATA% 搬到安装目录时复制一次；不搬 Chromium 缓存与锁文件。 */
+function qianYiJiuShuJu(oldDir: string, newDir: string): void {
+  try {
+    if (!fs.existsSync(oldDir)) return;
+    if (fs.existsSync(newDir) && fs.readdirSync(newDir).length > 0) return;
+    const tmp = newDir + '.migrate-' + process.pid;
+    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.cpSync(oldDir, tmp, {
+      recursive: true,
+      dereference: false,
+      filter: (src) => !QIAN_YI_TIAO_GUO.has(path.basename(src)),
+    });
+    fs.rmSync(newDir, { recursive: true, force: true });
+    fs.renameSync(tmp, newDir);
+    fs.writeFileSync(path.join(newDir, '.migrated-from-appdata'), oldDir + '\n' + new Date().toISOString() + '\n');
+    console.log('[data] migrated user data into the install directory');
+  } catch (e) {
+    console.error('[data] migration failed:', e);
+  }
+}
 try {
   app.setName('无限牛马');
   const xian = process.argv.find((a) => String(a || '').startsWith('--user-data-dir='));
   const ziDing = xian ? String(xian).split('=').slice(1).join('=') : '';
+  const guDing = path.join(app.getPath('appData'), '@warmy', 'app-shell');
   if (ziDing && fs.existsSync(ziDing)) {
     // 显式指定过 ⇒ 用它（测试/多实例隔离必须这样）
     app.setPath('userData', ziDing);
+  } else if (app.isPackaged && process.platform === 'win32') {
+    const anZhuang = path.dirname(process.execPath);
+    let shuJu = path.join(anZhuang, 'WArmyData');
+    try {
+      fs.mkdirSync(shuJu, { recursive: true });
+      const zhen = path.join(shuJu, '.write-probe-' + process.pid);
+      fs.writeFileSync(zhen, 'ok');
+      fs.rmSync(zhen, { force: true });
+    } catch (e) {
+      // 安装到 Program Files 等只读目录时退回旧目录，并在启动日志里说明
+      console.error('[data] install directory is not writable, using appData:', e);
+      shuJu = guDing;
+      fs.mkdirSync(shuJu, { recursive: true });
+    }
+    if (shuJu !== guDing) qianYiJiuShuJu(guDing, shuJu);
+    app.setPath('userData', shuJu);
+    try { app.setPath('sessionData', shuJu); } catch { /* 旧 Electron 没有这个路径 */ }
   } else {
-    const guDing = path.join(app.getPath('appData'), '@warmy', 'app-shell');
+    fs.mkdirSync(guDing, { recursive: true });
     app.setPath('userData', guDing);
   }
 } catch { /* 拿不到就用默认 userData（如单测） */ }

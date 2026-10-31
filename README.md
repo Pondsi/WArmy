@@ -4,11 +4,11 @@
 
 ### Your AI work has a team now.
 
-WArmy is a local-first desktop command center for AI workhorses. Give each agent a role and a model. A duty agent assigns the work, a shared board keeps it moving, and a local memory service remembers what happened. Run it with Ollama on your machine or your own cloud provider, and keep the workspace on your disk by default.
+WArmy is a local-first desktop command center for AI workhorses. Give each agent a role and a model. A duty agent assigns the work, a shared board keeps it moving, and a local memory service remembers what happened. Point it at any local or self-hosted model endpoint that speaks a supported protocol, or at your own cloud provider, and keep the workspace on your disk by default.
 
-[Download for Windows](https://github.com/Pondsi/WArmy/releases/tag/v0.2.30) · [Chinese manual](./说明.md) · [How it works](#how-it-works)
+[Download for Windows](https://github.com/Pondsi/WArmy/releases/tag/v0.2.31) · [Chinese manual](./说明.md) · [How it works](#how-it-works)
 
-[![Release](https://img.shields.io/github/v/release/Pondsi/WArmy?label=v0.2.30)](https://github.com/Pondsi/WArmy/releases/tag/v0.2.30)
+[![Release](https://img.shields.io/github/v/release/Pondsi/WArmy?label=v0.2.31)](https://github.com/Pondsi/WArmy/releases/tag/v0.2.31)
 [![License](https://img.shields.io/badge/license-MIT%20%2B%20attribution-blue)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-informational)](https://github.com/Pondsi/WArmy/releases)
 [![Electron](https://img.shields.io/badge/Electron-45.1-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
@@ -45,7 +45,7 @@ WArmy keeps the team in one workspace. The plan, the task board, the files, and 
 
 **Run recurring operations.** Schedule tasks and exports. Watch long-running processes. Keep an audit trail of tool calls and permission decisions.
 
-**Keep sensitive work local.** Point WArmy at Ollama on `127.0.0.1` and the model runs on your machine. Cloud providers are optional.
+**Keep sensitive work local.** Point WArmy at a local model server on your machine and the model runs there. Use any server that speaks a supported protocol; enter its base URL, and add a key only if the server requires one. Cloud providers are optional.
 
 **Coordinate more than one machine.** Turn on the optional network layer to join projects across devices, or connect the IM adapters (WeChat, WeCom, DingTalk, Telegram, Feishu) to bring messages into a project. Every network feature is off until you configure it.
 
@@ -87,24 +87,25 @@ WArmy works without a server account. The identity key, mnemonic, model API keys
 
 ### Models and optional networking
 
-Bring an Ollama model, an OpenAI-compatible endpoint, or Anthropic. WArmy handles tool calls, streaming, usage accounting, and fallback. The network layer is optional: LAN discovery, NAT-PMP and STUN for direct connections, opt-in DHT discovery, X25519 key agreement with Ed25519 signatures, a delivery outbox with business ACKs, signed invitations, and join approval. A small team on the same LAN can share a project without standing up a server.
+Bring a local or self-hosted model that speaks a supported protocol, an OpenAI-compatible endpoint, or Anthropic. Enter the base URL and model name; the API key field stays empty when the server does not require one. WArmy handles tool calls, streaming, usage accounting, and fallback. The network layer is optional: LAN discovery, NAT-PMP and STUN for direct connections, opt-in DHT discovery, X25519 key agreement with Ed25519 signatures, a delivery outbox with business ACKs, signed invitations, and join approval. A small team on the same LAN can share a project without standing up a server.
 
 <details>
 <summary id="small-details">Small details and technical notes</summary>
 
 - Desktop shell: Electron 45.1.0, TypeScript, pnpm workspace.
+- Model protocols: OpenAI-compatible, Anthropic, and Ollama native. Enter the base URL; the API key is optional when the endpoint does not require one.
 - Languages / 语言: 简体中文 · 繁體中文 · English · 日本語 · 한국어 · Русский · Español · Français · Português · Esperanto.
 - Light and dark themes, 4K-aware layout. Physical 4K verification is still pending.
 - Local memory database: SQLite with FTS5, optionally SQLCipher-encrypted through `better-sqlite3-multiple-ciphers`.
 - Vault: AES-256-GCM; key derivation with scrypt; one-time session token after unlock.
 - Network transport: X25519 key agreement, Ed25519 signatures, HKDF-SHA256. Mesh ports: 59599 production, 58588 dev, 62666 test.
-- Data directory: `%APPDATA%\@warmy\app-shell` on Windows.
+- Data directory: `WArmyData` next to `WARMY.exe` in the chosen install directory.
 
 </details>
 
 ## How it works
 
-1. **Add a provider.** Use Ollama on your machine, an OpenAI-compatible endpoint, or Anthropic.
+1. **Add a provider.** Point WArmy at a local model server, an OpenAI-compatible endpoint, or Anthropic. Enter the base URL and model; the key is optional for servers that do not require one.
 2. **Create workhorses.** Pick a persona and a model for each role.
 3. **Create a project.** Add members and choose a duty agent.
 4. **Send a brief.** Mark urgency and difficulty. The duty agent dispatches a worker with tools and a budget.
@@ -114,19 +115,19 @@ Bring an Ollama model, an OpenAI-compatible endpoint, or Anthropic. WArmy handle
 
 ### Windows 10 or 11, x64
 
-1. Open the [v0.2.30 release](https://github.com/Pondsi/WArmy/releases/tag/v0.2.30).
-2. Download `WArmy-Setup-0.2.30.exe`.
+1. Open the [v0.2.31 release](https://github.com/Pondsi/WArmy/releases/tag/v0.2.31).
+2. Download `WArmy-Setup-0.2.31.exe`.
 3. Run the installer and launch **WArmy / 无限牛马**.
 
-The installer is not code-signed. Windows SmartScreen may show an unknown publisher warning. The release page lists the SHA-256 so you can verify the download. WArmy is free under the MIT license with attribution. You pay your model provider directly.
+The installer lets you choose the installation folder. WArmy stores its data in `WArmyData` inside that folder, and keeps that folder when you uninstall or upgrade. The installer is not code-signed. Windows SmartScreen may show an unknown publisher warning. The release page lists the SHA-256 so you can verify the download. WArmy is free under the MIT license with attribution. You pay your model provider directly.
 
 ### First run
 
-Choose a language, accept the terms, create an identity, and save the 24-word mnemonic. Then add a provider and create your first workhorse. A local Ollama setup needs no API key: start Ollama, point WArmy at `http://127.0.0.1:11434`, and pull a model.
+Choose a language, accept the terms, create an identity, and save the 24-word mnemonic. Then add a provider and create your first workhorse. For a local server, start it, enter its base URL, and pick a model. Leave the key empty when the server does not require one.
 
 ## Status
 
-0.2.30 runs on Windows 10 and 11 x64. Core workflows are verified with local Ollama models. Five of the ten planned acceptance rounds are complete with zero failures. macOS, physical 4K, real IM accounts, and cloud providers are still being verified.
+0.2.31 runs on Windows 10 and 11 x64. Core workflows are verified with local model servers. Five of the ten planned acceptance rounds are complete with zero failures. macOS, physical 4K, real IM accounts, and cloud providers are still being verified.
 
 The installer is unsigned. Most workspace files are plaintext while the app is unlocked. Model output can be wrong, so review artifacts before shipping them.
 
@@ -148,10 +149,10 @@ pnpm --filter @warmy/app-shell start
 No. WArmy has no server-side account. You bring your own model provider.
 
 **Can it run offline?**
-Yes with a local Ollama model. Web search, page extraction, cloud models, and IM connections need network access.
+Yes with a local model server. Web search, page extraction, cloud models, and IM connections need network access.
 
 **Where does my data live?**
-In `%APPDATA%\@warmy\app-shell` by default. You can export chats and a vault backup, and you can delete the directory to erase local data.
+In `WArmyData` next to `WARMY.exe` in the install directory you chose. On the first launch after upgrading, WArmy copies the old `%APPDATA%\@warmy\app-shell` data into `WArmyData` and leaves the old folder as a backup. You can export chats and a vault backup, and you can delete `WArmyData` to erase local data.
 
 **Does WArmy send telemetry?**
 The app includes no analytics SDK. It contacts GitHub for update checks, and it contacts only the providers and services you configure. Crash logs stay on your machine.

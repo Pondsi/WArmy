@@ -1,6 +1,6 @@
 {
   "name": "@warmy/app-shell",
-  "version": "0.2.30",
+  "version": "0.2.31",
   "private": true,
   "description": "Electron main/renderer shell (no native modules)",
   "main": "./dist/electron-main.js",

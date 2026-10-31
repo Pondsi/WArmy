@@ -78,6 +78,17 @@ win:
         - node.exe
   target:
     - nsis
+
+# 安装器：允许用户选择安装目录；运行期数据放在 <安装目录>\WArmyData。
+# customRemoveFiles 在卸载/升级时先移出 WArmyData，避免把用户数据一起删掉。
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+  include: installer.nsh
 mac:
   icon: build/icon.png
 linux:
