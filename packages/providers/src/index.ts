@@ -12,6 +12,7 @@ export * from './util.js';
 export * from './mo-xing-neng-li.js';
 export * from './audio.js';
 export * from './media-format.js';
+export * from './comfyui.js';
 export { JianrongOpenAIGongYing, chuangjianDeepSeek } from './openai.js';
 export { AnthropicGongYing } from './anthropic.js';
 export { OllamaGongYing } from './ollama.js';

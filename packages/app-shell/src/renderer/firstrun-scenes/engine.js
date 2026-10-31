@@ -938,16 +938,29 @@
     }
   }
   let raf = 0;
+  /** 第 120 轮（W10）：窗口不可见不画；系统要求减少动态效果时只画静态首帧，不自动轮播 */
+  let jianDong = false;
+  try { jianDong = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch { /* noop */ }
+  if (jianDong) auto = false;
+  let lastDrawnToken = -1;
   function loop(now) {
-    if (active) {
-      if (auto && now - start > AUTO_MS) {
-        select((activeIndex + 1) % scenes.length);
+    if (active && !document.hidden) {
+      if (jianDong) {
+        if (lastDrawnToken !== token) {
+          active.draw(0);
+          lastDrawnToken = token;
+          window.__sceneFrames = (window.__sceneFrames || 0) + 1;
+        }
+      } else {
+        if (auto && now - start > AUTO_MS) {
+          select((activeIndex + 1) % scenes.length);
+        }
+        const t = Math.max(0, (now - start) / 1000);
+        active.draw(t);
+        window.__sceneFrames = (window.__sceneFrames || 0) + 1;
+        const bar = document.getElementById('autoBar');
+        if (bar) bar.style.width = auto ? `${Math.min(100, ((now - start) / AUTO_MS) * 100).toFixed(1)}%` : '0%';
       }
-      const t = Math.max(0, (now - start) / 1000);
-      active.draw(t);
-      window.__sceneFrames = (window.__sceneFrames || 0) + 1;
-      const bar = document.getElementById('autoBar');
-      if (bar) bar.style.width = auto ? `${Math.min(100, ((now - start) / AUTO_MS) * 100).toFixed(1)}%` : '0%';
     }
     raf = requestAnimationFrame(loop);
   }

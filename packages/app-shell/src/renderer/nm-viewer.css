@@ -1149,7 +1149,8 @@ body.tuoYaSuoFenGe { cursor: col-resize; user-select: none; }
 #wangYeGongJu button svg { width: 14px; height: 14px; display: block; }
 #wangYeGongJu button:hover { background: var(--hover); }
 #wangYeGongJu button:disabled { opacity: .45; cursor: not-allowed; }
-#wangYeGongJu button.fenLanAnNiu[aria-pressed="true"] {
+#wangYeGongJu button.fenLanAnNiu[aria-pressed="true"],
+#wangYeGongJu button.xinKaiAnNiu[aria-pressed="true"] {
   border-color: var(--accent);
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--card));
@@ -1167,6 +1168,22 @@ body.tuoYaSuoFenGe { cursor: col-resize; user-select: none; }
 }
 #wangYeUrl:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 0; }
 #wangYeTiShi { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+#wangYeSouHang { flex-wrap: nowrap; }
+#wangYeSouRu {
+  flex: 1 1 240px;
+  min-width: 90px;
+  max-width: 420px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  padding: 3px 8px;
+  height: 26px;
+  font: inherit;
+}
+#wangYeSouRu:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 0; }
+#wangYeSouJi { flex: 0 0 auto; min-width: 44px; text-align: center; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+#wangYeSouJi.wu { opacity: .65; }
 /* 标签页行：溢出用左右箭头滚动 */
 #wangYeTabLie {
   flex: 1 1 auto;
@@ -1199,25 +1216,73 @@ body.tuoYaSuoFenGe { cursor: col-resize; user-select: none; }
 }
 .wangYeTab.dangQian { color: var(--ink); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
 .wangYeTab .tabMing { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.wangYeTab .tabGuan {
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
+#wangYeGongJu .wangYeTab .tabGuan {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  min-width: 0;
   border: 0;
   padding: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s ease, color .12s ease;
 }
+#wangYeGongJu .wangYeTab .tabGuan:hover,
+#wangYeGongJu .wangYeTab .tabGuan:focus-visible {
+  opacity: 1;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+}
+#wangYeGongJu .wangYeTab .tabGuan svg { width: 10px; height: 10px; display: block; }
+#wangYeGongJu .wangYeTab .tabGuan path { stroke: currentColor; }
 #wangYeGongJu button.tabGun { padding: 0 4px; font-size: 14px; line-height: 1; }
 #wangYeGongJu button.tabGun:disabled { opacity: .3; }
+#wangYeGongJu button.tabJia {
+  padding: 0 6px;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--muted);
+}
+#wangYeGongJu button.tabJia:hover { color: var(--ink); }
 
-/* 网站模式正文：4 态分栏（0 只网页 / 1 网页左源码右 / 2 源码左网页右 / 3 网页上源码下） */
+/* 网站模式正文：4 态分栏（0 只网页 / 1 网页左源码右 / 2 源码左网页右 / 3 网页上源码下）
+   分隔条可左右/上下拖动；比例存在**每个标签页自己**身上（切换标签不会串）。 */
 #wangYeLie { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; background: #fff; }
-#wangYeKuangHe { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; }
+#wangYeKuangHe { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; order: 0; }
 #wangYeKuang { flex: 1 1 auto; width: 100%; height: 100%; border: 0; background: #fff; }
+#wangYeFenGe {
+  flex: 0 0 7px;
+  align-self: stretch;
+  cursor: col-resize;
+  background: var(--line);
+  position: relative;
+  touch-action: none;
+  z-index: 5;
+}
+#wangYeFenGe[hidden] { display: none; }
+#wangYeFenGe::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: .55;
+}
+#wangYeFenGe:hover,
+body.tuoWangYeFenGe #wangYeFenGe { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+body.tuoWangYeFenGe { cursor: col-resize; user-select: none; }
+body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
 #wangYeYuan {
   flex: 0 0 50%;
   min-width: 0;
@@ -1226,11 +1291,16 @@ body.tuoYaSuoFenGe { cursor: col-resize; user-select: none; }
   flex-direction: column;
   background: var(--panel-bg);
   border-left: 1px solid var(--line);
+  order: 2;
 }
-#wangYeLie.fen2 #wangYeYuan { order: -1; border-left: 0; border-right: 1px solid var(--line); }
+#wangYeLie.fen2 #wangYeYuan { order: 0; border-left: 0; border-right: 1px solid var(--line); }
+#wangYeLie.fen2 #wangYeFenGe { order: 1; }
+#wangYeLie.fen2 #wangYeKuangHe { order: 2; }
 #wangYeLie.fen3 { flex-direction: column; }
-#wangYeLie.fen3 #wangYeKuangHe { flex: 1 1 60%; }
-#wangYeLie.fen3 #wangYeYuan { flex: 1 1 40%; border-left: 0; border-top: 1px solid var(--line); }
+#wangYeLie.fen3 #wangYeKuangHe { flex: 0 0 60%; }
+#wangYeLie.fen3 #wangYeYuan { flex: 1 1 0; border-left: 0; border-top: 1px solid var(--line); }
+#wangYeLie.fen3 #wangYeFenGe { flex-basis: 7px; cursor: row-resize; }
+#wangYeLie.fen3 #wangYeFenGe::after { width: 34px; height: 3px; }
 #wangYeYuan .yuanHang {
   flex: 0 0 auto;
   padding: 4px 6px;
@@ -1346,4 +1416,42 @@ body.tuoYaSuoFenGe { cursor: col-resize; user-select: none; }
   .biaoGeWai thead th { position: static; }
   .kuai, .docYe, .pptYe { break-inside: avoid; }
   #daYinWenBen { display: block; white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px; }
+}
+
+/* ── 第 120 轮（W10）：最小下载管理面板 ───────────────────────────── */
+#xiaZaiMianBan {
+  position: fixed;
+  top: 86px;
+  right: 16px;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(60vh, 460px);
+  overflow: auto;
+  z-index: 13000;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 10px 32px rgba(0,0,0,.18);
+  padding: 8px;
+}
+#xiaZaiMianBan[hidden] { display: none !important; }
+#xiaZaiTou { display: flex; align-items: center; gap: 8px; padding: 2px 4px 8px; font-size: 12px; }
+#xiaZaiTou .jingYin { flex: 1; }
+#xiaZaiLie { display: flex; flex-direction: column; gap: 6px; }
+.xiaZaiKong { color: var(--muted); font-size: 12px; padding: 10px 6px; line-height: 1.6; }
+.xiaZaiHang {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 8px;
+  font-size: 12px;
+}
+.xiaZaiMing { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xiaZaiBei { color: var(--muted); grid-column: 1; }
+.xiaZaiTiao { grid-column: 1 / -1; height: 4px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.xiaZaiTiao span { display: block; height: 100%; background: var(--accent); transition: width .2s ease; }
+.xiaZaiAnNiu { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 4px; align-items: center; }
+@media (prefers-reduced-motion: reduce) {
+  .xiaZaiTiao span { transition: none; }
 }

@@ -359,10 +359,11 @@ export class GroupChatRouter {
     const zhiXingQiJi = candidateIds
       .filter((id) => (chengYuan.find((m) => m.id === id)?.status === 'idle'))
       .slice(0, 3);
-    // 值班者本身也可执行（非 pureDispatcher 且没有别的候选）
-    if (!zhiXingQiJi.length && !duty.pureDispatcher) {
-      zhiXingQiJi.push(duty.id);
-    }
+    /**
+     * 第 121 轮：值班者本体**永不作为执行者**。没有候选执行者时返回空列表，
+     * 由编排器在“无执行者/执行者全失败/用户点名值班者”时派它的**唯一分身**去干活；
+     * 值班者本体始终留在岗位上做派发与汇总。
+     */
 
     const decision: OrchestrationDecision = {
       executorIds: zhiXingQiJi,

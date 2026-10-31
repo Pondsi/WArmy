@@ -2,7 +2,7 @@
   "name": "@warmy/dsh-runtime",
   "version": "0.1.0",
   "private": true,
-  "description": "bundled Node spawn + dsh profile 启动",
+  "description": "Bundled Node spawn + dsh profile launcher",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

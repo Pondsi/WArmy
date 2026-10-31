@@ -2,7 +2,7 @@
   "name": "@warmy/group-router",
   "version": "0.1.0",
   "private": true,
-  "description": "值班者状态机、queue.jsonl、群类型与权限",
+  "description": "Duty state machine, queue.jsonl, group types and permissions",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

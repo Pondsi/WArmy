@@ -1,8 +1,8 @@
 {
   "name": "@warmy/app-shell",
-  "version": "0.2.29",
+  "version": "0.2.30",
   "private": true,
-  "description": "Electron主/渲染进程壳（零原生模块）",
+  "description": "Electron main/renderer shell (no native modules)",
   "main": "./dist/electron-main.js",
   "type": "module",
   "exports": {
@@ -20,23 +20,23 @@
     "dev": "node scripts/dev-restart.mjs"
   },
   "dependencies": {
-    "@warmy/contracts": "workspace:*",
-    "@warmy/dsh-runtime": "workspace:*",
-    "@warmy/memory-os": "workspace:*",
-    "@warmy/providers": "workspace:*",
-    "@warmy/group-router": "workspace:*",
+    "@warmy/asset-governance": "workspace:*",
     "@warmy/board": "workspace:*",
     "@warmy/ccr-compressor": "workspace:*",
+    "@warmy/contracts": "workspace:*",
+    "@warmy/dsh-runtime": "workspace:*",
+    "@warmy/group-router": "workspace:*",
     "@warmy/knowledge-base": "workspace:*",
-    "@warmy/sync-protocol": "workspace:*",
-    "@warmy/asset-governance": "workspace:*"
+    "@warmy/memory-os": "workspace:*",
+    "@warmy/providers": "workspace:*",
+    "@warmy/sync-protocol": "workspace:*"
   },
   "optionalDependencies": {
     "sherpa-onnx-node": "1.13.8"
   },
   "devDependencies": {
     "@types/node": "24.9.0",
-    "electron": "40.10.6",
+    "electron": "45.1.0",
     "electron-builder": "25.1.8"
   },
   "types": "./dist/index.d.ts",

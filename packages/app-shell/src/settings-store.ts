@@ -260,6 +260,10 @@ export interface YingYongPeizhi {
   zhuXiFuKai?: boolean;
   /** 项目内文件左键是否用 nm 查看器打开（默认关；右键「打开」走另一条路） */
   nmKaiWenJian?: boolean;
+  /** 第 121 轮：每个会话第一次网页下载选过的目录（之后同目录；默认 <会话工作区>/downloads） */
+  nmDownloadDirs?: Record<string, string>;
+  /** 第 121 轮：run_shell 永久授权账本（相同规范化命令 + 相同工作目录；可见、可撤销、可审计） */
+  commandGrants?: Array<{ key: string; cmd: string; cwd: string; createdAt: number }>;
   /**
    * **用户主动卸载过 nm 查看器插件**（默认 false）：为 true 时更新/重启都不许自动装回，
    * 只有设置→功能里点「安装 nm 查看器」才清除。与 `chaJianJi` 分开存，避免列表被同步覆盖后“复活”。
@@ -339,6 +343,18 @@ export interface YingYongPeizhi {
     hostMode?: boolean | { enabled?: boolean };
     /** 主机地址（`host:port`，IPv6 写成 `[::1]:59599`；缺省端口 59599，最多 10 条） */
     hosts?: string[];
+    /**
+     * 公开可发现（C 方案，默认关）。
+     * true = 允许把「签名 + 公开发现密钥加密」的地址记录发布到 DHT；
+     * 聊天内容永不进入发现层，消息仍走用户自选服务器。
+     */
+    publicDiscoverable?: boolean;
+    /** 发现层引导节点（host 或 host:port，默认 7800；最多 10 条） */
+    discoveryBootstrap?: string[];
+    /** 本机 DHT UDP 端口（默认 7800；0 = 临时端口） */
+    discoveryPort?: number;
+    /** 对外宣告的地址；缺省按 publicAddresses[0] → hosts[0] → 本机地址 选 */
+    discoveryAdvertiseHost?: string;
     /**
      * 主机服务商（最多 1000 条）。`hasCredential` 只表示 SecureKeyStore 里“有一条”，
      * 明文凭证**绝不**写进 settings；`credentialState:'pending'` 表示安全存储写入失败/入口缺失。
@@ -468,6 +484,11 @@ export interface YingYongPeizhi {
    */
   containerProjectRuntime?: Record<string, string>;
   /**
+   * 「我的牛马」也支持容器运行环境：按实例 id 记住选定的运行时。
+   * 与项目分开存，避免把实例 id 混进项目事实里（项目属性以 groups.json 为准）。
+   */
+  containerInstanceRuntime?: Record<string, string>;
+  /**
    * ADR 004 §7.8（第九批）：**每个项目的容器与环境状态** —— 与"记住每个项目用哪个容器"配套。
    * 这里存的是**真发生过的事**（容器引用 / 上次固化时间 / 固化产物列表），
    * 没真固化过就**不写**（不许编一个"已固化"）。
@@ -523,6 +544,10 @@ export interface DingShiDaoChuWeiZhi {
 }
 
 export interface DingShiDaoChu {
+  /** 固定任务编号：不改任务就一直复用；写入 .nm 明文头用于旧包清理 */
+  scheduleId: string;
+  /** 同一任务保留几份：默认 1，最小 1；0 = 不检查、每次都保留新文件 */
+  copies: number;
   enabled: boolean;
   /** 下一次执行的时间戳（epoch ms）；0 = 还没排过 */
   nextAt: number;
@@ -753,6 +778,8 @@ function defaults(): YingYongPeizhi {
     kbPerms: {},
     zhuXiFuKai: true,
     nmKaiWenJian: true,
+    nmDownloadDirs: {},
+    commandGrants: [],
     contextBudgetPercent: 60,
     autoSummary: true,
     modelContextTokens: 128000,
@@ -791,6 +818,8 @@ function defaults(): YingYongPeizhi {
     projectDisabled: {},
     /** ADR 004：默认没有容器开发项目选定运行时 */
     containerProjectRuntime: {},
+    /** 「我的牛马」默认没有选定容器运行时 */
+    containerInstanceRuntime: {},
     /** ADR 004：默认没有项目的容器/环境记录（没真发生过就不写） */
     projectEnv: {},
     /** ADR 004：默认没有回退点的环境指纹 */
@@ -799,6 +828,8 @@ function defaults(): YingYongPeizhi {
     fsGuard: {},
     /** 定时导出：默认关闭；打开后由主进程按 nextAt 执行 */
     dingShiDaoChu: {
+      scheduleId: '',
+      copies: 1,
       enabled: false,
       nextAt: 0,
       cycles: 0,

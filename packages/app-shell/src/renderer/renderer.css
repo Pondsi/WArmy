@@ -2547,7 +2547,8 @@ html { font-weight: var(--fw-ui, 400); }
 
 /* ===== 第 44 轮 用户项 3：授权卡的按钮对齐（与 app.css 里同名那段**一字不差**，本文件后加载，漏改就等于白改） ===== */
 #shouQuanKaiGuan { gap: 6px; }
-#shouQuanKaiGuan > span:first-of-type { flex: 1 1 auto; }
+/* 「添加」跟在“授权”后面靠左；箭头仍用 margin-left:auto 顶到最右。 */
+#shouQuanKaiGuan > span:first-of-type { flex: 0 0 auto; }
 .shouQuanCheXiaoXiao,
 .shouQuanTianJiaXiao {
   display: inline-flex;

@@ -2,7 +2,7 @@
   "name": "@warmy/memory-os",
   "version": "0.1.0",
   "private": true,
-  "description": "L2 记忆服务：JSONL 只追加 + SQLite FTS 投影（长驻子进程）",
+  "description": "L2 memory service: append-only JSONL + SQLite FTS projection (long-lived child process)",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

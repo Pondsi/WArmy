@@ -18,8 +18,9 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import os from 'node:os';
-import { execFile } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
 /**
@@ -281,6 +282,15 @@ export const MING_LING_BAI_MING_DAN = [
   'tar', 'powershell', 'pwsh', 'zip', 'unzip', '7z',
 ];
 
+/** 第 121 轮：永久授权的规范化内容（同一命令 + 同一作用域；空白差异不算新内容） */
+export function guiFanMingLing(cmd: string): string {
+  return String(cmd || '').replace(/\s+/g, ' ').trim();
+}
+export function mingLingShouQuanJian(cmd: string, cwd: string): string {
+  const yuan = guiFanMingLing(cmd) + '\n' + path.resolve(String(cwd || '.'));
+  return crypto.createHash('sha256').update(yuan, 'utf8').digest('hex').slice(0, 32);
+}
+
 export function zaiBaiMingDan(cmd: string): boolean {
   const t = String(cmd || '').trim();
   if (!t) return false;
@@ -307,16 +317,48 @@ export function yunXingMingLing(cmd: string, opts: { cwd?: string; timeoutMs?: n
     // 统一走 shell，但命令串已经过静态检测与授权判定（调用方负责判定）
     const sh = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
     const args = process.platform === 'win32' ? ['/d', '/s', '/c', cmd] : ['-c', cmd];
-    execFile(sh, args, {
+    /**
+     * 最小环境变量白名单：API Key / 令牌 / 身份私钥等**不传给普通工具进程**。
+     * 需要凭据的工具必须由主进程代用，而不是把宿主环境整体继承下去。
+     */
+    const env: Record<string, string> = {};
+    const allow = ['PATH', 'SystemRoot', 'SystemDrive', 'windir', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP',
+      'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'LANG', 'LC_ALL', 'TZ'];
+    for (const k of allow) {
+      const v = process.env[k];
+      if (typeof v === 'string' && v) env[k] = v;
+    }
+    const child = spawn(sh, args, {
       cwd: opts.cwd || os.homedir(),
-      timeout: timeoutMs,
-      maxBuffer: 4 * 1024 * 1024,
+      env,
       windowsHide: true,
-    }, (err, stdout, stderr) => {
-      const out = String(stdout || '').slice(0, maxOut);
-      const er = String(stderr || '').slice(0, maxOut);
-      const code = err && typeof (err as { code?: number }).code === 'number' ? ((err as { code?: number }).code as number) : (err ? 1 : 0);
-      resolve({ ok: !err, code, stdout: out, stderr: er, ms: Date.now() - t0, risk: jiance.risk });
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    const shou = (s: string) => s.slice(0, maxOut);
+    child.stdout?.on('data', (d) => { stdout = shou(stdout + String(d)); });
+    child.stderr?.on('data', (d) => { stderr = shou(stderr + String(d)); });
+    const sha = () => {
+      try {
+        if (process.platform === 'win32') {
+          spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: 10000 });
+        } else if (child.pid) {
+          try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* noop */ } }
+        }
+      } catch { /* noop */ }
+    };
+    const timer = setTimeout(() => { timedOut = true; sha(); }, timeoutMs);
+    child.once('error', (e) => {
+      clearTimeout(timer);
+      resolve({ ok: false, code: 1, stdout: shou(stdout), stderr: shou(stderr + '\n' + String((e as Error)?.message || e)), ms: Date.now() - t0, risk: jiance.risk });
+    });
+    child.once('close', (code, signal) => {
+      clearTimeout(timer);
+      const c = timedOut ? 124 : (typeof code === 'number' ? code : (signal ? 1 : 0));
+      resolve({ ok: !timedOut && c === 0, code: c, stdout: shou(stdout), stderr: shou(stderr), ms: Date.now() - t0, risk: jiance.risk });
     });
   });
 }

@@ -692,8 +692,9 @@ export class AuthService {
     const written = this.writeVault(file);
     if (!written.ok) return written;
     // 从「我的页」设置 PIN 并关闭自动登录时不要顺手锁掉当前会话；普通改 PIN 才要求重新登录。
-    if (payload?.disableAutoLogin !== true) this.lockSession();
-    return { ok: true, locked: true, state: this.state() };
+    const willLock = payload?.disableAutoLogin !== true;
+    if (willLock) this.lockSession();
+    return { ok: true, locked: willLock, state: this.state() };
   }
 
   viewMnemonic(): AuthResult {

@@ -1426,7 +1426,7 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
 export const HOST_TOOL_NAMES = [
   'open_path', 'open_file', 'open_url', 'schedule_task', 'monitor_process', 'lsp_diagnostics', 'ask_user', 'plan_update', 'plan_verify', 'write_skill',
   'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'download_file',
-  'get_time', 'wait_seconds', 'read_profile',
+  'get_time', 'wait_seconds', 'read_profile', 'image_generate', 'video_generate',
 ] as const;
 export function isHostTool(name: unknown): boolean {
   return typeof name === 'string' && (HOST_TOOL_NAMES as readonly string[]).includes(name);
@@ -1847,15 +1847,38 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
     {
       type: 'function',
       function: {
-        name: 'download_file',
-        description: '下载一个文件（http/https）保存到指定路径（可写 Desktop/xx 等系统目录，需授权）。返回保存后的绝对路径。',
+        name: 'image_generate',
+        description: '用本机 ComfyUI（默认 127.0.0.1:8188）生成一张图片，保存到会话工作区并返回绝对路径。需要本机已启动 ComfyUI 且有图像 checkpoint（SD1.5/Flux 等）；没有就如实报错，不会伪装成功。',
         parameters: {
           type: 'object',
           properties: {
-            url: { type: 'string', description: 'http/https 网址' },
-            path: { type: 'string', description: '保存路径，如 Desktop/资料.pdf 或 out/a.bin' },
+            prompt: { type: 'string', description: '画面描述（英文效果通常更稳）' },
+            negative: { type: 'string', description: '不想要的内容（可选）' },
+            width: { type: 'number', description: '宽，默认 512' },
+            height: { type: 'number', description: '高，默认 512' },
+            steps: { type: 'number', description: '步数，默认 20' },
+            seed: { type: 'number', description: '随机种子（可选）' },
           },
-          required: ['url', 'path'],
+          required: ['prompt'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'video_generate',
+        description: '用本机 ComfyUI 生成一段短视频（SVD 图生视频；没有给图片就先生成一张），保存到会话工作区并返回绝对路径。需要本机已启动 ComfyUI 且有 SVD 视频 checkpoint；生成较慢（数十秒到数分钟），没有就如实报错。',
+        parameters: {
+          type: 'object',
+          properties: {
+            prompt: { type: 'string', description: '画面描述（用于生成首帧）' },
+            image_path: { type: 'string', description: '可选：以这张图为首帧（工作区相对路径或绝对路径）' },
+            width: { type: 'number', description: '宽，默认 512' },
+            height: { type: 'number', description: '高，默认 512' },
+            frames: { type: 'number', description: '帧数 2–25，默认 14' },
+            fps: { type: 'number', description: '帧率 1–30，默认 6' },
+          },
+          required: ['prompt'],
         },
       },
     },

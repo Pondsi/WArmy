@@ -13,14 +13,10 @@ import { paiFaZhiXingZhe, paiFaXianHou, zhiBanKeZiXing, yongHuYaoQiuZhiBanZiZuo,
 import { ZHAN_BEN_DAN_TIAO_ZI_SHANG_XIAN } from './executor.js';
 import { CcrGateway } from '@warmy/ccr-compressor';
 import {
-  xuanranYoujieShitu,
-  DEFAULT_CONTEXT_BUDGET_CHARS,
-  DEFAULT_KEEP_HEAD,
-  DEFAULT_KEEP_TAIL,
   type LogEntry,
 } from './context-renderer.js';
 import { retrieveAssetsForChat, zhuCeLiaoTianZiChan } from './asset-wire.js';
-import { liaoTianDaiGongJu, neiRongWenBen, type LiaoTianXiaoXi, type GongJuDiaoYong, type GongJuGuiGe } from '@warmy/providers';
+import { type LiaoTianXiaoXi, type GongJuDiaoYong, type GongJuGuiGe } from '@warmy/providers';
 /** 契约 v1.1：编排 Schema（紧急度）/ 缓存三层顺序 / 任务黑板来源 —— 只 import，不另写 */
 import type { Jinji, ShangxiawenXuanranCeng, HeiBanLaiYuan } from '@warmy/contracts';
 import {
@@ -61,14 +57,6 @@ export function buildStatusCard(ka: StatusCard): string {
   ];
   const text = HangJi.join('\n');
   return text.length > 1800 ? text.slice(0, 1800) + '…' : text;
-}
-
-/** 预算折算用的文字构成样本：头 12 条 + 尾 24 条，截 6 万字符（只取样，不全量遍历） */
-function yangBenLiuShu(entries: LogEntry[]): string {
-  const z = Array.isArray(entries) ? entries : [];
-  const tou = z.slice(0, 12).map((e) => String(e?.content || ''));
-  const wei = z.length > 12 ? z.slice(-24).map((e) => String(e?.content || '')) : [];
-  return [...tou, ...wei].join('\n').slice(0, 60000);
 }
 
 export interface XietiaoqiYilai {
@@ -160,6 +148,8 @@ export interface XietiaoqiYilai {
   cunZhengLiuQuanWen?: (p: { groupId: string; renWuId: string; zxId: string; ming: string; wen: string }) => Promise<string>;
   /** 翻译（宿主传 tMain）：回复里用户可见的新文案走语言包；不给就用中文兜底 */
   t?: (key: string, fallback: string) => string;
+  /** 第 121 轮：审批等待累计（毫秒）；执行者 duration 要扣掉它 */
+  approvalWaitMs?: () => number;
 }
 
 export interface XietiaoJieguo {
@@ -431,6 +421,7 @@ async function paiFaZhiXingZheLun(
       tools: gongJuJi.length ? gongJuJi : undefined,
       runTool: deps.runTool,
       toolLimits: deps.toolLimits?.(zxId),
+      approvalWaitMs: deps.approvalWaitMs,
       heiBan: {
         gongJu: heiBanGongJu(),
         zhaiYao: () => heiBanZhaiYao(heiBan.lie(), renWuId),
@@ -551,6 +542,65 @@ async function paiFaZhiXingZheLun(
   return { huiFu, heiBan, jieGuo };
 }
 
+/**
+ * 第 121 轮：值班者的**唯一分身**。
+ * 本体永远只做派发/汇总，绝不直接答活；需要它自己上时（无执行者、执行者全失败、用户点名），
+ * 由这个子代理用值班者自己的模型/人格/工具在独立循环里执行。全局同一时间只允许一个。
+ */
+const DUTY_SUBAGENT_ID = '__duty_subagent__';
+const dutyFenShenBusy = new Set<string>();
+
+async function zhiXingDutyFenShen(
+  deps: XietiaoqiYilai,
+  args: {
+    groupId: string;
+    dutyId: string;
+    dutyMing: string;
+    dutyCfg: ZhibanGongyingshangPeizhi;
+    dutyGeRen?: { persona?: string; model?: string; presetId?: string; baseURL?: string; apiKey?: string; protocol?: string; timeoutMs?: number };
+    brief: string;
+    contextItems: string[];
+    nanYi?: { modelTier?: string; thinkLevel?: string; nan?: number; za?: number; ji?: number };
+    yuanWenChars: number;
+  },
+): Promise<{ ok: true; lun: Awaited<ReturnType<typeof paiFaZhiXingZheLun>> } | { ok: false; busy?: boolean; error: string }> {
+  const key = `${args.groupId}:${args.dutyId}`;
+  if (dutyFenShenBusy.has(key)) return { ok: false, busy: true, error: 'duty-subagent-busy' };
+  dutyFenShenBusy.add(key);
+  const ming = `${args.dutyMing}·分身`;
+  const subDeps: XietiaoqiYilai = {
+    ...deps,
+    listInstances: () => [
+      ...deps.listInstances(),
+      { id: DUTY_SUBAGENT_ID, ming, status: 'running', dutyEligible: false, persona: args.dutyGeRen?.persona, order: 9999 },
+    ],
+    executorConfig: (id, nan) => (id === DUTY_SUBAGENT_ID ? args.dutyGeRen : deps.executorConfig?.(id, nan)),
+    executorThink: (id, level, model) => deps.executorThink?.(id === DUTY_SUBAGENT_ID ? args.dutyId : id, level, model),
+    executorSignal: (id) => deps.executorSignal?.(id === DUTY_SUBAGENT_ID ? args.dutyId : id),
+    onExecutorStart: (gid, id) => deps.onExecutorStart?.(gid, id === DUTY_SUBAGENT_ID ? args.dutyId : id),
+    onExecutorEnd: (gid, id) => deps.onExecutorEnd?.(gid, id === DUTY_SUBAGENT_ID ? args.dutyId : id),
+  };
+  const qi = Date.now();
+  try {
+    const lun = await paiFaZhiXingZheLun(subDeps, args.dutyCfg, {
+      groupId: args.groupId,
+      brief: args.brief,
+      contextItems: args.contextItems,
+      zhiXingQiJi: [DUTY_SUBAGENT_ID],
+      fenPei: [{ executorId: DUTY_SUBAGENT_ID, ming, thinkLevel: 'auto', interrupt: 'none', why: '值班者分身（本体不执行）' }],
+      nanYi: args.nanYi,
+      yuanWenChars: args.yuanWenChars,
+    });
+    try { deps.audit?.('group.duty-subagent-done', { groupId: args.groupId, dutyId: args.dutyId, ms: Date.now() - qi, ok: !lun.jieGuo.some((x) => !!x.jg.error) }); } catch { /* noop */ }
+    return { ok: true, lun };
+  } catch (e) {
+    try { deps.audit?.('group.duty-subagent-failed', { groupId: args.groupId, dutyId: args.dutyId, error: String((e as Error)?.message || e).slice(0, 160) }); } catch { /* noop */ }
+    return { ok: false, error: String((e as Error)?.message || e) };
+  } finally {
+    dutyFenShenBusy.delete(key);
+  }
+}
+
 /** 回复里带出去的黑板/蒸馏概况（门禁与界面读它，不读正文措辞） */
 function gaiKuangOf(r: { heiBan: RenWuHeiBan; jieGuo: Array<{ ming: string; jg: zhixingqiJieguo }> }): Pick<XietiaoJieguo, 'renWuHeiBan' | 'zhengLiu'> {
   const tiao = r.heiBan.lie();
@@ -580,16 +630,6 @@ export function sanCengXiaoXi(ceng: ShangxiawenXuanranCeng, shiTu: LiaoTianXiaoX
     ...(ceng.statusCard ? [{ role: 'system', content: ceng.statusCard } as LiaoTianXiaoXi] : []),
   ];
 }
-function gouJianSanCeng(xiTong: string, shiTu: LiaoTianXiaoXi[], ka: string): ShangxiawenXuanranCeng {
-  const liShiWen = shiTu.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
-  return {
-    inHistorySystemPrompt: xiTong,
-    appendedHistoryView: liShiWen,
-    statusCard: ka,
-    totalBudgetTokens: guJiToken(xiTong) + guJiToken(liShiWen) + guJiToken(ka),
-  };
-}
-
 /**
  * 完整闭环：路由 → 卡片 → 执行者 → 看板/知识库 → 蒸馏回复
  */
@@ -598,6 +638,7 @@ export async function xietiaoQunXiaoxi(
   cfg: ZhibanGongyingshangPeizhi,
   xiaoXi: { groupId: string; userId?: string; content: string; urgency?: Jinji; mentionIds?: string[] }
 ): Promise<XietiaoJieguo> {
+  const tr = deps.t || ((_k: string, d: string) => d);
   const urgency = xiaoXi.urgency || 'P2';
   /**
    * **叫停之后一步都不再派**（第 100 轮）：项目停止按钮同样要“马上停”，
@@ -728,6 +769,7 @@ export async function xietiaoQunXiaoxi(
   let usage: XietiaoJieguo['usage'];
   let gaiKuang: Pick<XietiaoJieguo, 'renWuHeiBan' | 'zhengLiu'> = {};
   const brief = route.decision?.taskBrief || xiaoXi.content;
+  let fenShenReason: 'no-executor' | 'all-failed' = 'no-executor';
   const memSnip = deps.projectMemory ? deps.projectMemory(xiaoXi.groupId) : '';
   const decSnip = deps.decisionContext ? deps.decisionContext(xiaoXi.groupId) : '';
   /** 马尔可夫毯：主路径与队列冲刷共用同一个构造（gouJianZhanBianXiang），不再各写一份 */
@@ -768,7 +810,7 @@ export async function xietiaoQunXiaoxi(
           executorConfidence: 0.7, dutyConfidence: dutyConf,
         });
         try { deps.audit?.('group.duty-self', { groupId: xiaoXi.groupId, quanBai, dutyConf, userForbidden: jinZhiZhiBanZiZuo, ok: ziXing.ok, why: ziXing.why }); } catch { /* noop */ }
-        if (ziXing.ok) zhiXingQiJi = [];
+        if (ziXing.ok) { zhiXingQiJi = []; fenShenReason = 'all-failed'; }
       }
       if (zhiXingQiJi.length) {
         distilled = lun.huiFu;
@@ -776,64 +818,45 @@ export async function xietiaoQunXiaoxi(
       }
     }
     if (!zhiXingQiJi.length) {
-      // 无空闲执行者 → 值班者自己（带卡片）
-      const { congYuSheChuangJian } = await import('@warmy/providers');
-      const provider = congYuSheChuangJian(dutyCfg.presetId, {
-        apiKey: dutyCfg.apiKey,
-        baseURL: dutyCfg.baseURL || undefined,
-        protocol: dutyCfg.protocol,
-      } as never, dutyCfg.protocol as never);
       /**
-       * 契约「缓存三层顺序」：系统提示只放**不随轮次变**的东西（身份 + 项目记忆 + 纪律），
-       * 状态卡片与决策上下文每轮都变 ⇒ 放到历史视图之后（最后一条 system），系统提示前缀才能被缓存命中。
+       * 第 121 轮硬口径：**值班者本体绝不直接答活**。
+       * 无执行者 / 执行者全失败 / 用户点名值班者时，只能派出自己的**唯一分身**去干；
+       * 分身用值班者的模型、人格和干活工具，在独立执行循环里跑，本体只汇总。
+       * 用户明确禁止值班者执行时，连分身也不派，如实说明无人可执行。
        */
-      const dongJieXiTong =
-        `你是 WArmy 项目「${xiaoXi.groupId}」的值班者。\n` +
-        (dutyGeRen?.persona ? `你的人设：${String(dutyGeRen.persona).slice(0, 600)}\n` : '') +
-        (memSnip ? memSnip + '\n' : '') +
-        `请用简短中文回复。若需更新任务，使用指令：新建任务:/完成/进度 标题:百分比\n` +
-        `任务树：新建任务 父任务 / 子任务；需要人类点选时可用工具 askUser（永远含「其他」自定义）。`;
-      // 不变量 #2：值班者输入复用**同一个**有界渲染器（原来这里是 hist.slice(-12)，只按条数有界）。
-      // 会话部分恒 ≤ 预算且与日志总长解耦。
-      const entries: LogEntry[] = deps.logOf
-        ? deps.logOf(xiaoXi.groupId)
-        : liShi.map((m, i) => ({
-            seq: i + 1,
-            role: (m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user') as LogEntry['role'],
-            content: typeof m.content === 'string' ? m.content : '',
-          }));
-      const shitu = xuanranYoujieShitu(entries, {
-        budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars(dutyCfg.model, yangBenLiuShu(entries)) : DEFAULT_CONTEXT_BUDGET_CHARS,
-        keepHead: DEFAULT_KEEP_HEAD,
-        keepTail: DEFAULT_KEEP_TAIL,
-        recallHint: xiaoXi.content,
-      });
-      const ceng = gouJianSanCeng(dongJieXiTong, shitu.xiaoXiJi as LiaoTianXiaoXi[], decSnip ? `${ka}\n${decSnip}` : ka);
-      // ADR 002 §9.4 待办 2：值班者路径同样可以用 recall/retrieve 解引用被省略的历史
-      const limits = deps.toolLimits?.() ?? { zuiDaLunShu: 3, zuiDaJieGuoZiShu: 4000, totalChars: 12000 };
-      const tools: GongJuGuiGe[] | undefined = deps.toolSpecs?.();
-      const Qiu: Parameters<typeof liaoTianDaiGongJu>[1] = {
-        model: dutyCfg.model || 'deepseek-chat',
-        xiaoXiJi: sanCengXiaoXi(ceng, shitu.xiaoXiJi as LiaoTianXiaoXi[]),
-        maxTokens: 512,
-        tools,
-      };
-      const loop = deps.runTool
-        ? await liaoTianDaiGongJu(provider, Qiu, deps.runTool, {
-            zuiDaLunShu: limits.zuiDaLunShu,
-            zuiDaJieGuoZiShu: limits.zuiDaJieGuoZiShu,
-            maxToolResultChars: limits.totalChars,
-            // 提炼/摘要这类一次性调用：额度预警对它没意义（第 39 轮：预警只给主对话循环）
-            wuYuSuanTiShi: true,
-          })
-        : null;
-      const xiangYing = loop ? loop.xiangYingTi : await provider.chat(Qiu);
-      distilled = neiRongWenBen(xiangYing.choices[0]?.message?.content);
-      usage = {
-        promptTokens: xiangYing.usage.promptTokens,
-        completionTokens: xiangYing.usage.completionTokens,
-        cacheHitTokens: xiangYing.usage.cacheHitTokens,
-      };
+      if (jinZhiZhiBanZiZuo) {
+        distilled = tr('group.duty.forbidden', '（没有可用的执行者；按你的要求，值班者本体和分身都不执行。）');
+      } else {
+        try { deps.audit?.('group.duty-subagent-start', { groupId: xiaoXi.groupId, dutyId: duty.id, reason: fenShenReason }); } catch { /* noop */ }
+        const fsr = await zhiXingDutyFenShen(deps, {
+          groupId: xiaoXi.groupId,
+          dutyId: duty.id,
+          dutyMing: duty.ming,
+          dutyCfg,
+          dutyGeRen,
+          brief,
+          contextItems,
+          nanYi: paiFaJiHua.difficulty,
+          yuanWenChars: xiaoXi.content.length,
+        });
+        if (!fsr.ok) {
+          distilled = fsr.busy
+            ? tr('group.duty.subagentBusy', '（值班者的分身正在执行上一条任务；同一时间只允许 1 个分身，本条未重复派出。）')
+            : tr('group.duty.subagentFailed', '（值班者分身执行失败：{err}）').replace('{err}', () => String(fsr.error).slice(0, 200));
+        } else {
+          if (deps.isStopped?.(xiaoXi.groupId)) {
+            return { action: 'stopped', reply: '（已按你的要求停止。）', queueLength: deps.router.listQueue(xiaoXi.groupId).length };
+          }
+          distilled = fsr.lun.huiFu;
+          gaiKuang = gaiKuangOf(fsr.lun);
+          const u = fsr.lun.jieGuo.reduce((n, x) => {
+            n.promptTokens += Number(x.jg.stats?.promptTokens) || 0;
+            n.completionTokens += Number(x.jg.stats?.completionTokens) || 0;
+            return n;
+          }, { promptTokens: 0, completionTokens: 0 });
+          if (u.promptTokens || u.completionTokens) usage = { ...u, cacheHitTokens: 0 };
+        }
+      }
     }
   } else {
     distilled = `[未配置 Key] 值班=${duty.ming} 执行者=${zhiXingQiJi.join(',') || '无'} 卡片已生成`;
@@ -939,6 +962,7 @@ async function runOneDutyRound(
   cfg: ZhibanGongyingshangPeizhi,
   xiaoXi: { groupId: string; userId: string; content: string; urgency: Jinji; mentionIds: string[] }
 ): Promise<XietiaoJieguo> {
+  const tr = deps.t || ((_k: string, d: string) => d);
   const route = deps.router.route({
     groupId: xiaoXi.groupId,
     userId: xiaoXi.userId,
@@ -991,6 +1015,7 @@ async function runOneDutyRound(
   let usage: XietiaoJieguo['usage'];
   let gaiKuang: Pick<XietiaoJieguo, 'renWuHeiBan' | 'zhengLiu'> = {};
   const brief = route.decision?.taskBrief || xiaoXi.content;
+  let fenShenReason: 'no-executor' | 'all-failed' = 'no-executor';
   if (dutyCfg.apiKey || dutyCfg.protocol === 'ollama' || dutyCfg.presetId === 'ollama' || String(dutyCfg.presetId || '').startsWith('ollama-')) {
     if (zhiXingQiJi.length) {
       /**
@@ -1020,7 +1045,7 @@ async function runOneDutyRound(
           executorConfidence: 0.7, dutyConfidence: dutyConf,
         });
         try { deps.audit?.('group.duty-self', { groupId: xiaoXi.groupId, quanBai, dutyConf, userForbidden: jinZhiZhiBanZiZuo, ok: ziXing.ok, why: ziXing.why }); } catch { /* noop */ }
-        if (ziXing.ok) zhiXingQiJi = [];
+        if (ziXing.ok) { zhiXingQiJi = []; fenShenReason = 'all-failed'; }
       }
       if (zhiXingQiJi.length) {
         distilled = lun.huiFu;
@@ -1028,48 +1053,37 @@ async function runOneDutyRound(
       }
     }
     if (!zhiXingQiJi.length) {
-      const { congYuSheChuangJian } = await import('@warmy/providers');
-      const provider = congYuSheChuangJian(dutyCfg.presetId, { apiKey: dutyCfg.apiKey, baseURL: dutyCfg.baseURL || undefined, protocol: dutyCfg.protocol } as never, dutyCfg.protocol as never);
-      /** 契约「缓存三层顺序」：冻结系统提示（不含状态卡片）→ 有界视图 → 状态卡片 */
-      const dongJieXiTong = `你是 WArmy 项目「${xiaoXi.groupId}」的值班者。\n` + (dutyGeRen?.persona ? `你的人设：${String(dutyGeRen.persona).slice(0, 600)}\n` : '') + '请用简短中文回复。';
-      const entries: LogEntry[] = deps.logOf
-        ? deps.logOf(xiaoXi.groupId)
-        : (deps.history.get(xiaoXi.groupId) || []).map((m, i) => ({
-            seq: i + 1,
-            role: (m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user') as LogEntry['role'],
-            content: typeof m.content === 'string' ? m.content : '',
-          }));
-      const shitu = xuanranYoujieShitu(entries, {
-        budgetChars: deps.contextBudgetChars ? deps.contextBudgetChars(dutyCfg.model, yangBenLiuShu(entries)) : DEFAULT_CONTEXT_BUDGET_CHARS,
-        keepHead: DEFAULT_KEEP_HEAD,
-        keepTail: DEFAULT_KEEP_TAIL,
-        recallHint: xiaoXi.content,
-      });
-      const limits = deps.toolLimits?.() ?? { zuiDaLunShu: 3, zuiDaJieGuoZiShu: 4000, totalChars: 12000 };
-      const tools: GongJuGuiGe[] | undefined = deps.toolSpecs?.();
-      const ceng = gouJianSanCeng(dongJieXiTong, shitu.xiaoXiJi as LiaoTianXiaoXi[], ka);
-      const Qiu: Parameters<typeof liaoTianDaiGongJu>[1] = {
-        model: dutyCfg.model || 'deepseek-chat',
-        xiaoXiJi: sanCengXiaoXi(ceng, shitu.xiaoXiJi as LiaoTianXiaoXi[]),
-        maxTokens: 512,
-        tools,
-      };
-      const loop = deps.runTool
-        ? await liaoTianDaiGongJu(provider, Qiu, deps.runTool, {
-            zuiDaLunShu: limits.zuiDaLunShu,
-            zuiDaJieGuoZiShu: limits.zuiDaJieGuoZiShu,
-            maxToolResultChars: limits.totalChars,
-            // 提炼/摘要这类一次性调用：额度预警对它没意义（第 39 轮：预警只给主对话循环）
-            wuYuSuanTiShi: true,
-          })
-        : null;
-      const xiangYing = loop ? loop.xiangYingTi : await provider.chat(Qiu);
-      distilled = neiRongWenBen(xiangYing.choices[0]?.message?.content);
-      usage = {
-        promptTokens: xiangYing.usage.promptTokens,
-        completionTokens: xiangYing.usage.completionTokens,
-        cacheHitTokens: xiangYing.usage.cacheHitTokens,
-      };
+      /** 队列冲刷同样：本体不执行，只派唯一分身（与主路径同一口径） */
+      if (jinZhiZhiBanZiZuo) {
+        distilled = tr('group.duty.forbidden', '（没有可用的执行者；按你的要求，值班者本体和分身都不执行。）');
+      } else {
+        try { deps.audit?.('group.duty-subagent-start', { groupId: xiaoXi.groupId, dutyId: duty.id, reason: fenShenReason, via: 'queue-drain' }); } catch { /* noop */ }
+        const fsr = await zhiXingDutyFenShen(deps, {
+          groupId: xiaoXi.groupId,
+          dutyId: duty.id,
+          dutyMing: duty.ming,
+          dutyCfg,
+          dutyGeRen,
+          brief,
+          contextItems: gouJianZhanBianXiang(deps, xiaoXi.groupId, xiaoXi.content, ka),
+          nanYi: paiFaJiHua.difficulty,
+          yuanWenChars: xiaoXi.content.length,
+        });
+        if (!fsr.ok) {
+          distilled = fsr.busy
+            ? tr('group.duty.subagentBusy', '（值班者的分身正在执行上一条任务；同一时间只允许 1 个分身，本条未重复派出。）')
+            : tr('group.duty.subagentFailed', '（值班者分身执行失败：{err}）').replace('{err}', () => String(fsr.error).slice(0, 200));
+        } else {
+          distilled = fsr.lun.huiFu;
+          gaiKuang = gaiKuangOf(fsr.lun);
+          const u = fsr.lun.jieGuo.reduce((n, x) => {
+            n.promptTokens += Number(x.jg.stats?.promptTokens) || 0;
+            n.completionTokens += Number(x.jg.stats?.completionTokens) || 0;
+            return n;
+          }, { promptTokens: 0, completionTokens: 0 });
+          if (u.promptTokens || u.completionTokens) usage = { ...u, cacheHitTokens: 0 };
+        }
+      }
     }
   } else {
     distilled = `[未配置 Key] 队列项已处理 duty=${duty.ming}`;

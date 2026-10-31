@@ -8,6 +8,9 @@
  */
 import { fork, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import path from 'node:path';
+import { existsSync as fsExists } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { GongJuDiaoYong, GongJuGuiGe } from '@warmy/providers';
 import type { MemoryStore, JsonlXieRu, XieRuZhe, HuisuoChaxun, RetrieveRequest, AcpKongzhiXiaoxi } from '@warmy/contracts';
 
@@ -17,6 +20,10 @@ export interface JiyiCangKeHuXuanXiang {
   CangLu: string;
   /** 第 111 轮：SQLCipher 兼容库密钥（hex）；未登录/迁移前为空时保持旧的明文投影 */
   dbKeyHex?: () => string | null;
+  /** 第 114 轮：JSONL 静态加密密钥（hex）；有 key 时子进程按同一封装格式读写 */
+  dataKeyHex?: () => string | null;
+  /** 加密层根目录（userData）；子进程据此只处理受管路径 */
+  encRoot?: string;
   /** 启动日志出口（主进程的 qidong）。子进程崩溃/stderr 过去被直接丢掉，只看到"启动超时" */
   log?: (xiaoXi: string) => void;
 }
@@ -28,6 +35,8 @@ type ZiJinChengXiaoXi = (AcpKongzhiXiaoxi & { id?: undefined }) | { id: number; 
  * 记忆库客户端 **implements 契约 `MemoryStore`**（v1.1）：签名改了编译器当场报错，
  * 不会再出现"契约写一套、实现另一套、谁也不知道"的情况。
  */
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 export class JiyiCangKeHu implements MemoryStore {
   private Zhi: ChildProcess | null = null;
   private seq = 0;
@@ -73,15 +82,18 @@ export class JiyiCangKeHu implements MemoryStore {
     // 用真正的 node.exe 时设了也无害，但不设的话 electron 会当普通 GUI 启动并立刻崩。
     const useElectronAsNode = /electron(\.exe)?$/i.test(execPath);
     const memoryDbKey = String(this.opts.dbKeyHex?.() || '');
+    const dataKey = String(this.opts.dataKeyHex?.() || '');
+    const encPreload = path.join(__dirname, 'enc-fs.cjs');
     this.Zhi = fork(this.opts.ipcEntry, [], {
       execPath,
-      execArgv: [],
+      execArgv: dataKey && fsExists(encPreload) ? ['--require', encPreload] : [],
       env: {
         ...process.env,
         WARMY_MEMORY_DIR: this.opts.CangLu,
         // legacy alias during rename window
         CCA_ARMY_MEMORY_DIR: this.opts.CangLu,
         ...(memoryDbKey ? { WARMY_MEMORY_DB_KEY_HEX: memoryDbKey } : {}),
+        ...(dataKey && this.opts.encRoot ? { WARMY_DATA_KEY_HEX: dataKey, WARMY_ENC_ROOT: this.opts.encRoot } : {}),
         ...(useElectronAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -188,9 +200,9 @@ export class JiyiCangKeHu implements MemoryStore {
     return this.call({ op: 'recall', query, limit });
   }
 
-  /** 带作用域的召回（权限先于相关性；scope 为空 = 不过滤） */
-  recallScoped(query: string, limit = 10, scope?: HuisuoChaxun['scope']) {
-    return this.call({ op: 'recall', query, limit, scope });
+  /** 带作用域的召回（权限先于相关性；scope 为空 = 不过滤；deadline 到期后后台补算停止） */
+  recallScoped(query: string, limit = 10, scope?: HuisuoChaxun['scope'], opts?: { deadline?: number }) {
+    return this.call({ op: 'recall', query, limit, scope, deadline: opts?.deadline });
   }
 
   retrieve(anchor: RetrieveRequest['anchor'], opts?: Pick<RetrieveRequest, 'huiTui' | 'window' | 'scope'>) {
@@ -213,14 +225,27 @@ export class JiyiCangKeHu implements MemoryStore {
   }
 
   async stop(): Promise<void> {
-    if (!this.Zhi) return;
+    const zhi = this.Zhi;
+    if (!zhi) return;
     try {
       await this.call({ op: 'shutdown' }, 2000);
     } catch {
-      this.Zhi.kill();
+      try { zhi.kill(); } catch { /* noop */ }
     }
     this.Zhi = null;
     this.ready = false;
+    /**
+     * Windows 上子进程退出前仍握着 SQLite / WAL 文件；调用方紧接着封存 vault 会 EBUSY。
+     * 必须等它真正退出（最多 3 秒，超时再强杀等一次退出），不能只发完 shutdown 就返回。
+     */
+    if (zhi.exitCode === null && zhi.signalCode === null) {
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => { if (done) return; done = true; resolve(); };
+        const timer = setTimeout(() => { try { zhi.kill(); } catch { /* noop */ } finish(); }, 3000);
+        zhi.once('exit', () => { clearTimeout(timer); finish(); });
+      });
+    }
   }
 }
 

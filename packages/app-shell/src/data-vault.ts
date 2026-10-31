@@ -28,6 +28,7 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { once } from 'node:events';
+import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { krootFingerprint } from './auth-core.mjs';
 
@@ -65,6 +66,11 @@ const SCRYPT_P = 1;
 /** 应用缓存/运行时目录不进入仓库：它们不是用户数据，且可能被进程占用。 */
 const SKIP_NAMES = new Set([
   'Cache', 'Code Cache', 'GPUCache', 'DawnGraphiteCache', 'DawnWebGPUCache',
+  'GrShaderCache', 'ShaderCache', 'GraphiteDawnCache', 'Extension State', 'Extensions',
+  'Local Extension Settings', 'Sync Extension Settings',
+  'declarative_performance_observer.db', 'declarative_performance_observer.db-journal',
+  'Network Persistent State', 'TransportSecurity', 'Trust Tokens', 'Trust Tokens-journal',
+  'OriginTrials', 'component_crx_cache', 'optimization_guide_model_store',
   'Session Storage', 'Local Storage', 'Shared Dictionary', 'blob_storage',
   'Network', 'DIPS', 'DIPS-wal', 'SharedStorage', 'SharedStorage-wal',
   'memory-runtime', 'updates', 'node_modules', '.git', 'logs', 'external-edits',
@@ -194,7 +200,14 @@ function lieWenJian(root: string, includeProtected: boolean, include?: string[],
       if (!st.isFile()) { skipped.push(rel); continue; }
       if (!zaiFanWei(rel)) { skipped.push(rel); continue; }
       if (yuanShiPaiChu(rel)) { skipped.push(rel); continue; }
-      files.push({ rel, size: st.size, mtime: Math.round(st.mtimeMs) });
+      /**
+       * 归档条目必须记录**逻辑（解密后）大小**：`lstat` 拿到的只是密文物理长度，
+       * 而下面用 `createReadStream` 读出来的是明文。两者混用会让解包按错误长度截断/越界。
+       * 符号链接已在上面的 `lstat` 拒绝；普通文件再取一次受管层 `statSync`（逻辑大小）。
+       */
+      let logicalSize = st.size;
+      try { logicalSize = fs.statSync(p).size; } catch { /* 取不到就保留 lstat 值，后面逐条校验会兜住 */ }
+      files.push({ rel, size: logicalSize, mtime: Math.round(st.mtimeMs) });
     }
   };
   walk(root);
@@ -224,48 +237,47 @@ async function jiaMiGuiDang(
   const gzip = zlib.createGzip({ level: 6 });
   const cipher = crypto.createCipheriv('aes-256-gcm', key, nonce);
   const ws = fs.createWriteStream(outFile);
-  const cipherEnd = new Promise<void>((resolve, reject) => {
-    cipher.once('end', resolve);
-    cipher.once('error', reject);
-  });
-  const wsDone = new Promise<void>((resolve, reject) => {
-    ws.once('finish', resolve);
-    ws.once('error', reject);
-  });
-  void cipherEnd.catch(() => {});
-  void wsDone.catch(() => {});
-  gzip.once('error', (e) => cipher.destroy(e));
-  cipher.once('error', (e) => ws.destroy(e));
-  ws.write(head);
-  gzip.pipe(cipher).pipe(ws, { end: false });
-  const xie = async (buf: Buffer) => { if (!gzip.write(buf)) await once(gzip, 'drain'); };
   let bytes = 0;
-  try {
-    await xie(ARCHIVE_MAGIC);
+  const yuan = async function* () {
+    yield ARCHIVE_MAGIC;
     for (const f of files) {
       const name = Buffer.from(f.rel, 'utf8');
       const meta = Buffer.allocUnsafe(4 + 8 + 8);
       meta.writeUInt32BE(name.length, 0);
       meta.writeBigUInt64BE(BigInt(f.size), 4);
       meta.writeBigInt64BE(BigInt(f.mtime), 12);
-      await xie(meta);
-      await xie(name);
-      for await (const chunk of fs.createReadStream(f.abs || path.join(root, f.rel))) {
+      yield meta;
+      yield name;
+      const abs = f.abs || path.join(root, f.rel);
+      let zheGe = 0;
+      for await (const chunk of fs.createReadStream(abs)) {
         const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        zheGe += buf.length;
         bytes += buf.length;
-        await xie(buf);
+        yield buf;
+      }
+      if (zheGe !== f.size) {
+        throw new Error(`archive-size-mismatch（${f.rel} 清单 ${f.size} 字节，实际读到 ${zheGe} 字节）`);
+      }
+      // 读取期间被并发修改 ⇒ 失败，不删除源文件，也不提交一个不一致的归档
+      let after: fs.Stats | null = null;
+      try { after = fs.statSync(abs); } catch { after = null; }
+      if (!after || after.size !== f.size) {
+        throw new Error(`archive-source-changed（${f.rel} 读取期间大小变化）`);
       }
     }
-    await xie(Buffer.alloc(4));
-    gzip.end();
-    await cipherEnd;
+    yield Buffer.alloc(4);
+  };
+  try {
+    ws.write(head);
+    await pipeline(Readable.from(yuan()), gzip, cipher, ws, { end: false });
     ws.end(cipher.getAuthTag());
-    await wsDone;
+    await once(ws, 'finish');
     return bytes;
   } catch (e) {
+    try { ws.destroy(); } catch { /* noop */ }
     try { gzip.destroy(); } catch { /* noop */ }
     try { cipher.destroy(); } catch { /* noop */ }
-    try { ws.destroy(); } catch { /* noop */ }
     throw e;
   }
 }
@@ -379,6 +391,16 @@ export interface NmHeader {
   categories: string[];
   files: number;
   bytes: number;
+  /** 定时导出任务的稳定编号（明文头可读；用于同一任务的旧包清理） */
+  scheduleId?: string;
+  /** 第 120 轮（W06）：包所有者（Kroot 指纹或 local）；导入前可据此提示跨身份 */
+  owner?: string;
+  /** 清单 schema 版本（2 = 当前 .nm v2） */
+  schemaVersion?: number;
+  /** 本包内容依赖的未包含类别（导入后可能需要补导） */
+  dependencies?: string[];
+  /** 完整性口径：密文包为 aes-256-gcm；明文包为 gzip */
+  integrity?: 'aes-256-gcm' | 'gzip';
   krootFp?: string;
   kdf?: { salt: string; nonce: string; wrap: string };
   archiveNonce?: string;
@@ -391,13 +413,18 @@ export interface NmInspect {
   categories?: string[];
   files?: number;
   bytes?: number;
+  scheduleId?: string;
+  owner?: string;
+  schemaVersion?: number;
+  dependencies?: string[];
+  integrity?: 'aes-256-gcm' | 'gzip';
   krootFp?: string;
   header?: NmHeader;
   error?: string;
 }
 
 function nmAad(h: NmHeader): Buffer {
-  return Buffer.from('warmy-nm-data-aad-v2|' + JSON.stringify({
+  const aad: Record<string, unknown> = {
     format: h.format,
     v: h.v,
     mode: h.mode,
@@ -410,7 +437,10 @@ function nmAad(h: NmHeader): Buffer {
     krootFp: h.krootFp || '',
     archiveNonce: h.archiveNonce || '',
     kdf: h.kdf ? { salt: h.kdf.salt, nonce: h.kdf.nonce } : null,
-  }), 'utf8');
+  };
+  /** 旧包没有 scheduleId，必须保持原 AAD 不变（否则旧加密包会打不开）。 */
+  if (h.scheduleId) aad.scheduleId = h.scheduleId;
+  return Buffer.from('warmy-nm-data-aad-v2|' + JSON.stringify(aad), 'utf8');
 }
 
 function nmPrefix(h: NmHeader): Buffer {
@@ -541,6 +571,11 @@ export function inspectNmPackage(file: string): NmInspect {
     categories: h.categories,
     files: h.files,
     bytes: h.bytes,
+    scheduleId: h.scheduleId || '',
+    owner: h.owner || '',
+    schemaVersion: h.schemaVersion || 2,
+    dependencies: Array.isArray(h.dependencies) ? h.dependencies : [],
+    integrity: h.integrity || (h.mode === 'plain' ? 'gzip' : 'aes-256-gcm'),
     krootFp: h.krootFp || '',
     header: h,
   };
@@ -739,8 +774,33 @@ async function jieMiGuiDangLiu(src: string, destRoot: string, keyOf: (salt: Buff
   }
 }
 
-function paiShengMiYao(password: string, salt: Buffer): Buffer {
-  return crypto.scryptSync(String(password || ''), salt, 32, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: 64 * 1024 * 1024 });
+/**
+ * 封存提交前的**可恢复性校验**：把候选归档真正解一遍到临时目录，核对文件数、总字节和每个条目大小。
+ * 只有校验通过才允许替换 vault.bin 并删除明文工作副本。代价是一次顺序读取/解密 + 临时磁盘；
+ * 换来的是"绝不会在归档不可解时删掉唯一源数据"。临时目录在 finally 中清理。
+ */
+async function heYanGuiDang(
+  src: string,
+  key: Buffer,
+  expect: { files: number; bytes: number; list: Array<{ rel: string; size: number }> }
+): Promise<void> {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `warmy-seal-verify-${process.pid}-`));
+  try {
+    const r = await jieMiGuiDangLiu(src, tmp, () => key);
+    if (r.files !== expect.files) throw new Error(`seal-verify-failed（文件数 ${r.files} ≠ ${expect.files}）`);
+    if (r.bytes !== expect.bytes) throw new Error(`seal-verify-failed（总字节 ${r.bytes} ≠ ${expect.bytes}）`);
+    for (const f of expect.list) {
+      const p = path.join(tmp, f.rel);
+      let st: fs.Stats | null = null;
+      try { st = fs.statSync(p); } catch { st = null; }
+      if (!st || st.size !== f.size) throw new Error(`seal-verify-failed（${f.rel} 大小 ${st ? st.size : 'missing'} ≠ ${f.size}）`);
+    }
+  } finally {
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* noop */ }
+  }
+}
+
+function paiShengMiYao(password: string, salt: Buffer): Buffer {  return crypto.scryptSync(String(password || ''), salt, 32, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: 64 * 1024 * 1024 });
 }
 
 function zhuYaoYaoShi(masterKey: Buffer): Buffer {
@@ -779,7 +839,10 @@ async function jieMiWenJian(src: string, out: string, keyOf: (salt: Buffer, mode
 
 function shanChuWenJian(root: string, files: GuiDangTiao[]): string[] {
   const shiBai: string[] = [];
+  /** 登录前必须可读的受保护目录：无论清单怎么来的，都绝不在封存时删除 */
+  const BAO_HU = new Set(['auth', 'identity', 'secure']);
   for (const f of files) {
+    if (BAO_HU.has(String(f.rel).split('/')[0] || '')) continue;
     try { fs.rmSync(path.join(root, f.rel), { force: true, maxRetries: 5, retryDelay: 100 }); } catch { shiBai.push(f.rel); }
   }
   // 只清理空目录；auth/identity/secure 等受保护目录不在 files 里，不会被删
@@ -789,6 +852,7 @@ function shanChuWenJian(root: string, files: GuiDangTiao[]): string[] {
     while (d && d !== '.') { dirs.add(d); d = path.dirname(d); }
   }
   for (const d of [...dirs].sort((a, b) => b.length - a.length)) {
+    if (BAO_HU.has(String(d).split('/')[0] || '')) continue;
     try { fs.rmdirSync(path.join(root, d)); } catch { /* 非空/占用 */ }
   }
   return shiBai;
@@ -804,6 +868,21 @@ export class DataVault {
   private legacyKey: Buffer | null = null;
   private unsealed = false;
   private lastStatus: { files: number; bytes: number } | null = null;
+  /** 数据状态版本：预览令牌绑定它，导入/封存/解包后旧令牌失效 */
+  private stateVersion = 0;
+  /** 可观测计数：验证/导入共用一次解包，防止“以为只解一次”的口径漂移 */
+  readonly nmStats = { prepared: 0, committed: 0, unpacked: 0 };
+  /** 已解包一次的导入暂存区（令牌 → 目录/包哈希/选择范围） */
+  private nmStages = new Map<string, {
+    dir: string;
+    file: string;
+    fileHash: string;
+    files: number;
+    bytes: number;
+    include: string[] | null;
+    stateVersion: number;
+    createdAt: number;
+  }>();
 
   constructor(opts: VaultOptions) {
     this.userData = opts.userData;
@@ -948,6 +1027,8 @@ export class DataVault {
     const tmpVault = this.vaultFile + '.tmp';
     try {
       const bytes = await jiaMiGuiDang(this.userData, files, tmpVault, this.key, MODE_MASTER, Buffer.alloc(16));
+      // 提交前先证明这份归档真的能解开；失败则保留明文、删除候选，绝不进入"封存成功但恢复不了"
+      await heYanGuiDang(tmpVault, this.key, { files: files.length, bytes, list: files });
       fs.renameSync(tmpVault, this.vaultFile);
       const shiBai = shanChuWenJian(this.userData, files);
       this.unsealed = false;
@@ -1038,6 +1119,9 @@ export class DataVault {
       scope?: DaoChuFanWei;
       extraFiles?: Array<{ rel: string; size: number; mtime: number; abs?: string }>;
       appVersion?: string;
+      scheduleId?: string;
+      /** 包所有者（Kroot 指纹；明文包也要写，导入前可提示跨身份） */
+      owner?: string;
     } = {},
   ): Promise<VaultResult> {
     const { files: yuanFiles, skipped } = lieWenJian(this.userData, true, opts.include, opts.scope);
@@ -1046,9 +1130,21 @@ export class DataVault {
     const categories = Array.isArray(opts.include) && opts.include.length
       ? [...new Set(opts.include.map(String))]
       : Object.keys(EXPORT_CATEGORIES);
+    /** 类别依赖：导入后若缺依赖，界面/后续可以提示补导；不自动把未选类别塞进包里 */
+    const NM_CATEGORY_DEPS: Record<string, string[]> = {
+      chat: ['knowledge'],
+      knowledge: [],
+      contacts: ['settings'],
+      settings: [],
+      account: ['settings'],
+      logs: [],
+    };
+    const dependencies = [...new Set(categories.flatMap((c) => NM_CATEGORY_DEPS[c] || []))]
+      .filter((d) => !categories.includes(d)).sort();
     const base: NmHeader = {
       format: 'warmy-nm-data',
       v: 2,
+      schemaVersion: 2,
       mode: opts.plain ? 'plain' : 'kroot',
       createdAt: Date.now(),
       app: 'warmy',
@@ -1056,6 +1152,10 @@ export class DataVault {
       categories,
       files: files.length,
       bytes: total,
+      owner: String(opts.owner || (opts.kroot && opts.kroot.length === 32 ? krootFingerprint(opts.kroot) : 'local')),
+      dependencies,
+      integrity: opts.plain ? 'gzip' : 'aes-256-gcm',
+      ...(opts.scheduleId ? { scheduleId: String(opts.scheduleId) } : {}),
     };
     try {
       if (opts.plain) {
@@ -1097,40 +1197,116 @@ export class DataVault {
   /** 导入前只读 `.nm` 头（不解密）；用于判断是否需要源助记词 */
   inspectNm(file: string): NmInspect { return inspectNmPackage(file); }
 
-  async verifyNm(inFile: string, kroot: Buffer | null): Promise<VaultResult> {
-    const tempRoot = path.join(os.tmpdir(), `warmy-nm-verify-${process.pid}-${Date.now()}`);
-    try {
-      fs.mkdirSync(tempRoot, { recursive: true });
-      const r = await jieNmDaoMuLu(inFile, tempRoot, kroot);
-      return { ok: true, files: r.files, bytes: r.bytes };
-    } catch (e) {
-      return { ok: false, error: String((e as Error)?.message || e) };
-    } finally {
-      try { fs.rmSync(tempRoot, { recursive: true, force: true }); } catch { /* noop */ }
-      try { kroot?.fill(0); } catch { /* noop */ }
+  private static guiFanXuanZe(include?: string[]): string[] | null {
+    if (!Array.isArray(include) || !include.length) return null;
+    return [...new Set(include.map(String))].sort();
+  }
+  private static async wenJianSha256(file: string): Promise<string> {
+    const h = crypto.createHash('sha256');
+    await new Promise<void>((resolve, reject) => {
+      const rd = fs.createReadStream(file);
+      rd.on('data', (c) => h.update(c));
+      rd.once('end', () => resolve());
+      rd.once('error', reject);
+    });
+    return h.digest('hex');
+  }
+  private qingLiNmZanCun(token: string): void {
+    const st = this.nmStages.get(token);
+    this.nmStages.delete(token);
+    if (st) { try { fs.rmSync(st.dir, { recursive: true, force: true }); } catch { /* noop */ } }
+  }
+  private qingLiGuoQiZanCun(): void {
+    const now = Date.now();
+    for (const [token, st] of this.nmStages) {
+      if (now - st.createdAt > 15 * 60 * 1000) this.qingLiNmZanCun(token);
     }
   }
-
-  /** 导入 `.nm`：先完整解到临时目录，确认后覆盖；失败回滚，绝不半解。 */
-  async importNm(inFile: string, opts: { kroot?: Buffer | null; include?: string[] } = {}): Promise<VaultResult> {
-    const stamp = `${process.pid}-${Date.now()}`;
-    const tempRoot = path.join(os.tmpdir(), `warmy-nm-import-${stamp}`);
+  /**
+   * 第 120 轮（P7）：预览与导入共用**一次**解包。
+   * 令牌绑定包哈希、当前数据状态版本和选择范围；包被换掉/状态已变/范围不一致都拒绝提交。
+   */
+  async prepareNm(inFile: string, opts: { kroot?: Buffer | null; include?: string[] } = {}): Promise<VaultResult & { token?: string }> {
+    this.qingLiGuoQiZanCun();
+    const include = DataVault.guiFanXuanZe(opts.include);
+    const tempRoot = path.join(os.tmpdir(), `warmy-nm-stage-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`);
+    try {
+      fs.mkdirSync(tempRoot, { recursive: true, mode: 0o700 });
+      const hash0 = await DataVault.wenJianSha256(inFile);
+      const r = await jieNmDaoMuLu(inFile, tempRoot, opts.kroot || null);
+      this.nmStats.unpacked += 1;
+      const hash1 = await DataVault.wenJianSha256(inFile);
+      if (hash0 !== hash1) {
+        return { ok: false, error: 'package-changed-during-verify（包在验证期间被修改，请重试）' };
+      }
+      const token = crypto.randomBytes(16).toString('hex');
+      this.nmStages.set(token, {
+        dir: tempRoot, file: inFile, fileHash: hash1, files: r.files, bytes: r.bytes,
+        include, stateVersion: this.stateVersion, createdAt: Date.now(),
+      });
+      this.nmStats.prepared += 1;
+      return { ok: true, files: r.files, bytes: r.bytes, token };
+    } catch (e) {
+      try { fs.rmSync(tempRoot, { recursive: true, force: true }); } catch { /* noop */ }
+      return { ok: false, error: String((e as Error)?.message || e) };
+    } finally {
+      try { opts.kroot?.fill(0); } catch { /* noop */ }
+    }
+  }
+  /** 提交前确认令牌仍有效（包没被换、数据没被别的操作改过、暂存区还在） */
+  async validateNmStage(token: string): Promise<VaultResult> {
+    const st = this.nmStages.get(token);
+    if (!st) return { ok: false, error: 'preview-token-invalid-or-expired' };
+    if (Date.now() - st.createdAt > 15 * 60 * 1000) {
+      this.qingLiNmZanCun(token);
+      return { ok: false, error: 'preview-token-expired' };
+    }
+    if (st.stateVersion !== this.stateVersion) {
+      this.qingLiNmZanCun(token);
+      return { ok: false, error: 'state-changed（数据已被修改，请重新预览）' };
+    }
+    try {
+      if (await DataVault.wenJianSha256(st.file) !== st.fileHash) {
+        this.qingLiNmZanCun(token);
+        return { ok: false, error: 'package-changed（文件已被替换，请重新预览）' };
+      }
+      if (!fs.existsSync(st.dir)) {
+        this.qingLiNmZanCun(token);
+        return { ok: false, error: 'preview-staging-missing' };
+      }
+      return { ok: true, files: st.files, bytes: st.bytes };
+    } catch (e) {
+      this.qingLiNmZanCun(token);
+      return { ok: false, error: String((e as Error)?.message || e) };
+    }
+  }
+  disposeNm(token: string): void { this.qingLiNmZanCun(token); }
+  /** 提交已解包的暂存区；失败回滚，绝不半解。 */
+  async commitNm(token: string, opts: { include?: string[] } = {}): Promise<VaultResult> {
+    const st = this.nmStages.get(token);
+    if (!st) return { ok: false, error: 'preview-token-invalid-or-expired' };
+    const chk = await this.validateNmStage(token);
+    if (!chk.ok) return chk;
+    const include = DataVault.guiFanXuanZe(opts.include);
+    if (JSON.stringify(include) !== JSON.stringify(st.include)) {
+      return { ok: false, error: 'selection-changed（这次选择与预览时不一致，请重新预览）' };
+    }
+    this.nmStages.delete(token);
+    const stamp = `${process.pid}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
     const backupFile = path.join(os.tmpdir(), `warmy-nm-import-backup-${stamp}.wvault`);
     const restoreRoot = path.join(os.tmpdir(), `warmy-nm-import-restore-${stamp}`);
     const backupKey = this.key || crypto.randomBytes(32);
     let keepBackup = false;
     try {
-      fs.mkdirSync(tempRoot, { recursive: true });
-      const r = await jieNmDaoMuLu(inFile, tempRoot, opts.kroot || null);
       /** 逻辑载荷先并进当前数据；消息排队到 logical-import/，由记忆服务启动后导入 */
-      try { this.heBingLuoJi(tempRoot, this.userData, Array.isArray(opts.include) && opts.include.length ? opts.include.map(String) : null); } catch (e) {
+      try { this.heBingLuoJi(st.dir, this.userData, include); } catch (e) {
         this.log('nm.logical-merge-failed ' + String((e as Error)?.message || e).slice(0, 160));
       }
       const before = lieWenJian(this.userData, true).files;
       const beforeSet = new Set(before.map((f) => f.rel));
       await jiaMiGuiDang(this.userData, before, backupFile, backupKey, MODE_MASTER, Buffer.alloc(16));
       try {
-        this.huiFuMuLu(tempRoot, this.userData, Array.isArray(opts.include) && opts.include.length ? opts.include.map(String) : null);
+        this.huiFuMuLu(st.dir, this.userData, include);
       } catch (copyErr) {
         try {
           fs.mkdirSync(restoreRoot, { recursive: true });
@@ -1142,21 +1318,36 @@ export class DataVault {
         } catch { keepBackup = true; }
         return { ok: false, error: `import-failed-and-rolled-back: ${String((copyErr as Error)?.message || copyErr)}（加密快照：${backupFile}）` };
       }
-      this.lastStatus = r;
+      this.lastStatus = { files: st.files, bytes: st.bytes };
+      this.stateVersion += 1;
+      this.nmStats.committed += 1;
       try { fs.rmSync(this.vaultFile, { force: true }); } catch { /* noop */ }
       this.clearSessionToken();
       this.clearClean();
       this.unsealed = !!this.key;
-      this.log(`nm.imported files=${r.files} bytes=${r.bytes}`);
-      return { ok: true, files: r.files, bytes: r.bytes };
+      this.log(`nm.imported files=${st.files} bytes=${st.bytes} (staged)`);
+      return { ok: true, files: st.files, bytes: st.bytes };
     } catch (e) {
       return { ok: false, error: String((e as Error)?.message || e) };
     } finally {
-      try { fs.rmSync(tempRoot, { recursive: true, force: true }); } catch { /* noop */ }
+      try { fs.rmSync(st.dir, { recursive: true, force: true }); } catch { /* noop */ }
       try { fs.rmSync(restoreRoot, { recursive: true, force: true }); } catch { /* noop */ }
       if (!keepBackup) { try { fs.rmSync(backupFile, { force: true }); } catch { /* noop */ } }
-      try { opts.kroot?.fill(0); } catch { /* noop */ }
     }
+  }
+
+  async verifyNm(inFile: string, kroot: Buffer | null): Promise<VaultResult> {
+    const pre = await this.prepareNm(inFile, { kroot });
+    if (!pre.ok) return { ok: false, error: pre.error };
+    if (pre.token) this.disposeNm(pre.token);
+    return { ok: true, files: pre.files, bytes: pre.bytes };
+  }
+
+  /** 导入 `.nm`：一次解包，确认后覆盖；失败回滚，绝不半解。 */
+  async importNm(inFile: string, opts: { kroot?: Buffer | null; include?: string[] } = {}): Promise<VaultResult> {
+    const pre = await this.prepareNm(inFile, { kroot: opts.kroot, include: opts.include });
+    if (!pre.ok || !pre.token) return { ok: false, error: pre.error || 'prepare-failed' };
+    return this.commitNm(pre.token, { include: opts.include });
   }
 
   /** 导入前看信封：只读头，不解密；返回是否有完整账号。 */

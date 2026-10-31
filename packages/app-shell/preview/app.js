@@ -1716,7 +1716,7 @@
             <button class="anNiuXiao" id="anNiuNeiWangTingZhi">${t('lan.stop')}</button>
           </div>
           <div class="shiLiHang" style="margin-top:8px">
-            <div class="field"><label>${t('lan.peerHost')}</label><input id="neiWangHost" value="192.168.1.123" placeholder="192.168.1.123"/></div>
+            <div class="field"><label>${t('lan.peerHost')}</label><input id="neiWangHost" value="192.0.2.123" placeholder="192.0.2.123"/></div>
             <div class="field"><label>${t('lan.peerPort')}</label><input id="neiWangPport" value="7788"/></div>
             <button class="anNiuXiao" id="anNiuNeiWangFaSong">${t('lan.sendTest')}</button>
             <button class="anNiuXiao" id="anNiuNeiWangShuangJi">${t('lan.dualSmoke')}</button>

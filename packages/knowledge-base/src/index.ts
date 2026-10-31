@@ -92,6 +92,10 @@ export interface ZhishiShijian {
 export class KnowledgeBase {
   private entities = new Map<string, Shiti>();
   private events = new Map<string, ZhishiShijian>();
+  /** 有未落盘的变更（使用计数合并写）；存储失败时保持 true 以便诊断/重试 */
+  private dirty = false;
+  private lastSaveError = '';
+  private useSaveTimer: NodeJS.Timeout | null = null;
   readonly ceng: ZhishiCeng;
 
   constructor(private CangLu: string, ceng: ZhishiCeng = 'session') {
@@ -127,7 +131,7 @@ export class KnowledgeBase {
    * 现在与 `audit.ts` 同一套做法：目录不在就重建再写；仍失败则**降级为不落盘**（内存里的知识仍在），
    * 绝不让"存知识"这件事把整轮对话带崩。
    */
-  private save(): void {
+  private save(): boolean {
     const xie = () => fs.writeFileSync(
       this.storePath,
       JSON.stringify({ entities: [...this.entities.values()], events: [...this.events.values()] }, null, 2),
@@ -135,17 +139,44 @@ export class KnowledgeBase {
     );
     try {
       xie();
-      return;
-    } catch {
-      /* 目录可能被外力清掉：重建一次再试 */
+      this.dirty = false;
+      this.lastSaveError = '';
+      return true;
+    } catch (e) {
+      this.lastSaveError = String((e as Error)?.message || e);
     }
     try {
       fs.mkdirSync(this.CangLu, { recursive: true });
       xie();
-    } catch {
-      /* 仍写不进去 ⇒ 如实放弃落盘（内存里的内容不丢，下次成功时再写） */
+      this.dirty = false;
+      this.lastSaveError = '';
+      return true;
+    } catch (e) {
+      // 存储失败保留 dirty，调用方可诊断并在下次成功时补齐；绝不假报已持久化
+      this.dirty = true;
+      this.lastSaveError = String((e as Error)?.message || e);
+      return false;
     }
   }
+
+  /** 使用计数合并落盘：只在空闲窗口写一次，避免每次召回都整层 JSON 序列化 */
+  private scheduleUseSave(): void {
+    if (this.useSaveTimer) return;
+    this.useSaveTimer = setTimeout(() => {
+      this.useSaveTimer = null;
+      this.save();
+    }, 800);
+    this.useSaveTimer.unref?.();
+  }
+
+  /** 立即冲刷待写计数（退出/测试用）；返回是否真的写成功 */
+  flush(): boolean {
+    if (this.useSaveTimer) { clearTimeout(this.useSaveTimer); this.useSaveTimer = null; }
+    return this.save();
+  }
+
+  isDirty(): boolean { return this.dirty; }
+  saveError(): string { return this.lastSaveError; }
 
   upsertEntity(partial: Omit<Shiti, 'updatedAt' | 'eventIds'> & { eventIds?: string[] }): Shiti {
     const prev = this.entities.get(partial.id);
@@ -242,7 +273,7 @@ export class KnowledgeBase {
       });
       n += 1;
     }
-    if (n) this.save();
+    if (n) { this.dirty = true; this.scheduleUseSave(); }
     return n;
   }
 

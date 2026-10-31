@@ -89,6 +89,8 @@ export interface HuisuoXuanxiang {
   hydrateBudget?: number;
   /** 向量通道余弦下限，覆盖 VectorOptions.minCosine */
   minCosine?: number;
+  /** 本轮召回等待上限（epoch ms）；到期停止补算，避免调用方已放弃后还在后台烧 CPU */
+  deadline?: number;
 }
 
 export interface ScopeStats {
@@ -262,6 +264,10 @@ export class JiyiCangFuwu {
   private vectorInitError = '';
   private vectorTried: string[] = [];
   private queryVecCache = new Map<string, Float32Array>();
+  /** 水合 single-flight：并发召回共用同一次补算，同一记录不会重复嵌入 */
+  private hydrateInFlight: Promise<{ embedded: number; ms: number; shengYu: number; skipped?: string }> | null = null;
+  /** 在途水合取最早 deadline（后到的更急请求可以把等待收紧，不能放宽） */
+  private hydrateDeadline = 0;
   private closed = false;
   private jsonlIndex: JsonlSuoyin | null = null;
   /** SWMR 文件锁：写侧持有，读者可并发（与检查点回退共享同一 .lock 协议） */
@@ -740,19 +746,46 @@ export class JiyiCangFuwu {
     const rows = this.db
       .prepare(`SELECT v.seq, v.scale, v.data FROM vec_index v ${join}`)
       .all() as Array<{ seq: number; scale: number; data: Buffer }>;
-    const scored: Array<{ seq: number; cos: number }> = [];
     // 查询向量也量化到 int8，两侧同域比较
     const { data: q8, scale: qs } = encodeVectorToInt8ForQuery(qvec);
+    /**
+     * P5：有界 top-k 小顶堆，不再对全部授权向量做全量 sort。
+     * 保留授权预过滤（JOIN 仍在 SQL 里）；内存 O(k)，时间 O(n log k)。
+     */
+    const k = Math.max(0, Math.floor(Number(limit) || 0));
+    if (!k) return { idJi: [], scoreById: new Map(), cosines: rows.length, belowThreshold: rows.length };
+    const heap: Array<{ seq: number; cos: number }> = [];
+    const up = (i: number) => {
+      while (i > 0) {
+        const p = (i - 1) >> 1;
+        if (heap[p]!.cos <= heap[i]!.cos) break;
+        [heap[p]!, heap[i]!] = [heap[i]!, heap[p]!];
+        i = p;
+      }
+    };
+    const down = (i: number) => {
+      for (;;) {
+        const l = i * 2 + 1;
+        const r = l + 1;
+        let m = i;
+        if (l < heap.length && heap[l]!.cos < heap[m]!.cos) m = l;
+        if (r < heap.length && heap[r]!.cos < heap[m]!.cos) m = r;
+        if (m === i) break;
+        [heap[m]!, heap[i]!] = [heap[i]!, heap[m]!];
+        i = m;
+      }
+    };
     for (const r of rows) {
       const v8 = unpackInt8(r.data);
       const cos = yuXianInt8(q8, qs, v8, Number(r.scale));
-      scored.push({ seq: r.seq, cos });
+      if (heap.length < k) { heap.push({ seq: r.seq, cos }); up(heap.length - 1); }
+      else if (cos > heap[0]!.cos) { heap[0] = { seq: r.seq, cos }; down(0); }
     }
-    scored.sort((a, b) => b.cos - a.cos);
+    heap.sort((a, b) => b.cos - a.cos);
     const idJi: string[] = [];
     const scoreById = new Map<string, number>();
-    let belowThreshold = 0;
-    for (const s of scored.slice(0, limit)) {
+    let belowThreshold = Math.max(0, rows.length - heap.length);
+    for (const s of heap) {
       if (s.cos < minCosine) {
         belowThreshold += 1;
         continue;
@@ -761,7 +794,6 @@ export class JiyiCangFuwu {
       idJi.push(id);
       scoreById.set(id, normalizeCosine(s.cos));
     }
-    belowThreshold += Math.max(0, scored.length - limit);
     return { idJi, scoreById, cosines: rows.length, belowThreshold };
   }
 
@@ -848,11 +880,10 @@ export class JiyiCangFuwu {
         if (tokens.length === 0) vecSkipped = 'empty query tokens';
         else if (vecUnkRatio > maxUnk) vecSkipped = `unk-ratio ${vecUnkRatio.toFixed(2)} > ${maxUnk}（稠密向量不可信，交给词法通道）`;
         else {
-          if (o.hydrate !== false) {
-            const h = await this.hydrateVectors(o.hydrateBudget ?? 256);
-            timings.hydrateMs = h.ms;
-            timings.hydrated = h.embedded;
-          }
+          /**
+           * 第 120 轮（P6）：查询先用**已建索引**，补算放到有界后台队列。
+           * 旧顺序是“先水合再查询”，每次召回都等全部嵌入完成；调用方 800ms 放弃后它还在继续烧 CPU。
+           */
           const eT = Date.now();
           const qvec = await this.embedQuery(o.query);
           timings.embedQueryMs = Date.now() - eT;
@@ -867,6 +898,17 @@ export class JiyiCangFuwu {
             for (const id of vec.idJi) scoreById.set(id, { ...(scoreById.get(id) ?? {}), vector: vec.scoreById.get(id) });
           }
           if (!vecShiyong) vecSkipped = `all ${vec.cosines} cosines below minCosine ${o.minCosine ?? vo.minCosine ?? 0.5}`;
+          if (o.hydrate !== false) {
+            /** single-flight + deadline：并发召回共用同一轮补算；到期就停，不再“放弃了还继续” */
+            const hP = this.hydrateVectors(o.hydrateBudget ?? 256, { deadline: o.deadline }).catch(() => null);
+            const remain = o.deadline ? Math.max(0, o.deadline - Date.now()) : 0;
+            const wait = Math.min(250, remain);
+            const h = await Promise.race([
+              hP,
+              new Promise<null>((res) => { const t = setTimeout(() => res(null), wait); t.unref?.(); }),
+            ]);
+            if (h) { timings.hydrateMs = h.ms; timings.hydrated = h.embedded; }
+          }
         }
       }
     }
@@ -1289,9 +1331,24 @@ export class JiyiCangFuwu {
    * 被动水合：把还没有向量的历史记录补上（最近优先），上限 budget 条。
    * 不是全量预算 —— 每次查询只补水合预算内的那部分，其余留给下一次。
    */
-  async hydrateVectors(budget = 256): Promise<{ embedded: number; ms: number; shengYu: number; skipped?: string }> {
+  async hydrateVectors(budget = 256, opts: { deadline?: number } = {}): Promise<{ embedded: number; ms: number; shengYu: number; skipped?: string }> {
+    if (opts.deadline) {
+      this.hydrateDeadline = this.hydrateDeadline ? Math.min(this.hydrateDeadline, opts.deadline) : opts.deadline;
+    }
+    /** single-flight：并发的召回/显式 hydrate 共用同一轮，避免同一条记录被重复嵌入 */
+    if (this.hydrateInFlight) return this.hydrateInFlight;
+    const p = this.hydrateVectorsInner(budget, opts);
+    this.hydrateInFlight = p;
+    try { return await p; } finally {
+      if (this.hydrateInFlight === p) { this.hydrateInFlight = null; this.hydrateDeadline = 0; }
+    }
+  }
+  private async hydrateVectorsInner(budget: number, opts: { deadline?: number }): Promise<{ embedded: number; ms: number; shengYu: number; skipped?: string }> {
     const qiShiShiJian = Date.now();
     if (!this.embedder) return { embedded: 0, ms: 0, shengYu: 0, skipped: this.vectorInitError || 'embedder unavailable' };
+    const dl = this.hydrateDeadline || opts.deadline;
+    const chaoShi = () => !!(dl && Date.now() >= dl);
+    if (chaoShi()) return { embedded: 0, ms: 0, shengYu: 0, skipped: 'deadline' };
     const maxChars = this.vectorOpts().maxEmbedChars ?? 512;
     const rows = this.db
       .prepare(
@@ -1302,8 +1359,10 @@ export class JiyiCangFuwu {
     if (!rows.length) return { embedded: 0, ms: Date.now() - qiShiShiJian, shengYu: 0 };
     const shiLi = this.db.prepare('INSERT OR REPLACE INTO vec_index (seq, dim, scale, data) VALUES (?,?,?,?)');
     let n = 0;
+    let skipped: string | undefined;
     for (const hang of rows) {
-      if (this.closed) break;
+      if (this.closed) { skipped = 'closed'; break; }
+      if (chaoShi()) { skipped = 'deadline'; break; }
       const text = String(hang.ti).slice(0, maxChars);
       const vec = await this.embedder.embed(text);
       const enc = bianMaXiangLiang(vec);
@@ -1313,7 +1372,7 @@ export class JiyiCangFuwu {
     const qiYu = (this.db
       .prepare('SELECT COUNT(*) AS n FROM records r LEFT JOIN vec_index v ON v.seq = r.seq WHERE v.seq IS NULL')
       .get() as { n: number }).n;
-    return { embedded: n, ms: Date.now() - qiShiShiJian, shengYu: qiYu };
+    return { embedded: n, ms: Date.now() - qiShiShiJian, shengYu: qiYu, ...(skipped ? { skipped } : {}) };
   }
 
   /** 直接嵌入一段文本（调试/测试用） */
@@ -1333,16 +1392,23 @@ export class JiyiCangFuwu {
     try {
       const len = Math.max(0, Number(tiao.end) - Number(tiao.start));
       if (!len) return String(tiao.ti || '');
-      const fd = fs.openSync(this.jsonlPath, 'r');
-      try {
-        const buf = Buffer.alloc(len);
-        fs.readSync(fd, buf, 0, len, Number(tiao.start));
-        const Hang = buf.toString('utf8').trim();
+      const f = fs as unknown as { __warmyReadLogicalRangeSync?: (p: string, start: number, end: number) => Buffer };
+      let Hang = '';
+      if (typeof f.__warmyReadLogicalRangeSync === 'function') {
+        // 索引存的是**明文字节偏移**；加密文件的物理偏移完全不同，必须走受管范围读取
+        Hang = f.__warmyReadLogicalRangeSync(this.jsonlPath, Number(tiao.start), Number(tiao.end)).toString('utf8').trim();
+      } else {
+        const fd = fs.openSync(this.jsonlPath, 'r');
         try {
-          const j = JSON.parse(Hang) as { ti?: string; content?: string; text?: string };
-          return String(j.ti ?? j.content ?? j.text ?? Hang);
-        } catch { return Hang; }
-      } finally { try { fs.closeSync(fd); } catch { /* noop */ } }
+          const buf = Buffer.alloc(len);
+          fs.readSync(fd, buf, 0, len, Number(tiao.start));
+          Hang = buf.toString('utf8').trim();
+        } finally { try { fs.closeSync(fd); } catch { /* noop */ } }
+      }
+      try {
+        const j = JSON.parse(Hang) as { ti?: string; content?: string; text?: string };
+        return String(j.ti ?? j.content ?? j.text ?? Hang);
+      } catch { return Hang; }
     } catch { return String(tiao.ti || ''); }
   }
 
@@ -1490,8 +1556,29 @@ interface JsonlSuoyin {
   entries: JsonlSuoyinTiaomu[];
 }
 
+/** 逻辑记录迭代（加密 JSONL 必须走这条；原生 fd 只看到 WARMYEF2 密文） */
+function logicalRecords(p: string): Generator<Buffer> | null {
+  const f = fs as unknown as {
+    __warmyReadLogicalRecordsSync?: (path: string) => Generator<Buffer>;
+    __warmyIsEncryptedPath?: (path: string) => boolean;
+  };
+  if (typeof f.__warmyReadLogicalRecordsSync !== 'function') return null;
+  try {
+    if (typeof f.__warmyIsEncryptedPath === 'function' && !f.__warmyIsEncryptedPath(p)) return null;
+  } catch { return null; }
+  return f.__warmyReadLogicalRecordsSync(p);
+}
+
 /** 同步分块逐行迭代（>2 GiB 文件安全；调用方只拿字符串行，不保留整文件） */
 export function* meiHangLiu(jsonlPath: string, chunk = 8 * 1024 * 1024): Generator<string> {
+  const recs = logicalRecords(jsonlPath);
+  if (recs) {
+    for (const b of recs) {
+      const s = b.toString('utf8');
+      for (const line of s.split(/\r?\n/)) if (line.length) yield line;
+    }
+    return;
+  }
   const buf = Buffer.allocUnsafe(chunk);
   const fd = fs.openSync(jsonlPath, 'r');
   try {
@@ -1530,6 +1617,45 @@ export function gouJianJsonlSuoYin(jsonlPath: string): JsonlSuoyin {
   if (!fs.existsSync(jsonlPath)) return empty;
   const st = fs.statSync(jsonlPath);
   const entries: JsonlSuoyinTiaomu[] = [];
+  const tui = (lineBuf: Buffer, absStart: number, absEnd: number) => {
+    const Hang = lineBuf.toString('utf8').trim();
+    if (!Hang) return;
+    let parsed: any = null;
+    try { parsed = JSON.parse(Hang); } catch { return; }
+    /**
+     * 只存**预览**：全文按字节偏移现读（否则 2000 行×2M ≈ 4GB 常驻内存 ⇒ OOM）。
+     * ⚠️ 必须**复制成独立字符串**：V8 的 `slice` 是 sliced string，会保留整条 4.7MB 原文的父串，
+     * 于是"只存 500 字"依然把全文留在堆里（实测 RSS 线性涨到 4GB 后 OOM）。
+     */
+    const quan = String(parsed.ti ?? parsed.content ?? parsed.text ?? Hang);
+    const ti = Buffer.from(quan.slice(0, 500), 'utf8').toString('utf8');
+    entries.push({
+      start: absStart,
+      end: absEnd,
+      seq: Number(parsed.seq ?? entries.length + 1),
+      id: String(parsed.id ?? ''),
+      ti,
+    });
+  };
+  /**
+   * 加密 JSONL：原生 fd 只能读到密文。改走受管记录迭代，偏移是**明文偏移**，
+   * 与 duJsonlQuanWen 的范围读取同一口径。
+   */
+  const recs = logicalRecords(jsonlPath);
+  if (recs) {
+    let pos = 0;
+    for (const b of recs) {
+      let from = 0;
+      for (let i = 0; i < b.length; i++) {
+        if (b[i] !== 0x0a) continue;
+        tui(b.subarray(from, i), pos + from, pos + i);
+        from = i + 1;
+      }
+      if (from < b.length) tui(b.subarray(from), pos + from, pos + b.length);
+      pos += b.length;
+    }
+    return { size: pos, mtimeMs: st.mtimeMs, entries };
+  }
   const CHUNK = 8 * 1024 * 1024;
   const buf = Buffer.allocUnsafe(CHUNK);
   const fd = fs.openSync(jsonlPath, 'r');
@@ -1539,26 +1665,6 @@ export function gouJianJsonlSuoYin(jsonlPath: string): JsonlSuoyin {
     let carry = Buffer.alloc(0);
     /** carry 在文件中的绝对起始偏移 */
     let carryStart = 0;
-    const tui = (lineBuf: Buffer, absStart: number, absEnd: number) => {
-      const Hang = lineBuf.toString('utf8').trim();
-      if (!Hang) return;
-      let parsed: any = null;
-      try { parsed = JSON.parse(Hang); } catch { return; }
-      /**
-       * 只存**预览**：全文按字节偏移现读（否则 2000 行×2M ≈ 4GB 常驻内存 ⇒ OOM）。
-       * ⚠️ 必须**复制成独立字符串**：V8 的 `slice` 是 sliced string，会保留整条 4.7MB 原文的父串，
-       * 于是"只存 500 字"依然把全文留在堆里（实测 RSS 线性涨到 4GB 后 OOM）。
-       */
-      const quan = String(parsed.ti ?? parsed.content ?? parsed.text ?? Hang);
-      const ti = Buffer.from(quan.slice(0, 500), 'utf8').toString('utf8');
-      entries.push({
-        start: absStart,
-        end: absEnd,
-        seq: Number(parsed.seq ?? entries.length + 1),
-        id: String(parsed.id ?? ''),
-        ti,
-      });
-    };
     for (;;) {
       const n = fs.readSync(fd, buf, 0, CHUNK, pos);
       if (n <= 0) break;
@@ -1669,7 +1775,11 @@ export function qishiJiyiCangFuwuIpc(CangLu: string, opts?: { dbKeyHex?: string 
     },
     /** 完整三路 recall（fts_uni ∪ fts_tri ∪ 向量 → RRF），返回卡片 + 计时 + 作用域统计 */
     recall: async (xiaoXi) => {
-      const detail = await fuwu.recallDetailed({ query: xiaoXi.query, scope: xiaoXi.scope, limit: xiaoXi.limit });
+      const detail = await fuwu.recallDetailed(
+        { query: xiaoXi.query, scope: xiaoXi.scope, limit: xiaoXi.limit },
+        xiaoXi.limit ?? 10,
+        { deadline: xiaoXi.deadline },
+      );
       return { ok: true, cards: detail.cards, timings: detail.timings, scopeStats: detail.scopeStats, channels: detail.channels, candidates: detail.candidates };
     },
     /** 同步 recall（不含异步向量水合），保持历史语义 */

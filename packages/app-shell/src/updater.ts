@@ -59,6 +59,9 @@ export interface GengXinQingDan {
   size?: number;
   mandatory?: boolean;
   publishedAt?: string;
+  /** Ed25519 签名（base64）；配置了公钥时必须有 */
+  signature?: string;
+  keyId?: string;
 }
 
 export interface GengXinJianChaJieGuo {
@@ -143,6 +146,8 @@ export interface GengxinqiXuanxiang {
   /** 下载硬上限（默认 512MB） */
   maxBytes?: number;
   userAgent?: string;
+  /** Ed25519 公钥（base64 SPKI DER）；配置后清单必须带有效签名，否则拒绝 */
+  manifestPublicKey?: string;
   log?: (xiaoXi: string) => void;
 }
 
@@ -387,7 +392,47 @@ export function guiFanHuaGengXinQingDan(
   if (mandatory !== undefined) manifest.mandatory = mandatory;
   const publishedAt = zifuchuan(obj['publishedAt']) || zifuchuan(obj['published_at']) || zifuchuan(obj['date']) || zifuchuan(obj['created_at']);
   if (publishedAt) manifest.publishedAt = publishedAt;
+  const signature = zifuchuan(obj['signature']) || zifuchuan(obj['sig']);
+  if (signature) manifest.signature = signature;
+  const keyId = zifuchuan(obj['keyId']) || zifuchuan(obj['key_id']);
+  if (keyId) manifest.keyId = keyId;
   return { ok: true, manifest };
+}
+
+/** 签名覆盖的规范化正文：键排序、剔除 signature/keyId（二者本身不参与签名） */
+export function qingDanQianMingWen(manifest: GengXinQingDan): string {
+  const { signature: _s, keyId: _k, ...rest } = manifest;
+  const pai = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(pai);
+    if (v && typeof v === 'object') {
+      const o = v as Record<string, unknown>;
+      const r: Record<string, unknown> = {};
+      for (const k of Object.keys(o).sort()) r[k] = pai(o[k]);
+      return r;
+    }
+    return v;
+  };
+  return JSON.stringify(pai(rest));
+}
+
+/** 校验清单签名；公钥为 base64 SPKI DER（Ed25519） */
+export function yanZhengQingDanQianMing(
+  manifest: GengXinQingDan,
+  publicKeyB64: string
+): { ok: boolean; reason?: string } {
+  if (!manifest.signature) return { ok: false, reason: 'signature-missing' };
+  let key: crypto.KeyObject;
+  try {
+    key = crypto.createPublicKey({ key: Buffer.from(String(publicKeyB64), 'base64'), format: 'der', type: 'spki' });
+  } catch {
+    return { ok: false, reason: 'public-key-invalid' };
+  }
+  try {
+    const ok = crypto.verify(null, Buffer.from(qingDanQianMingWen(manifest), 'utf8'), key, Buffer.from(manifest.signature, 'base64'));
+    return ok ? { ok: true } : { ok: false, reason: 'bad-signature' };
+  } catch {
+    return { ok: false, reason: 'bad-signature' };
+  }
 }
 
 /** 网络错误 → 粗粒度、无敏感信息的描述 */
@@ -478,6 +523,7 @@ export class Gengxinqi {
   private readonly downloadTimeoutMs: number;
   private readonly maxBytes: number;
   private readonly userAgent: string;
+  private readonly manifestPublicKey: string;
   private readonly log: (xiaoXi: string) => void;
 
   constructor(opts: GengxinqiXuanxiang) {
@@ -491,6 +537,7 @@ export class Gengxinqi {
     this.downloadTimeoutMs = opts.downloadTimeoutMs ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
     this.maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
     this.userAgent = opts.userAgent || `WArmy/${this.currentVersion}`;
+    this.manifestPublicKey = String(opts.manifestPublicKey || '').trim();
     this.log = opts.log || (() => {});
   }
 
@@ -594,6 +641,27 @@ export class Gengxinqi {
 
   // ── 查询 ──
 
+  /**
+   * 逐跳校验的重定向：初始 URL 和每一个 Location 都必须是 https（或显式 loopback），
+   * 最多 5 跳。`redirect:'follow'` 会默默跟随到 http，等于绕过初始校验。
+   */
+  private async anQuanFetch(url: string, init: RequestInit): Promise<Response> {
+    let cur = String(url);
+    for (let i = 0; i < 5; i++) {
+      const chk = jiaoyanGengxinyuanUrl(cur);
+      if (!chk.ok) throw new Error(`unsafe-update-url: ${chk.error || 'invalid'}`);
+      const res = await this.fetchImpl(chk.url, { ...init, redirect: 'manual' });
+      if ([301, 302, 303, 307, 308].includes(res.status)) {
+        const loc = res.headers.get('location');
+        if (!loc) return res;
+        cur = new URL(loc, chk.url).toString();
+        continue;
+      }
+      return res;
+    }
+    throw new Error('too-many-redirects（更新地址跳转超过 5 次）');
+  }
+
   async check(): Promise<GengXinJianChaJieGuo> {
     const started = Date.now();
     const src = this.resolveSource();
@@ -611,10 +679,9 @@ export class Gengxinqi {
     const ac = new AbortController();
     const jiShiQi = setTimeout(() => ac.abort(), this.timeoutMs);
     try {
-      res = await this.fetchImpl(src.url, {
+      res = await this.anQuanFetch(src.url, {
         method: 'GET',
         headers: { accept: 'application/json, text/plain;q=0.9, */*;q=0.5', 'user-agent': this.userAgent },
-        redirect: 'follow',
         signal: ac.signal,
       });
     } catch (e) {
@@ -693,6 +760,19 @@ export class Gengxinqi {
     }
 
     const { manifest } = guiFanHua;
+    if (this.manifestPublicKey) {
+      const q = yanZhengQingDanQianMing(manifest, this.manifestPublicKey);
+      if (!q.ok) {
+        const r = this.result('invalid-response', {
+          durationMs: Date.now() - started,
+          reason: q.reason || 'bad-signature',
+          message: `update check failed: manifest signature rejected (${q.reason || 'bad-signature'})`,
+        });
+        this.persistCheck(r);
+        this.log(`manifest signature rejected: ${q.reason || 'bad-signature'}`);
+        return r;
+      }
+    }
     const cmp = bijiaoBanben(manifest.version, this.currentVersion);
     if (cmp === null) {
       const r = this.result('invalid-response', {
@@ -803,10 +883,9 @@ export class Gengxinqi {
     const jiShiQi = setTimeout(() => ac.abort(), this.downloadTimeoutMs);
     let res: Response;
     try {
-      res = await this.fetchImpl(v.url, {
+      res = await this.anQuanFetch(v.url, {
         method: 'GET',
         headers: { accept: 'application/octet-stream, */*', 'user-agent': this.userAgent },
-        redirect: 'follow',
         signal: ac.signal,
       });
     } catch (e) {

@@ -27,6 +27,124 @@ import { renWenDangGeShi, tiQuWenDang } from './doc-extract.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/** 第 120 轮（W10）：nm 网页模式的最小下载管理（列表、进度、打开/定位） */
+export interface NmXiaZaiXiang {
+  id: number;
+  name: string;
+  path: string;
+  state: 'progressing' | 'completed' | 'cancelled' | 'interrupted';
+  received: number;
+  total: number;
+  startedAt: number;
+  endedAt?: number;
+}
+const NM_XIA_ZAI = new Map<number, NmXiaZaiXiang>();
+let nmXiaZaiXuHao = 1;
+const nmXiaZaiYiGua = new WeakSet<object>();
+let nmXiaZaiShenJi: ((op: string, detail: Record<string, unknown>) => void) | null = null;
+export function nmSheZhiXiaZaiShenJi(fn: ((op: string, detail: Record<string, unknown>) => void) | null): void {
+  nmXiaZaiShenJi = fn;
+}
+/** 会话级下载目录解析（由主进程注入：默认 <会话工作区>/downloads；已选目录按会话记住） */
+let nmXiaZaiLuJing: {
+  defaultDir: (sessionId: string) => string;
+  getSaved: (sessionId: string) => string;
+  save: (sessionId: string, dir: string) => void;
+} | null = null;
+export function nmSheZhiXiaZaiLuJing(fn: typeof nmXiaZaiLuJing): void { nmXiaZaiLuJing = fn; }
+import { nmAnQuanXiaZaiMing, nmWeiYiLuJing } from './nm-download-names.js';
+function nmGuangBoXiaZai(xiang: NmXiaZaiXiang): void {
+  for (const Z of CHUANG_KOU.values()) {
+    try { if (!Z.win.isDestroyed()) Z.win.webContents.send('warmy:nmXiaZaiGengXin', xiang); } catch { /* noop */ }
+  }
+}
+function nmXiaZaiGuaGou(sess: any): void {
+  if (!sess || typeof sess.on !== 'function' || nmXiaZaiYiGua.has(sess)) return;
+  nmXiaZaiYiGua.add(sess);
+  sess.on('will-download', (_e: unknown, item: any) => {
+    try {
+      const name = nmAnQuanXiaZaiMing(item.getFilename());
+      const wc = typeof item.getWebContents === 'function' ? item.getWebContents() : null;
+      const Z = wc ? [...CHUANG_KOU.values()].find((z) => z.wangYeView && !z.wangYeView.webContents.isDestroyed() && z.wangYeView.webContents.id === wc.id) : undefined;
+      const sid = String(Z?.huiHuaId || '');
+      let target = '';
+      const saved = sid && nmXiaZaiLuJing ? String(nmXiaZaiLuJing.getSaved(sid) || '') : '';
+      if (saved && fs.existsSync(saved)) {
+        /** 同一会话第一次问过位置；之后同目录，同名自动加 (1)(2) */
+        target = nmWeiYiLuJing(saved, name);
+      } else {
+        const def = sid && nmXiaZaiLuJing ? String(nmXiaZaiLuJing.defaultDir(sid) || '') : app.getPath('downloads');
+        const dir = def || app.getPath('downloads');
+        try { fs.mkdirSync(dir, { recursive: true }); } catch { /* noop */ }
+        const opts = {
+          title: '保存下载文件',
+          defaultPath: path.join(dir, name),
+        };
+        const chosen = Z && !Z.win.isDestroyed()
+          ? dialog.showSaveDialogSync(Z.win, opts)
+          : dialog.showSaveDialogSync(opts);
+        if (!chosen) { try { item.cancel(); } catch { /* noop */ } return; }
+        target = chosen;
+        if (sid && nmXiaZaiLuJing) {
+          try { nmXiaZaiLuJing.save(sid, path.dirname(chosen)); } catch { /* noop */ }
+        }
+      }
+      item.setSavePath(target);
+      const xiang: NmXiaZaiXiang = {
+        id: nmXiaZaiXuHao++,
+        name,
+        path: target,
+        state: 'progressing',
+        received: 0,
+        total: Math.max(0, Number(item.getTotalBytes()) || 0),
+        startedAt: Date.now(),
+      };
+      NM_XIA_ZAI.set(xiang.id, xiang);
+      nmGuangBoXiaZai(xiang);
+      let last = 0;
+      item.on('updated', (_ev: unknown, state: string) => {
+        const now = Date.now();
+        if (now - last < 250 && state === 'progressing') return;
+        last = now;
+        xiang.received = Math.max(0, Number(item.getReceivedBytes()) || 0);
+        xiang.total = Math.max(xiang.total, Number(item.getTotalBytes()) || 0);
+        xiang.state = state === 'interrupted' ? 'interrupted' : 'progressing';
+        nmGuangBoXiaZai({ ...xiang });
+      });
+      item.once('done', (_ev: unknown, state: string) => {
+        xiang.received = Math.max(0, Number(item.getReceivedBytes()) || 0);
+        xiang.total = Math.max(xiang.total, Number(item.getTotalBytes()) || 0);
+        xiang.state = state === 'completed' ? 'completed' : state === 'cancelled' ? 'cancelled' : 'interrupted';
+        xiang.endedAt = Date.now();
+        nmGuangBoXiaZai({ ...xiang });
+        try { nmXiaZaiShenJi?.('nm.download', { state: xiang.state, bytes: xiang.received, name: xiang.name, path: xiang.path }); } catch { /* noop */ }
+      });
+    } catch (err) {
+      try { nmXiaZaiShenJi?.('nm.download-failed', { error: String((err as Error)?.message || err).slice(0, 160) }); } catch { /* noop */ }
+    }
+  });
+}
+export function nmXiaZaiLieBiao(): NmXiaZaiXiang[] {
+  return [...NM_XIA_ZAI.values()].sort((a, b) => b.startedAt - a.startedAt).slice(0, 50).map((x) => ({ ...x }));
+}
+export function nmXiaZaiQingKong(): { removed: number } {
+  const n = [...NM_XIA_ZAI.values()].filter((x) => x.state !== 'progressing').length;
+  for (const [id, x] of NM_XIA_ZAI) if (x.state !== 'progressing') NM_XIA_ZAI.delete(id);
+  return { removed: n };
+}
+export async function nmXiaZaiDaKai(id: number): Promise<{ ok: boolean; error?: string }> {
+  const x = NM_XIA_ZAI.get(Number(id));
+  if (!x) return { ok: false, error: 'not-found' };
+  if (!fs.existsSync(x.path)) return { ok: false, error: 'file-missing' };
+  const e = await shell.openPath(x.path);
+  return e ? { ok: false, error: e } : { ok: true };
+}
+export function nmXiaZaiXianShi(id: number): { ok: boolean; error?: string } {
+  const x = NM_XIA_ZAI.get(Number(id));
+  if (!x || !fs.existsSync(x.path)) return { ok: false, error: 'file-missing' };
+  try { shell.showItemInFolder(x.path); return { ok: true }; } catch (e) { return { ok: false, error: String((e as Error)?.message || e) }; }
+}
+
 /** 吸附判定的"够近"阈值（像素）：两窗边缘差距 ≤ 这个数就贴上去 */
 export const NM_XI_FU_JIA = 24;
 
@@ -1068,6 +1186,8 @@ interface NmZhuangTai {
   id: number;
   win: BrowserWindow;
   luJing: string;
+  /** 打开该 nm 窗口的会话 id（下载目录按它解析；没有会话就是空） */
+  huiHuaId?: string;
   zongShiDing: boolean;
   xiFu: boolean;
   /**
@@ -1082,6 +1202,10 @@ interface NmZhuangTai {
   yiDongDingShi: NodeJS.Timeout | null;
   /** 第 104 轮 项 12：远程网页用 WebContentsView（本地网页仍走 sandbox iframe/srcdoc） */
   wangYeView?: WebContentsView;
+  /** 第 116 轮：远程页查找条是否打开（只用于把 Esc 转发给宿主收起） */
+  wangYeChaZhaoKai?: boolean;
+  /** 第 122 轮：链接在新标签页打开（渲染层开关；主进程据此拦 will-navigate） */
+  wangYeXinKai?: boolean;
 }
 
 /** 主窗口在窗口池里的固定 id（nm 窗口 id 都是正数，不会撞） */
@@ -1096,6 +1220,8 @@ export interface NmKaiXuanXiang {
   luJing: string;
   tuBiao?: string;
   zhuTi?: { mode: 'light' | 'dark'; accent: string; ink?: string };
+  /** 第 121 轮：从哪个会话打开（下载默认落在该会话工作区/downloads；窗口绝不张冠李戴） */
+  huiHuaId?: string;
 }
 
 function kongBian(): Record<NmBian, number | null> {
@@ -1501,6 +1627,57 @@ function wangYeZhuangTai(Z: NmZhuangTai, extra: Record<string, unknown> = {}): v
     Z.win.webContents.send('warmy:nmWangYeZhuangTai', { id: Z.id, ...extra });
   } catch { /* noop */ }
 }
+/** 第 116 轮：把 WebContents 自己的前进/后退/载入状态同步给工具栏（不再让渲染层猜） */
+function wangYeDaoHangZhuangTai(Z: NmZhuangTai): void {
+  try {
+    const wc = Z.wangYeView?.webContents;
+    if (!wc || wc.isDestroyed()) return;
+    wangYeZhuangTai(Z, {
+      nav: {
+        canGoBack: wc.navigationHistory.canGoBack(),
+        canGoForward: wc.navigationHistory.canGoForward(),
+        loading: wc.isLoading(),
+        url: wc.getURL(),
+      },
+    });
+  } catch { /* noop */ }
+}
+/**
+ * 第 116 轮：把远程页里的按键映射成 nm 自己的动作。
+ * 抽成纯函数是为了能离线断言（不依赖 WebContents 真的拿到焦点）。
+ */
+export function nmWangYeJianPanDongZuo(input: {
+  type?: string; key?: string; control?: boolean; meta?: boolean; alt?: boolean; shift?: boolean;
+}, chaZhaoKai = false): string {
+  if (String(input?.type || '') !== 'keyDown') return '';
+  const key = String(input?.key || '');
+  const ctrl = !!(input.control || input.meta);
+  if (ctrl && !input.alt && (key === 'f' || key === 'F')) return 'find';
+  if (ctrl && !input.alt && (key === 'l' || key === 'L')) return 'address';
+  if (ctrl && !input.alt && (key === 'r' || key === 'R')) return 'reload';
+  if (ctrl && !input.alt && (key === 'p' || key === 'P')) return 'print';
+  if (!ctrl && !input.alt && key === 'F5') return 'reload';
+  if (input.alt && key === 'ArrowLeft') return 'back';
+  if (input.alt && key === 'ArrowRight') return 'forward';
+  if (key === 'Escape' && chaZhaoKai) return 'escape';
+  return '';
+}
+/**
+ * 第 116 轮：焦点在远程页里时，宿主窗口收不到 keydown。
+ * 把 nm 自己的浏览器级快捷键经 before-input-event 转发回宿主渲染层处理；
+ * 页面内输入框的普通按键不受影响。
+ */
+function wangYeJianPan(Z: NmZhuangTai, e: { preventDefault(): void }, input: {
+  type?: string; key?: string; control?: boolean; meta?: boolean; alt?: boolean; shift?: boolean;
+}): void {
+  const shortcut = nmWangYeJianPanDongZuo(input, !!Z.wangYeChaZhaoKai);
+  if (!shortcut) return;
+  e.preventDefault();
+  if (shortcut === 'find' || shortcut === 'address') {
+    try { Z.win.focus(); Z.win.webContents.focus(); } catch { /* noop */ }
+  }
+  wangYeZhuangTai(Z, { shortcut });
+}
 function quWangYeView(Z: NmZhuangTai): WebContentsView {
   if (Z.wangYeView && !Z.wangYeView.webContents.isDestroyed()) return Z.wangYeView;
   const v = new WebContentsView({
@@ -1514,19 +1691,44 @@ function quWangYeView(Z: NmZhuangTai): WebContentsView {
     },
   });
   const wc = v.webContents;
-  wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+  /** 第 120 轮（W10）：网页下载落到系统下载目录，并在查看器里显示状态 */
+  try { nmXiaZaiGuaGou(wc.session); } catch { /* 下载钩子失败不影响浏览 */ }
+  /**
+   * 第 122 轮：target=_blank / window.open 不再无声丢掉——
+   * 一律拒绝新开原生窗口，把 URL 交回渲染层，在同一个 nm 窗口里新建标签页。
+   */
+  wc.setWindowOpenHandler(({ url }) => {
+    const u = String(url || '');
+    if (/^https?:\/\//i.test(u)) wangYeZhuangTai(Z, { openInNewTab: u });
+    else wangYeZhuangTai(Z, { blocked: u });
+    return { action: 'deny' };
+  });
   wc.on('will-navigate', (e, u) => {
-    if (!/^https?:\/\//i.test(String(u || ''))) { e.preventDefault(); wangYeZhuangTai(Z, { blocked: u }); }
+    const url = String(u || '');
+    if (!/^https?:\/\//i.test(url)) { e.preventDefault(); wangYeZhuangTai(Z, { blocked: url }); return; }
+    /**
+     * 开关开启：网页内的链接点击不覆盖当前页，而是在新标签页打开。
+     * will-navigate 只在用户/页面发起导航时触发，不拦 loadURL（我们自己的地址栏/新建标签）。
+     */
+    if (Z.wangYeXinKai) {
+      e.preventDefault();
+      wangYeZhuangTai(Z, { openInNewTab: url });
+    }
   });
   try { wc.session.setPermissionRequestHandler((_wc, _p, cb) => cb(false)); } catch { /* noop */ }
   try { wc.session.setPermissionCheckHandler(() => false); } catch { /* noop */ }
   wc.on('page-title-updated', (_e, title) => wangYeZhuangTai(Z, { title }));
-  wc.on('did-navigate', (_e, url) => wangYeZhuangTai(Z, { url, loading: false }));
-  wc.on('did-navigate-in-page', (_e, url, isMain) => { if (isMain) wangYeZhuangTai(Z, { url }); });
-  wc.on('did-start-loading', () => wangYeZhuangTai(Z, { loading: true }));
-  wc.on('did-stop-loading', () => wangYeZhuangTai(Z, { loading: false }));
+  wc.on('did-navigate', (_e, url) => {
+    Z.wangYeChaZhaoKai = false;
+    wangYeZhuangTai(Z, { url, loading: false, found: { matches: 0, active: 0, query: '' } });
+    wangYeDaoHangZhuangTai(Z);
+  });
+  wc.on('did-navigate-in-page', (_e, url, isMain) => { if (isMain) { wangYeZhuangTai(Z, { url }); wangYeDaoHangZhuangTai(Z); } });
+  wc.on('did-start-loading', () => { wangYeZhuangTai(Z, { loading: true }); wangYeDaoHangZhuangTai(Z); });
+  wc.on('did-stop-loading', () => { wangYeZhuangTai(Z, { loading: false }); wangYeDaoHangZhuangTai(Z); });
   wc.on('render-process-gone', (_e, d) => wangYeZhuangTai(Z, { crashed: true, reason: d?.reason || '' }));
   wc.on('found-in-page', (_e, r) => wangYeZhuangTai(Z, { found: { matches: r.matches, active: r.activeMatchOrdinal } }));
+  wc.on('before-input-event', (e, input) => wangYeJianPan(Z, e, input));
   Z.win.contentView.addChildView(v);
   v.setVisible(false);
   Z.wangYeView = v;
@@ -1545,6 +1747,7 @@ export function nmWangYeKai(p0: { id?: number; url?: string; kuang?: NmWangYeKua
     v.setVisible(true);
     const cur = v.webContents.getURL();
     if (cur !== url) void v.webContents.loadURL(url).catch(() => { /* 错误由 did-fail-load / 状态事件如实回报 */ });
+    wangYeDaoHangZhuangTai(Z);
     return { ok: true };
   } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 200) }; }
 }
@@ -1576,8 +1779,45 @@ export function nmWangYeDaoHang(id: number, dong: 'back' | 'forward' | 'reload' 
       if (!/^https?:\/\//i.test(u)) return { ok: false, cuo: '只支持 http/https 网页' };
       void wc.loadURL(u).catch(() => { /* noop */ });
     }
+    wangYeDaoHangZhuangTai(Z);
     return { ok: true };
   } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e) }; }
+}
+
+/** 第 122 轮：链接在新标签页打开的开关（渲染层按钮 → 主进程 will-navigate 判据） */
+export function nmWangYeXinKai(id: number, kai: boolean): { ok: boolean } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  if (!Z) return { ok: false };
+  Z.wangYeXinKai = !!kai;
+  return { ok: true };
+}
+
+/**
+ * 第 122 轮：远程网页源码。页面由 WebContentsView 承载，
+ * `executeJavaScript` 在它的主 frame 里读 `document.documentElement.outerHTML`——
+ * 跨域也拿得到（不是网页脚本的 fetch）；返回的是**渲染后的 HTML**（脚本改过 DOM 也是当前看到的这一份）。
+ */
+export async function nmWangYeYuan(id: number): Promise<{ ok: boolean; html?: string; url?: string; title?: string; truncated?: boolean; cuo?: string }> {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  if (!Z || !Z.wangYeView || Z.wangYeView.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+  const wc = Z.wangYeView.webContents;
+  try {
+    const url = wc.getURL();
+    if (!/^https?:\/\//i.test(url)) return { ok: false, cuo: '当前不是远程网页' };
+    const html = await wc.executeJavaScript(
+      '(document.documentElement ? ("<!DOCTYPE html>\\n" + document.documentElement.outerHTML) : "")',
+      false,
+    );
+    const s = String(html ?? '');
+    const MAX = 2 * 1024 * 1024;
+    return {
+      ok: true,
+      html: s.slice(0, MAX),
+      url,
+      title: wc.getTitle(),
+      ...(s.length > MAX ? { truncated: true } : {}),
+    };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 300) }; }
 }
 
 /** 远程页内查找（DOM 查找只能查 nm 自己的页面，查不到 WebContentsView） */
@@ -1586,9 +1826,16 @@ export function nmWangYeChaZhao(id: number, wen: string, xiangQian = true): { ok
   if (!Z || !Z.wangYeView || Z.wangYeView.webContents.isDestroyed()) return { ok: false };
   const wc = Z.wangYeView.webContents;
   const s = String(wen || '');
-  if (!s) { try { wc.stopFindInPage('clearSelection'); } catch { /* noop */ } return { ok: true }; }
+  if (!s) {
+    Z.wangYeChaZhaoKai = false;
+    try { wc.stopFindInPage('clearSelection'); } catch { /* noop */ }
+    wangYeZhuangTai(Z, { found: { matches: 0, active: 0, query: '' } });
+    return { ok: true };
+  }
+  Z.wangYeChaZhaoKai = true;
   try {
     const requestId = wc.findInPage(s, { forward: !!xiangQian, findNext: true });
+    wangYeZhuangTai(Z, { found: { matches: 0, active: 0, query: s, pending: true } });
     return { ok: true, requestId };
   } catch { return { ok: false }; }
 }
@@ -1607,7 +1854,8 @@ export function nmShiTuKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yi
     if (!abs || !fs.existsSync(abs)) return { ok: false, cuo: '文件不存在' };
     if (fs.statSync(abs).isDirectory()) return { ok: false, cuo: '这是目录，不是文件' };
     for (const z of CHUANG_KOU.values()) {
-      if (z.luJing === abs && !z.win.isDestroyed()) {
+      /** 同文件 + 同会话才复用；不同会话打开同一路径必须各自绑定，下载目录不能串 */
+      if (z.luJing === abs && z.huiHuaId === xuan?.huiHuaId && !z.win.isDestroyed()) {
         z.win.show();
         z.win.focus();
         return { ok: true, id: z.id, yiCunZai: true };
@@ -1646,6 +1894,7 @@ export function nmShiTuKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yi
       id: w.id,
       win: w,
       luJing: abs,
+      huiHuaId: String(xuan?.huiHuaId || ''),
       zongShiDing: false,
       xiFu: true, // 产品要求：吸附默认开
       bian: kongBian(),

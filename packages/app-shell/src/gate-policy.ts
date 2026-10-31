@@ -85,21 +85,25 @@ export function ruanMenJinChongTu(wen: string): string[] {
   const hit = new Set<string>();
   if (!t.trim()) return [];
   const ju = t.split(/[。；;\n]+/).map((s) => s.trim()).filter(Boolean);
-  const fouding = (s: string) => /(不需要|无需|可以不|不必|禁止|不允许|跳过|忽略|取消|废除|免去|不做|不用)/.test(s);
-  const kenDing = (s: string) => /(必须|只能|一定要|务必|不得)/.test(s);
+  /** 明确的禁止词：出现时该句是在**执行**硬门禁，不是在取消它 */
+  const jinZhi = (s: string) => /(禁止|严禁|不得|不许|不要|不能|不可|不允许|不准)/.test(s);
+  /** 明确的取消/放行词：只有它才可能表示与硬门禁冲突 */
+  const quXiao = (s: string) => /(不需要|无需|不必|可以不|跳过|忽略|取消|废除|免去|不做|不用)/.test(s);
+  const yunXu = (s: string) => !jinZhi(s) && /(允许|可以|直接|自行|自己)/.test(s);
   for (const s of ju) {
-    const fou = fouding(s);
-    const ken = kenDing(s);
-    // A：可复用能力
-    if (/可复用能力|skill|门禁|插件/.test(s) && /只留在聊天|只写在聊天|留在聊天里/.test(s) && !/(不得|不许|不要|禁止)/.test(s)) hit.add('A');
-    if (fou && /(skill|门禁|插件)/.test(s) && /(落成|固化成|沉淀成|落盘)/.test(s)) hit.add('A');
-    // B：计划任务
-    if (fou && /计划任务|计划步骤|plan_update|doing|verified/.test(s)) hit.add('B');
-    if (/自填 verified|自己标 verified|直接标 verified/i.test(s) && !/不(许|能|得)/.test(s)) hit.add('B');
-    // C：后台任务制度
-    if (fou && /后台任务|交代|汇报|先说清/.test(s)) hit.add('C');
-    if (/静默执行|不要汇报|无需交代/.test(s) && !/不(许|能|得)/.test(s)) hit.add('C');
-    // D：硬门禁可被覆盖
+    const fou = jinZhi(s) || quXiao(s);
+    const ken = jinZhi(s);
+    // A：可复用能力（"禁止落成 skill" 本身与 A 冲突，保留）
+    if (/可复用能力|skill|门禁|插件/.test(s) && /只留在聊天|只写在聊天|留在聊天里/.test(s) && !jinZhi(s)) hit.add('A');
+    if (fou && /(skill|门禁|插件)/.test(s) && /(落成|固化成|沉淀成|落盘)/.test(s) && !/不禁止|无需禁止/.test(s)) hit.add('A');
+    // B：计划任务 —— "禁止自填 verified / 禁止跳过计划" 是在执行门禁，不是冲突
+    if (quXiao(s) && !jinZhi(s) && /计划任务|计划步骤|plan_update/.test(s)) hit.add('B');
+    if (yunXu(s) && /(多步|同时|并行)[^。；，,]{0,8}doing|doing[^。；，,]{0,8}(多步|同时|并行)/i.test(s)) hit.add('B');
+    if (yunXu(s) && /自填 verified|自己标 verified|直接标 verified/i.test(s)) hit.add('B');
+    // C：后台任务制度 —— "禁止静默执行" 不冲突
+    if (quXiao(s) && !jinZhi(s) && /后台任务|交代|汇报|先说清/.test(s)) hit.add('C');
+    if (yunXu(s) && /静默执行|不要汇报|无需交代/.test(s) && !jinZhi(s)) hit.add('C');
+    // D：硬门禁可被覆盖 —— "禁止覆盖硬门禁" 不冲突
     if (/(硬门禁|hard gate)/i.test(s) && /(?:可以|可|能|允许)(?:被[^。；，,]{0,8})?(?:覆盖|跳过|忽略|绕过|替代|降到次要)|优先级更低|不必遵守|可忽略|次要规则/.test(s) && !ken) hit.add('D');
   }
   return [...hit];

@@ -890,6 +890,50 @@ function ipv6ScopeOrNull(host: string): string | null {
   return s === 'invalid' ? null : s;
 }
 
+/**
+ * 项目属性入站决策：只有"本机不是创建者 + 对端握手身份等于本地记录的创建者"才允许应用。
+ * 未知群/无创建者指纹/非创建者一律拒绝；创建者自己的回声忽略（不覆盖本机事实）。
+ */
+export function jueCeXiangMuShuXingLaiYuan(shuRu: {
+  hasGroup: boolean;
+  creatorFingerprint: string;
+  peerFingerprint: string;
+  localFingerprint: string;
+}): 'apply' | 'echo' | 'reject-unknown-group' | 'reject-creator-mismatch' {
+  if (!shuRu.hasGroup || !String(shuRu.creatorFingerprint || '').trim()) return 'reject-unknown-group';
+  const peerIsCreator = zhiWenXiangTong(shuRu.creatorFingerprint, shuRu.peerFingerprint);
+  const localIsCreator = zhiWenXiangTong(shuRu.creatorFingerprint, shuRu.localFingerprint);
+  if (peerIsCreator && localIsCreator) return 'echo';
+  if (!peerIsCreator) return 'reject-creator-mismatch';
+  return 'apply';
+}
+
+export type JiaRuPiZhunJueCe =
+  | 'ok'
+  | 'issuer-handshake-mismatch'
+  | 'no-pending-request'
+  | 'token-mismatch'
+  | 'public-key-mismatch'
+  | 'subject-mismatch';
+
+/** 加入批准的三方绑定：握手身份、待批申请、token/公钥/主体必须同时一致 */
+export function jueCeJiaRuPiZhun(shuRu: {
+  peerFingerprint: string;
+  issuerFingerprint: string;
+  pending: { token?: string; subjectPublicKey?: string; subjectFp?: string } | null;
+  token: string;
+  publicKey: string;
+  subjectFp: string;
+}): JiaRuPiZhunJueCe {
+  if (!shuRu.peerFingerprint || !shuRu.issuerFingerprint
+    || !zhiWenXiangTong(shuRu.issuerFingerprint, shuRu.peerFingerprint)) return 'issuer-handshake-mismatch';
+  if (!shuRu.pending) return 'no-pending-request';
+  if (shuRu.pending.token && shuRu.pending.token !== shuRu.token) return 'token-mismatch';
+  if (shuRu.pending.subjectPublicKey && shuRu.pending.subjectPublicKey !== shuRu.publicKey) return 'public-key-mismatch';
+  if (shuRu.pending.subjectFp && !zhiWenXiangTong(shuRu.pending.subjectFp, shuRu.subjectFp)) return 'subject-mismatch';
+  return 'ok';
+}
+
 /* ────────────────────────────── 鉴权组网服务 ────────────────────────────── */
 
 export interface WangzhuangDuiduanYinyong {
@@ -899,6 +943,29 @@ export interface WangzhuangDuiduanYinyong {
   port: number;
   kind?: 'lan' | 'wan';
   lastSeen?: number;
+  /** 鉴权握手学到的对端指纹；没有就不能被收件人白名单选中 */
+  zhiWen?: string;
+}
+
+/** 指纹文本比较：忽略分隔符/大小写（只用于比较，不用于加密推导） */
+export function zhiWenXiangTong(a: unknown, b: unknown): boolean {
+  const norm = (v: unknown) => String(v ?? '').replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+  const x = norm(a);
+  return !!x && x === norm(b);
+}
+
+/**
+ * 收件人白名单过滤：**在构造传输之前**只保留握手身份确实属于该会话的对端。
+ * 没有指纹的旧地址簿记录一律不选（宁可 no-matching-peers，也不把内容发给未知人）。
+ */
+export function guoLvShouJianDuiDuan(
+  peers: WangzhuangDuiduanYinyong[],
+  allowedFingerprints: string[]
+): WangzhuangDuiduanYinyong[] {
+  const allowed = (allowedFingerprints || []).filter((x) => String(x || '').trim());
+  if (!allowed.length) return [];
+  return (peers || []).filter((p) => !!p && !!p.host && Number(p.port) > 0 && !!p.zhiWen
+    && allowed.some((fp) => zhiWenXiangTong(fp, p.zhiWen)));
 }
 
 export interface AnQuanRuXiangXiaoXi {
@@ -1313,22 +1380,44 @@ export class SecureMesh {
     return this.liveness.status(zhiWen);
   }
 
+  /** 向指定指纹的**已建立**会话发一条控制帧（投递回执用）；没有活会话就返回 false，不新拨号 */
+  sendControlToPeer(peerFp: string, payload: unknown): boolean {
+    if (!peerFp) return false;
+    const huo = [
+      ...(this.server?.sessionList ?? []),
+      ...[...this.clients.values()].map((c) => c.session).filter((s): s is AnQuanHuiHua => !!s),
+    ];
+    const session = huo.find((s) => s.alive && zhiWenXiangTong(s.info.peerFingerprint, peerFp));
+    if (!session) return false;
+    try {
+      session.faSong({ to: peerFp, channel: 'control', payload });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** 出站：连一个地址发一条消息（一次拨号一次握手；失败即返回，不重试） */
   async sendToHost(
     host: string,
     port: number,
     xiaoXi: Omit<TongbuXiaoxi, 'id' | 'ts' | 'from'>,
-    opts: { pin?: string; timeoutMs?: number; keepOpen?: boolean } = {}
+    opts: { pin?: string; timeoutMs?: number; keepOpen?: boolean; expectFingerprints?: string[] } = {}
   ): Promise<{ ok: boolean; error?: string; peerFingerprint?: string; latencyMs?: number }> {
     const store = this.opts.store();
     const menjin = yaoQiuKeQianMingShenFen(store);
     if (!menjin.ok || !store) return { ok: false, error: menjin.errorCode ?? 'identity-missing' };
     const key = `${host}:${port}`;
     const cunzai = this.clients.get(key);
-    if (cunzai?.session?.alive) {
+    const cunzaiSession = cunzai?.session || null;
+    if (cunzaiSession?.alive) {
+      if (opts.expectFingerprints?.length
+        && !opts.expectFingerprints.some((fp) => zhiWenXiangTong(fp, cunzaiSession.info.peerFingerprint))) {
+        return { ok: false, error: 'recipient-mismatch' };
+      }
       try {
-        cunzai.session.faSong(xiaoXi);
-        return { ok: true, peerFingerprint: cunzai.session.info.peerFingerprint };
+        cunzaiSession.faSong(xiaoXi);
+        return { ok: true, peerFingerprint: cunzaiSession.info.peerFingerprint };
       } catch (e) {
         return { ok: false, error: (e as Error).message };
       }
@@ -1360,6 +1449,12 @@ export class SecureMesh {
     if (opts.keepOpen) this.clients.set(key, client);
     const peerFingerprint = r.session.info.peerFingerprint;
     const latencyMs = this.now() - started;
+    if (opts.expectFingerprints?.length
+      && !opts.expectFingerprints.some((fp) => zhiWenXiangTong(fp, peerFingerprint))) {
+      // 握手完成但对方不是本会话的收件人：**一条消息都不发**，直接关闭
+      try { client.close('recipient-mismatch'); } catch { /* noop */ }
+      return { ok: false, error: 'recipient-mismatch', peerFingerprint, latencyMs };
+    }
     try {
       r.session.faSong(xiaoXi);
     } catch (e) {

@@ -604,30 +604,35 @@ body.liaoTianChuangKou .liaoTianBuJu {
 #shuRu:focus, #shuRu:focus-visible {
   outline: none; box-shadow: none; border: none; background: transparent;
 }
-/* ── 整理语言时的输入框特效：逐字明暗 + 主题色魔法光点，整体很淡 ── */
+/* ── 整理语言时的输入框特效：字保持本色，少数随机字变主题色发光闪烁 + 星星点点 + 字在重排 ── */
 #shuRu.zhengLiZhong {
   color: transparent;
   caret-color: var(--accent);
-  cursor: progress;
+  /* 魔法光标由脚本按主题色生成 data URI；这里只是不支持时的兜底（绝不出现等待光标） */
+  cursor: text;
 }
-#shuRu[aria-readonly="true"] { cursor: progress; }
+#shuRu[aria-readonly="true"] { cursor: text; }
 .shuRuQuZhu.zhengLiZhong { border-color: color-mix(in srgb, var(--accent) 36%, var(--input-border)); }
 .zhengLiTeXiao {
   position: absolute; left: 0; top: 0;
   pointer-events: none; overflow: hidden;
   border-radius: 8px; z-index: 3;
+  transition: opacity .24s ease;
 }
+.zhengLiTeXiao.zhengLiShou { opacity: 0; }
 .zhengLiTeXiao::after {
   content: '';
   position: absolute; inset: 0;
   border-radius: inherit;
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
-    0 0 16px color-mix(in srgb, var(--accent) 12%, transparent);
-  opacity: .7;
-  animation: zhengLiBian 4.2s ease-in-out infinite;
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent),
+    0 0 24px color-mix(in srgb, var(--accent) 22%, transparent);
+  opacity: .8;
+  animation: zhengLiBian 2.6s ease-in-out infinite;
   pointer-events: none;
+  transition: opacity .2s ease;
 }
+.zhengLiTeXiao.zhengLiShou::after { animation: none; opacity: 0; }
 .zhengLiTeXiaoWen {
   position: absolute; left: 0; top: 0;
   width: 100%; height: 100%;
@@ -639,53 +644,123 @@ body.liaoTianChuangKou .liaoTianBuJu {
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: break-word;
-  color: color-mix(in srgb, var(--accent) 38%, var(--ink));
+  /* 字仍然是字体本色：主题色只落在随机亮起的少数几个字上 */
+  color: var(--ink);
   z-index: 1;
   will-change: transform;
+  transition: opacity .22s ease;
 }
-.zhengLiZi { opacity: .95; }
+.zhengLiZi {
+  position: relative;
+  display: inline-block;
+  color: inherit;
+  opacity: 1;
+  will-change: transform, opacity;
+  transition: color .16s ease, opacity .16s ease, text-shadow .16s ease, transform .26s cubic-bezier(.2, .7, .3, 1);
+}
+/* 随机亮字：主题色 + 发光 + 两次闪烁；右上角同时爆出一颗小星芒 */
 .zhengLiZi.isLiang {
-  animation: zhengLiZiLiang var(--zi-dur, 3.2s) ease-in-out infinite;
-  animation-delay: var(--zi-delay, 0s);
+  animation: zhengLiZiLiang var(--zi-dur, .72s) ease-out 1;
+}
+.zhengLiZi.isLiang::after {
+  content: '✦';
+  position: absolute;
+  right: -0.3em; top: -0.66em;
+  font-size: .6em;
+  line-height: 1;
+  color: var(--accent);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 90%, transparent);
+  animation: zhengLiXingMang var(--zi-dur, .72s) ease-out 1;
+  pointer-events: none;
+}
+/* 重排：位移由脚本写入，这里只保证挪动的字盖住相邻字 */
+.zhengLiZi.isPaiLie { z-index: 2; }
+/* 整理完成：新字从散落位置逐字归位，先主题色再回到本色 */
+.zhengLiZi.zhengLiCongLai {
+  animation: zhengLiCongLai .58s cubic-bezier(.2, .7, .25, 1) both;
 }
 .zhengLiTeXiaoHua {
   position: absolute; left: 0; top: 0;
   z-index: 0;
   pointer-events: none;
+  transition: opacity .22s ease;
 }
+.zhengLiTeXiao.zhengLiShou .zhengLiTeXiaoHua,
+.zhengLiTeXiao.zhengLiShou .zhengLiTeXiaoWen { opacity: 0; }
 /* 只读提示：说明“现在不能改字”不是因为卡死，取消/完成会恢复 */
 .zhengLiTiShi {
-  position: absolute; right: 10px; bottom: 6px;
+  position: absolute; right: 8px; bottom: 5px;
   z-index: 2;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--card) 82%, var(--accent) 10%);
   font-size: var(--fs-xs);
-  color: color-mix(in srgb, var(--accent) 62%, var(--muted));
-  opacity: .72;
+  color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+  opacity: .92;
   pointer-events: none;
   letter-spacing: .02em;
 }
 .zhengLiChangWen .zhengLiTeXiaoWen {
-  opacity: .82;
-  animation: zhengLiChangWen 4.6s ease-in-out infinite;
+  opacity: .9;
+  animation: zhengLiChangWen 2s ease-in-out infinite;
 }
 @keyframes zhengLiZiLiang {
-  0%, 100% {
-    opacity: var(--zi-ji, .78);
-    color: color-mix(in srgb, var(--accent) 32%, var(--ink));
+  0% {
+    color: var(--ink);
     text-shadow: none;
-  }
-  50% {
     opacity: 1;
+  }
+  16% {
     color: var(--accent);
-    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 95%, transparent), 0 0 2px var(--accent);
+    opacity: 1;
+  }
+  42% {
+    color: color-mix(in srgb, var(--accent) 55%, var(--ink));
+    text-shadow: 0 0 4px color-mix(in srgb, var(--accent) 40%, transparent);
+    opacity: .84;
+  }
+  68% {
+    color: var(--accent);
+    text-shadow: 0 0 13px color-mix(in srgb, var(--accent) 95%, transparent), 0 0 3px var(--accent);
+    opacity: 1;
+  }
+  100% {
+    color: var(--ink);
+    text-shadow: none;
+    opacity: 1;
+  }
+}
+@keyframes zhengLiXingMang {
+  0% { opacity: 0; transform: scale(.3) rotate(0deg); }
+  30% { opacity: .95; transform: scale(1) rotate(35deg); }
+  100% { opacity: 0; transform: scale(.4) rotate(90deg); }
+}
+@keyframes zhengLiCongLai {
+  0% {
+    color: var(--accent);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 85%, transparent);
+    filter: blur(1.2px);
+  }
+  55% {
+    color: var(--accent);
+    text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 55%, transparent);
+    filter: blur(0);
+  }
+  100% {
+    color: var(--ink);
+    text-shadow: none;
+    filter: none;
   }
 }
 @keyframes zhengLiBian {
-  0%, 100% { opacity: .55; }
-  50% { opacity: .9; }
+  0%, 100% { opacity: .65; }
+  50% { opacity: 1; }
 }
 @keyframes zhengLiChangWen {
-  0%, 100% { opacity: .7; }
-  50% { opacity: .92; }
+  0%, 100% { opacity: .78; text-shadow: 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+  50% { opacity: 1; text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent); }
 }
 .shuRuCounter {
   text-align: right; font-size: var(--fs-xs); color: var(--muted);
@@ -925,16 +1000,17 @@ button.ddWen:hover { background: transparent !important; color: var(--ink); }
 .jinJiPills button.qiYong[data-u="P1"] { color: var(--danger); font-weight: 600; }
 .shuRuQuFaSongHang { display: flex; align-items: center; gap: 4px; }
 /* 话筒右侧的下拉：重组语言 / 自动发送 */
-/* 下拉箭头紧挨话筒：话筒按钮 36px 内含 7px 空 padding，箭头按钮 20px 内含 2px，
-   再把整块左移 12px ⇒ 两个图标的视觉间距约 1px（第 107 轮用户口径）。 */
-.yuYinDd { position: relative; display: flex; align-items: center; margin-left: -12px; }
+/* 下拉箭头紧挨话筒：话筒按钮 36px 内含 7px 空 padding，箭头按钮 18px 内含 2px，
+   整块左移 13px ⇒ 两个图标视觉间距 0，箭头看起来是话筒右下角的小附属。 */
+.yuYinDd { position: relative; display: flex; align-items: center; margin-left: -13px; }
 .yuYinXiaLa {
   border: 0; background: transparent; color: var(--muted); cursor: pointer;
-  width: 20px; height: 30px; display: flex; align-items: center; justify-content: center;
+  width: 18px; height: 28px; display: flex; align-items: center; justify-content: center;
   border-radius: 6px; padding: 0;
+  opacity: .86;
 }
-.yuYinXiaLa:hover { background: var(--hover); color: var(--ink); }
-.yuYinXiaLa .ico { width: 16px; height: 16px; }
+.yuYinXiaLa:hover { background: var(--hover); color: var(--ink); opacity: 1; }
+.yuYinXiaLa .ico { width: 14px; height: 14px; }
 .yuYinCaiDan {
   position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 1300;
   width: min(292px, calc(100vw - 40px));
@@ -1236,6 +1312,8 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
 }
 /* 数据范围/定时导出：内容多，卡片变宽；高度永远服从主界面，超出就在内容区滚动 */
 .duiHuaKuangKa:has(.daoChuShu) { width: min(780px, calc(100vw - 48px)); }
+/* 我的名片：卡片宽度跟随内容，但不超过主界面；内容超出高度时才由 .duiHuaKuangTi 滚动 */
+.duiHuaKuangKa:has(.woCardBody) { width: min(560px, calc(100vw - 48px)); }
 .duiHuaKuangBiaoTi, .duiHuaKuangDongZuoJi { flex: 0 0 auto; }
 .duiHuaKuangTi { min-height: 0; overflow: auto; padding-right: 4px; }
 @keyframes modal-in {
@@ -2442,10 +2520,10 @@ body.liaoTianChuangKou #pageBuJu, body.liaoTianChuangKou #kongTai, body.liaoTian
 #warmyAuthMyCard { margin-top: 2px; }
 #warmyAuthMyCard:empty { display: none; }
 /* 我的名片弹窗：服务商多选 + 生成二维码/链接（链接一律纯文本，不做可点样式） */
-.woCardBody { min-width: min(520px, 72vw); }
+.woCardBody { min-width: 0; }
 .woCardAvatar { margin-top: 0; }
 .woCardProvTitle { margin: 12px 0 6px; font-weight: 600; }
-.woCardProvList { display: flex; flex-direction: column; gap: 6px; max-height: 210px; overflow: auto; padding: 2px; }
+.woCardProvList { display: flex; flex-direction: column; gap: 6px; padding: 2px; }
 .woCardProv { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
 .woCardProv .jingYin { font-size: 11px; }
 .woCardOut { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
@@ -2872,20 +2950,6 @@ body.liaoTianChuangKou #appTi {
 .mianBanKuai:hover > .kaGuanBi { opacity: 1; pointer-events: auto; }
 .kaGuanBi:hover { background: var(--hover, rgba(0,0,0,0.08)); color: var(--danger, #c00); }
 
-/* 第四列卡片拖拽手柄：悬停才出现，位置在「×」左边。
-   只在手柄上按住才能拖动 —— 卡片体内全是可点元素，整块起拖会把这些操作全废掉。 */
-.kaTuoBa {
-  position: absolute; top: 4px; right: 32px;
-  width: 26px; height: 26px; padding: 0;
-  border: none; border-radius: 4px;
-  background: transparent; color: var(--ink-dim, #888);
-  font-size: 13px; line-height: 26px; letter-spacing: -2px; cursor: grab;
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.15s, background 0.15s;
-}
-.mianBanKuai:hover > .kaTuoBa { opacity: 1; pointer-events: auto; }
-.kaTuoBa:hover { background: var(--hover, rgba(0,0,0,0.08)); color: var(--ink); }
-.kaTuoBa:active { cursor: grabbing; }
 /* 正在拖动的那张：浮起来（脱离文档流、贴着指针）*/
 .mianBanKuai.kaTuoZhong { opacity: .96; outline: 1px dashed var(--accent); outline-offset: 2px;
   box-shadow: 0 10px 26px rgba(0, 0, 0, .28); cursor: grabbing; }
@@ -2898,7 +2962,7 @@ body.liaoTianChuangKou #appTi {
  * 以前折叠是逐个给子元素加 `yinCang`，而渲染函数每轮都会重写 innerHTML
  * （真机：定时/分身卡收起后一切会话又弹回展开）。卡片级 class 不会被重写冲掉。
  */
-.mianBanKuai.shouQi > :not([data-ka-title]):not(.kaGuanBi):not(.kaTuoBa) { display: none !important; }
+.mianBanKuai.shouQi > :not([data-ka-title]):not(.kaGuanBi) { display: none !important; }
 /** 收起就是一行：不许带着用户拉高的 inline 高度（否则收起态还是老高一块） */
 .mianBanKuai.shouQi {
   height: auto !important; max-height: none !important; min-height: 0 !important; resize: none;
@@ -3733,6 +3797,8 @@ html { font-weight: var(--fw-ui, 400); }
 .dingShiMing { font-weight: 600; margin-bottom: 2px; }
 
 /* 计划任务卡：标题旁的 X/X（进行中/总数）+ 可滚动任务列表（要能自动滚到底） */
+#jiHuaKaiGuan { white-space: nowrap; min-width: 0; }
+#jiHuaKaiGuan > span:first-of-type { flex: 0 0 auto; }
 .jiHuaJiShu { margin-left: 6px; color: var(--accent); font-size: var(--fs-xs); font-weight: 600;
   font-variant-numeric: tabular-nums; }
 /* #jiHuaLieBiao 的高度交给卡片 flex 拉伸（见 .mianBanKuai > #jiHuaLieBiao），不再写死 max-height */
@@ -3954,20 +4020,31 @@ html { font-weight: var(--fw-ui, 400); }
 }
 /**
  * **播放时对话外框发光**（产品要求）：强调色、淡淡的、慢慢的、呼吸式。
- * 只动 box-shadow 的透明度（合成层友好，不触发重排）；周期 3.2s 够"慢"。
+ * 第 120 轮（P9）：`box-shadow` 会触发绘制，不是合成层属性。这里改成
+ * **静态阴影层 + 只动 opacity**：阴影形状不变，浏览器只做合成，不重绘阴影。
  * 系统开启「减少动态效果」时只留一圈静态微光，不做动画。
  */
-.xiaoXi:has(.boFangZhong) .bubble {
+.xiaoXi:has(.boFangZhong) .bubble { position: relative; }
+.xiaoXi:has(.boFangZhong) .bubble::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 42%, transparent),
+              0 0 18px 2px color-mix(in srgb, var(--accent) 30%, transparent);
+  opacity: .45;
   animation: langDuHuXi 3.2s ease-in-out infinite;
+  will-change: opacity;
 }
 @keyframes langDuHuXi {
-  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 32%, transparent), 0 0 10px 1px color-mix(in srgb, var(--accent) 18%, transparent); }
-  50%      { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 22px 4px color-mix(in srgb, var(--accent) 40%, transparent); }
+  0%, 100% { opacity: .35; }
+  50%      { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .xiaoXi:has(.boFangZhong) .bubble {
+  .xiaoXi:has(.boFangZhong) .bubble::after {
     animation: none;
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 10px 0 color-mix(in srgb, var(--accent) 18%, transparent);
+    opacity: .6;
   }
 }
 .xiaoXiLangDu.langDuZhong .xiaoXiIco { animation: langDuPulse 1s ease-in-out infinite; transform-origin: center; }
@@ -4090,6 +4167,8 @@ html { font-weight: var(--fw-ui, 400); }
 }
 @media (prefers-reduced-motion: reduce) {
   .zhengLiZi.isLiang,
+  .zhengLiZi.isLiang::after,
+  .zhengLiZi.zhengLiCongLai,
   .zhengLiTeXiao::after,
   .zhengLiChangWen .zhengLiTeXiaoWen,
   #anNiuYuYin.zhengLiZhong::after {
@@ -4333,31 +4412,81 @@ html { font-weight: var(--fw-ui, 400); }
 .guoChengLie { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
 .guoChengDuan { margin-bottom: 0; }
 .zhongJianKa {
+  position: relative;
+  min-width: 0; max-width: 100%;
   margin: 2px 0;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
-  border-radius: 10px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--card) 96%, #fff 4%) 0%, var(--card) 55%, color-mix(in srgb, var(--card) 92%, #000 8%) 100%);
-  box-shadow: inset 0 2px 0 color-mix(in srgb, #fff 72%, transparent), inset 0 -2px 0 color-mix(in srgb, #000 20%, transparent), 0 3px 10px color-mix(in srgb, #000 18%, transparent), 0 1px 2px color-mix(in srgb, #000 14%, transparent);
-  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-sm);
+  /* 第 122 轮：中间回复与最终回复同一样式（去掉浮雕/渐变/内阴影） */
+  background: var(--them-bubble);
+  color: var(--them-bubble-ink, var(--ink));
+  box-shadow: 0 1px 1px rgba(0,0,0,.04);
+  overflow: visible;
 }
 .zhongJianKa > summary {
   cursor: pointer; list-style: none; user-select: none;
+  display: flex; align-items: center; min-width: 0; max-width: 100%; box-sizing: border-box;
   padding: 6px 11px; font-size: var(--fs-sm); color: var(--muted);
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  white-space: nowrap; overflow: hidden;
 }
 .zhongJianKa > summary::-webkit-details-marker { display: none; }
 .zhongJianKa > summary::before {
-  content: '▸'; display: inline-block; margin-right: 6px;
+  content: '▸'; display: inline-block; margin-right: 6px; flex: 0 0 auto;
   transition: transform .12s ease;
 }
 .zhongJianKa[open] > summary::before { transform: rotate(90deg); }
+.zhongJianKa .zhongJianZhaiYao {
+  display: block; flex: 1 1 0; width: 0; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 展开后不再显示标签/摘要，只留右上角一个小箭头用于收回；正文直接是内容。 */
+.zhongJianKa[open] > summary {
+  position: absolute; top: 3px; right: 5px; z-index: 4;
+  width: 20px; height: 20px; padding: 0;
+  border: 0; background: transparent;
+  align-items: center; justify-content: center;
+  opacity: .5;
+}
+.zhongJianKa[open] > summary:hover { opacity: 1; }
+.zhongJianKa[open] > summary::before { margin-right: 0; }
+.zhongJianKa[open] > summary .zhongJianZhaiYao { display: none; }
 .zhongJianKa > .zhongJianHuiFu {
   margin: 0; padding: 9px 11px;
   border: 0; background: transparent; color: var(--ink);
   font-size: var(--fs-md); line-height: 1.55;
 }
+.zhongJianKa[open] > .zhongJianHuiFu { padding-right: 28px; }
 .zhongJianKa > .zhongJianHuiFu > :first-child { margin-top: 0; }
 .zhongJianKa > .zhongJianHuiFu > :last-child { margin-bottom: 0; }
+
+/* 思考与执行段 / 中间回复的悬停操作：模型 + 完整时间 + 赞踩/朗读/引用/复制（左下角）。 */
+.guoChengCaoZuo {
+  display: flex; justify-content: flex-start; align-items: center; gap: 6px;
+  min-width: 0; margin-top: 4px; padding: 2px 2px 0 11px;
+  font-size: 10px; color: var(--muted);
+  opacity: 0; transition: opacity .15s ease; pointer-events: none;
+}
+.guoChengDuan:hover > .guoChengCaoZuo,
+.zhongJianKa:hover > .guoChengCaoZuo { opacity: 1; pointer-events: auto; }
+.guoChengCaoZuo .gcMoXing { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guoChengCaoZuo .gcShiJian { flex: 0 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.guoChengCaoZuo .zanCaiJi { margin-left: 2px; gap: 2px; flex: 0 0 auto; }
+.guoChengCaoZuo .xiaoXiLangDu { margin-left: 0; padding: 1px 3px; }
+.guoChengCaoZuo .xiaoXiYinYong { padding: 1px 3px; }
+.guoChengCaoZuo .xiaoXiFuZhi { padding: 1px 4px; }
+.guoChengCaoZuo .xiaoXiIco { width: 12px; height: 12px; }
+
+/* 最终回复第一行右侧的斑马头（主题色、左右翻转；只在有思考/中间回复时出现）。 */
+.zuiZhongHang { display: flex; align-items: flex-start; gap: 6px; min-width: 0; max-width: 100%; }
+.zuiZhongHang > .bubble { min-width: 0; }
+.banMaTou {
+  flex: 0 0 18px; width: 18px; height: 18px; margin-top: 4px;
+  background: var(--accent); opacity: .9; pointer-events: none;
+  transform: scaleX(-1);
+  -webkit-mask: url('assets/zebra-head.svg') center / contain no-repeat;
+  mask: url('assets/zebra-head.svg') center / contain no-repeat;
+}
 
 /* 【项 5】行动行现在长在「思考/执行过程」块里面 —— 去掉左缩进，与思考正文对齐 */
 .siKaoKuai .xingDongZu { margin: 4px 0 3px; }
@@ -4540,7 +4669,8 @@ html { font-weight: var(--fw-ui, 400); }
    这里把两个按钮钉成**同一个盒**，并让审批/决策那一行的按钮**等高**（`once` 是 .anNiuZhuYao、其余是 .anNiuXiao，
    原本字号与内边距都不同 ⇒ 同一行里上沿下沿都不齐）。两份 CSS（app.css / renderer.css）必须一字不差。 */
 #shouQuanKaiGuan { gap: 6px; }
-#shouQuanKaiGuan > span:first-of-type { flex: 1 1 auto; }
+/* 「添加」跟在“授权”后面靠左；箭头仍用 margin-left:auto 顶到最右。 */
+#shouQuanKaiGuan > span:first-of-type { flex: 0 0 auto; }
 .shouQuanCheXiaoXiao,
 .shouQuanTianJiaXiao {
   display: inline-flex;
@@ -4624,3 +4754,44 @@ html { font-weight: var(--fw-ui, 400); }
 /* R100：用户停止时，正在执行的操作行显示「已停止」（中性色，不当成失败） */
 .xingDongHang.isStopped::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 2px; background: var(--jingYin, #8a8a8a); opacity: .6; }
 .xingDongHang .xdZhuang.yiTingZhi { color: var(--jingYin, #8a8a8a); }
+
+/* R114：外部编辑显式会话的常驻提示（副本存在期间一直可见，直到用户点“结束并封存”） */
+.waiBuBianJiTiao {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 12050;
+  width: min(360px, calc(100vw - 36px));
+  background: var(--card, #fff);
+  color: var(--ink, #222);
+  border: 1px solid var(--accent, #A87654);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .18);
+  padding: 10px 12px;
+}
+.waiBuBianJiTiao .wbbjTou { font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--accent, #A87654); }
+.waiBuBianJiTiao .wbbjHang { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-top: 1px dashed var(--line, #ddd); }
+.waiBuBianJiTiao .wbbjHang:first-of-type { border-top: none; }
+.waiBuBianJiTiao .wbbjMing { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.waiBuBianJiTiao .wbbjDuan { border-color: var(--accent, #A87654) !important; color: var(--accent, #A87654); }
+.waiBuBianJiTiao .wbbjQi { font-size: 12px; }
+
+/* ── 第 120 轮（W10）：键盘可达与减少动态效果 ─────────────────────── */
+/* 操作行默认靠 hover 出现；键盘 Tab 进来时必须同样可见，否则焦点落在看不见的按钮上 */
+.xiaoXi:focus-within .xiaoXiJiao,
+.xiaoXi:focus-within .xiaoXiMoXing { opacity: 1; }
+.xiaoXiJiao button:focus-visible,
+.xiaoXiJiaoHang button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* 系统开启「减少动态效果」：动画/过渡压到近乎瞬时，避免眩晕；滚动仍可用 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

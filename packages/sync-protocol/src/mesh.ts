@@ -24,6 +24,8 @@ export interface DuiDuanXinXi {
   /** lan | wan */
   kind: 'lan' | 'wan';
   lastSeen: number;
+  /** 鉴权握手得到的对端身份指纹（有则用于收件人过滤；旧记录可能没有） */
+  zhiWen?: string;
   revoked?: boolean;
 }
 
@@ -68,8 +70,8 @@ export class DuiDuanMingCe {
     return Quan;
   }
 
-  addManual(nodeId: string, ming: string, host: string, port: number, kind: 'lan' | 'wan' = 'wan'): DuiDuanXinXi {
-    return this.upsert({ nodeId, ming, host, port, kind, lastSeen: Date.now() });
+  addManual(nodeId: string, ming: string, host: string, port: number, kind: 'lan' | 'wan' = 'wan', zhiWen?: string): DuiDuanXinXi {
+    return this.upsert({ nodeId, ming, host, port, kind, lastSeen: Date.now(), ...(zhiWen ? { zhiWen } : {}) });
   }
 
   revoke(nodeId: string) {
@@ -143,8 +145,6 @@ export class NeiWangFaXian {
     );
     try {
       this.sock.send(payload, DISCOVER_PORT, '255.255.255.255');
-      // 常见本地广播
-      this.sock.send(payload, DISCOVER_PORT, '192.168.1.255');
     } catch {
       /* ignore */
     }

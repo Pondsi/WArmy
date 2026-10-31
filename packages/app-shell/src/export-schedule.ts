@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DataVault } from './data-vault.js';
+import { inspectNmPackage } from './data-vault.js';
 import type { DingShiDaoChu } from './settings-store.js';
 
 export const EXPORT_CATEGORIES = ['chat', 'knowledge', 'contacts', 'settings', 'account', 'logs'] as const;
@@ -82,10 +83,17 @@ export function guiYiDingShiDaoChu(raw: unknown, now = Date.now()): DingShiDaoCh
     .map((s) => String(s || '')).filter((s, i, a) => ['session', 'internal', 'private', 'none'].includes(s) && a.indexOf(s) === i);
   const from = Number(scopeRaw.from) > 0 ? Math.floor(Number(scopeRaw.from)) : 0;
   const to = Number(scopeRaw.to) > 0 ? Math.floor(Number(scopeRaw.to)) : 0;
+  const copiesRaw = x.copies;
+  const copiesNum = Number(copiesRaw);
+  const copies = copiesRaw === undefined || copiesRaw === null || copiesRaw === '' || !Number.isFinite(copiesNum)
+    ? 1
+    : Math.max(0, Math.floor(copiesNum));
   const scope = (chatIds.length || kbLayers.length || from || to)
     ? { ...(chatIds.length ? { chatIds } : {}), ...(kbLayers.length ? { kbLayers } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) }
     : undefined;
   return {
+    scheduleId: String(x.scheduleId || '').trim().slice(0, 80),
+    copies,
     enabled: x.enabled === true,
     nextAt,
     cycles,
@@ -118,8 +126,7 @@ export function shiJianCi(ts: number): string {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-export function paiXiaYiCi(cfg: DingShiDaoChu, now = Date.now()): DingShiDaoChu {
-  const runsDone = (cfg.runsDone || 0) + 1;
+export function paiXiaYiCi(cfg: DingShiDaoChu, now = Date.now()): DingShiDaoChu {  const runsDone = (cfg.runsDone || 0) + 1;
   const haiYao = cfg.cycles === 0 || runsDone < cfg.cycles;
   return {
     ...cfg,
@@ -134,6 +141,44 @@ export function paiXiaYiCi(cfg: DingShiDaoChu, now = Date.now()): DingShiDaoChu 
  * 到点就执行一次（每个启用的位置各一份）。`force` 只用于用户点「立即导出」，
  * 不改变"循环几次/下次时间"的语义。
  */
+/**
+ * 定时导出后的目录保留策略（第 113 轮）：检查该目录下**所有 `.nm`**（不只当前任务），
+ * 按包头 createdAt / 文件 mtime 倒序保留最新 `copies` 份（刚导出的新文件必留）。
+ * copies=0 表示不检查、不删；scheduleId 只用于审计，不能拿它来限定删除范围。
+ */
+function qingLiTongRenWuJiuBao(dir: string, scheduleId: string, copies: number, newFile: string): { deleted: string[]; errors: string[] } {
+  const deleted: string[] = [];
+  const errors: string[] = [];
+  if (copies <= 0) return { deleted, errors };
+  let names: string[] = [];
+  try { names = fs.readdirSync(dir); } catch (e) { return { deleted, errors: [String((e as Error)?.message || e)] }; }
+  const found: Array<{ file: string; createdAt: number; mtime: number }> = [];
+  for (const name of names) {
+    if (!/\.nm$/i.test(name)) continue;
+    const file = path.join(dir, name);
+    try {
+      const st = fs.statSync(file);
+      if (!st.isFile()) continue;
+      const r = inspectNmPackage(file);
+      /** 包头能读就用 createdAt；读不到/坏包用 mtime，仍参与“目录下所有 .nm”的保留排序。 */
+      found.push({ file, createdAt: r.ok ? (Number(r.createdAt) || 0) : 0, mtime: st.mtimeMs || 0 });
+    } catch { /* 坏包/无权限：不纳入清理，避免误删 */ }
+  }
+  found.sort((a, b) => (b.createdAt - a.createdAt) || (b.mtime - a.mtime) || b.file.localeCompare(a.file));
+  const keep = Math.max(1, Math.floor(copies));
+  const keepFiles = new Set([path.resolve(newFile)]);
+  for (const f of found) {
+    if (keepFiles.size >= keep) break;
+    keepFiles.add(path.resolve(f.file));
+  }
+  for (const f of found) {
+    if (keepFiles.has(path.resolve(f.file))) continue;
+    try { fs.rmSync(f.file, { force: true }); deleted.push(f.file); }
+    catch (e) { errors.push(`${f.file}: ${String((e as Error)?.message || e)}`); }
+  }
+  return { deleted, errors };
+}
+
 export async function zhiXingDingShiDaoChu(deps: DingShiDaoChuDeps, opts: { force?: boolean } = {}): Promise<DingShiDaoChuRunResult> {
   const now = deps.now ? deps.now() : Date.now();
   const cfg = guiYiDingShiDaoChu(deps.load(), now);
@@ -204,9 +249,16 @@ export async function zhiXingDingShiDaoChu(deps: DingShiDaoChuDeps, opts: { forc
         scope: cfg.scope,
         extraFiles,
         appVersion: deps.appVersion?.() || '',
+        ...(cfg.scheduleId ? { scheduleId: cfg.scheduleId } : {}),
       });
-      if (r.ok) { paths.push(file); filesN = Math.max(filesN, Number(r.files) || 0); bytes += Number(r.bytes) || 0; }
-      else errors.push(`${loc.path}: ${r.error || 'export-failed'}`);
+      if (r.ok) {
+        paths.push(file); filesN = Math.max(filesN, Number(r.files) || 0); bytes += Number(r.bytes) || 0;
+        if (cfg.copies > 0) {
+          const qing = qingLiTongRenWuJiuBao(loc.path, cfg.scheduleId, cfg.copies, file);
+          if (qing.deleted.length) deps.audit?.('export.schedule.retention', { path: loc.path, scheduleId: cfg.scheduleId, copies: cfg.copies, deleted: qing.deleted.length });
+          for (const e of qing.errors) errors.push(`${loc.path}: cleanup: ${e}`);
+        }
+      } else errors.push(`${loc.path}: ${r.error || 'export-failed'}`);
     } catch (e) {
       errors.push(`${loc.path}: ${String((e as Error)?.message || e)}`);
     } finally {

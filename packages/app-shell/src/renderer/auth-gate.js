@@ -2722,8 +2722,10 @@
       || 'zh-CN',
     );
     await loadPack(state.locale);
-    state.consented = !!(settings && settings.settings && settings.settings.privacyConsent);
-    state.setupDone = !!(setup && setup.done === true);
+    /** 有账号但设置被封存时，settingsGet 读不到；账号本身证明此前已同意过条款，除非有撤销标记。 */
+    state.consented = !!(settings && settings.settings && settings.settings.privacyConsent)
+      || !!(st.hasAccount && setup && setup.privacyRevoked !== true);
+    state.setupDone = !!(setup && setup.done === true) || !!st.hasAccount;
     // 首启（无账号且 setup 未完成）：第一屏只有语言下拉 + 开始。
     if (!st.hasAccount && !state.setupDone) {
       enterLanguage();
@@ -3025,7 +3027,12 @@
      * 用户下次登录后可在“我的”里重新勾选。
      */
     try { await call('authSetAutoLogin', false); } catch { /* 没接上就继续退出 */ }
-    await call('authLogout');
+    const r = await call('authLogout');
+    if (!r || r.ok === false) {
+      state.error = String((r && r.error) || 'logout-failed');
+      render();
+      return;
+    }
     location.reload();
   }
 

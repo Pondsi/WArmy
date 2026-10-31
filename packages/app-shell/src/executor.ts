@@ -31,6 +31,7 @@ import {
   type JiaoFuCanShu,
 } from './zheng-liu.js';
 import { fenLeiCuoWu } from './cuowu-fenlei.js';
+import { jiSuanGongZuoHaoShi } from './work-time.js';
 
 export interface ZhixingqiRenwu extends GongzuozheRenwuShuru {
   /** 用户原话长度（压缩前）：只用于验收/排障，证明超长输入确实被压到有界提示里 */
@@ -57,6 +58,8 @@ export interface ZhixingqiRenwu extends GongzuozheRenwuShuru {
   tools?: GongJuGuiGe[];
   runTool?: (call: GongJuDiaoYong, ctx: { round: number; zuiDaJieGuoZiShu: number }) => Promise<string> | string;
   toolLimits?: { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalChars: number };
+  /** 第 121 轮：审批等待累计时钟（毫秒）。执行时间从 duration 里扣掉它，不把等人点按钮算成干活 */
+  approvalWaitMs?: () => number;
   /** 共享黑板：工具规格 + 已按本执行者绑定来源的处理器 + 开工时的有界摘要 */
   heiBan?: { gongJu: GongJuGuiGe[]; zhiXing: (call: GongJuDiaoYong) => Promise<string> | string; zhaiYao: () => string };
   /** 宿主核实产物：真实存在 ⇒ 返回绝对路径，否则空串（缺省只认存在的绝对路径） */
@@ -133,6 +136,8 @@ export async function yunxingDuanCunhuoZhixingqi(
   cfg: ZhixingqiGongyingshangPeizhi
 ): Promise<zhixingqiJieguo> {
   const qiShiShiJian = Date.now();
+  const piZhun0 = Math.max(0, Number(renwu.approvalWaitMs?.()) || 0);
+  const gongZuoHaoShi = (): number => jiSuanGongZuoHaoShi(qiShiShiJian, piZhun0, Date.now(), Math.max(0, Number(renwu.approvalWaitMs?.()) || 0));
   const sf = renwu.shenFen;
   const youGongJu = !!(renwu.tools && renwu.tools.length && renwu.runTool);
   /**
@@ -263,7 +268,7 @@ export async function yunxingDuanCunhuoZhixingqi(
       youGongJu,
       heShi: renwu.heShiChanWu || heShiMoRen,
       stats: {
-        durationMs: Date.now() - qiShiShiJian,
+        durationMs: gongZuoHaoShi(),
         promptTokens: xiangYing.usage.promptTokens,
         completionTokens: xiangYing.usage.completionTokens,
       },
@@ -309,7 +314,7 @@ export async function yunxingDuanCunhuoZhixingqi(
       taskId: renwu.taskId,
       distilled: '',
       artifacts: [],
-      stats: { ...tongJiKong, durationMs: Date.now() - qiShiShiJian },
+      stats: { ...tongJiKong, durationMs: gongZuoHaoShi() },
       error: gl.category === 'UNKNOWN' ? { ...gl, category: 'WORKER_CRASH', code: 'worker' } : gl,
       chaoChang: false,
     };

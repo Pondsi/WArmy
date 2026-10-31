@@ -64,6 +64,9 @@ contextBridge.exposeInMainWorld('warmy', {
   qunChongJian: (payload) => ipcRenderer.invoke('warmy:qunChongJian', payload),
   waiBuBianJi: (payload) => ipcRenderer.invoke('warmy:waiBuBianJi', payload),
   waiBuBianJiLieBiao: () => ipcRenderer.invoke('warmy:waiBuBianJiLieBiao'),
+  waiBuBianJiJieShu: (payload) => ipcRenderer.invoke('warmy:waiBuBianJiJieShu', payload),
+  quanLiangJiaMiZhuangTai: () => ipcRenderer.invoke('warmy:quanLiangJiaMiZhuangTai'),
+  onWaiBuBianJiZhuangTai: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:waiBuBianJiZhuangTai', h); return () => ipcRenderer.removeListener('warmy:waiBuBianJiZhuangTai', h); },
   updateSourceGet: () => ipcRenderer.invoke('warmy:gengXinLaiYuanQu'),
   updateSourceSet: (payload) => ipcRenderer.invoke('warmy:gengXinLaiYuanSheZhi', payload),
   groupMessage: (xiaoXi) => ipcRenderer.invoke('warmy:qunXiaoXi', xiaoXi),
@@ -81,6 +84,8 @@ contextBridge.exposeInMainWorld('warmy', {
   providerKeyClear: (payload) => ipcRenderer.invoke('warmy:gongYingShangMiYaoQingChu', payload),
   chatSend: (xiaoXi) => ipcRenderer.invoke('warmy:liaoTianFaSong', xiaoXi),
   chatNetSend: (p) => ipcRenderer.invoke('warmy:chatNetSend', p),
+  chatTouDiZhuangTai: (p) => ipcRenderer.invoke('warmy:chatTouDiZhuangTai', p),
+  chatNetRead: (p) => ipcRenderer.invoke('warmy:chatNetRead', p),
   /** 第 81 轮：nm 查看器右键「插入对话」→ 主窗口当前输入框 */
   chaRuDuiHua: (text) => ipcRenderer.invoke('warmy:chaRuDuiHua', text),
   onChaRuDuiHua: (cb) => ipcRenderer.on('warmy:chaRuDuiHua', (_e, d) => cb(d)),
@@ -260,6 +265,8 @@ contextBridge.exposeInMainWorld('warmy', {
   credentialInfo: () => ipcRenderer.invoke('warmy:pingZhengXinXi'),
   credentialRestore: (credential) => ipcRenderer.invoke('warmy:pingZhengHuiFu', credential),
   identityBackupImport: (payload) => ipcRenderer.invoke('warmy:shenFenBeiFenDaoRu', payload),
+  commandGrantsList: () => ipcRenderer.invoke('warmy:mingLingShouQuanLieBiao'),
+  commandGrantRevoke: (key) => ipcRenderer.invoke('warmy:mingLingShouQuanCheXiao', key),
   pluginsScanDirsGet: () => ipcRenderer.invoke('warmy:chaJianJiSaoMiaoMuLuJiQu'),
   pluginsScanDirsSet: (dirs) => ipcRenderer.invoke('warmy:chaJianJiSaoMiaoMuLuJiSheZhi', dirs),
   pluginsScan: () => ipcRenderer.invoke('warmy:chaJianJiSaoMiao'),
@@ -359,6 +366,10 @@ contextBridge.exposeInMainWorld('warmy', {
   meshEnable: (payload) => ipcRenderer.invoke('warmy:wangLuoWangZhuangQiYong', payload),
   meshDisable: () => ipcRenderer.invoke('warmy:wangLuoWangZhuangTingYong'),
   netMeshAnnounce: (reason) => ipcRenderer.invoke('warmy:wangLuoWangZhuangGuangBo', reason),
+  // 公开可发现（C 方案）：默认关；开关只影响 DHT 地址发布，聊天仍走自选服务器
+  gongKaiFaXianDu: () => ipcRenderer.invoke('warmy:gongKaiFaXianDu'),
+  gongKaiFaXianShe: (p) => ipcRenderer.invoke('warmy:gongKaiFaXianShe', p),
+  gongKaiFaXianCha: (zhiWen) => ipcRenderer.invoke('warmy:gongKaiFaXianCha', zhiWen),
   // 本体协作层：ref / 路径门禁 + 租约（写操作前 acquire、写完 release）
   repoGuardCheckRef: (payload) => ipcRenderer.invoke('warmy:cangKuShouWeiJianChaYinYong', payload),
   repoGuardCheckPaths: (payload) => ipcRenderer.invoke('warmy:cangKuShouWeiJianChaLuJingJi', payload),
@@ -429,8 +440,20 @@ contextBridge.exposeInMainWorld('warmy', {
   nmWangYeKuang: (p) => ipcRenderer.invoke('warmy:nmWangYeKuang', p),
   nmWangYeGuan: (id) => ipcRenderer.invoke('warmy:nmWangYeGuan', id),
   nmWangYeDaoHang: (p) => ipcRenderer.invoke('warmy:nmWangYeDaoHang', p),
+  nmWangYeXinKai: (p) => ipcRenderer.invoke('warmy:nmWangYeXinKai', p),
+  nmWangYeYuan: (p) => ipcRenderer.invoke('warmy:nmWangYeYuan', p),
   nmWangYeChaZhao: (p) => ipcRenderer.invoke('warmy:nmWangYeChaZhao', p),
   nmWangYeDaYin: (id) => ipcRenderer.invoke('warmy:nmWangYeDaYin', id),
+  /** 第 120 轮（W10）：网页下载管理（列表/清空/打开/定位/进度事件） */
+  nmXiaZaiLieBiao: () => ipcRenderer.invoke('warmy:nmXiaZaiLieBiao'),
+  nmXiaZaiQingKong: () => ipcRenderer.invoke('warmy:nmXiaZaiQingKong'),
+  nmXiaZaiDaKai: (id) => ipcRenderer.invoke('warmy:nmXiaZaiDaKai', id),
+  nmXiaZaiXianShi: (id) => ipcRenderer.invoke('warmy:nmXiaZaiXianShi', id),
+  nmXiaZaiGengXin: (cb) => {
+    const fn = (_e, d) => { try { cb(d); } catch { /* noop */ } };
+    ipcRenderer.on('warmy:nmXiaZaiGengXin', fn);
+    return () => ipcRenderer.removeListener('warmy:nmXiaZaiGengXin', fn);
+  },
   nmWangYeZhuangTai: (cb) => {
     const fn = (_e, d) => { try { cb(d); } catch { /* noop */ } };
     ipcRenderer.on('warmy:nmWangYeZhuangTai', fn);
@@ -556,7 +579,6 @@ contextBridge.exposeInMainWorld('warmy', {
   auditLog: (limit) => ipcRenderer.invoke('warmy:shenJiRiZhi', limit),
   auditClear: () => ipcRenderer.invoke('warmy:shenJiQingChu'),
   secureKeySave: (payload) => ipcRenderer.invoke('warmy:anQuanMiYaoBaoCun', payload),
-  secureKeyLoad: (id) => ipcRenderer.invoke('warmy:anQuanMiYaoJiaZai', id),
   archiveExternal: (payload) => ipcRenderer.invoke('warmy:guiDangWaiBu', payload),
   archiveList: (groupId) => ipcRenderer.invoke('warmy:guiDangLieBiao', groupId),
   /** 自动归档：增量归档（每个会话有游标，只归档新增，不从头重做） */
