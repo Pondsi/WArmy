@@ -1,0 +1,41 @@
+import {copyFileSync, mkdirSync, readdirSync, statSync, existsSync as fsExists} from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+const root = path.dirname(fileURLToPath(import.meta.url));
+const src = path.join(root, '..', 'src');
+const dist = path.join(root, '..', 'dist');
+
+/** 递归复制目录（支持任意层级子目录，如 renderer/icons/avatars） */
+function copyDir(from, to) {
+  mkdirSync(to, { recursive: true });
+  for (const entry of readdirSync(from, { withFileTypes: true })) {
+    const s = path.join(from, entry.name);
+    const d = path.join(to, entry.name);
+    if (entry.isDirectory()) copyDir(s, d);
+    else copyFileSync(s, d);
+  }
+}
+
+mkdirSync(path.join(dist, 'renderer'), { recursive: true });
+mkdirSync(path.join(dist, 'i18n'), { recursive: true });
+
+copyFileSync(path.join(src, 'preload.cjs'), path.join(dist, 'preload.cjs'));
+/** 第 114 轮：运行期静态加密层（主进程 + 记忆子进程共用，纯 CJS） */
+copyFileSync(path.join(src, 'enc-fs.cjs'), path.join(dist, 'enc-fs.cjs'));
+/** 第 66 轮认证：纯 JS 加密核心/词表不是 tsc 产物，必须显式带进 dist（否则启动 import 直接崩） */
+for (const f of ['auth-core.mjs', 'auth-core.d.mts', 'auth-wordlist.mjs', 'auth-friend-words.mjs', 'auth-friend-idioms.mjs']) {
+  if (fsExists(path.join(src, f))) copyFileSync(path.join(src, f), path.join(dist, f));
+}
+if (fsExists(path.join(src, 'snip-preload.cjs'))) copyFileSync(path.join(src, 'snip-preload.cjs'), path.join(dist, 'snip-preload.cjs'));
+copyFileSync(path.join(src, 'ipc-aliases.json'), path.join(dist, 'ipc-aliases.json'));
+copyDir(path.join(src, 'renderer'), path.join(dist, 'renderer'));
+copyDir(path.join(src, 'i18n'), path.join(dist, 'i18n'));
+// pptx 模板（make_pptx 用；打包后也要在，否则只能如实报 template-missing）
+const tplFrom = path.join(root, '..', 'assets');
+if (fsExists(path.join(tplFrom, 'tpl.pptx'))) {
+  mkdirSync(path.join(dist, 'assets'), { recursive: true });
+  copyFileSync(path.join(tplFrom, 'tpl.pptx'), path.join(dist, 'assets', 'tpl.pptx'));
+}
+
+console.log('app-shell assets copied (renderer + i18n, recursive)');
