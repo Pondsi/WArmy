@@ -34,7 +34,9 @@ console.log('\n[2] 聊天路径按模型路由（不是只用全局 providerCfg�
 // 窗口只要宽到能包住这一段就行 —— 取下一个函数头会包住更早的私有 helper，反而更不稳）。
 const fnAt = src.indexOf('async function zhenZhengFaSong');
 const qd = fnAt >= 0 ? fnAt : src.indexOf('warmy:liaoTianFaSong');
-const chatSeg = src.slice(qd, qd + 24000);
+/** 用**函数结束边界**（IPC 注册行）而不是固定字符窗口：本轮往函数前段加了停止现场，固定 24k 会被顶出窗口。 */
+const endAt = src.indexOf("chuliIpc('warmy:liaoTianFaSong'", qd);
+const chatSeg = src.slice(qd, endAt > qd ? endAt : qd + 60000);
 check('聊天里调用了 jieMoXingGongYingShang', /jieMoXingGongYingShang\(/.test(chatSeg));
 check('先选模型再定供应商', chatSeg.indexOf('jueCeMoXing') < chatSeg.indexOf('jieMoXingGongYingShang') || /const modelId[\s\S]{0,400}jieMoXingGongYingShang/.test(chatSeg));
 check('密钥检查用的是**解析出来的**供应商', /!zhu\.apiKey && zhu\.protocol !== 'ollama'/.test(chatSeg));

@@ -2,7 +2,7 @@
   "name": "@warmy/asset-governance",
   "version": "0.1.0",
   "private": true,
-  "description": "资产治理：分类/作用域/生命周期",
+  "description": "Asset governance: classification, scope, lifecycle",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

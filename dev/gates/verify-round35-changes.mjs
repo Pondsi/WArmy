@@ -148,7 +148,7 @@ panding('项10 渲染层发送时把附件路径交给授权卡（不用用户�
 panding('项10 preload 暴露 fuJianShouQuan', /fuJianShouQuan:/.test(preload));
 panding('项10/36-6 只读豁免**不外溢**（写授权覆盖读；读授权不覆盖写；写/删/跑命令照旧问）',
   /if \(c === 'write'\) return x;/.test(main) && /if \(c === 'read'\) return yao === 'read' \? x : null;/.test(main)
-  && /else if \(ask\) \{/.test(win(main, 'const yaoLei = gongJuQuanLei', 1400)));
+  && /else if \(ask \|\| baoHu\)/.test(win(main, 'const yaoLei = gongJuQuanLei', 2400)));
 
 /* ═══ 项 11：路径右键菜单只有真实完整路径才有 ══════════════════════════ */
 panding('项11 路径正则允许单个内部空格（不会被空格截断）',
@@ -168,8 +168,8 @@ panding('项12 图标文件到位（resources 里的木马.svg 被复制进渲�
 panding('项12/36-3 行动行用木马.svg 作图标（并且取强调色：CSS 蒙版而不是 img）',
   /icons\/muMa\.svg/.test(appCss) && /background-color: var\(--accent\)/.test(win(appCss, '.xingDongHang .xdIco', 400))
   && /class="xdIco"/.test(appJs));
-panding('项12 同一操作只写一次：start 建条目、finish 按 hao 改同一条',
-  /const you = arr\.find\(\(x\) => x\.hao === hao\)/.test(appJs) && /phase === 'start'/.test(appJs));
+panding('项12 同一操作只写一次：start 建条目、finish 按 hao 改同一条（旧 xd1 只合并 running，不跨轮覆盖）',
+  /const you = guHao/.test(appJs) && /x\.hao === hao && x\.status === 'running'/.test(appJs) && /phase === 'start'/.test(appJs));
 panding('项12 主进程另开"行动台账"通道（控制台通道仍不许带路径）',
   /warmy:xingDongShiJian/.test(main) && /dangQianXingDong/.test(main) && /onXingDong/.test(preload));
 panding('项12 只有异常（失败）用强调色，进行中/完成都是正常色',
@@ -184,19 +184,20 @@ panding('项12 主进程把完整路径/完整命令放进台账（写文件给�
   /quLuJingCanShu\(aA\)/.test(win(main, 'let xingDongDetail', 900)) && /command/.test(win(main, 'let xingDongDetail', 900)));
 
 /* ═══ 项 13：行动过程并入执行过程、按时间混排、单行浮雕 ════════════════ */
-panding('项13/36-5 执行明细**长在思考块里**（不再单独一个 details 区块）',
-  /let kuai = wrap\.querySelector\('\.siKaoKuai'\)/.test(appJs) && /kuai\.appendChild\(xingDongHangNode\(m\)\)/.test(appJs));
-panding('项13 动作行按时间升序插入（同一条时间线）', /mingXi\.sort\(\(a, b\) => \(Number\(a\.ts\) \|\| 0\) - \(Number\(b\.ts\) \|\| 0\)\)/.test(appJs));
-panding('项13 中间回复节点带时间戳（排序依据）', /div\.dataset\.ts = String\(Number\(ts\)/.test(appJs));
+panding('项13/36-5 执行明细长在分段执行过程里（按中间回复切段）',
+  /guoChengLieHtml/.test(appJs) && /guoChengDuan/.test(appJs) && /xingDongHangNode\(x\)\.outerHTML/.test(appJs));
+panding('项13 动作行按时间升序插入（同一条时间线）',
+  /const ev = \[\.\.\.think, \.\.\.mids, \.\.\.tools\]/.test(appJs) && /\.sort\(\(a, b\) => \(a\.ts - b\.ts\)/.test(appJs));
+panding('项13 中间回复节点带时间戳（排序依据）', /class="zhongJianKa" data-ts="' \+ e\.ts/.test(appJs));
 panding('项13 行动行有凸出浮雕（渐变 + 内外阴影）',
   /\.xingDongHang \{[^}]*linear-gradient\(180deg/.test(appCss.replace(/\n\s*/g, ' ')) && /\.xingDongHang:hover \{[^}]*translateY\(-1px\)/.test(appCss.replace(/\n\s*/g, ' ')));
 
 /* ═══ 项 14：执行过程（改名 / 不限高 / 无滚动条） ══════════════════════ */
-panding('项14 文案改成"执行过程"（内心活动/行动过程两个旧名都不再出现于语言包值）',
+panding('项14 文案改成"思考与执行"（内心活动/行动过程两个旧名都不再出现于语言包值）',
   (() => {
     const j = JSON.parse(rd(path.join(SRC, 'i18n/zh-CN.json')) || '{}');
-    return j['chat.thinking'] === '执行过程' && j['chat.thinkingDone'] === '执行过程'
-      && j['chat.actionLog'] === '执行过程' && j['chat.actingNow'].startsWith('执行中');
+    return j['chat.thinking'] === '思考与执行' && j['chat.thinkingDone'] === '思考与执行'
+      && j['chat.actionLog'] === '思考与执行' && j['chat.actingNow'].startsWith('进行中');
   })());
 panding('项14 app.css 里思考正文不限高、不出滚动条',
   /\.siKaoKuai pre \{[^}]*max-height: none; overflow: visible/.test(appCss.replace(/\n\s*/g, ' ')));
@@ -207,12 +208,12 @@ panding('项14 执行过程区块本身也不限高', /\.xingDongKuai \{[^}]*max
 /* ═══ 项 15：ASR 修好（不再拿聊天模型当识别模型） ═════════════════════ */
 panding('项15 兜底不再用 providerCfg.model（当前聊天模型）当听话模型',
   appJsAlways() && !/asrChatShi\(anDie, providerCfg\.model \|\|/.test(main));
-panding('项15 兜底只挑真正的听话模型（asr/whisper/paraformer…）',
-  /asrMo = nengLiLianMoXing\('asr'\)\.find/.test(main));
-panding('项15 识别语言不再写死 zh（跟随设置，auto 就不传）',
-  !/asrChatShi\(anDie, asrMo, buf, yinPinGeShi, undefined, 'zh'\)/.test(main) && /langArg/.test(main));
-panding('项15 结果合理性闸新增"话太多也是症状"（字数/秒 + 重复句）',
-  /zi \/ yinPinMiao > 12/.test(main) && /\\1\{2,\}/.test(main));
+panding('项15 听话候选只来自配置的听话链（不猜名字、不重排）',
+  /nengLiLianMoXing\('asr'\)/.test(main) && /只去禁用项和重复项/.test(main));
+panding('项15 识别语言跟随设置，auto 就不传（不写死 zh）',
+  /asrLang/.test(main) && /const yuYan = lang && lang !== 'auto' \? lang : undefined;/.test(main) && !/undefined, 'zh'/.test(main));
+panding('项15 明显无语音/空结果会被拒（no-speech + empty-result）',
+  /asrWuYuYin/.test(main) && /no-speech/.test(main) && /empty-result/.test(main));
 panding('项15 降采样前先抗混叠（区间均值）+ 去直流',
   /区间均值/.test(appJs) && /dcBias/.test(appJs) && /Math\.floor\(\(i \+ 1\) \* ratio\)/.test(appJs));
 
@@ -247,7 +248,8 @@ panding('dist 主进程已含本轮改动（门禁注入 + 台账通道 + plan.m
 {
   try {
     const m = await import(pathToFileURL(path.join(PROV, 'mo-xing-neng-li.js')).href);
-    const a = m.moXingNengLi('clef:latest', { vision: true, kind: 'imageUnd' });
+    // 第 67 轮 项 14：clef 已被用户明确为分类/决策模型，不再拿它测 imageUnd。
+    const a = m.moXingNengLi('acme-vision-reader', { vision: true, kind: 'imageUnd' });
     panding('单元 端点的"图像理解"能落到 kind=imageUnd（不再被当成画图）', a.kind === 'imageUnd', JSON.stringify(a));
     const b = m.moXingNengLi('clef-flash:latest', { vision: true });
     panding('单元 只有 vision、没有生成证据的模型不会被判成 image（画图）', b.kind !== 'image', JSON.stringify(b));

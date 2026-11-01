@@ -2,7 +2,7 @@
   "name": "@warmy/ccr-compressor",
   "version": "0.1.0",
   "private": true,
-  "description": "写入侧 CCR 压缩网关（零 LLM）",
+  "description": "Write-side CCR compression gateway (no LLM)",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

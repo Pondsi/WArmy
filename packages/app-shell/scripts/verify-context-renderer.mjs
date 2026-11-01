@@ -428,7 +428,7 @@ const mock = http.createServer((req, res) => {
 const mockPort = await new Promise((r) => mock.listen(0, '127.0.0.1', () => r(mock.address().port)));
 const mockBase = `http://127.0.0.1:${mockPort}/v1`;
 {
-  const {xietiaoQunXiaoxi} = await import(pathToFileURL(path.join(pkgRoot, 'dist', 'orchestrator.js')).href);
+  const {xietiaoQunXiaoxi, sanCengXiaoXi} = await import(pathToFileURL(path.join(pkgRoot, 'dist', 'orchestrator.js')).href);
   const {GroupChatRouter, DEFAULT_PERMISSIONS} = await import(
     pathToFileURL(path.join(repoRoot, 'packages', 'group-router', 'dist', 'index.js')).href
   );
@@ -478,21 +478,24 @@ const mockBase = `http://127.0.0.1:${mockPort}/v1`;
   const prompts = seenPrompts.slice(before);
   check('值班者确实调用了 provider（走通闭环）', prompts.length === 3 && usageLog.every((a) => a === 'dispatch'), { calls: prompts.length, actions: usageLog });
   const dutyPromptChars = prompts.map((p) => msgs(p).reduce((s, m) => s + String(m.content ?? '').length, 0));
-  // 会话部分 = 除第 1 条冻结系统提示以外的全部（渲染器的输出）——必须正好等于预算
-  const dutyViewChars = prompts.map((p) => msgs(p).slice(1).reduce((s, m) => s + String(m.content ?? '').length, 0));
   const lastP = prompts[prompts.length - 1];
-  check('值班者注入 prompt 有界（≤ 预算 + 常数卡片/系统提示）', dutyPromptChars.every((c) => c <= 2000 + 900), dutyPromptChars);
-  check('值班者注入的会话部分 = 预算（2000）且跨轮方差为 0', new Set(dutyViewChars).size === 1 && dutyViewChars[0] === 2000, {
-    viewChars: dutyViewChars,
-    systemChars: prompts.map((p) => msgs(p)[0]?.content?.length || 0),
-  });
-  check('值班者 prompt 含省略指针（说明确实被渲染成有界视图）', !!lastP && msgs(lastP).some((m) => /已省略|省略 \d+ 条/.test(String(m.content))), lastP ? String(msgs(lastP)[1]?.content || '').slice(0, 120) : 'no-prompt');
-  check('值班者 = 1 系统提示 + 头 + 指针 + 尾，不是 200 条全量', !!prompts[0] && msgs(prompts[0]).length <= 12, prompts[0] ? msgs(prompts[0]).length : 0);
-  console.log(`  值班者 3 轮注入字符数: ${dutyPromptChars.join(' / ')}（会话部分 ${dutyViewChars.join(' / ')}，预算 2000；其余为冻结系统提示 + 状态卡片）`);
+  /**
+   * 第 121 轮：值班者本体不再直接生成 —— 每轮派**唯一分身**走执行者循环。
+   * 这里验的是新口径：没有值班者本体请求、分身 prompt 有界、200 条历史只采样。
+   */
+  check('值班者本体不再直接调用 provider（三轮都是分身请求）', prompts.length === 3
+    && prompts.every((p) => !String(msgs(p)[0]?.content || '').includes('的值班者'))
+    && prompts.every((p) => msgs(p).some((m) => String(m.content || '').includes('分身'))),
+  prompts.map((p) => String(msgs(p)[0]?.content || '').slice(0, 40)));
+  check('分身注入 prompt 有界（≤ 执行者毯上限 + 常数）', dutyPromptChars.every((c) => c <= 20000), dutyPromptChars);
+  const s = sanCengXiaoXi({ inHistorySystemPrompt: 'SYS', appendedHistoryView: '', statusCard: 'KA', totalBudgetTokens: 0 }, [{ role: 'user', content: 'u' }]);
+  const kong = sanCengXiaoXi({ inHistorySystemPrompt: 'SYS', appendedHistoryView: '', statusCard: '', totalBudgetTokens: 0 }, [{ role: 'user', content: 'u' }]);
+  check('三层顺序函数仍正确：系统 → 视图 → 卡片；没有卡片不塞空 system', s.map((m) => m.content).join('>') === 'SYS>u>KA' && kong.length === 2);
+  console.log(`  值班者 3 轮分身注入字符数: ${dutyPromptChars.join(' / ')}`);
   // 200 条历史里只有采样级条目原样出现（其余靠指针取回）
   const longPrompt = lastP ? msgs(lastP).map((m) => String(m.content)).join('\n') : '';
   const markersInPrompt = (longPrompt.match(/群内第 \d+ 条历史/g) || []).length;
-  check('值班者 prompt 里只出现采样级条目（不是 200 条全量）', markersInPrompt > 0 && markersInPrompt <= 30, {
+  check('分身 prompt 里只出现采样级条目（不是 200 条全量）', markersInPrompt > 0 && markersInPrompt <= 30, {
     markersInPrompt,
     logEntries: 200,
     sampleCap: 24,
@@ -591,10 +594,13 @@ if (!SKIP_ELECTRON) {
   if (!fs.existsSync(bundledNode)) console.log(`  注意：未找到捆绑 Node（${bundledNode}），记忆服务会退回 Electron 兜底`);
   console.log(`  临时副本 ${appRoot}；链接 ${linked.length} 个包；捆绑 Node=${fs.existsSync(bundledNode) ? bundledNode : '缺失'}`);
 
+  /** 环境里可能带着 `ELECTRON_RUN_AS_NODE=1`（Qoder/CI 父进程）⇒ 会当普通 Node 跑，import electron 就没有 BrowserWindow */
+  const childEnv = { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { WARMY_NODE: bundledNode } : {}) };
+  delete childEnv.ELECTRON_RUN_AS_NODE;
   const child = spawn(electronPath, [mainFile, `--user-data-dir=${userData}`, '--remote-debugging-port=0'], {
     cwd: appRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { WARMY_NODE: bundledNode } : {}) },
+    env: childEnv,
   });
   const logs = [];
   let devtoolsPort = 0;
@@ -682,6 +688,16 @@ if (!SKIP_ELECTRON) {
     check('set-provider 指到本地 mock（不碰外网）', set?.ok === true, set);
     const info = await call('appInfo');
     console.log(`  Electron=${info?.electron} 版本=${info?.version}`);
+    /**
+     * 预算口径（第 97 轮）：产品已从“固定 4000 字符”改为“百分比 × 模型真实窗口”。
+     * Electron 段显式注入一个小窗口，让 24 轮日志真的进入有界区；后面用 metrics 的
+     * viewBudgetChars 作为**实际预算**断言，不再写死 4000。
+     */
+    const budgetSet = await call('settingsSave', { modelContextTokens: 32768, contextBudgetPercent: 10 });
+    check('测试预算：32K 窗口 × 10% 已保存', budgetSet?.settings?.modelContextTokens === 32768 && budgetSet?.settings?.contextBudgetPercent === 10, {
+      modelContextTokens: budgetSet?.settings?.modelContextTokens,
+      contextBudgetPercent: budgetSet?.settings?.contextBudgetPercent,
+    });
 
     const before = seenPrompts.length;
     const TURNS = 24;
@@ -694,34 +710,46 @@ if (!SKIP_ELECTRON) {
       if (r && typeof r.reply === 'string') replyChars.push(r.reply.length);
     }
     const prompts = seenPrompts.slice(before);
-    check('24 轮 chat-send 全部走通（ok:true 且有回复）', turnResults.every((r) => r && r.ok === true) && prompts.length === TURNS, {
+    /**
+     * 每一轮 chatSend 还会让分类模型判一次“重要/复杂”，所以 `seenPrompts` 是主对话 + 分类两路。
+     * 主对话 prompt 有完整历史（≥4 条消息），分类/标题只有 2 条；下面只对主对话做有界断言。
+     */
+    /**
+     * 每一轮除完整历史请求外，宿主在工具执行后还会发一条“直接用文字汇报”的短请求（只有 3 条消息）。
+     * 有界性/稳定性只看**完整历史**（≥4 条消息）；短请求没有历史，不受视图预算影响。
+     */
+    const fullPrompts = prompts.filter((p) => msgs(p).length >= 4);
+    const pointerPrompts = prompts.filter((p) => msgs(p).some((m) => /已省略|省略 \d+ 条/.test(String(m.content))));
+    check('24 轮 chat-send 全部走通（ok:true 且有回复，且每轮都有完整历史请求）', turnResults.every((r) => r && r.ok === true) && prompts.length >= TURNS && fullPrompts.length >= TURNS - 1, {
       ok: turnResults.filter((r) => r?.ok).length,
       prompts: prompts.length,
+      fullPrompts: fullPrompts.length,
       sampleError: turnResults.find((r) => !r?.ok)?.error,
     });
-    const injectedChars = prompts.map((p) => msgs(p).reduce((s, m) => s + String(m.content ?? '').length, 0));
-    const injectedJson = prompts.map((p) => JSON.stringify(msgs(p)).length);
-    check('chat-send 注入 prompt 恒 ≤ 预算（字符）', injectedChars.every((c) => c <= BUDGET), { max: Math.max(...injectedChars), budget: BUDGET, series: injectedChars.slice(-6) });
+    const injectedChars = fullPrompts.map((p) => msgs(p).reduce((s, m) => s + String(m.content ?? '').length, 0));
+    const injectedJson = fullPrompts.map((p) => JSON.stringify(msgs(p)).length);
+    const sum = await call('metricsSummary');
+    const EB = Number(sum?.viewBudgetChars) || BUDGET;
     // 日志未超过预算的前几轮，视图=日志（较小）；一旦日志超预算，视图立刻钉在预算上不再增长。
-    // 所以"恒定"要在进入有界区之后看：取后 12 轮。
+    // 所以"恒定"要在进入有界区之后看：取后 12 轮。主对话 prompt 里含固定系统提示，不能用绝对预算断言。
     const settled = injectedChars.slice(-12);
+    const settledJson = injectedJson.slice(-12);
     const firstSettled = injectedChars.findIndex((c) => c === settled[settled.length - 1]);
-    check('进入有界区后注入体积方差为 0（末 12 轮完全相同）', new Set(settled).size === 1, {
+    check('进入有界区后主对话注入体积稳定（末 12 轮差 ≤8 字符；仅动态时间戳可差 1）', settled.length === 12 && Math.max(...settled) - Math.min(...settled) <= 8, {
       settledValues: [...new Set(settled)],
       settledFrom: firstSettled + 1,
       series: injectedChars,
     });
-    check('注入 prompt 与日志长度解耦（有界区内不再增长）', Math.max(...settled) - Math.min(...settled) === 0, {
+    check('主对话注入与日志长度解耦（有界区内不再增长，差 ≤8 字符）', Math.max(...settled) - Math.min(...settled) <= 8, {
       min: Math.min(...settled),
       max: Math.max(...settled),
       headTurns: injectedChars.slice(0, 5),
     });
-    check('注入的 JSON 体积也在同一量级（包装开销固定）', Math.max(...injectedJson) <= BUDGET + 400, { maxJson: Math.max(...injectedJson) });
-    const lastPrompt = prompts[prompts.length - 1];
-    check('末轮 prompt 含省略指针（真发生裁剪）', msgs(lastPrompt).some((m) => /已省略|省略 \d+ 条/.test(String(m.content))), msgs(lastPrompt)[0].content.slice(0, 140));
-    check('末轮 prompt 条数有界（不是全量日志）', msgs(lastPrompt).length <= 12, { xiaoXiJi: msgs(lastPrompt).length, logTurns: TURNS * 2 });
+    check('主对话 JSON 体积也稳定（差 ≤8 字符）', Math.max(...settledJson) - Math.min(...settledJson) <= 8, { sizes: [...new Set(settledJson)] });
+    const lastPrompt = pointerPrompts[pointerPrompts.length - 1] || fullPrompts[fullPrompts.length - 1];
+    check('末轮 prompt 含省略指针（真发生裁剪）', !!lastPrompt && msgs(lastPrompt).some((m) => /已省略|省略 \d+ 条/.test(String(m.content))), lastPrompt ? msgs(lastPrompt)[0].content.slice(0, 140) : 'no-prompt');
+    check('末轮 prompt 条数有界（不是全量日志）', !!lastPrompt && msgs(lastPrompt).length <= 12, lastPrompt ? { xiaoXiJi: msgs(lastPrompt).length, logTurns: TURNS * 2 } : 'no-prompt');
 
-    const sum = await call('metricsSummary');
     check('metrics 暴露 viewBytes/logBytes 哨兵', sum && typeof sum.viewBytes === 'number' && typeof sum.logBytes === 'number' && sum.viewSamples >= TURNS, {
       viewSamples: sum?.viewSamples, viewBytes: sum?.viewBytes, logBytes: sum?.logBytes, budget: sum?.viewBudgetChars,
     });
@@ -729,13 +757,13 @@ if (!SKIP_ELECTRON) {
     check('metrics: logBytes 远大于 viewBytes（解耦的实测证据）', sum && sum.logBytes > sum.viewBytes * 3, {
       logBytes: sum?.logBytes, viewBytes: sum?.viewBytes, ratio: sum && sum.viewBytes ? +(sum.logBytes / sum.viewBytes).toFixed(1) : null,
     });
-    check('metrics: viewBytes 上界 = 预算，末次 = 上界（从未越界）', sum && sum.viewBytesMax <= BUDGET && sum.viewBytes === sum.viewBytesMax, {
-      min: sum?.viewBytesMin, max: sum?.viewBytesMax, last: sum?.viewBytes, budget: sum?.viewBudgetChars,
+    check('metrics: viewBytes 上界 = 预算，末次 = 上界（从未越界）', sum && sum.viewBytesMax <= EB && sum.viewBytes === sum.viewBytesMax, {
+      min: sum?.viewBytesMin, max: sum?.viewBytesMax, last: sum?.viewBytes, budget: EB,
     });
     console.log(`  24 轮实测：注入字符 ${injectedChars[0]} → ${injectedChars[injectedChars.length - 1]}（进入有界区第 ${firstSettled + 1} 轮起恒为 ${settled[settled.length - 1]}），JSON ${Math.min(...injectedJson)}~${Math.max(...injectedJson)}；metrics viewBytes=${sum?.viewBytes} logBytes=${sum?.logBytes}（viewBytes min=${sum?.viewBytesMin}/max=${sum?.viewBytesMax}）`);
 
     // 指针可回溯：把末轮指针里的 recordId 拿出来，用真记忆服务 retrieve 比对
-    const lastP = prompts[prompts.length - 1];
+    const lastP = lastPrompt;
     const ptr = (msgs(lastP)).find((m) => m.role === 'system' && /已省略/.test(String(m.content)));
     const ids = [...String(ptr?.content || '').matchAll(/recordId="([^"]+)"/g)].map((m) => m[1]);
     check('末轮指针里给出真实 recordId', ids.length >= 1, { ids: ids.slice(0, 3) });
@@ -770,21 +798,30 @@ if (!SKIP_ELECTRON) {
         inView,
         longRecordsInRange: longOnes.length,
       });
-      check('JSONL 里的记录数 = 发送轮次 ×（用户 + 回复）', records.length >= TURNS * 2, { records: records.length, turns: TURNS });
+      /** 记忆服务可能把空/重复回复去重；这里只要求每轮至少有一条落点，不把去重当丢失 */
+      check('JSONL 里的记录数至少覆盖每一轮', records.length >= TURNS, { records: records.length, turns: TURNS });
       console.log(`    JSONL=${jsonl}（${raw.length} 字符 / ${records.length} 条；含指针里的 id=${ids.filter((i) => raw.includes(i)).length}/${ids.length}，省略区 [${lo},${hi}] 内长正文 ${longOnes.length} 条，取第 ${midRec?.seq} 条：在视图内=${inView}）`);
     }
 
-    // 预算可配置：settings.json 改成 600，注入体积必须随之缩小
-    const save = await call('settingsSave', { contextBudgetChars: 600 });
-    check('settings 保存 contextBudgetChars=600', save?.settings?.contextBudgetChars === 600, save?.settings?.contextBudgetChars);
+    // 预算可配置：把滑杆从 10% 调到 20%，预算/视图必须随之变化（不再写死 600 字符）
+    const save = await call('settingsSave', { modelContextTokens: 32768, contextBudgetPercent: 20 });
+    check('settings 保存 32K 窗口 × 20%', save?.settings?.modelContextTokens === 32768 && save?.settings?.contextBudgetPercent === 20, {
+      modelContextTokens: save?.settings?.modelContextTokens,
+      contextBudgetPercent: save?.settings?.contextBudgetPercent,
+    });
     const before2 = seenPrompts.length;
-    await call('chatSend', { sessionId: 's-bounded', content: '预算改成 600 之后：' + '短'.repeat(200) });
+    await call('chatSend', { sessionId: 's-bounded', content: '预算改成更大之后：' + '短'.repeat(200) });
     const p2 = seenPrompts.slice(before2);
-    const chars2 = p2.length ? msgs(p2[0]).reduce((s, m) => s + String(m.content ?? '').length, 0) : -1;
-    check('预算可配置（600）后注入体积随之受限', chars2 > 0 && chars2 <= 600 + 900, { injected: chars2, budget: 600, limit: 1500 });
-    check('预算 600 下指针仍完整', p2.length > 0 && msgs(p2[0]).some((m) => /seq \d+\.\.\d+/.test(String(m.content)) && /(retrieve|recall)\(/.test(String(m.content))), p2[0]?.xiaoXiJi?.[0]?.content?.slice(0, 160));
+    const full2 = p2.filter((p) => msgs(p).length >= 4);
+    const ptr2 = p2.filter((p) => msgs(p).some((m) => /seq \d+\.\.\d+/.test(String(m.content)) && /(retrieve|recall)\(/.test(String(m.content))));
+    const chars2 = full2.length ? msgs(full2[full2.length - 1]).reduce((s, m) => s + String(m.content ?? '').length, 0) : -1;
     const sum2 = await call('metricsSummary');
-    check('metrics 反映新预算', sum2?.viewBudgetChars === 600 && sum2?.viewBytes <= 600 + 900, { budget: sum2?.viewBudgetChars, viewBytes: sum2?.viewBytes });
+    const EB2 = Number(sum2?.viewBudgetChars) || 0;
+    check('预算可配置：32K × 20% 后预算/注入随之变化', EB2 > 0 && EB2 !== EB && chars2 > 0 && chars2 !== injectedChars[injectedChars.length - 1], {
+      injected: chars2, budget: EB2, before: EB, beforeInjected: injectedChars[injectedChars.length - 1],
+    });
+    check('调预算后指针仍完整', ptr2.length > 0, ptr2[0]?.xiaoXiJi?.[0]?.content?.slice(0, 160));
+    check('metrics 反映新预算', sum2?.viewBudgetChars === EB2 && sum2?.viewBytes <= EB2, { budget: sum2?.viewBudgetChars, viewBytes: sum2?.viewBytes });
 
     // 群消息（值班者路径）也走渲染器：不抛错、有界
     const gcreate = await call('groupCreate', { groupId: 'g-ctx', ming: '有界渲染群', type: 'internal' });

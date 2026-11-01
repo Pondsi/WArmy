@@ -51,7 +51,7 @@ export interface TongbuXiaoxi {
   id: string;
   from: string;
   to: string | '*';
-  channel: 'group' | 'control' | 'invite' | 'gossip' | 'announce';
+  channel: 'group' | 'control' | 'invite' | 'join' | 'gossip' | 'announce';
   groupId?: string;
   payload: unknown;
   ts: number;

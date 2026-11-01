@@ -249,11 +249,18 @@ console.log('\n[8] 工具面接线（源码级断言）');
   check('文档读取走统一抽取器（tiQuWenDang）', /tiQuWenDang\(absD, \{ maxChars/.test(em) && /ReturnType<typeof tiQuWenDang>/.test(em));
   check('find_skill 用规范解析（不再读前 3 行）', /saoMiaoJiNeng\(/.test(em) && !/filter\(\(l\) => l\.trim\(\)\)\.slice\(0, 3\)/.test(em));
   check('install_skill 带规范校验并如实告知', /规范校验/.test(em));
-  check('会话级回滚 IPC 存在（warmy:huaTiHuiGun）', /huaTiHuiGun/.test(em) && /chatRollbackRound/.test(fs.readFileSync(path.join(pkgRoot, 'src', 'preload.cjs'), 'utf8')));
+  // 第 67 轮 项 13：删除“回到这一轮之前”；回档 = checkpointHuiGun + 显式 opts（停 AI/恢复文件/保留聊天）。
+  {
+    const preload = fs.readFileSync(path.join(pkgRoot, 'src', 'preload.cjs'), 'utf8');
+    check('回档 IPC 存在且 preload 透传 opts；旧的“回到这一轮之前”已移除',
+      /warmy:checkpointHuiGun/.test(em) && /checkpointRollback: \(id, opts\)/.test(preload)
+      && !/chatRollbackRound/.test(preload));
+  }
   check('工具预算：有上限常量 + 超预算如实叫停', /GONG_JU_YU_SUAN_MOREN/.test(em) && /tool-budget-exceeded/.test(em) && /预算已用完/.test(em));
   check('工具可观测 IPC 存在', /warmy:gongJuTongJi/.test(em) && /toolStats\(/.test(em));
   check('门禁留档：跑门禁必写留档', /jiLuMenJin\(/.test(em) && /gates-history\.jsonl/.test(em));
-  check('社交密码落盘加密接线在 taiBaoCun/taiJiaZai', /jiaMiSheJiao\(state\.instances/.test(em) && /jieMiSheJiao\(s\.instances/.test(em));
+  check('社交密码落盘加密接线在 taiBaoCun/taiJiaZai（加密对象可以是清洗后的实例数组，判据只认"过加密函数"这件事）',
+    /jiaMiSheJiao\([A-Za-z_$][\w$]*, anQuanCunChu\(\)\)/.test(em) && /jieMiSheJiao\(s\.instances, anQuanCunChu\(\)\)/.test(em));
 }
 
 /* ── 9. 子集化自身：不许悄悄丢字形、缺字形要如实上报 ── */

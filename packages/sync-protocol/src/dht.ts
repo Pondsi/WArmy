@@ -437,6 +437,8 @@ export interface DhtJieDianXuanXiang {
   id?: Buffer;
   /** 绑定地址，默认 127.0.0.1；组网时用 0.0.0.0 */
   host?: string;
+  /** 对外宣告地址；绑定 0.0.0.0 且作为种子/中继时必须给出，否则对端只能学到 127.0.0.1 */
+  advertiseHost?: string;
   /** 绑定端口，0 = 随机（测试用） */
   port?: number;
   /** 本机 TCP 服务端口（宣告记录里用） */
@@ -767,7 +769,7 @@ export class DhtJieDian {
       args.record ??
       ({
         fp: args.zhiWen,
-        host: this.bound.host === '0.0.0.0' ? '127.0.0.1' : this.bound.host,
+        host: this.opts.advertiseHost?.trim() || (this.bound.host === '0.0.0.0' ? '127.0.0.1' : this.bound.host),
         port: this.tcpPort,
         scope: 'lan',
         announcedAt: this.now(),
@@ -1004,7 +1006,9 @@ export class DhtJieDian {
   }
 
   private selfWireContact(): Record<string, unknown> {
-    const host = this.bound.host === '0.0.0.0' ? '127.0.0.1' : this.bound.host;
+    // 绑定 0.0.0.0 时本机不知道对外地址；种子/中继必须显式给出 advertiseHost，
+    // 否则对端只会学到 127.0.0.1，引导回来的 RPC 全部打空。
+    const host = this.opts.advertiseHost?.trim() || (this.bound.host === '0.0.0.0' ? '127.0.0.1' : this.bound.host);
     return { id: b64u(this.id), host, port: this.bound.port, fp: this.identity.zhiWen };
   }
 

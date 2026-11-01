@@ -20,7 +20,10 @@ export async function attach(port, opts = {}) {
   const t0 = Date.now();
   const res = await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(5000) });
   const list = await res.json();
-  const page = list.find((t) => t.type === 'page');
+  const pages = list.filter((t) => t.type === 'page');
+  const page = opts.matchUrlIncludes
+    ? pages.find((t) => String(t.url || '').includes(opts.matchUrlIncludes))
+    : pages[0];
   if (!page) throw new Error(`[${biaoQian}] 没有 page target（渲染进程可能已崩）`);
 
   const ws = new WebSocket(page.webSocketDebuggerUrl);

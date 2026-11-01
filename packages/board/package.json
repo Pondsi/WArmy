@@ -2,7 +2,7 @@
   "name": "@warmy/board",
   "version": "0.1.0",
   "private": true,
-  "description": "看板：board.jsonl 只追加，仅 duty 可写",
+  "description": "Board: append-only board.jsonl; only duty can write",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -31,8 +31,10 @@ panding('项1 老位置的同名播种会被清掉（内容与我们出厂稿一
   /if \(fs\.readFileSync\(wen, 'utf8'\) === nei\) fs\.rmSync/.test(main));
 
 /* 项 2：印象 */
-panding('项2 「印象」文件是 userData/yonghushuju.md，读写 IPC 齐全',
-  /function yinXiangLu/.test(main) && /'yonghushuju\.md'/.test(main) && /warmy:yinXiangDu/.test(main) && /warmy:yinXiangShe/.test(main));
+panding('项2 「印象」文件是 userData/yinxiang.md（旧名 yonghushuju.md 读之前自动改名一次、不留双份），读写 IPC 齐全',
+  /function yinXiangLu/.test(main) && /'yinxiang\.md'/.test(main)
+  && /YIN_XIANG_JIU_MING = 'yonghushuju\.md'/.test(main) && /fs\.renameSync\(jiu, xin\)/.test(main)
+  && /warmy:yinXiangDu/.test(main) && /warmy:yinXiangShe/.test(main));
 panding('项2 preload 暴露 yinXiangDu/She/ZhiYi', ['yinXiangDu:', 'yinXiangShe:', 'yinXiangZhiYi:'].every((k) => preload.includes(k)));
 panding('项2 「我的」页在**道与规矩之间**渲染印象卡（可编辑，与道同一套确定/取消）',
   (() => {
@@ -41,13 +43,15 @@ panding('项2 「我的」页在**道与规矩之间**渲染印象卡（可编�
     const k = appJs.indexOf('id="zuiGaoXinNianKa"');
     return i > 0 && j > i && k > j && /yinXiangTi/.test(appJs);
   })());
-panding('项2 印象注入系统提示，且**明确低于规矩**、与用户当场的话冲突以用户为准',
-  /【印象 · 牛马对用户的长期理解（低于「规矩」）】/.test(main) && /一律以用户当场说的为准/.test(main)
-  && /已被用户否认/.test(main));
-panding('项2 归档时归纳进印象（确定性提取，不调用模型）',
-  /zhengLiYinXiang\(\{ yuanHua: yongHuHua \}\)/.test(main) && /function zhengLiYinXiang/.test(main));
-panding('项2 印象有防膨胀上限（行数 + 字符双闸）',
-  /YIN_XIANG_MAX_LINES = 120/.test(main) && /YIN_XIANG_MAX_CHARS = 6000/.test(main) && /ziZeng\.length > YIN_XIANG_MAX_LINES/.test(main));
+panding('项2 印象注入系统提示：第 52 轮升到「规范」之后（仍声明可能是错的，与用户当场的话冲突以用户为准）',
+  /【印象 · 对用户的长期理解】/.test(main) && /一律以用户当场说的为准/.test(main)
+  && /已被用户否认/.test(main)
+  && !/【印象 · 对用户的长期理解（最低）】/.test(main));
+panding('项2 归档时归纳进印象（第 38 轮改为"用整理模型/对话模型 + 只许摘录原话"，确定性提取留作降级）',
+  /function zhengLiYinXiang/.test(main) && /moXingGuiNaYinXiang\(/.test(main)
+  && /yinxiang\.hallucination-dropped/.test(main) && /nengLiLianMoXing\('organizer'\)/.test(main));
+panding('项2 印象有防膨胀上限（行数 + 字符双闸；字符闸取自第 53 轮的唯一上限表，不再与上限表并存两套数字）',
+  /YIN_XIANG_MAX_LINES = 120/.test(main) && /(?:YIN_XIANG_MAX_CHARS = shangXianOf\('印象'\)|function yinXiangMaxChars\(\): number \{ return shangXianOf\('印象')/.test(main) && /ziZeng\.length > YIN_XIANG_MAX_LINES/.test(main));
 panding('项2 软门禁（提取纪律）存在：只提取长期有效的、不提取一次细节/隐私/猜测',
   /YIN_XIANG_TIQU_MENJIN/.test(main) && /不要提取/.test(main) && /三个月后再看到这条/.test(main));
 panding('项2 硬门禁：用户否认 ⇒ 归因 + 标记该条 + **追加一条提取纪律**',
@@ -58,8 +62,10 @@ panding('项2 渲染层在用户否认时调用归因（保守：只认明确否
 /* 项 5：微信扫码 */
 panding('项5 微信扫码：官方 iLink 两步（get_bot_qrcode → get_qrcode_status）',
   /get_bot_qrcode\?bot_type=/.test(main) && /get_qrcode_status\?qrcode=/.test(main));
-panding('项5 扫码确认后凭据**加密**保存并默认映射到这只牛马自己的会话',
-  /st === 'confirmed'/.test(main) && /zhengJiaMi\(\{ pingTai: dai\.pingTai, botId, botToken: token/.test(main) && /huiHuaYingShe: \{ default: dai\.instId \}/.test(main));
+panding('项5 扫码确认后凭据加密保存并默认映射到这只牛马自己的会话（第 67 轮起按账号列表保存）',
+  /st === 'confirmed'/.test(main) && /accounts\.push\(\{ id: botId/.test(main)
+  && /cunSheJiaoZhangHao\(/.test(main) && /zheng: \{ \.\.\.a\.zheng, pingTai \}/.test(main)
+  && /huiHuaYingShe: old\.huiHuaYingShe && Object\.keys\(old\.huiHuaYingShe\)\.length \? old\.huiHuaYingShe : \{ default: String\(instId \|\| ''\) \}/.test(main));
 panding('项5 UI 有「微信扫码连接」按钮 + 二维码弹层 + 状态轮询', /data-sj-qr/.test(appJs) && /sheJiaoSaoMaZhuangTai/.test(appJs));
 panding('项5 失败如实显示服务端原话（不假装成功）', /qrFail/.test(appJs) && /HTTP ' \+ r\.status/.test(main));
 
@@ -82,10 +88,18 @@ panding('项6 person-10 / user-default 是"抽象的人"（几何人形 + 整圆
 panding('项6 默认头像左右对称且无角落装饰点（用户两次点名要求）',
   (() => {
     const s = rd(path.join(SRC, 'renderer/icons/avatars/user-default.svg'));
-    // 对称：关键元素都以 x=50 为轴（居中圆/居中方头 + 左右成对弧）
-    return /cx="50"/.test(s) && /M26,72/.test(s) && /M74,72/.test(s)
-      && !/<circle[^>]*\br="[1-5](\.[0-9]+)?"/.test(s);
-  })());
+    /**
+     * 第 44 轮改这条：原来钉死 `M26,72` 与 `M74,72` 两个**坐标字面量**，
+     * 第 42 轮头像换稿（新的对称轴是 14/86 那对路）⇒ 画还是严格左右对称的，门禁却因为坐标变了而红。
+     * 改成守真正的不变量：**每个起笔 x 都要有以 x=50 为轴的镜像兄弟**（整宽横线 0→100 视为对称），
+     * 且所有圆心都在轴上；小装饰点的判据保留。
+     */
+    const qi = [...s.matchAll(/\bM\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/g)].map((m) => Number(m[1]));
+    if (!qi.length) return false;
+    const dui = qi.every((x) => x === 0 || qi.some((y) => Math.abs((x + y) - 100) < 0.01));
+    const zhou = [...s.matchAll(/<circle[^>]*\bcx="([\d.]+)"/g)].every((m) => Number(m[1]) === 50);
+    return /cx="50"/.test(s) && dui && zhou && !/<circle[^>]*\br="[1-5](\.[0-9]+)?"/.test(s);
+  })(), '起笔点/圆心不成轴');
 panding('项6 可选列表第 10 个（abs-1）= 原默认头像画面', (() => {
   const dir = path.join(SRC, 'renderer/icons/avatars');
   const a = rd(path.join(dir, 'abs-1.svg'));
@@ -123,7 +137,7 @@ panding('项8 要改附件时卡片改口为「请求**修改**你给它的这�
 /* 项 9：流式期间的执行明细 */
 panding('项9 执行明细能挂到**流式气泡**上（不再等最终回复）',
   /const liuShi = hang\.filter\(\(n\) => n\.hasAttribute\('data-streaming'\)\)/.test(appJs)
-  && /const zhuan = liuShi\.length \? liuShi\[liuShi\.length - 1\]/.test(appJs));
+  && /const liuShiNode = liuShi\.length \? liuShi\[liuShi\.length - 1\] : null/.test(appJs));
 
 /* 项 10：退出走应用自己的路 */
 panding('项10 支持 --warmy-quit 二次启动参数 ⇒ 走应用自己的退出函数（不再 taskkill）',
@@ -132,7 +146,7 @@ panding('项10 支持 --warmy-quit 二次启动参数 ⇒ 走应用自己的退�
 /* 项 11/12：凭据加密 + 按牛马 */
 panding('项11 社交凭据落盘加密（safeStorage，enc:v1）',
   /export function jiaMiWenBen/.test(cred) && /export function jieMiWenBen/.test(cred)
-  && /xiao\.zheng = zhengJiaMi\(/.test(main) && /zhengJieMi\(x\.zheng\)/.test(main));
+  && /zhengJiaMi/.test(main) && /enc:v1:/.test(main) && /social-credential-encrypt-failed/.test(main));
 panding('项12 社交配置按牛马存 + 连接按「实例::平台」分开',
   /sheJiaoJieRu\?: Record<string, SheJiaoPeiZhi>/.test(main) && /function sheJiaoLianJieJian/.test(main));
 panding('项12 默认映射到这只牛马**自己的会话**', /huiHuaYingShe = \{ default: instId \|\| '' \}/.test(main));

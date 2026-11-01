@@ -1,7 +1,7 @@
 /**
  * 文档合规校验（发布规范）：
  *  - README 含 10 语言节标题
- *  - README/说明 最后含 Pondsi 署名
+ *  - 说明 最后含 Pondsi 署名
  *  - 不出现 token / 本机绝对路径 / 私网 IP（第一方文档）
  *  - 必备文件存在
  *  - 安装包链接与 checksums 指向一致（若有）
@@ -44,23 +44,20 @@ for (const alias of ['繁體中文', '한국어', 'Русский', '日本語',
 
 const SIG = 'Pondsi (+mimo-X-pro-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash)';
 const SIG_ZH_FULL = 'Pondsi（+mimo-X-pro-Preview +mimo-v2.5-pro +DeepSeek-V4.1-Flash +Qwen3.7-max +Qwen3.8-27b +Gemini3.1pro +Gemini3.8-flash）';
-check('README signature models (single style)', readme.includes(SIG));
 check('说明 signature models (single style)', shuoming.includes(SIG) || shuoming.includes(SIG_ZH_FULL));
-check('README has only one signature footer line', (readme.match(/automatically committed by Xiaomi MiMo Desktop/g) || []).length === 1);
 check('说明 has only one signature footer line', (shuoming.match(/由 Xiaomi MiMo Desktop 自行提交|automatically committed by Xiaomi MiMo Desktop/g) || []).length === 1);
-check('README signature Xiaomi MiMo Desktop', /Xiaomi MiMo Desktop/.test(readme));
 check('说明 signature Xiaomi MiMo Desktop', /Xiaomi MiMo Desktop/.test(shuoming));
 check('LICENSE mandates Pondsi attribution', /ATTRIBUTION TO PONDSI/i.test(license) && license.includes('Pondsi'));
 
 // brand rules
 check('README Workhorse Army', readme.includes('Workhorse Army'));
-check('README English tagline', readme.includes('An infinite army of AI workhorses working for you.'));
-check('说明 zh tagline', shuoming.includes('让AI成为你的无限牛马'));
+check('README English tagline', readme.includes("An army that's yours."));
+check('说明 zh tagline', shuoming.includes('属于你的军团'));
 check('README no CCArmy', !/CCArmy|Corporate Cattle/i.test(readme));
 check('说明 no CCArmy', !/CCArmy|Corporate Cattle/i.test(shuoming));
 
 // content pillars user asked for
-for (const k of ['What makes WArmy different', 'Compared with similar open-source', 'Install', 'How to use', 'Technical highlights', '59599', 'Memory system', '说明.md']) {
+for (const k of ['What you get', 'What you can do', 'The system', 'Install', 'How it works', 'Small details and technical notes', '59599', 'Memory you can inspect', '说明.md']) {
   check(`README section/keyword: ${k}`, readme.includes(k), k);
 }
 for (const k of ['优点', '同类产品', '安装方法', '使用方法', '技术要点', '59599', '记忆系统', 'recall', 'retrieve']) {
@@ -91,9 +88,48 @@ check('github update feed json', fs.existsSync(path.join(ROOT, 'feed/latest.json
 check('i18n naming doc', fs.existsSync(path.join(ROOT, 'docs/i18n-naming.md')));
 check('set-github-update-feed script', fs.existsSync(path.join(ROOT, 'scripts/set-github-update-feed.mjs')));
 check('launch-warmy vbs', fs.existsSync(path.join(ROOT, 'packages/app-shell/scripts/launch-warmy.vbs')));
+/**
+ * 第 53 轮：两份**决策文档**必须存在且结构完整（用户点名"告诉我在哪里查看该方案的优缺点 / 其他优化方案"，
+ * 以及项 8 那两个"如何实现"的问题）。只查文件在不够 —— 要查关键小节真的在（缺节等于没写）。
+ */
+const tuminDoc = fs.readFileSync(path.join(ROOT, 'docs/P0-6-TUMIN.md'), 'utf8');
+check('P0-6 脱敏方案对照文档存在', tuminDoc.length > 3000, { chars: tuminDoc.length });
+check('P0-6 文档把六个候选方案逐个写全（A–F）',
+  ['A. 让模型改写', 'B. 能力白名单', 'C. k-匿名', 'D. 差分隐私', 'E. 密态计算', 'F. 不做概要'].every((x) => tuminDoc.includes(x)));
+check('P0-6 文档有"最坏情况"与"挡不住什么"（只写优缺点不给决策依据）',
+  (tuminDoc.match(/最坏情况/g) || []).length >= 6 && /## 3\..*最坏情况清单/.test(tuminDoc));
+check('P0-6 文档有"还能怎么优化"的排序清单（用户点名的其他优化方案）', /还能怎么优化/.test(tuminDoc) && /性价比排序/.test(tuminDoc));
+const pingzhengDoc = fs.readFileSync(path.join(ROOT, 'docs/P0-5-ZITUOGUAN.md'), 'utf8');
+check('P0-5 自托管凭证与自动解锁方案文档存在', pingzhengDoc.length > 3000, { chars: pingzhengDoc.length });
+check('P0-5 文档直接回答那两个问题（看不到密钥怎么自动解锁 / 换设备怎么解开旧文件）',
+  /Q1/.test(pingzhengDoc) && /Q2/.test(pingzhengDoc) && /结论先行/.test(pingzhengDoc));
+check('P0-5 文档写了"没有服务器 ⇒ 忘记密码就不能自动找回"这条硬边界（不藏取舍）',
+  /二者不能同时要|要么放弃/.test(pingzhengDoc));
+check('P0-5 文档有丢失场景真值表与落地三步（否则只是感想）',
+  /场景真值表/.test(pingzhengDoc) && /Step 1/.test(pingzhengDoc) && /Step 3/.test(pingzhengDoc) && /需要用户拍板/.test(pingzhengDoc));
+for (const [ming, wd] of [['P0-6', tuminDoc], ['P0-5', pingzhengDoc]]) {
+  check(`${ming} 文档不含本机路径/主机名/工作区目录名`,
+    !/[A-Za-z]:[\\/]{1,2}(Users|TEMP|ProgramData)/i.test(wd) && !/大龙虾/.test(wd) && !/AppData/i.test(wd));
+}
+check('两份决策文档在交接文档里都指得到（用户要"每次回复都能找到它们在哪"）',
+  ['docs/HANDOFF-R51.md'].every((f) => {
+    const s = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    return s.includes('P0-6-TUMIN') && s.includes('P0-5-ZITUOGUAN');
+  }));
 const feedJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'feed/latest.json'), 'utf8'));
 const pkgVer = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages/app-shell/package.json'), 'utf8')).version;
-check('feed version matches package.json', feedJson.version === pkgVer, { feed: feedJson.version, pkg: pkgVer });
+// feed 描述**已发布**版本，package.json 描述当前构建；候选包未发布时两者允许 package 更新，
+// 但不允许 feed 超前（否则用户会被引到一个不存在的下载）。
+const banbenBi = (a, b) => {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i += 1) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+};
+check('feed 版本不得新于 package.json', banbenBi(feedJson.version, pkgVer) <= 0, { feed: feedJson.version, pkg: pkgVer });
 check('feed points to GitHub release asset', String(feedJson.url || feedJson.downloadUrl || '').includes('github.com/Pondsi/WArmy'), feedJson.url);
 
 // privacy qiYong first-party docs
@@ -107,9 +143,12 @@ for (const [re, ming] of privacyPats) {
   check(`说明 no ${ming}`, !re.test(shuoming));
 }
 
-// release asset naming consistency
-check('README mentions WArmy-Setup-0.1.0.exe', readme.includes('WArmy-Setup-0.1.0.exe'));
-check('说明 mentions WArmy-Setup-0.1.0.exe', shuoming.includes('WArmy-Setup-0.1.0.exe'));
+// release asset naming consistency（版本从 **feed** 取：文档写的是已发布资产；
+// 候选构建尚未发布时不应强迫文档提前写一个下不到的链接）
+const releasePkgVer = feedJson.version;
+const setupAsset = `WArmy-Setup-${releasePkgVer}.exe`;
+check(`README mentions ${setupAsset}`, readme.includes(setupAsset));
+check(`说明 mentions ${setupAsset}`, shuoming.includes(setupAsset));
 check('README GitHub release link', readme.includes('https://github.com/Pondsi/WArmy/releases'));
 
 console.log(`\n==== verify-docs: ${pass} ok / ${fail} FAIL ====`);

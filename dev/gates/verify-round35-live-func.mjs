@@ -202,7 +202,7 @@ try {
     JSON.stringify(ui.hang.map((x) => x.icoTag)));
   panding('③ 真跑出来的行动明细每个操作只有一行（有内容且状态是完成/失败/进行中）',
     ui.hang.length > 0 && ui.hang.every((x) => /完成|失败|进行中/.test(String(x.zt))), JSON.stringify(ui.hang.map((x) => x.zt)));
-  panding('③ 执行过程标题就是「执行过程」', /执行过程/.test(String(ui.yao)), ui.yao);
+  panding('③ 执行过程标题就是「思考与执行」', /思考与执行/.test(String(ui.yao)), ui.yao);
 
   const cunZai = fs.existsSync(path.join(profile, 'workspace', SID, 'r35-真机测试.txt'))
     || fs.existsSync(path.join(profile, 'workspace', SID));

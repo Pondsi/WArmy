@@ -64,7 +64,7 @@ console.log('\n[1] 决策卡 24h 语义');
   ok(ctx.startsWith('[决策卡]') && (ctx.match(/\n/g) || []).length <= 6, '决策上下文有界（最多 5 张卡进 prompt，不会越跑越长）', (ctx.match(/\n/g) || []).length);
   ok(q.cancel(kaiLe[1].id) === true && q.pending(QUN).length === 5, 'cancel 后 pending 减少（取消是真取消，不是留着继续提醒）', q.pending(QUN).length);
   const mainTs = fs.readFileSync(path.join(root, 'packages/app-shell/src/electron-main.ts'), 'utf8');
-  ok(/timeoutMs = 24 \* 60 \* 60 \* 1000/.test(mainTs), '主进程默认等 24 小时（长跑期间没人答就等满，不误判超时）');
+  ok(/timeoutMs = 0/.test(mainTs), '主进程默认无限等待（长跑期间没人答就等，不误判超时）');
 }
 
 // ══════════════════════════════════════════════════════════════

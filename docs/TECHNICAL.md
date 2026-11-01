@@ -71,19 +71,19 @@ L1 模型/容器 providers / container-probe / dsh 进程
 | `chatLogs` | `Map<sessionId, LogEntry[]>` 内存中的会话日志镜像（seq 单调） |
 | `groupStore` | 项目/群持久化 `groups.json`（含 `project.memory`、`gateVerify`） |
 | `router` | `GroupChatRouter`：值班编排与队列；`persistRouterQueues` 落盘 |
-| `aiQuestions` | `AiQuestionHub` 决策卡 |
+| `aiQuestions` | `AiWenTiZhongXin`（`ai-questions.ts`）决策卡 |
 | `memory` | `MemoryClient` → 记忆子进程 |
 | `archiver` / `cleanup` | 归档与清理 |
 | `gateVerifyForProjectType()` | 按项目类型选默认验收脚本 |
-| `runProjectGateOnce()` | 门禁执行（3s 节流，仅 complete/验收触发） |
+| `yunxingXiangmuMenjinYici()` | 门禁执行（3s 节流，仅 complete/验收触发） |
 | `WARMY_*` 常量引用 | 端口、节点路径等，来自 settings-store |
 
-**创建群时必做**：`setProjectAttrsOf` 写入 `devEnv?`、`directory?`、**`gateVerify`（始终）**。
+**创建群时必做**：`sheZhiXiangMuShuXing` 写入 `devEnv?`、`directory?`、**`gateVerify`（始终）**。
 
 **会话摘要 IPC** `warmy:session-summary`：
 
 1. 取 `chatLogs` 最近 30 条 → 文本  
-2. `extractStructuredSummary` → decisions/todos/risks/bullets  
+2. `tiQuJieGouHuaZhaiYao`（`archive-cleanup.ts`）→ decisions/todos/risks/bullets  
 3. 组装 Markdown 摘要  
 4. `archiver.archive` 带 **`structured` + anchors（最近日志 seq）**  
 5. `extractKnowledgeFromArchive` → 知识库实体/事件 + 用户偏好  
@@ -94,9 +94,9 @@ L1 模型/容器 providers / container-probe / dsh 进程
 |------|------|
 | `KnowledgeArchiver` | 追加写 `userData/archive/archives.jsonl`；条目可含 `structured` |
 | `CleanupManager` | 检查点/审计/语音清理（有界） |
-| `extractStructuredSummary` | 规则匹配：决定/待办/风险/要点；**不调用 LLM、不编造** |
+| `tiQuJieGouHuaZhaiYao` | 规则匹配：决定/待办/风险/要点；**不调用 LLM、不编造** |
 | `extractKnowledgeFromArchive` | 摘要 → 实体/事件（含结构化事件）+ 偏好正则 |
-| `mergeUserPreferences` | 写 `userData/user-preferences.json`（按 key 覆盖，最多约 200 条） |
+| `xiePianHaoDaoYinXiang` | 赞/踩里提炼出的偏好写进「印象」`userData/yinxiang.md`（第 38 轮：`user-preferences.json` 这条只写不读的死路径已删除） |
 | `ArchiveEntry.structured?` | `{bullets,decisions,todos,risks}` |
 
 ### 2.3 设置 `settings-store.ts`
@@ -111,18 +111,84 @@ L1 模型/容器 providers / container-probe / dsh 进程
 
 **产品铁律**：绑定失败 → 报错告知端口与底层错误；**绝不**自动改端口。
 
-### 2.4 上下文渲染 `context-renderer.ts` / `orchestrator.ts`
+### 2.4 上下文渲染 `context-renderer.ts` / `orchestrator.ts` / `yuSuan-jiage.ts`
 
-- `renderBoundedView(log, opts)`：产出注入模型的消息数组；**断言**视图不超过预算。  
-- 中间省略 → 指针文案，可用 memory `retrieve` 取回。  
+- `renderBoundedView(log, opts)`：产出注入模型的消息数组；**断言**视图不超过预算。
+- 中间省略 → 指针文案，可用 memory `retrieve` 取回。
 - `orchestrator`：注入 `projectMemory`（≤1200 字）、`decisionContext`、工具结果、门禁原因；`runWithContextRetry` 按 100/60/35/20% 重试。
+
+**一条请求的装配与分配顺序**（第 44/45 轮定稿，唯一实现 `yuSuan-jiage.ts`，不留第二套算术）：
+
+```
+① 固定开销 shenFenTou（按【标签】切段：道 / 规矩 / 印象 / 产品门禁 / 身份锚 / 人设 / 能力清单 / 知识库 /
+                最近 5 条 user 原文 / 归档摘要注入 / 前置召回注入）
+② 工具规格 gongJuWen —— 与发送侧同一个入口 zuJingGongJuGuiGe(…, zuiDuo)（截尾时两边同时截）
+③ 本轮输入 benLunZi（内部续派指令才另计；普通用户轮已在视图里，不重复计费）
+④ 迟注入层 daiRu（步骤账本 + 子模型结果 + 分次看图描述）⇒ **先按常数份额预留，注入时按同一上限截断**
+⑤ 图片 shiJue（按真实像素 shiJueToken(宽,高,模型) × 1.2；只算"真的会进请求"的那些）
+   ↓
+fenPeiYuSuan：视图额度 = min( max(预算×95%, 各段之和 + 视图下限), (窗口 − 输出预留 − 2% 安全垫) × 95% ) − 各段
+   ↓
+装不下 → 阶梯：①摘要最近5 ②摘要本轮 ③分次/降分辨率/减张数 ④收缩视图 ④·5 压可压缩段 + 工具面截尾
+              ④·6 让出我们自己留的余量 ⑤停止发送（走异常系统）
+```
+
+- **窗口装不下固定开销时先压"允许动的部分"**（第 52 轮定稿：**只有产品硬门禁与「道」永不可压缩** —— `BU_KE_YA_SUO = ['道','产品门禁']`；术/规范/教条/束缚/认知/印象都可压），
+  压缩顺序 = 优先级倒序：先压**不在阶梯里的段**（身份锚、本机目录、语言约束、计划门禁、能力清单…），再按 **印象 → 认知 → 软门禁 → 工具 → 束缚 → 教条 → 规范 → 术** 逐段压（`YA_SUO_XIAN_HOU`），
+  每条仍留双下限（≥600 字、最多压掉 55%），压不满缺口才走下一级阶梯（工具面 12→6、让出余量…）。**段标题必须 ≤24 字**，否则压缩层认不出这一段。
+  压完仍不行才按 12→6 收窄本轮工具面（记忆双刀与干活工具优先），并**当场在上下文里告诉模型**工具被收窄了
+  （同一条通知在上下文里只留一份：这一级可能连走两趟，重复注入过两条一模一样的「本轮工具面收窄」）。
+- **第④·六级「让出余量」**（`yuSuan-jiage.ts:rangChuYuLiang()`，排在停止发送之前）：缺口常常全在**我们自己加的垫子**里
+  —— 2% 窗口安全垫 + 输出预留（长文 12288）+ 5% 执行余量。让法是：安全垫让完、输出预留退到地板
+  `max(2048, 窗口×4%)`、执行余量退到 2%；让完仍装不下才停止发送。
+  为什么敢让：预算用的是**分脚本上界**估算，实测真实/上界 ≈0.64（中文）–0.89（代码），上界本身已比 2% 垫子厚；
+  输出预留不全让，模型还得有话可说，剩下的交给续派。
+  ⚠️ **让了就必须两边一起让**：输入窗口是按"只给输出留 `yuZhanXin`"放行的，所以发送侧的 `maxTokens`
+  （`yunXuShuChu`）也要夹到同一个数（审计 `chat.budget.output-cap-lowered`）。地板两边同源
+  `SHU_CHU_LIU_WEI_DI_BAO = 2048`（也是思考模型 thinking 的保底）—— 一边按 2048 放行、一边仍要 12288，
+  输入 + 输出就顶穿窗口，等于把"让垫子"变成"偷偷超发"。
+  真机事故：模型窗口未知 ⇒ 兜底窗口偏小 ⇒ 道（不可压缩）+ 工具顶满 ⇒ `chat.budget.stop-send` 缺 3356 token，
+  整轮什么都没发出去（用户看到"什么都没干"）；让出余量后同一轮正常发完
+  （审计：`chat.budget.give-back-reserve`，读数见 §15.6/§16 与 `GATE-AUDIT.md`）。
+- **停止发送是真的结束这一轮**：`{ tingZhi: … }` 由收缩重试壳带出，外层**排在** `contextTooSmall` 兜底之前判 ——
+  否则"固定开销 18143 + 工具 8989 装不进 26616"这句有用的话会被退化成一句没用的"上下文太小"。
+- **两条路径同一个口径**：`contextBudgetChars()`（群 / 值班 / 编排器用）也按**余额**给视图额度，
+  扣的是 `ZUI_XIAO_JI` 里上一轮实测的固定开销；该表**按单聊与值班两侧取大**（被较小的测量冲掉就等于少扣 ⇒ 顶窗）。
+- **执行者上下文 = 马尔可夫毯**（ADR000 P5）：`executor.ts:shouZhanBian()` 给两道闸 —— 单条 ≤3000 字（超出留"按序号回原文里取"的指针）、
+  总长 ≤12000 字（超长的条目**整条丢掉**并如实计数）。群里的用户原话进毯前同样设闸（`orchestrator.ts:gouJianZhanBianXiang`，切口给前缀与提示留 64 字位）。
+- **缓存三层顺序**（契约第 9 份）：值班者自答 = 冻结系统提示（身份 + 项目记忆 + 纪律，跨轮不变）→ 有界视图 → 状态卡片（最后一条 system，每轮在变）。
+  入口 `orchestrator.ts:sanCengXiaoXi()`；主路径与队列冲刷同一份。
+
+### 2.4.2 执行者协议：任务黑板 + 结构化蒸馏（第 48 轮）
+
+| 文件 | 含义 |
+|---|---|
+| `orchestrator.ts:paiFaZhiXingZheLun()` | **主路径与队列冲刷共用**的一轮执行者派发：每人自己的身份/人格/模型、干活工具 + 记忆双刀 + `jiao_fu` + 黑板读写；并行跑；宿主把交付补记上黑板（去重）、查冲突与产物重叠、按公平配额拼回复 |
+| `hei-ban.ts` | 任务黑板纯逻辑：输入校验（拒收原因写给执行者看）、只追加 + `tiDai` 替代、**来源宿主盖章**、冲突（同主题 + 不同来源 + 说法不同）、产物重叠、未决问题、有界摘要（≤2400 字）、`heiban_read` 有界返回、工具规格 |
+| `hei-ban-cun.ts` | 落盘适配工厂（主进程与门禁同一份）：黑板 → 记忆库 `kind:'blackboard'`、超长结论 → `kind:'worker'`、产物核实（与干活工具同一 `resolveInside` 口径）；**只有记忆服务回 ok:true 才算落盘** |
+| `zheng-liu.ts` | 蒸馏：`jiao_fu` 解析 → 正文 json 块 → 正文兜底；结论硬上限 300/200 字（句子边界截）；事实/决定/问题/产物条数与单条上限；超长 ⇒ 完整原文存档、存成功才挂指针；公平配额 `meiRenPeiE`（3000/N，每人 ≥400） |
+| `executor.ts` | 短命执行者：输入 `GongzuozheRenwuShuru`、返回 `GongzuozheJieguo`（契约 v1.1）；报错按 `cuowu-fenlei.ts` 归类（认不出的当 `WORKER_CRASH`） |
+| `cuowu-fenlei.ts` | 错误分类表的唯一实现（判据顺序：鉴权/风控/越界/IPC 先于超限、先剥 URL、状态码只认状态码位置），`shiShangXiaWenChaoXian` 是收缩重试的唯一判据 |
+| `gong-ju-fen-dang.ts` | 窗口装不下整套工具规格时的截尾档位（纯函数，计价侧与发送侧同调）：本轮用户点名/明显要用的工具（-1）与最小干活集（0）永不裁，其后读取类 → 其它 → 派小弟 → 自定义 |
+| `packages/contracts` | 契约 v1.1（只有类型）：13 份，每份都有包外消费点；门禁 `verify-r48-qiyue.mjs` |
+
+### 2.4.1 token 计量 `token-jiliang.ts`（口径唯一）
+
+- 紧上界：按**字符类别**分脚本估（CJK 0.78 / 拉丁 0.30 / 数字 0.45 / 空白 0.35 / 标点 0.60 / 其它 1.30），再乘安全垫 `1.15 + min(0.35, 误差)`。
+- 校准：只认供应商**原生**回读（`source:'native'`），键 = `供应商 / 模型 / 密度桶`（三者任一不同都可能是不同分词法，不许混）；
+  比值 EMA（步长 0.3，限幅 [0.25, 2.5]），**分母永远是未校准上界**（否则自我复合）。
+- 没有回读的模型走"该桶平均法"，一次回读都没有就走先验；每次回读追加一条观测，**归档时离线全量重算**覆盖在线值。
+- 带图片的轮不再整轮跳过校准：先按同一套算法算出视觉 token，从回读里**扣掉**，剩下的才拿去校准文字系数。
 
 ### 2.5 记忆 `memory-client.ts` + `packages/memory-os`
 
-- 真相：`fast-memory.jsonl` 只追加。  
-- 投影：SQLite FTS（uni + tri）可重建。  
-- 环境目录：`WARMY_MEMORY_DIR`。  
-- 双刀：`recall` 发现 → `retrieve` 取回。
+- 真相：`fast-memory.jsonl` 只追加（**整条原文**，一个字都不许在写入时丢掉）。
+- 投影：SQLite FTS（uni + tri）可重建，索引预览 ≤16000 字符；`retrieve` 一律优先读 JSONL，退回投影时 `via` 如实标 `sqlite:*-预览`。
+- JSONL 索引**增量维护**（append 时更新），不再每次全量重扫。
+- 环境目录：`WARMY_MEMORY_DIR`。
+- 双刀：`recall` 发现 → `retrieve` 取回；宿主在装配阶段**主动前置召回**（`recallScoped`，有界份额、800ms 超时不拖轮、可关）。
+- 归档摘要注入：`zhai-yao-he-bing.ts`（纯模块）—— 最近逐条 + 更早合并去重，**注入总量与归档条数无关**，
+  未覆盖的条数写在正文里，份额随本轮预算缩放（8%，夹在 1200–8000 字）。
 
 ### 2.6 渲染层
 
@@ -167,6 +233,20 @@ L1 模型/容器 providers / container-probe / dsh 进程
 - 控制台白名单字段：`runtimeId, action, sessionId, data`。
 
 ---
+
+## 2.9 第 52 轮：阶梯、分层压缩、拒绝停用与知识库三层（口径唯一来源）
+
+- **阶梯**：`产品硬门禁 > 道 > 术 > 规范 > 印象 > 工具 > 软门禁 > 教条 > 束缚 > 认知 > 身份/模型/时间`
+  （文本层与机制层的区分见 `builtin-rules.ts` 头注释；「工具」「软门禁」不是文本层）。
+- **压缩**：`yaSuo-fenCeng.ts` 的分层表 + 两个强度（半极限留 72% / 真极限留 45%，段内下限 600 字）+ 8 轮泵道
+  （先各层半极限，再回头各层真极限）；`BU_KE_YA_SUO = ['道','产品门禁']` 不变；
+  `YA_SUO_XIAN_HOU` 由分层表 flat 派生（不留第二份事实来源）。
+- **拒绝停用**：`ju-jue-zhang.ts`（同一任务累计 2 次 ⇒ 本轮硬停用；续接保留、新任务重置），
+  拒绝文案走唯一出口 `huiBaoJuJue()`（生成文案即记账，不靠措辞反推）。
+- **知识库**：`zhi-shi-fen-ceng.ts`（三层语义 + 内容升层判据 + 能力白名单 + 脱敏检查器）、
+  `zhi-shi-zheng-li.ts`（归档后整理规划器：去重 / 新旧取新 / 超长截断）。
+- **门禁**：`verify-r52-jujue`（42）/ `verify-r52-yasuo`（43）/ `verify-r52-kb`（38）/ `verify-r52-layers`（53），
+  每条判据都要有"只有它能拦"的样例（负向验证读数见 HANDOFF §32.10）。
 
 ## 3. 命名规范（必须遵守；门禁 `verify-naming.mjs`）
 
@@ -307,7 +387,7 @@ providers 285…）按同一流程逐包推进；**每包完成必须 tsc + 全�
 | `memory/fast-memory.jsonl` 等 | memory-os | 记忆真相 |
 | `knowledge/knowledge.json` | knowledge | 实体/事件 |
 | `archive/archives.jsonl` | archiver | 摘要+锚点+structured |
-| `user-preferences.json` | mergeUserPreferences | 使用者行为偏好 |
+| `yinxiang.md` | `xiePianHaoDaoYinXiang` / `zhengLiYinXiang` | 「印象」：牛马对用户的长期理解（低于「规矩」，用户当场否认即改） |
 | `audit/audit.jsonl` | audit | 审计，**不上传** |
 | `permissions/allowlist.json` | SecurityManager | 持久允许库 |
 | `checkpoints/` | checkpoint | 回退点 |
@@ -320,7 +400,7 @@ providers 285…）按同一流程逐包推进；**每包完成必须 tsc + 全�
 - 注册：`handleIpc('warmy:xxx', handler)` 于 `electron-main.ts`。  
 - 渲染：`preload.cjs` 暴露 `window.warmy.xxx`。  
 - 形参与实测：`docs/API-OPERATIONS.md` + `docs/API-OPERATIONS-RESULTS.json`。  
-- 写操作：优先 `withReadBack`；**confident=false 不得提示已保存**。
+- 写操作：优先 `daiHuiDuYanZheng`（`read-back.ts`）；**confident=false 不得提示已保存**。
 
 常用通道（节选）：
 
@@ -479,6 +559,12 @@ Set-Location packages\app-shell
 | 摘要 structured 不落盘 | 右栏读不到 | ArchiveEntry.structured + IPC 写入 |
 | gateVerify 仅 devEnv 分支才写 | 项目可能无门禁 | 创建时始终写入 |
 | EN noClaim 缺 `will **not**` | probe 17-4 FAIL | 补齐 markdown 强调 |
+| 模型能力只在启动时读一次（第 48 轮） | 设置里写进 `modelCaps` 后预算仍按 32K 兜底：工具面被裁、图片被减、输出留位压到 2048 | `nengLiCongLuoPan()` 是落盘 → 内存能力表的唯一同步口，启动与任何带 `modelCaps` 的设置保存都走它；门禁 `verify-r48-nengli-tongbu` |
+| 「手动添加模型」不落盘（第 48 轮） | 主进程不知道它的窗口，重启后模型消失 | 验证通过由主进程落盘能力（`model.manual-add`），渲染层 `saveProviders()` 落盘模型列表 |
+| 工具指纹只看前 400 字（第 48 轮） | 只差路径的两次长正文调用被当成"原样重复"拦下 | `gong-ju-zhi-wen.ts`：预览 400 字 + 全文 sha256 |
+| 中间回复不落盘（第 48 轮） | 模型发起工具调用时写给用户的话重绘/重启即丢 | 工具循环返回 `zhongJianHuiFu` → 正式回复的旁路字段 `zhongJian` → 界面 `.zhongJianHuiFu` 按 ts 排进「执行过程」；不进模型上下文 |
+| 写完的一轮重启后显示"被中断"（第 48 轮） | 经 IPC/续派发出的轮次不清半成品 | `zhenZhengFaSong` 在正式回复落账后清 `jinXing` |
+| 开工的那一轮流式分片全被丢（第 48 轮） | 渲染层挡尾包的「本轮已收尾」标记只在界面点发送那一路清 ⇒ 经 IPC/续派开工的轮：思考与中间回复不显示、半成品不落盘，重启后像"全部消失" | 同一唯一入口在每轮开工时广播 `warmy:yunXingZhuangTai {kai:true}`，渲染层收到即放行（`xinRenWu:false` ⇒ 任务开始时间不重置）；门禁 `verify-round38-restart` |
 
 ---
 

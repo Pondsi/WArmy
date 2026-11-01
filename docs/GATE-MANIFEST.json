@@ -1,10 +1,10 @@
 {
   "note": "门禁审计清单：kind=universal 表示\"可给其他项目直接复用\"；project=本项目专项；probe=刻意不进默认门禁的探针；status=known-red 表示**当下红着**（redNote 写清证据，且必须出现在 docs/GATE-AUDIT.md）。由 packages/app-shell/scripts/verify-gate-manifest.mjs 校验与磁盘/主进程/界面一致。",
-  "generatedAt": "2026-10-15T08:46:55.087Z",
+  "generatedAt": "2026-10-31T12:36:37.981Z",
   "counts": {
-    "total": 83,
-    "universal": 30,
-    "project": 48,
+    "total": 135,
+    "universal": 32,
+    "project": 98,
     "probe": 5,
     "knownRed": 8
   },
@@ -236,6 +236,15 @@
       "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
     },
     {
+      "id": "verify-hard-gates",
+      "file": "packages/app-shell/scripts/verify-hard-gates.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": true,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
       "id": "verify-history-persist",
       "file": "packages/app-shell/scripts/verify-history-persist.mjs",
       "kind": "project",
@@ -299,6 +308,15 @@
       "status": "known-red",
       "redNote": "真机 UI 断言（悬停提示/凭证截断显示/头像尺寸）与当前渲染实现有出入，需逐条核对后重写。",
       "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-local-search",
+      "file": "packages/app-shell/scripts/verify-local-search.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "统一本地搜索：分区顺序、敏感打码、按需扫描（不建索引）、只读、模型全盘权限（本地搜索产品通用）"
     },
     {
       "id": "verify-media-format",
@@ -466,6 +484,438 @@
       "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
     },
     {
+      "id": "verify-r100-stop",
+      "file": "packages/app-shell/scripts/verify-r100-stop.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r101-changes",
+      "file": "packages/app-shell/scripts/verify-r101-changes.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r102-changes",
+      "file": "packages/app-shell/scripts/verify-r102-changes.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r103-4k-static",
+      "file": "packages/app-shell/scripts/verify-r103-4k-static.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r104-vault",
+      "file": "packages/app-shell/scripts/verify-r104-vault.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r117-directed",
+      "file": "packages/app-shell/scripts/verify-r117-directed.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r119-instance-devenv-ui",
+      "file": "packages/app-shell/scripts/verify-r119-instance-devenv-ui.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r119-instance-devenv",
+      "file": "packages/app-shell/scripts/verify-r119-instance-devenv.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r119-memory-jsonl",
+      "file": "packages/app-shell/scripts/verify-r119-memory-jsonl.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r119-storage-recovery",
+      "file": "packages/app-shell/scripts/verify-r119-storage-recovery.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r120-async-boundary",
+      "file": "packages/app-shell/scripts/verify-r120-async-boundary.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r120-backup",
+      "file": "packages/app-shell/scripts/verify-r120-backup.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r120-hardening",
+      "file": "packages/app-shell/scripts/verify-r120-hardening.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": true,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r120-nm-stage",
+      "file": "packages/app-shell/scripts/verify-r120-nm-stage.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r120-plugin-code-plain",
+      "file": "packages/app-shell/scripts/verify-r120-plugin-code-plain.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r120-recall-cancel",
+      "file": "packages/app-shell/scripts/verify-r120-recall-cancel.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r120-ui-a11y",
+      "file": "packages/app-shell/scripts/verify-r120-ui-a11y.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r121-decisions",
+      "file": "packages/app-shell/scripts/verify-r121-decisions.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r52-jujue",
+      "file": "packages/app-shell/scripts/verify-r52-jujue.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r52-kb",
+      "file": "packages/app-shell/scripts/verify-r52-kb.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r52-layers",
+      "file": "packages/app-shell/scripts/verify-r52-layers.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r52-yasuo",
+      "file": "packages/app-shell/scripts/verify-r52-yasuo.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r53-shijian",
+      "file": "packages/app-shell/scripts/verify-r53-shijian.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": true,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r53-tishangxian",
+      "file": "packages/app-shell/scripts/verify-r53-tishangxian.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r53-tumin",
+      "file": "packages/app-shell/scripts/verify-r53-tumin.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r53-zhishi",
+      "file": "packages/app-shell/scripts/verify-r53-zhishi.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r54-i18n-defaults",
+      "file": "packages/app-shell/scripts/verify-r54-i18n-defaults.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r54-zi-geng",
+      "file": "packages/app-shell/scripts/verify-r54-zi-geng.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r55-shouquan-kb",
+      "file": "packages/app-shell/scripts/verify-r55-shouquan-kb.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r56-preset-i18n",
+      "file": "packages/app-shell/scripts/verify-r56-preset-i18n.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r57-ruo-yizhi",
+      "file": "packages/app-shell/scripts/verify-r57-ruo-yizhi.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r58-zhongji",
+      "file": "packages/app-shell/scripts/verify-r58-zhongji.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r59-wangluo",
+      "file": "packages/app-shell/scripts/verify-r59-wangluo.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r60-nm-server",
+      "file": "packages/app-shell/scripts/verify-r60-nm-server.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r62-ui",
+      "file": "packages/app-shell/scripts/verify-r62-ui.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r63-main-ui",
+      "file": "packages/app-shell/scripts/verify-r63-main-ui.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r63-net",
+      "file": "packages/app-shell/scripts/verify-r63-net.mjs",
+      "kind": "project",
+      "needsElectron": true,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r63-nm",
+      "file": "packages/app-shell/scripts/verify-r63-nm.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r64-fwarmy",
+      "file": "packages/app-shell/scripts/verify-r64-fwarmy.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r65-mic-lifecycle",
+      "file": "packages/app-shell/scripts/verify-r65-mic-lifecycle.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r65-nm-pair-live",
+      "file": "packages/app-shell/scripts/verify-r65-nm-pair-live.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r65-nm-pair",
+      "file": "packages/app-shell/scripts/verify-r65-nm-pair.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r65-route",
+      "file": "packages/app-shell/scripts/verify-r65-route.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r65-session-isolation",
+      "file": "packages/app-shell/scripts/verify-r65-session-isolation.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r65-shejiao",
+      "file": "packages/app-shell/scripts/verify-r65-shejiao.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r66-auth",
+      "file": "packages/app-shell/scripts/verify-r66-auth.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r66-nm",
+      "file": "packages/app-shell/scripts/verify-r66-nm.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
+      "id": "verify-r99-five-axis",
+      "file": "packages/app-shell/scripts/verify-r99-five-axis.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
+    },
+    {
       "id": "verify-raf-batching",
       "file": "packages/app-shell/scripts/verify-raf-batching.mjs",
       "kind": "universal",
@@ -506,9 +956,9 @@
       "file": "packages/app-shell/scripts/verify-research-pipeline.mjs",
       "kind": "universal",
       "needsElectron": false,
-      "selfCheck": true,
+      "selfCheck": false,
       "status": "green",
-      "why": "调研管线：搜索条目必须带 URL、抓取要摘录、**没密钥就如实失败**（不许编结果）"
+      "why": "调研管线：搜索条目必须带 URL、抓取要摘录、**免注册可用**；额度用尽/出错必须如实失败（不许编结果）"
     },
     {
       "id": "verify-router-queue",
@@ -527,6 +977,15 @@
       "selfCheck": false,
       "status": "green",
       "why": "真机运行期无未捕获异常"
+    },
+    {
+      "id": "verify-search-providers",
+      "file": "packages/app-shell/scripts/verify-search-providers.mjs",
+      "kind": "universal",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "联网搜索供应商编排：默认关闭、Tavily/DeepSeek/自定义映射、429 与回退（多供应商产品通用）"
     },
     {
       "id": "verify-secret-at-rest",
@@ -754,6 +1213,15 @@
       "selfCheck": false,
       "status": "green",
       "why": "工作区沙箱：越权路径 / 超限写入一律拒绝（不是尽力而为）"
+    },
+    {
+      "id": "verify-zhi-ban-pai-fa",
+      "file": "packages/app-shell/scripts/verify-zhi-ban-pai-fa.mjs",
+      "kind": "project",
+      "needsElectron": false,
+      "selfCheck": false,
+      "status": "green",
+      "why": "项目专项：编码本产品具体功能/约定，换项目不适用"
     },
     {
       "id": "verify-zip-look",

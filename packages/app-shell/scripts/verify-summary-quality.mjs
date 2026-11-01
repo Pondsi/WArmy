@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {tiQuJieGouHuaZhaiYao, congGuiDangTiQuZhiShi, ZhiShiGuiDangQi, heBingYongHuPianHao} from '../dist/archive-cleanup.js';
+import {tiQuJieGouHuaZhaiYao, congGuiDangTiQuZhiShi, ZhiShiGuiDangQi} from '../dist/archive-cleanup.js';
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(selfDir, '..', '..', '..');
@@ -57,9 +57,12 @@ const listed = arch.LieBiao('g1');
 check('archive list returns structured', listed[listed.length - 1]?.structured?.decisions?.length === 1);
 check('archive entry has anchors for jump', Array.isArray(entry.anchors) && entry.anchors[0].seq === 12);
 
-// ── 4. 用户偏好合并 ──
-const pref = heBingYongHuPianHao(tmp, [{ key: 'preference.port', value: '59599', source: 'archive:g1' }]);
-check('heBingYongHuPianHao ok', pref.ok === true && pref.count >= 0);
+// ── 4. 用户偏好落点（第 38 轮 项 5：`user-preferences.json` 已废弃，偏好统一进「印象」） ──
+const cu = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/archive-cleanup.ts'), 'utf8');
+const zhu = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/electron-main.ts'), 'utf8');
+check('user-preferences.json 死路径已从代码里删除', !/user-preferences\.json/.test(cu));
+check('归档抽出的偏好改写入印象（xiePianHaoDaoYinXiang）',
+  /function xiePianHaoDaoYinXiang/.test(zhu) && /xiePianHaoDaoYinXiang\(liWai\.preferences/.test(zhu));
 
 // ── 5. 源码断言：项目侧面板 + 跳转回退 + session-summary 锚点 ──
 const yingYong = fs.readFileSync(path.join(ROOT, 'packages/app-shell/src/renderer/app.js'), 'utf8');

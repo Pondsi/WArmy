@@ -19,11 +19,14 @@
 | 触发点 | 动作 |
 |--------|------|
 | 值班解析看板指令 / 会话事件 | `knowledge.upsertEntity` + `addEvent`（既有） |
-| **归档** `warmy:archive-external` | 摘要提炼实体/事件进知识库 + **使用者偏好** 写入 `user-preferences.json` |
+| **归档** `warmy:archive-external` | 摘要提炼实体/事件进知识库 + **使用者偏好**整理进「印象」`userData/yinxiang.md` |
 | 人工知识库增删 | 设置/右栏知识库 IPC（既有） |
 | 项目 MEMORY 保存 | **不**自动进知识库（避免双写）；属当前规矩 |
 
-归档提炼实现：`archive-cleanup.ts` → `extractKnowledgeFromArchive` + `mergeUserPreferences`。
+归档提炼实现：`archive-cleanup.ts` → `congGuiDangTiQuZhiShi`（实体/事件），
+偏好落点见 `electron-main.ts` → `xiePianHaoDaoYinXiang` / `zhengLiYinXiang`。
+> 第 38 轮：原先另有一份 `userData/user-preferences.json`（**只写不读**，没有任何地方把它注入上下文）已删除，
+> 用户偏好统一只走「印象」一条路，避免两份"偏好"互相矛盾。
 
 ## 会话摘要：结构化提炼
 

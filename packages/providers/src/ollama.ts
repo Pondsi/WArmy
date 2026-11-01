@@ -1,4 +1,4 @@
-import { JichuGongYing, pinJieUrl, guiFanYongLiang } from './base.js';
+import { JichuGongYing, pinJieUrl, guiFanYongLiang, FEI_LIU_CHAT_MS } from './base.js';
 import type { LiaoTianPian, LiaoTianQingQiu, LiaoTianXiangYing, GongYingRenZheng } from './types.js';
 
 /** 只放行 PNG / JPEG 的 base64：一张解不开的图会让 Ollama 整个请求 400/500，连同截图一起丢 */
@@ -256,7 +256,7 @@ export class OllamaGongYing extends JichuGongYing {
         stream: false,
         ...(Qiu.maxTokens != null ? { max_tokens: Qiu.maxTokens } : {}),
       };
-      const yu2 = AbortSignal.timeout(this.auth.timeoutMs ?? 60_000);
+      const yu2 = AbortSignal.timeout(this.auth.timeoutMs ?? FEI_LIU_CHAT_MS);
       const ben2 = signal ? AbortSignal.any([signal, yu2]) : yu2;
       const res = await fetch(pinJieUrl(this.baseURL, 'v1/chat/completions'), {
         method: 'POST',
@@ -321,8 +321,11 @@ export class OllamaGongYing extends JichuGongYing {
       const forced = await this.chatOpenAIRequired(Qiu, signal);
       if (forced) return forced;
     }
-    /** 单次请求硬超时（真机：Ollama 无超时 fetch 会把工具循环挂死，界面永远 busy） */
-    const yu = AbortSignal.timeout(this.auth.timeoutMs ?? 60_000);
+    /**
+     * 单次请求硬超时（真机：Ollama 无超时 fetch 会把工具循环挂死，界面永远 busy）。
+     * 上限与 openai/anthropic 同一个数：本机模型只会比云端慢 —— 旧值 60s 把 27B 的 8192 token 兜底请求掐在半路（server.log 记 500）。
+     */
+    const yu = AbortSignal.timeout(this.auth.timeoutMs ?? FEI_LIU_CHAT_MS);
     const ben = signal ? AbortSignal.any([signal, yu]) : yu;
     const jiShi = this.huiTuiJieTi(Qiu, false);
     let cuoWu = '';

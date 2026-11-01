@@ -2,7 +2,7 @@
   "name": "@warmy/sync-protocol",
   "version": "0.1.0",
   "private": true,
-  "description": "跨设备同步协议 + NodeRegistry",
+  "description": "Cross-device sync protocol + NodeRegistry",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

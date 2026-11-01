@@ -5,12 +5,19 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 const ROOT = process.cwd();
 const PKG = path.join(ROOT, 'packages', 'app-shell');
 const ROUND = (() => { const i = process.argv.indexOf('--round'); return i >= 0 ? String(process.argv[i + 1] || '1') : '1'; })();
 const PORT = 9720 + (Number(ROUND) || 1);
-const DATA = path.join(process.env.APPDATA || '', '@warmy', 'app-shell');
+/**
+ * **隔离的 userData**（第 48 轮）：以前这里直接用 `%APPDATA%\@warmy\app-shell`（注释说 `--user-data-dir` 无效 —— 那是早期主进程写死路径时的事，
+ * 现在其它真机门禁都靠 `--user-data-dir` 隔离且已验证生效）。用真实目录的代价是**每跑一遍 live 档就把用户真实配置整个删掉重建**
+ * （round18 系列与 round19 开头就是 `rmSync(DATA)`：首启备份、本机语音模型、身份与密钥仓一起没了）。现在每次一个临时目录（系统临时目录下，名字带时间戳），不再碰用户真实配置。
+ */
+const DATA = path.join(os.tmpdir(), 'warmy-round18b-' + Date.now());
+fs.mkdirSync(DATA, { recursive: true });
 const MARK = `R18B-${ROUND}-${Date.now().toString(36)}`;
 const key = (() => {
   const k = String(process.env.MIMO_KEY || '').trim();
@@ -84,7 +91,7 @@ const imgPath = seed();
 const env = { ...process.env, ...(key ? { MIMO_KEY: key } : {}) };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(path.join(PKG, 'node_modules', 'electron', 'dist', 'electron.exe'),
-  [`--remote-debugging-port=${PORT}`, path.join(PKG, 'dist', 'electron-main.js')],
+  [`--remote-debugging-port=${PORT}`, `--user-data-dir=${DATA}`, path.join(PKG, 'dist', 'electron-main.js')],
   { cwd: PKG, stdio: ['ignore', 'pipe', 'pipe'], env });
 const logs = [];
 child.stdout.on('data', (d) => logs.push(String(d)));

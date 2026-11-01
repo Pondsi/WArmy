@@ -58,8 +58,12 @@ extraResources:
     to: pnpm-store
     filter:
       - "**/better-sqlite3/**"
+      - "**/better-sqlite3-multiple-ciphers/**"
       - "**/bindings/**"
       - "**/file-uri-to-path/**"
+  # 第 122 轮：dsh 运行时随项目携带（必装；设置页检测优先看 resources/warmy-dsh）
+  - from: ../../spikes/spike-05-plugins/node_modules
+    to: warmy-dsh/node_modules
 
 # ── 应用图标（打包进 exe，任务栏/资源管理器都读它）──
 win:
@@ -74,6 +78,17 @@ win:
         - node.exe
   target:
     - nsis
+
+# 安装器：允许用户选择安装目录；运行期数据放在 <安装目录>\WArmyData。
+# customRemoveFiles 在卸载/升级时先移出 WArmyData，避免把用户数据一起删掉。
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+  include: installer.nsh
 mac:
   icon: build/icon.png
 linux:

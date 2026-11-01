@@ -1,0 +1,45 @@
+{
+  "name": "warmy-plugin-mcp-bridge",
+  "version": "1.0.0",
+  "description": "Bridge Model Context Protocol (MCP) stdio servers into WArmy agents as ordinary tools.",
+  "type": "module",
+  "main": "bridge.mjs",
+  "private": true,
+  "keywords": [
+    "warmy",
+    "warmy-plugin",
+    "plugin",
+    "mcp",
+    "model-context-protocol",
+    "json-rpc",
+    "stdio"
+  ],
+  "warmyPlugin": {
+    "id": "mcp-bridge",
+    "manifest": "plugin.json",
+    "entry": "bridge.mjs",
+    "kind": "tool-bridge",
+    "protocolVersion": "2024-11-05",
+    "configFile": "mcp-servers.json",
+    "defaultEnabled": false,
+    "requires": {
+      "node": ">=18"
+    }
+  },
+  "defaultEnabled": false,
+  "scripts": {
+    "selftest": "node selftest.mjs",
+    "list": "node bridge.mjs list",
+    "tools": "node bridge.mjs tools"
+  },
+  "files": [
+    "package.json",
+    "plugin.json",
+    "bridge.mjs",
+    "echo-server.mjs",
+    "selftest.mjs",
+    "seed.mjs",
+    "README.md",
+    "mcp-servers.json.example"
+  ]
+}

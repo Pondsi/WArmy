@@ -18,8 +18,9 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import os from 'node:os';
-import { execFile } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
 /**
@@ -166,6 +167,12 @@ export interface ShouQuanPanDuan {
 /**
  * 按授权档位 + 「允许提权」勾选 决定一个动作是否放行。
  * @param kind 'shell' | 'skill'
+ *
+ * 第 55 轮口径（用户定稿）：
+ *  · **完全授权**：整台设备都开放，**没有需要问的**（连高风险 skill 也不再问）；
+ *  · **常规授权**：只能在工作区内读/写/删；命令/脚本/工具要过安全审核，安全才直接跑，否则问；
+ *  · **严格授权**：只能在工作区内读/写/删；此外任何命令/脚本/工具都要问。
+ * 文件读写删本身由路径判据把关（工作区外一律走越权流程），这里只管"命令/脚本/技能"。
  */
 export function panDuanShouQuan(
   dang: AnquanDang,
@@ -173,19 +180,10 @@ export function panDuanShouQuan(
   kind: 'shell' | 'skill',
   jiance: AnquanJianCeJieGuo,
 ): ShouQuanPanDuan {
-  if (dang === 'full') {
-    // 完全授权：shell 无限制；skill 仍要过安全检测（产品要求："确保安全再装"）
-    if (kind === 'skill' && jiance.risk === 'high') {
-      return askOnExceed
-        ? { allow: false, needAsk: true, why: '高风险 skill，需用户确认' }
-        : { allow: false, needAsk: false, why: '高风险 skill 被拒（未勾「允许提权」）' };
-    }
-    return { allow: true, needAsk: false, why: '' };
-  }
+  if (dang === 'full') return { allow: true, needAsk: false, why: '' };
   if (dang === 'strict') {
-    // 严格授权：一律询问；不勾「允许提权」= 直接拒绝
     return askOnExceed
-      ? { allow: false, needAsk: true, why: '严格授权需用户逐次确认' }
+      ? { allow: false, needAsk: true, why: '严格授权：任何命令/脚本/工具都要逐次确认' }
       : { allow: false, needAsk: false, why: '严格授权且未勾「允许提权」⇒ 直接拒绝' };
   }
   // 常规授权：低风险才自动放行；中/高风险询问或拒绝
@@ -195,6 +193,85 @@ export function panDuanShouQuan(
     : { allow: false, needAsk: false, why: jiance.summary + '（未勾「允许提权」⇒ 拒绝）' };
 }
 
+/**
+ * **常规授权下"只能在工作区内操作"的可执行判据**（第 55 轮用户口径）：
+ * 命令里出现绝对路径、家目录、`..` 上跳、或盘符/UNC 路径且落在工作区外 ⇒ 视为越界。
+ * 为什么不能只靠"命令名白名单"：`cat /etc/passwd`、`type C:\Windows\win.ini`、`dir \\server\share`
+ * 的首词都在白名单里，但读的是工作区外 —— 白名单只说明"程序是谁"，不说明"它碰了哪里"。
+ */
+export function mingLingZaiGongZuoQu(cmd: string, base: string): { ok: boolean; why: string } {
+  const t = String(cmd || '');
+  const gen = path.resolve(String(base || '.'));
+  const zai = (p: string) => {
+    try {
+      const r = path.resolve(gen, p);
+      return r === gen || r.startsWith(gen + path.sep);
+    } catch { return false; }
+  };
+  // 家目录引用
+  if (/(^|[\s"'=])~(?=[\\/\s"']|$)/.test(t)) return { ok: false, why: '命令引用了家目录（~）' };
+  // 盘符绝对路径（Windows）
+  for (const m of t.matchAll(/([A-Za-z]:[\\/][^\s"']*)/g)) {
+    if (!zai(m[1]!)) return { ok: false, why: '命令访问工作区外的盘符路径：' + m[1]!.slice(0, 60) };
+  }
+  // UNC 路径
+  if (/(^|[\s"'])\\\\[^\s"']+/.test(t)) return { ok: false, why: '命令访问网络共享路径（UNC）' };
+  // POSIX 绝对路径（含 /etc、/usr、/tmp 等）
+  for (const m of t.matchAll(/(^|[\s"'=:])((?:\/[^\s"']+)+)/g)) {
+    const p = m[2]!;
+    if (p.startsWith('//')) continue;
+    if (!zai(p)) return { ok: false, why: '命令访问工作区外的路径：' + p.slice(0, 60) };
+  }
+  // 相对路径上跳出工作区
+  if (gen && /(^|[\s"'=])\.\.([\\/]|$)/.test(t)) return { ok: false, why: '命令包含 .. 上跳' };
+  return { ok: true, why: '' };
+}
+
+/**
+ * **命令类动作的授权决策**（run_shell 专用，第 99 轮定稿）：
+ * 完全 ⇒ 放行；严格 ⇒ 一律问；常规 ⇒ 必须同时满足「在工作区内」+「首词在白名单」+「静态风险 low」才免问。
+ * “常规授权可以执行工作区命令”不再需要用户勾选开关 —— 白名单/工作区/低风险三条同时满足就是“检测没问题”。
+ */
+export function panDuanMingLingShouQuan(
+  dang: AnquanDang,
+  askOnExceed: boolean,
+  cmd: string,
+  base: string,
+): ShouQuanPanDuan & { jianCe: AnquanJianCeJieGuo; zaiGongZuoQu: boolean } {
+  const jianCe = anquanJianCeMingLing(cmd);
+  if (dang === 'full') return { allow: true, needAsk: false, why: '', jianCe, zaiGongZuoQu: true };
+  if (dang === 'strict') {
+    return {
+      allow: false, needAsk: askOnExceed,
+      why: '严格授权：任何命令/脚本/工具都要逐次确认',
+      jianCe, zaiGongZuoQu: mingLingZaiGongZuoQu(cmd, base).ok,
+    };
+  }
+  const zai = mingLingZaiGongZuoQu(cmd, base);
+  if (!zai.ok) {
+    return {
+      allow: false, needAsk: askOnExceed,
+      why: '常规授权只允许在工作区内操作：' + zai.why,
+      jianCe, zaiGongZuoQu: false,
+    };
+  }
+  if (!zaiBaiMingDan(cmd)) {
+    return {
+      allow: false, needAsk: askOnExceed,
+      why: '常规授权下这条命令不在白名单里（需要授权或改用完全授权）',
+      jianCe, zaiGongZuoQu: true,
+    };
+  }
+  if (jianCe.risk !== 'low') {
+    return {
+      allow: false, needAsk: askOnExceed,
+      why: '安全审核未通过：' + jianCe.summary,
+      jianCe, zaiGongZuoQu: true,
+    };
+  }
+  return { allow: true, needAsk: false, why: '', jianCe, zaiGongZuoQu: true };
+}
+
 /* ─────────────────────── 受限 shell ─────────────────────── */
 
 /** 常规授权下的命令白名单（只读 + 安全构建类） */
@@ -202,7 +279,17 @@ export const MING_LING_BAI_MING_DAN = [
   'ls', 'dir', 'cat', 'type', 'head', 'tail', 'pwd', 'cd', 'echo', 'whoami', 'hostname', 'date',
   'find', 'grep', 'rg', 'wc', 'file', 'stat', 'du', 'df', 'node', 'python', 'python3', 'py',
   'npm', 'npx', 'pnpm', 'yarn', 'git', 'mkdir', 'cp', 'copy', 'mv', 'move', 'python -m',
+  'tar', 'powershell', 'pwsh', 'zip', 'unzip', '7z',
 ];
+
+/** 第 121 轮：永久授权的规范化内容（同一命令 + 同一作用域；空白差异不算新内容） */
+export function guiFanMingLing(cmd: string): string {
+  return String(cmd || '').replace(/\s+/g, ' ').trim();
+}
+export function mingLingShouQuanJian(cmd: string, cwd: string): string {
+  const yuan = guiFanMingLing(cmd) + '\n' + path.resolve(String(cwd || '.'));
+  return crypto.createHash('sha256').update(yuan, 'utf8').digest('hex').slice(0, 32);
+}
 
 export function zaiBaiMingDan(cmd: string): boolean {
   const t = String(cmd || '').trim();
@@ -230,16 +317,48 @@ export function yunXingMingLing(cmd: string, opts: { cwd?: string; timeoutMs?: n
     // 统一走 shell，但命令串已经过静态检测与授权判定（调用方负责判定）
     const sh = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
     const args = process.platform === 'win32' ? ['/d', '/s', '/c', cmd] : ['-c', cmd];
-    execFile(sh, args, {
+    /**
+     * 最小环境变量白名单：API Key / 令牌 / 身份私钥等**不传给普通工具进程**。
+     * 需要凭据的工具必须由主进程代用，而不是把宿主环境整体继承下去。
+     */
+    const env: Record<string, string> = {};
+    const allow = ['PATH', 'SystemRoot', 'SystemDrive', 'windir', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP',
+      'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'LANG', 'LC_ALL', 'TZ'];
+    for (const k of allow) {
+      const v = process.env[k];
+      if (typeof v === 'string' && v) env[k] = v;
+    }
+    const child = spawn(sh, args, {
       cwd: opts.cwd || os.homedir(),
-      timeout: timeoutMs,
-      maxBuffer: 4 * 1024 * 1024,
+      env,
       windowsHide: true,
-    }, (err, stdout, stderr) => {
-      const out = String(stdout || '').slice(0, maxOut);
-      const er = String(stderr || '').slice(0, maxOut);
-      const code = err && typeof (err as { code?: number }).code === 'number' ? ((err as { code?: number }).code as number) : (err ? 1 : 0);
-      resolve({ ok: !err, code, stdout: out, stderr: er, ms: Date.now() - t0, risk: jiance.risk });
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    const shou = (s: string) => s.slice(0, maxOut);
+    child.stdout?.on('data', (d) => { stdout = shou(stdout + String(d)); });
+    child.stderr?.on('data', (d) => { stderr = shou(stderr + String(d)); });
+    const sha = () => {
+      try {
+        if (process.platform === 'win32') {
+          spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: 10000 });
+        } else if (child.pid) {
+          try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* noop */ } }
+        }
+      } catch { /* noop */ }
+    };
+    const timer = setTimeout(() => { timedOut = true; sha(); }, timeoutMs);
+    child.once('error', (e) => {
+      clearTimeout(timer);
+      resolve({ ok: false, code: 1, stdout: shou(stdout), stderr: shou(stderr + '\n' + String((e as Error)?.message || e)), ms: Date.now() - t0, risk: jiance.risk });
+    });
+    child.once('close', (code, signal) => {
+      clearTimeout(timer);
+      const c = timedOut ? 124 : (typeof code === 'number' ? code : (signal ? 1 : 0));
+      resolve({ ok: !timedOut && c === 0, code: c, stdout: shou(stdout), stderr: shou(stderr), ms: Date.now() - t0, risk: jiance.risk });
     });
   });
 }

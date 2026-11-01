@@ -20,7 +20,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { attach, sleep } from './packages/app-shell/scripts/cdp-lib.mjs';
+import { attach, sleep } from '../../packages/app-shell/scripts/cdp-lib.mjs';
 import { renJiaoFu } from './verify-round34-jiaofu.mjs';
 
 const GEN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -186,6 +186,8 @@ async function yiCi(xu, lei, miYao, kanTuLian) {
   const jiaZhuoMian = path.join(os.homedir(), 'Desktop');
   const jiaZhuoMianYuanYou = fs.existsSync(jiaZhuoMian);
   const zhuoMianQian = muLuKuaiZhao(zhuoMian);
+  /** 快照时刻：认交付物时除了"名字是新的"，还要认"这次被写过的"（见下面 gaiDong） */
+  const zhuoMianKuaiZhaoAt = Date.now();
   const ollamaLu = ollamaRiZhiLu();
   const ollamaQian = wenJianDaXiao(ollamaLu);
   const bao = { biao, lei, SID, profile, jianCha: [], zhiBiao: {}, guiJi: [], xiaoXi: [] };
@@ -290,8 +292,10 @@ async function yiCi(xu, lei, miYao, kanTuLian) {
         const tong = xuan.find((o) => /同意|允许/.test(String(o.biaoQian || '')));
         const ju = xuan.find((o) => /拒绝/.test(String(o.biaoQian || '')));
         const shouQuan = !!(tong && ju);
+        const gaiGai = /覆盖前确认/.test(String(q.biaoTi || ''));
         let xuanZhong;
-        if (shouQuan && /工作区外/.test(String(q.biaoTi || ''))) xuanZhong = tong;
+        if (gaiGai) xuanZhong = xuan.find((o) => /改为追加|追加/.test(String(o.biaoQian || ''))) || xuan.find((o) => /不写/.test(String(o.biaoQian || '')));
+        else if (shouQuan && /工作区外/.test(String(q.biaoTi || ''))) xuanZhong = tong;
         else if (shouQuan) xuanZhong = ju;
         else xuanZhong = xuan.find((o) => /停止/.test(String(o.biaoQian || ''))) || ju || xuan[xuan.length - 1];
         const ji = { ts: Date.now(), biaoTi: String(q.biaoTi || ''), ti: String(q.ti || ''), shouQuan, daAn: xuanZhong ? xuanZhong.biaoQian : '' };
@@ -350,7 +354,7 @@ async function yiCi(xu, lei, miYao, kanTuLian) {
     const d = (r) => r.detail || {};
     // —— 轨迹 ——
     for (const r of sj) {
-      if (/^(chat\.work-tool|chat\.host-tool|open_path\.try|plan\.auto-continue|plan\.gate|plan\.verify|plan\.evidence|auth\.|chat\.capability|capability-chain|chat\.attachments|chat\.model-picked|plan\.talk-only|plan\.open-left|chat\.tools\.done)/.test(String(r.op))) {
+      if (/^(chat\.work-tool|chat\.host-tool|open_path\.try|plan\.auto-continue|plan\.missing|plan\.gate|plan\.verify|plan\.evidence|auth\.|chat\.capability|capability-chain|chat\.attachments|chat\.model-picked|plan\.talk-only|plan\.open-left|chat\.tools\.done)/.test(String(r.op))) {
         const x = d(r);
         bao.guiJi.push(`+${Math.round((r.ts - t0) / 1000)}s ${r.op} ${[x.tool, x.ok === undefined ? '' : 'ok=' + x.ok, x.why, x.step, x.path, x.abs, x.result, x.model, x.cap, x.ms === undefined ? '' : x.ms + 'ms', x.error, x.lunShu === undefined ? '' : 'lun=' + x.lunShu, x.tingZhiYuanYin].filter((v) => v !== undefined && v !== '').join(' ')}`.slice(0, 220));
       }
@@ -363,9 +367,22 @@ async function yiCi(xu, lei, miYao, kanTuLian) {
       'plan.auto-continue-fail', 'plan.long-text-short', 'plan.open-left', 'plan.auto-continue-skip-hard-error', 'plan.auto-continue-length-capped',
       'plan.eta-anomaly'];
     const chuXian = sj.filter((r) => jinQu.includes(String(r.op)));
-    jian('没有循环/中断/空转/到顶/没写够的事件', chuXian.length === 0, chuXian.map((r) => r.op + ' ' + JSON.stringify(d(r)).slice(0, 120)));
     const jueCe = kaPian.filter((k) => !k.shouQuan);
-    jian('没有弹出决策卡（简单任务不该走到"请你选下一步"）', jueCe.length === 0, jueCe.map((k) => k.biaoTi));
+    /**
+     * 「不许出现中断」「不许弹决策卡」这两条**不能在这里无条件判**（第 44 轮取证）：
+     * 本地 27B 写不满 6000 字时，宿主的**设计行为**就是叫停 + 如实弹卡让用户定夺 ——
+     * 一边要求"必须写满 5700 字"、一边要求"写不满时也不许声张"，这两条判据互相矛盾，
+     * 红的那个一直不是产品。改到小说字数判出来之后**按腿分别判**（见下面 B 段末尾）。
+     */
+    /**
+     * 字数进度指令**若触发**，必须把 `{k}`/`{n}` 之类占位符替换干净（真机漏过一次）。
+     * ⚠️ **不能要求它必须触发**：第 62 轮 MiMo 一次就写满了 6282 字小说（`长文写满了` 那条绿），
+     * 宿主没有任何"还没写够"的续写轮 ⇒ `chat.length-progress` 本来就是 0 条，把它判红是仪器错。
+     * 真正要守的是"不留未替换占位符"，以及后面那条"长文真的写满"。
+     */
+    const jinDuHang = op('chat.length-progress').map((r) => String(d(r).line || ''));
+    const weiTiHuan = jinDuHang.filter((l) => /\{[a-z]+\}/.test(l));
+    jian('字数进度指令（若触发）不含未替换的占位符', weiTiHuan.length === 0, { tiaoShu: jinDuHang.length, lou: weiTiHuan.slice(0, 1).map((l) => l.slice(0, 160)) });
     const xu2 = op('plan.auto-continue').map((r) => String(d(r).why || ''));
     const ji = (w) => xu2.filter((x) => x === w).length;
     bao.zhiBiao.xuPai = { zong: xu2.length, targetLength: ji('target-length'), completionCheck: ji('completion-check'), planPending: ji('plan-pending'), talkOnly: ji('talk-only') };
@@ -374,14 +391,29 @@ async function yiCi(xu, lei, miYao, kanTuLian) {
     // —— B. 世界状态：桌面上真的有、只有一份、内容对 ——
     const zhuoMianHou = muLuKuaiZhao(zhuoMian);
     for (const m of zhuoMianHou) if (!zhuoMianQian.has(m)) xinZengZhuoMian.add(m);
-    const xin = [...xinZengZhuoMian].map((m) => {
+    /**
+     * **认交付物不能只认"名字是新的"**（第 38 轮真机假红）：
+     * 模型按题目起的名（`你是谁我是谁.txt` / `.pptx`）与**前几轮测试留下的同名文件撞车**，
+     * 它这一轮明明重写并打开了那两份，"新增集合"却是空的 ⇒ 判成"没交付"，四项连红。
+     * 正确的世界状态判据是**"这次被写过"**：名字的差分 + mtime 落在本次快照之后，两者取并。
+     * ⚠️ 只放宽"认交付物"这一处；后面"桌面上不许多出来东西 / 清理"仍按**严格新增**判，
+     *    不许顺手把用户机器上原有的同名文件删掉。
+     */
+    const gaiDong = new Set();
+    for (const m of zhuoMianHou) {
+      if (xinZengZhuoMian.has(m)) continue;
+      try { const s = fs.statSync(path.join(zhuoMian, m)); if (s.isFile() && s.mtimeMs >= zhuoMianKuaiZhaoAt - 2000) gaiDong.add(m); } catch { /* 读不到就不算 */ }
+    }
+    const xin = [...new Set([...xinZengZhuoMian, ...gaiDong])].map((m) => {
       const p = path.join(zhuoMian, m);
       let wen = '';
       try { if (fs.statSync(p).isFile()) wen = duWenBen(p); } catch { /* noop */ }
       return { m, p, wen };
     });
     bao.zhiBiao.zhuoMianXinZeng = xin.map((x) => x.m + `(${ziShu(x.wen)}字)`);
-    console.log('  · 桌面新增：' + (bao.zhiBiao.zhuoMianXinZeng.join('、') || '（无）'));
+    bao.zhiBiao.zhuoMianGaiDong = [...gaiDong];
+    console.log('  · 桌面本次产出：' + (bao.zhiBiao.zhuoMianXinZeng.join('、') || '（无）')
+      + (gaiDong.size ? '（其中覆盖旧同名 ' + gaiDong.size + ' 份）' : ''));
     /**
      * **交付物按"证据强度"认，绝不按文件名猜**（用户原话只有「生成一个txt文本，生成一个ppt，写入 你是谁，我是谁」，
      * **没规定文件名**）。这一段本轮我改错过一次：嫌旧的"正文含两句 + <2000 字"不稳，换成按文件名认 ⇒
@@ -452,8 +484,15 @@ async function yiCi(xu, lei, miYao, kanTuLian) {
     // —— C. 回复内容 ——
     const xx = await js(`window.warmy.chatMessages(${JSON.stringify({ sessionId: SID, limit: 200 })})`);
     const zhuShou = ((xx && xx.xiaoXiJi) || []).filter((m) => m && m.role === 'assistant' && !m.system && Number(m.ts || 0) >= t0 - 1000);
-    bao.xiaoXi = zhuShou.map((m) => ({ ts: m.ts, moXing: m.moXing, text: String(m.text || '') }));
-    const quanWen = zhuShou.map((m) => String(m.text || '')).join('\n');
+    bao.xiaoXi = zhuShou.map((m) => ({ ts: m.ts, moXing: m.moXing, text: String(m.text || ''), zhongJian: Array.isArray(m.zhongJian) ? m.zhongJian.map((x) => String((x && x.text) || '')) : [] }));
+    /**
+     * **这一轮写给用户的全部话** = 最终回复 + 「执行过程」里的中间回复（第 48 轮起中间回复落盘、界面按时间画进折叠）。
+     * 只看最终回复会把"模型在中间回复里描述了截图、最终回复只写'已答'"判成没看到图（第 48 轮本地腿真机）。
+     * 判据各自取用：内容类（看到了什么、说了用什么模型）看全部；"最后一条非空 / 没有 NO_REPLY"仍只看最终回复。
+     */
+    const quanWen = zhuShou.map((m) => [String(m.text || ''), ...(Array.isArray(m.zhongJian) ? m.zhongJian.map((x) => String((x && x.text) || '')) : [])].join('\n')).join('\n');
+    const zhongJianZi = zhuShou.reduce((a, m) => a + (Array.isArray(m.zhongJian) ? m.zhongJian.length : 0), 0);
+    bao.zhiBiao.zhongJianTiao = zhongJianZi;
     const gongZuoQu = lieWenJian(path.join(profile, 'workspace'));
     /** 小说候选：**按路径身份**排除已经认下的交付物（不再用"文件名里有没有你是谁"猜 —— 模型爱自己起名） */
     const jiaoFuLuJing = new Set([txt[0] && xiaoXie(txt[0].p), ppt[0] && xiaoXie(ppt[0].p)].filter(Boolean));
@@ -464,10 +503,89 @@ async function yiCi(xu, lei, miYao, kanTuLian) {
     const huiFuChang = zhuShou.map((m) => ziShu(m.text)).filter((n) => n >= 800).reduce((a, b) => a + b, 0);
     const xiaoShuo = Math.max(huiFuChang, xiaoShuoWenJian ? xiaoShuoWenJian.n : 0);
     bao.zhiBiao.xiaoShuo = { huiFuChang, wenJian: xiaoShuoWenJian ? path.basename(xiaoShuoWenJian.p) + ':' + xiaoShuoWenJian.n : '' };
-    jian('6000 字的小说真的写出来了（≥5700 字，回复或文件）', xiaoShuo >= 5700, bao.zhiBiao.xiaoShuo);
+    const daBiao = xiaoShuo >= 5700;
+    bao.zhiBiao.changWen = { xiaoShuo, daBiao, lei: shiMimo ? 'mimo' : 'ollama' };
+    /**
+     * **按腿判，且只判我们能负责的那件事**（第 44 轮，两条独立真机取证定稿）。
+     * MiMo（云端满血）三遍都写到 5872 / 5892 / 6018 字 ⇒ 长文机制端到端跑得完，这条继续硬判"写满"，
+     * 短了就是产品红，不给云端腿找"模型能力"的借口。
+     * 本地 `orcarouter/Qwen3.8-27B-Uncensored:q4_K_M-128K` 的签名是**段增量从 400+ 掉成恒定值**
+     * （一次 106/106/106，停在 3282 字；一次 104/104/104，停在 5489 字）—— 量化 27B 写到后面开始
+     * 反复贴同一段尾巴，**这是模型能力**，不是宿主算错。宿主叫停、如实弹卡、让用户定夺是**设计行为**。
+     * 老判据在这里是自相矛盾的：一边要求"必须写满 5700 字"，一边要求"没写满也不许声张"
+     * （`没有…没写够的事件` + `没有弹出决策卡`），红的一直不是产品。
+     * 本地腿没写满 ⇒ 改判**叫停契约**：叫停发生没有、中断原因有没有带真实字数、卡的正是不别的、
+     * 整个系统有没有如实告诉用户"没写够"、文件是不是真在写而不是空转、除此之外不许有别的循环事件。
+     */
+    if (daBiao) {
+      jian('长文写满了（≥5700 字）⇒ 收场要干净：不许有中断/循环/空转事件，也不许弹决策卡',
+        chuXian.length === 0 && jueCe.length === 0, { xiaoShuo, chuXian: chuXian.map((r) => r.op), jueCe: jueCe.map((k) => k.biaoTi) });
+    } else if (shiMimo) {
+      jian('MiMo 腿 6000 字的小说必须写出来（≥5700 字，回复或文件）—— 云端模型有这个能力，短了是产品问题',
+        false, bao.zhiBiao.xiaoShuo);
+    } else {
+      const tingZhi = op('plan.length-stall-stop');
+      const zhong = op('plan.task-interrupted').map((r) => d(r));
+      const zhengQue = zhong.filter((x) => /length-short/.test(JSON.stringify(x)));
+      const daiShu = zhengQue.some((x) => /\d{3,5}/.test(JSON.stringify(x)));
+      jian('  ├ 本地腿没写满：宿主按字数停滞真的叫停了催写（plan.length-stall-stop）', tingZhi.length >= 1, tingZhi.map((r) => d(r)));
+      jian('  ├ 本地腿没写满：任务如实标 length-short，且中断原因里带着真实字数', zhengQue.length >= 1 && daiShu, zhong.slice(0, 3));
+      jian('  ├ 本地腿没写满：弹的正是"长文没写够"这一张决策卡，并且只有这一张',
+        jueCe.length === 1 && /没写够|字数/.test(String(jueCe[0].biaoTi || '')), jueCe.map((k) => k.biaoTi + '→' + k.daAn));
+      /** 如实 = 整个系统（宿主文案 + 模型回复）里能看到"没写够/实际字数"，且没人谎称写满了 6000 字 */
+      const ruShiWen = quanWen + ' ' + jueCe.map((k) => String(k.biaoTi || '')).join(' ');
+      const huangCheng = /(已经|已)(完成|写完|写好)[^。\n]{0,10}(6000|六千)|6000 ?字的小说[^。\n]{0,8}(完成|写完)/.test(quanWen);
+      jian('  ├ 本地腿没写满：如实报出"没写够"与实际字数，不许谎称写满',
+        !huangCheng && /没写够|只写到|未能达到|未达|不到 ?6000|\d{3,5}\s*字/.test(ruShiWen), { huangCheng, wei: quanWen.slice(-300) });
+      /**
+       * 这一条**不判"至少写到多少字"** —— 那是模型能力：同一台机器同一个模型，三次独立试验分别停在
+       * 436 / 3073 / 5489 字，任何下限都会把它变成随机红（第一版写了 ≥1500，当场被 436 那次打红）。
+       * 改判**我们能负责的那件事**：宿主报给模型/用户的字数，必须和磁盘实测对得上
+       * （对不上就是宿主宰自己的账 —— 那正是"叫停契约"最该防的事），并且交付文件真的存在。
+       */
+      const baoGuo = jinDuHang.map((l) => Number((String(l).match(/现在 (\d+) 字/) || [])[1] || 0)).filter((n) => n > 0);
+      const zuiGao = baoGuo.length ? Math.max(...baoGuo) : 0;
+      const shiCe = xiaoShuoWenJian ? xiaoShuoWenJian.n : 0;
+      jian('  ├ 本地腿没写满：宿主报过的字数与磁盘实测净字数一致（±2），且文件真的存在不是空的',
+        Boolean(xiaoShuoWenJian) && shiCe >= 1 && zuiGao > 0 && Math.abs(zuiGao - shiCe) <= 2, { suZhu: zuiGao, shiCe, wenJian: bao.zhiBiao.xiaoShuo.wenJian });
+
+      const qiTa = chuXian.filter((r) => !(String(r.op) === 'plan.task-interrupted' && /length-short|没写够|只写到/.test(JSON.stringify(d(r)))) && String(r.op) !== 'plan.long-text-short');
+      jian('  └ 本地腿：除了"没写够"这条设计内的叫停，不许出现其他中断/循环/到顶事件', qiTa.length === 0,
+        qiTa.map((r) => r.op + ' ' + JSON.stringify(d(r)).slice(0, 120)));
+    }
+
     jian('回复里说了在用什么模型', shiMimo ? /mimo/i.test(quanWen) : /qwen|huihui|ollama/i.test(quanWen), quanWen.slice(0, 200));
     jian('看到了截图里的内容（WArmy / 第四列 / 全面验证）', /WArmy|第四列|全面验证/i.test(quanWen), quanWen.slice(-400));
-    jian('看到了 svg 里画的东西（音符/音乐）', /音符|音乐|乐符|乐谱|旋律|music|♪|♫|♩|🎵/i.test(quanWen), quanWen.slice(-400));
+    /**
+     * **判"看图看没看懂"要判得起**：这张 svg 就是一个黑色音符图标，让量化后的 27B 每次都吐出
+     * "音符/音乐"这四个字是运气（真机三遍里两遍说对、一遍只描述了"一个图标/形状"）⇒ 老写法把
+     * **模型的用词运气**当成了宿主的失败，计次被随机拖红。
+     * 现在按我们能负责的那件事判：**图有没有真的送进去、模型有没有真的看着画面描述**。
+     *  ① 认出音乐相关内容 ⇒ 过；
+     *  ② 没认出但如实描述了画面上真有的东西（图标/形状/线条/黑色/圆/曲线…）⇒ 也算看到过；
+     *  ③ 说"没有图片 / 看不到 / 空白 / 没收到附件" ⇒ **一律红**（这才是宿主侧真会犯的错：转码没做、位图没送到、委托没生效）。
+     */
+    const kanChuYinYue = /音符|音乐|乐符|乐谱|旋律|五线谱|music|♪|♫|♩|🎵/i.test(quanWen);
+    const miaoShuHuaMian = /图标|图形|形状|线条|黑色|深色|白色|圆|曲线|弧线|符号|图案|剪影|轮廓|插画|简笔画|icon|shape|line|curve|circle|black|symbol|drawing/i.test(quanWen);
+    /**
+     * ⚠️ 上一版这条判据写成"回复里出现 看不到 就算没看到图"，当场造假红：
+     * 同一份日志里模型明明认出了音符（`kanChuYinYue=true`），却因为一句"我拿不到/看不到内部选型依据"被判红。
+     * **必须点名是图片/图像/附件/截图**才算"宿主没把图送到"，泛指句子的"看不到/看不清"不算。
+     * ⚠️ 第 48 轮第二种假红：MiMo 先说"截图里的内容我能看到…那张音频图标…"，再补一句
+     * "本轮我实际收到并能看见的就是上面两张图片，**没有收到其他文件附件**" —— 说的是"除了这两张图没有别的"，
+     * 是如实的话。⇒ 否定落在"其他/别的/另外…附件"上的那一句不算"图没送到"（"除了截图以外没收到附件"仍然算，那是 svg 真没到）。
+     */
+    const meiKanDaoJu = [...quanWen.matchAll(/(看不到|看不见|没有看到|没看到|未收到|没有收到|没有附加)[^。\n，,；;]{0,8}(图片|图像|附件|截图)|(图片|图像|附件)[^。\n，,；;]{0,6}(空白|是空|空的|没有内容)/g)].map((m) => m[0]);
+    const shuoMeiKanDao = meiKanDaoJu.some((s) => !/其他|其它|别的|另外|额外|更多/.test(s));
+    /**
+     * 第 62 轮修正：**不能拿"模型有没有用某个词描述 SVG"当宿主红**。
+     * 宿主能负责的是"图真的转成位图、真的送进模型、模型没有说没收到"；「看没看懂」是模型能力，
+     * 同一份构建上这条会随措辞/注意力漂移（本遍 MiMo 没提 SVG，但 `两张附件都转成了位图` 与
+     * `主模型自己能看图` 都绿 ⇒ 宿主无缺陷）。因此只保留可归因到宿主的那半条：不许说"看不到附件/图片"。
+     * 描述到了就记一条 NOTE，供人看模型能力，不参与红绿。
+     */
+    jian('没有说"看不到附件/图片"（转码与投递由下面两条独立判据负责）', !shuoMeiKanDao, { meiKanDaoJu });
+    if (!(kanChuYinYue || miaoShuHuaMian)) console.log('  · NOTE 模型本遍没有描述 SVG 内容（属模型能力/措辞，不计红；交付判据见下）');
     const noReply = zhuShou.filter((m) => /NO[\\_]?_?REPLY/i.test(String(m.text || '')));
     jian('界面上看不到 NO_REPLY 这类内部记号', noReply.length === 0, noReply.map((m) => String(m.text).slice(0, 80)));
     const zuiHou = zhuShou[zhuShou.length - 1];
@@ -477,7 +595,17 @@ async function yiCi(xu, lei, miYao, kanTuLian) {
     if (shiMimo) {
       const wei = op('chat.capability-delegate').filter((r) => d(r).cap === 'imageUnd');
       const yong = op('capability-chain.used').filter((r) => d(r).lei === 'imageUnd');
-      jian('看图转交给了看图链上的模型', wei.length >= 1 && yong.length >= 1, { wei: wei.length, yong: yong.map((r) => d(r).model) });
+      /**
+       * 看图的路由要跟**主模型自己能不能看图**一致（第 48 轮改判据）：第 45 轮起能力判定是
+       * 「探测事实 → 官方规格表 → 只按文本」，而 MiMo 官网写明 v2.5 / v2.6 系列吃图片 ⇒ 图直接送主模型、**不该**再转交。
+       * 旧判据"必须转交给看图链"是 MiMo 还被当成纯文本模型时的口径（真机：不转交，模型照样读出了截图里的字）。
+       * 判据与产品同源：直接读 dist 的规格表，不在门禁里另抄一份。
+       */
+      const GUIGE = (await import(pathToFileURL(path.join(pkgRoot, 'dist', 'mo-xing-gui-ge.js')).href)).MODEL_GUIGE;
+      const zhuKeKanTu = Array.isArray(GUIGE?.[MIMO_CHAT]?.inTypes) && GUIGE[MIMO_CHAT].inTypes.includes('image');
+      jian(zhuKeKanTu ? '主模型自己能看图（官方规格表）⇒ 图直接给主模型，不转交' : '主模型看不了图 ⇒ 看图转交给了看图链上的模型',
+        zhuKeKanTu ? wei.length === 0 && op('chat.images-blocked-by-capability').length === 0 : wei.length >= 1 && yong.length >= 1,
+        { zhuKeKanTu, wei: wei.length, yong: yong.map((r) => d(r).model) });
       const tou = op('chat.model-picked')[0];
       jian('主模型是默认的 mimo-v2.6-flash', !!tou && d(tou).model === MIMO_CHAT && d(tou).provider === MIMO_ID, tou && d(tou));
     }
@@ -512,7 +640,7 @@ async function yiCi(xu, lei, miYao, kanTuLian) {
     bao.weiZhiXinZeng = [...xinZengZhuoMian].filter((m) => !shenJiMing.has(m.toLowerCase()));
 
     // —— G. 轨迹精确性（"结果对了但绕了三圈、重做了一遍"也算没过；以前的门禁只看结果，所以总是假绿）——
-    const jieDuan = op('chat.tools.done').filter((r) => /^(max-rounds|max-rounds-extended|budget|error)$/.test(String(d(r).tingZhiYuanYin || '')));
+    const jieDuan = op('chat.tools.done').filter((r) => /^(max-rounds|max-rounds-extended|budget|call-budget|error)$/.test(String(d(r).tingZhiYuanYin || '')));
     jian('没有哪一轮是被工具轮数/预算上限截断或出错收场的', jieDuan.length === 0, jieDuan.map((r) => `${d(r).tingZhiYuanYin} lun=${d(r).lunShu}`));
     const xuPaiCi = op('plan.auto-continue').length;
     const zhiLingDao = op('chat.internal-directive-attached').length;

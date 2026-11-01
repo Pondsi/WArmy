@@ -149,10 +149,9 @@ export interface LeaseRegistryOptions {
   idPrefix?: string;
 }
 
+/** 租约说明里只写时间戳（ISO 8601 UTC）：不随机器时区漂移，避免同一份记录两种读法 */
 function geshiShijian(ms: number): string {
-  const d = new Date(ms);
-  const p = (n: number): string => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return new Date(ms).toISOString();
 }
 
 function geshiShengyu(ms: number): string {

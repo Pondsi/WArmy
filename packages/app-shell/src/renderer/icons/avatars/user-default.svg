@@ -1,42 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
   <!--
-    用户默认头像（第 37 轮 · 第 3 版）
+    用户默认头像 · 第 5 版（第 42 轮）
 
-    要求：抽象的人；不分性别、年龄、种族、职业；不涉政治、宗教。
-    本版三条硬约束（用户指定）：
-      ① **左右严格对称**（以 x=50 为轴，镜像）；② **没有任何角落小点/装饰点**；
-      ③ 人形要**更抽象、更复杂** —— 用"层层退进的拱 + 同心环 + 领口留白 + 两侧对称小弧"堆出层次，
-         不使用五官、头发、服饰、肤色，也不使用任何象征符号（不做放射状、不做居中光环）。
+    要求：**最多 4 种颜色**；抽象；大气（"大道"）。
+
+    构图 = 三个几何事实，没有第四个：
+      ① 墨色底 #0C1418 —— 天
+      ② 金色满环 #D9A441 —— 悬在路上的"日"，不与任何线相交
+      ③ 象牙地平带 #EFE7D8 —— 地平线，压稳画面
+      ④ 青灰大路 #6E8C99 —— 两条从地平线向远处收拢的粗线（灭点在环下），
+         这条"路"就是"大道"：越远越窄，指向环心。
+    无五官、无身体、无服饰、无象征、无禁止符号；纯几何，32px 仍清晰。
   -->
   <defs>
-    <clipPath id="uddv4clip"><circle cx="50" cy="50" r="50"/></clipPath>
-    <!-- 垂直渐变（上下对称的层次感，不会左右偏色） -->
-    <linearGradient id="uddv4bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#2A3350"/>
-      <stop offset="100%" stop-color="#141926"/>
-    </linearGradient>
+    <clipPath id="udd5clip"><circle cx="50" cy="50" r="50"/></clipPath>
   </defs>
-  <g clip-path="url(#uddv4clip)">
-    <rect width="100" height="100" fill="url(#uddv4bg)"/>
+  <g clip-path="url(#udd5clip)">
+    <rect width="100" height="100" fill="#0C1418"/>
 
-    <!-- ① 层层退进的拱（三圈，全对称，只作空间层次） -->
-    <path d="M14,100 V54 A36,36 0 0 1 86,54 V100" fill="none" stroke="#8FA3C8" stroke-width="1" opacity="0.16"/>
-    <path d="M21,100 V55 A29,29 0 0 1 79,55 V100" fill="none" stroke="#8FA3C8" stroke-width="1.2" opacity="0.26"/>
-    <path d="M28,100 V57 A22,22 0 0 1 72,57 V100" fill="none" stroke="#8FA3C8" stroke-width="1.4" opacity="0.34"/>
+    <!-- 大道：两条从地平带向灭点收拢的粗线（左右对称，灭点在环心正下方） -->
+    <path d="M14 84 L50 60" fill="none" stroke="#6E8C99" stroke-width="4.6" stroke-linecap="round"/>
+    <path d="M86 84 L50 60" fill="none" stroke="#6E8C99" stroke-width="4.6" stroke-linecap="round"/>
 
-    <!-- ② 肩：外层象牙白 + 内层留白（做成"领口"，靠负空间出层次） -->
-    <path d="M19,100 Q19,61 50,61 Q81,61 81,100 Z" fill="#EFE7D8"/>
-    <path d="M31,100 Q31,71 50,71 Q69,71 69,100 Z" fill="#141926" opacity="0.92"/>
+    <!-- 金色满环：悬在大道尽头之上 -->
+    <circle cx="50" cy="37" r="17.5" fill="none" stroke="#D9A441" stroke-width="6.4"/>
 
-    <!-- ③ 头：象牙白圆 + 同心环（同心，不是"光环"，也不高悬于头顶） -->
-    <circle cx="50" cy="39" r="15.5" fill="#EFE7D8"/>
-    <circle cx="50" cy="39" r="8.2" fill="none" stroke="#141926" stroke-width="2.2" opacity="0.72"/>
-
-    <!-- ④ 两侧对称小弧（肩颈处，纯几何，镜像） -->
-    <path d="M26,72 Q32,65 39,72" fill="none" stroke="#9FB6A8" stroke-width="2.2" stroke-linecap="round" opacity="0.75"/>
-    <path d="M74,72 Q68,65 61,72" fill="none" stroke="#9FB6A8" stroke-width="2.2" stroke-linecap="round" opacity="0.75"/>
-
-    <!-- ⑤ 顶部对称弧带（压在头的上方两侧，形成"额带"层次；不居中成冠） -->
-    <path d="M33,27 Q41,20 50,20 Q59,20 67,27" fill="none" stroke="#EFE7D8" stroke-width="1.6" opacity="0.5"/>
+    <!-- 象牙地平带 -->
+    <path d="M0 84 H100" stroke="#EFE7D8" stroke-width="6.5" stroke-linecap="butt"/>
   </g>
 </svg>

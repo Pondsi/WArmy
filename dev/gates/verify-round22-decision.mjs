@@ -81,9 +81,9 @@ ok(kaMo('length-short', xiang).options.some((o) => /追加/.test(o.biaoQian)), '
 // ── 3. 接线：卡点必须挂在唯一的中断登记出口上，且不许重复挂 ─────────────
 ok(/function biaoRenWuZhongDuan[\s\S]{0,1800}?fenLeiRenWuKadian\(/.test(mainTs), '决策卡挂在 biaoRenWuZhongDuan（唯一中断登记出口）上', undefined);
 ok(mainTs.includes('jueCeKaZaiDeng.has(k)') && mainTs.includes('jueCeKaZaiDeng.delete(k)'), '同一会话同一类卡点只挂一张（在途去重 + 答完释放）');
-ok(/qingQiuKaPian\(\s*sessionId,\s*ka\.biaoTi/.test(mainTs), '卡面走 qingQiuKaPian（沿用 24h 默认等待）');
-ok(mainTs.includes('timeoutMs = 24 * 60 * 60 * 1000'), '决策卡默认等待仍是 24 小时');
-ok(/if \(!xuan\) return;/.test(mainTs.replace(/\r/g, '').replace(/；[^\n]*\n/g, '\n')) || mainTs.includes('if (!wen) return;'), '24h 没人答 ⇒ 什么都不做（不烧 token、不替用户拿主意）');
+ok(/qingQiuKaPian\(\s*sessionId,\s*ka\.biaoTi/.test(mainTs), '卡面走 qingQiuKaPian（默认无限等待）');
+ok(mainTs.includes('timeoutMs = 0'), '决策卡默认无限等待（不再超时替用户选）');
+ok(/if \(!xuan\) return;/.test(mainTs.replace(/\r/g, '').replace(/；[^\n]*\n/g, '\n')) || /if \(!wen\) return(?: 'none')?;/.test(mainTs), '没人答 ⇒ 一直等（不烧 token、不替用户拿主意）');
 ok(mainTs.includes("return { jiXu: false, liYou: 'step-capped' }"), '步骤续派到顶如实报 step-capped（不再伪装成 done）');
 ok(mainTs.includes("if (pan.liYou === 'step-capped')") && mainTs.includes("'step-capped', '同一步骤续派到顶'"), 'step-capped 分支登记中断并发卡');
 ok(mainTs.includes("toolXunHuanYanZhang.set(String(sessionId || ''), Date.now() + 30 * 60 * 1000)"), '「再给它 30 分钟」真的写进延长账本');
@@ -91,9 +91,10 @@ ok(/const yingDingMs = yanZhangDao > Date.now\(\) \? YING_DING_MS \+ \(yanZhangD
 ok(mainTs.includes('if (yanZhangDao) toolXunHuanYanZhang.delete(String(sessionId || \'\'));'), '延长用完即失效（不许批一次永久免检）');
 ok(mainTs.includes("broadcastToWindows('warmy:jueCeKaJiXu'"), '选完方向后广播给界面（模型/牛马配置在界面那侧）');
 ok(pre.includes("onJueCeKaJiXu: (cb) => ipcRenderer.on('warmy:jueCeKaJiXu'"), 'preload 暴露 onJueCeKaJiXu');
-ok(appJs.includes('window.warmy.onJueCeKaJiXu?.(') && /onJueCeKaJiXu[\s\S]{0,900}?zhiXingJueCeKa\(d\)/.test(appJs) && /function zhiXingJueCeKa[\s\S]{0,700}?void deliver\(sid, prompt, 'P2'\)/.test(appJs), '界面用同一条 deliver 路径接着发（经 zhiXingJueCeKa）');
-ok(/function zhiXingJueCeKa[\s\S]{0,700}?state\.planResumeDisabled\[sid\] = true[\s\S]{0,300}?void deliver\(/.test(appJs), '卡片已续派的会话：「继续 / 重试」按钮随即失效（不许派两轮）');
-ok(/function zhiXingJueCeKa[\s\S]{0,300}?if \(queueBusy\(sid\)\)/.test(appJs), '第 28 轮：上一轮还在跑时不并行开新一轮（选完选项"像停了其实还在跑"的修法）');
+ok(appJs.includes('window.warmy.onJueCeKaJiXu?.(') && /onJueCeKaJiXu[\s\S]{0,900}?zhiXingJueCeKa\(d(?:, 0)?\)/.test(appJs) && /function zhiXingJueCeKa[\s\S]{0,1800}?void paiFaYiLun\(sid, prompt, 'P2'\)/.test(appJs), '界面用同一条 deliver 路径接着发（经 zhiXingJueCeKa）');
+ok(/function paiFaYiLun[\s\S]{0,240}?await deliver[\s\S]{0,240}?endOfRound[\s\S]{0,240}?flushQueue/.test(appJs), '决策卡续跑/继续按钮补做本轮收尾（最终回复当场出现、队列继续冲刷）');
+ok(/function zhiXingJueCeKa[\s\S]{0,1800}?delete state\.planResumeDisabled\[sid\][\s\S]{0,600}?void paiFaYiLun\(/.test(appJs), '卡片已续派的会话：「继续 / 重试」按钮整条收掉（不许派两轮）');
+ok(/function zhiXingJueCeKa[\s\S]{0,1000}?if \(queueBusy\(sid\)\)/.test(appJs), '第 28 轮：上一轮还在跑时不并行开新一轮（选完选项"像停了其实还在跑"的修法）');
 ok(mainTs.includes('chongZhiBeiTiaoGuoDeBuZhou(sessionId)') && /status === 'blocked'[\s\S]{0,80}status: 'pending'/.test(mainTs), '选「重试这一步」会把 blocked 步骤放回 pending');
 ok(mainTs.includes('etaYiChang.delete(sessionId);') && mainTs.includes('buZhouYanXu.delete(sessionId);'), '继续前清掉异常/续派计数（否则下一轮立刻又被判停）');
 /**
@@ -108,7 +109,7 @@ ok(mainTs.includes('etaYiChang.delete(sessionId);') && mainTs.includes('buZhouYa
   const idxMoXing = fenZhi.indexOf('去设置里调整');
   ok(idxJiXu > 0 && idxMoXing > idxJiXu, '「再试一次」不会被误判成「换模型」（先判接着干，再判换模型）', { idxJiXu, idxMoXing });
   ok(/\/换模型\|去设置里调整\|调整调用链\|擅长写长文\//.test(fenZhi), '换模型分支不再用裸"调用链"当判据（避免撞上"按原调用链再试一次"）');
-  ok(/认不出的方向\*\*不乱动\*\*/.test(fenZhi) || /return;\s*\/\/\s*认不出的方向/.test(fenZhi), '认不出的方向直接不动（不替用户猜）');
+  ok(/认不出的方向\*\*不乱动\*\*/.test(fenZhi) || /return(?: 'none')?;\s*\/\/\s*认不出的方向/.test(fenZhi), '认不出的方向直接不动（不替用户猜）');
 }
 
 // ── 4. 反例自证：分类器不是"永远返回同一个值"的摆设 ────────────────────

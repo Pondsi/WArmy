@@ -21,7 +21,8 @@ const pkgRoot = path.resolve(selfDir, '..');
 const PORT = Number(process.env.WARMY_LANG_CDP_PORT || 9988);
 const electron = path.join(pkgRoot, 'node_modules', 'electron', 'dist', 'electron.exe');
 const mainJs = path.join(pkgRoot, 'dist', 'electron-main.js');
-const profile = path.join(os.tmpdir(), 'warmy-lang-gate-profile');
+/** 每次跑用**唯一**临时目录（第 51 轮：固定名会被并发/上一轮残留锁住 ⇒ EPERM 假红） */
+const profile = path.join(os.tmpdir(), 'warmy-lang-gate-profile-' + process.pid + '-' + Date.now());
 
 let pass = 0;
 let fail = 0;
@@ -30,7 +31,7 @@ function check(l, ok, d) {
   else { fail++; console.log('  FAIL ' + l, d === undefined ? '' : JSON.stringify(d).slice(0, 400)); }
 }
 
-fs.rmSync(profile, { recursive: true, force: true });
+try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* 删不掉就用新名，不影响本次 */ }
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
 
@@ -88,8 +89,8 @@ try {
   // ② 关闭这个勾 → 发一条消息 → 应当是 on:false
   await c.evaluate(`(async function(){
     await window.warmy.settingsSave({ strictAiLanguage: false, yuYan: 'zh-CN' });
-    await window.warmy.chatSend({ sessionId: 'lang-gate-s', content: '门禁：关掉语言约束时说一句' }).catch(() => null);
-    return true;
+    const r = await window.warmy.chatSend({ sessionId: 'lang-gate-s', content: '门禁：关掉语言约束时说一句' }).catch((e) => ({ err: String(e && e.message || e) }));
+    return r;
   })()`);
   await sleep(2500);
   const guan = duLangJiLu();
@@ -99,8 +100,8 @@ try {
   // ③ 打开这个勾 → 再发一条 → 应当是 on:true 且带上目标语言与注入字符数
   await c.evaluate(`(async function(){
     await window.warmy.settingsSave({ strictAiLanguage: true, yuYan: 'zh-CN' });
-    await window.warmy.chatSend({ sessionId: 'lang-gate-s', content: '门禁：打开语言约束时说一句' }).catch(() => null);
-    return true;
+    const r = await window.warmy.chatSend({ sessionId: 'lang-gate-s', content: '门禁：打开语言约束时说一句' }).catch((e) => ({ err: String(e && e.message || e) }));
+    return r;
   })()`);
   await sleep(3000);
   const kai = duLangJiLu();

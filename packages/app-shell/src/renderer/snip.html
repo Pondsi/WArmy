@@ -102,11 +102,23 @@
       try {
         bar.style.display = 'none';
         ti.textContent = '处理中…';
-        // 必须走 invoke（见 snip-preload.cjs）；主进程收到后关闭本窗
-        if (window.warmySnipDone) window.warmySnipDone(r);
+        // 必须走 invoke（见 snip-preload.cjs）；主进程收到后关闭本窗。
+        // invoke 失败时**恢复可重试**（真机反馈：通道异常会永久卡"处理中"，窗口还没法关）
+        if (window.warmySnipDone) {
+          const pr = window.warmySnipDone(r);
+          if (pr && typeof pr.then === 'function') {
+            pr.then(() => {}, () => {
+              yiTiJiao = false;
+              ti.textContent = '截图通道失败，请重试（右键/Esc 取消）';
+            });
+          }
+        } else {
+          yiTiJiao = false;
+          ti.textContent = '截图通道不可用，请重试（右键/Esc 取消）';
+        }
       } catch (e) {
         yiTiJiao = false;
-        ti.textContent = '截图失败：' + String(e && e.message || e);
+        ti.textContent = '截图失败：' + String(e && e.message || e) + '（右键/Esc 取消）';
       }
     }
     function hua() {

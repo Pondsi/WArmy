@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { attach, sleep } from './packages/app-shell/scripts/cdp-lib.mjs';
+import { attach, sleep } from '../../packages/app-shell/scripts/cdp-lib.mjs';
 
 const GEN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const pkgRoot = path.join(GEN, 'packages', 'app-shell');
@@ -27,7 +27,9 @@ const check = (l, ok, d) => {
   else { fail++; console.log('  FAIL ' + l + (d === undefined ? '' : ' => ' + JSON.stringify(d).slice(0, 300))); }
 };
 
-const env = { ...process.env };
+/** 旁路认证：这里量的是「装好技能市场之后」的界面，首启/登录由 r35–r38、r68 专项门禁覆盖。
+ *  不旁路时干净 profile 会停在首启语言页（z-index 2147483000），弹窗遮罩断言量到的是首启卡而不是市场遮罩。 */
+const env = { ...process.env, WARMY_AUTH_BYPASS: '1' };
 delete env.ELECTRON_RUN_AS_NODE;
 fs.rmSync(shots, { recursive: true, force: true });
 fs.mkdirSync(shots, { recursive: true });
@@ -67,7 +69,7 @@ try {
   await c.send('Runtime.enable');
   await sleep(2500);
 
-  // ① 首屏（干净 profile 的首次启动样子）
+  // ① 首屏（正常进入后的主界面；认证已旁路，首启/登录由专门门禁覆盖）
   const shouPing = await js('(function(){ return { title: document.title, yinSiKa: !!document.querySelector("#yinSiTongYiKa, [id*=yinSi]"), huiHuaShu: (document.querySelectorAll(".huiHuaHang, .huiHuaXiang, [id*=huiHua]").length), shuRu: !!document.querySelector("#shuRu"), ceLan: !!document.querySelector("#ceLan, .ceLan"), kuaiZhao: !!document.querySelector("#kuaiZhaoXiaoXi, [id*=kuaiZhao]") }; })()');
   console.log('  · 首屏：' + JSON.stringify(shouPing));
   check('应用起来了（标题 + 输入框在）', !shouPing.__err && shouPing.shuRu === true, shouPing);
@@ -87,29 +89,87 @@ try {
   check('能找到「打开 dsh-market」入口', daoHang.changZai === true, daoHang);
 
   // ③ 点开弹窗（真实网络：目录应能出卡片；不通就应如实报错而不是白屏）
+  /**
+   * 类别这一项第 44 轮修过判据：第 32 轮把"横排胶囊 dshMkLeiP"改成了**下拉框**（样式照上游），
+   * 老选择器 .dshMkLeiP 永远数到 0 ⇒ 这条门禁红了 12 轮，红的从来不是产品。
+   * 现在量真正的事实：**下拉里有 ≥3 个真实类别 + 一个"全部"**，并且筛选真的生效（见下面的选择断言）。
+   * ⚠️ 这段说明**不许写进下面那个反引号模板里** —— 模板字符串里出现反引号会当场截断字符串。
+   */
   const kaiChuang = await js(`(async function(){
     const b=document.querySelector('#anNiuJinengShiChangShua'); if(!b) return { __err: 'no-button' };
     b.click();
     const gen=document.querySelector('#dshMkGen');
     const yinCang=gen?gen.classList.contains('yinCang'):true;
-    await new Promise((r)=>setTimeout(r,6000));
+    /**
+     * **等到"有结果"为止，不是干等 6 秒**（第 49 轮的真机假红）：产品侧这条请求自己带 15 秒上限
+     * （duShiChangMuLu 里 AbortSignal.timeout(15000)），拿不到就落一句实话。以前这里固定等 6 秒，
+     * 上游慢的时候恰好抓在"正在读取上游目录…"那一秒 ⇒ 判成"目录不可达时不实话"，而类别下拉框还没建出来 ⇒
+     * 又连红两条。现在等到出卡片 / 出实话为止（最多 26 秒）；**过完产品自己的上限还在转圈**，那才是真红。
+     */
+    const JIAZAI = /正在读取|读取中|loading/i;
+    let kaPian = 0, xiaoXi = '', leiXuan = null, xuanXiang = 0, dengMs = 0;
+    const t0 = Date.now();
+    while (Date.now() - t0 < 26000) {
+      await new Promise((r)=>setTimeout(r,1000));
+      const wang=document.querySelector('#dshMkWang');
+      kaPian = wang ? wang.querySelectorAll('.dshMkKaP').length : 0;
+      xiaoXi = String((document.querySelector('#dshMkXiaoXi')||{}).textContent||'');
+      leiXuan = document.querySelector('#dshMkLeiJi select.dshMkLeiXuan') || document.querySelector('#dshMkFenLeiXuan');
+      xuanXiang = leiXuan ? (leiXuan.querySelectorAll('option') || []).length : 0;
+      if (kaPian > 0 || xuanXiang > 0 || (xiaoXi && !JIAZAI.test(xiaoXi))) break;
+      dengMs = Date.now() - t0;
+    }
+    if (dengMs === 0) dengMs = Date.now() - t0;
     const wang=document.querySelector('#dshMkWang');
-    const kaPian=(wang?wang.querySelectorAll('.dshMkKaP').length:0);
-    const xiaoXi=(document.querySelector('#dshMkXiaoXi')||{}).textContent||'';
     const mask=document.elementFromPoint(Math.round(innerWidth/2), Math.round(innerHeight-24));
     const dianDaoZhu=(document.elementFromPoint(24, 24)||{}).className||'';
-    return { zhanShi: !yinCang, ariaModal: gen?gen.getAttribute('aria-modal'):null, kaPian, xiaoXi: xiaoXi.slice(0,120), fenLei: (document.querySelectorAll('#dshMkLeiJi .dshMkLeiP')||[]).length, maskLei: String(mask.className||'').slice(0,40), zhuLei: String(dianDaoZhu).slice(0,40) };
+    const fenLei = Math.max((document.querySelectorAll('#dshMkLeiJi .dshMkLeiP') || []).length, xuanXiang - 1);
+    return { zhanShi: !yinCang, ariaModal: gen?gen.getAttribute('aria-modal'):null, kaPian,
+      xiaoXi: xiaoXi.slice(0,120), fenLei, maskLei: String((mask||{}).className||'').slice(0,40),
+      zhuLei: String(dianDaoZhu).slice(0,40), dengMs, rengZaiJiaZai: JIAZAI.test(xiaoXi) && kaPian === 0 };
   })()`.replace(/\n\s*/g, ' '));
   console.log('  · 弹窗：' + JSON.stringify(kaiChuang));
   check('弹窗真的打开了（不是新窗口、不是外链）', kaiChuang.zhanShi === true && kaiChuang.ariaModal === 'true', kaiChuang);
   check('遮罩盖住主界面（左上角命中的是遮罩，不是主界面元素）', /dshMkMask/.test(String(kaiChuang.maskLei || '')), kaiChuang);
   const luLu = Array.isArray(kaiChuang) ? null : kaiChuang;
   if (luLu && luLu.kaPian > 0) {
-    check('目录出卡片了（真实上游 plugins.json）', luLu.kaPian >= 5 && luLu.fenLei >= 3, { kaPian: luLu.kaPian, fenLei: luLu.fenLei });
+    check('目录出卡片了（真实上游 plugins.json）', luLu.kaPian >= 5 && luLu.fenLei >= 3, { kaPian: luLu.kaPian, fenLei: luLu.fenLei, dengMs: luLu.dengMs });
   } else {
-    check('目录不可达时如实说明（不白屏、不假装有内容）', /不可用|失败|limit|http|unreachable|no-skill/i.test(String(luLu.xiaoXi || '')), luLu.xiaoXi);
+    check('目录不可达时如实说明（不白屏、不假装有内容）', luLu && luLu.rengZaiJiaZai !== true && /不可用|失败|limit|http|unreachable|no-skill/i.test(String(luLu.xiaoXi || '')), luLu);
   }
   await png('02-dsh-market');
+
+  /**
+   * ③′ **类别筛选真的能用**（第 44 轮补）：老门禁只数"类别有几个"，不验"选了它到底生不生效" ⇒
+   * 控件即使是个死下拉框也能绿。现在真的改值、派 `change`，看列表跟着变、不报错、切回"全部"还能恢复。
+   * （筛选是**带类别重新拉上游**，所以判"不多于全量 + 恢复后仍有卡片"，不去猜具体条数 —— 那是上游数据，不是我们的产品。）
+   */
+  const shai = await js(`(async function(){
+    const sel=document.querySelector('#dshMkLeiJi select.dshMkLeiXuan'); if(!sel) return { __err: 'no-select' };
+    const ops=[...(sel.options||[])];
+    const fei=ops.find((o)=>String(o.value||'')); if(!fei) return { __err: 'no-category-option' };
+    const shu=()=>(document.querySelectorAll('#dshMkWang .dshMkKaP')||[]).length;
+    const qian=shu();
+    sel.value=fei.value; sel.dispatchEvent(new Event('change',{bubbles:true}));
+    await new Promise((r)=>setTimeout(r,8000));
+    const hou=shu();
+    const xiaoXi=((document.querySelector('#dshMkXiaoXi')||{}).textContent||'').slice(0,140);
+    sel.value=''; sel.dispatchEvent(new Event('change',{bubbles:true}));
+    await new Promise((r)=>setTimeout(r,6000));
+    return { lei: String(fei.value), qian, hou, huiFu: shu(), xiaoXi };
+  })()`.replace(/\n\s*/g, ' '));
+  console.log('  · 类别筛选：' + JSON.stringify(shai));
+  if (luLu && luLu.kaPian > 0) {
+    check('选一个类别后列表按类别重新出（不多于全量），切回"全部"能恢复', !shai.__err && shai.hou <= shai.qian && shai.huiFu >= 5, shai);
+    check('筛选过程中没有把错误当成功（不白屏、不假装加载完）', !shai.__err && !/不可用|失败|unreachable|no-skill|限流|http [45]/i.test(String(shai.xiaoXi || '')), shai.xiaoXi || shai.__err);
+  } else {
+    /**
+     * 上游拿不到时**不能把这两条判红**（那是这台机器的网络事实，不是我们的产品），但也**不许静默跳过**：
+     * 改判一条真不变量 —— 没有目录数据就不许凭空造出筛选控件，小字必须是实话（不是"加载完成"）。
+     */
+    check('上游不可达时：不造假控件、不把加载说成完成（小字是实话）', shai.__err === 'no-select'
+      && luLu.rengZaiJiaZai !== true && /不可用|失败|limit|http|unreachable|no-skill/i.test(String(luLu.xiaoXi || '')), { shai, xiaoXi: luLu.xiaoXi, dengMs: luLu.dengMs });
+  }
 
   // ④ Esc 关闭
   const guan = await js(`(async function(){

@@ -180,6 +180,8 @@ export class AnthropicGongYing extends JichuGongYing {
     const duQuQi = res.body.getReader();
     const jieMaQi = new TextDecoder();
     let buf = '';
+    /** 流式用量：Anthropic 分两处给 —— `message_start` 给输入，`message_delta` 给输出，要合起来 */
+    let liuYongLiang: Record<string, unknown> | null = null;
     while (true) {
       const { done, value } = await duQuQi.read();
       if (done) break;
@@ -191,6 +193,8 @@ export class AnthropicGongYing extends JichuGongYing {
         if (!t.startsWith('data:')) continue;
         try {
           const j = JSON.parse(t.slice(5).trim());
+          if (j.type === 'message_start' && j.message?.usage) liuYongLiang = { ...(j.message.usage as Record<string, unknown>) };
+          if (j.type === 'message_delta' && j.usage) liuYongLiang = { ...(liuYongLiang || {}), ...(j.usage as Record<string, unknown>) };
           if (j.type === 'content_block_delta' && j.delta?.type === 'text_delta') {
             yield {
               id: '',
@@ -204,7 +208,17 @@ export class AnthropicGongYing extends JichuGongYing {
               ],
             };
           }
-          if (j.type === 'message_stop') return;
+          if (j.type === 'message_stop') {
+            if (liuYongLiang) {
+              yield {
+                id: '',
+                model: Qiu.model,
+                choices: [{ index: 0, delta: {}, finishReason: null }],
+                usage: guiFanYongLiang(liuYongLiang, 'anthropic'),
+              };
+            }
+            return;
+          }
         } catch {
           /* skip */
         }

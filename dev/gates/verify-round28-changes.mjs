@@ -45,7 +45,14 @@ console.log('\n项 6 · 为什么"简单任务不断重复"');
   shuo(/备注：\$\{zheng\}/.test(mainTs), '续派清单把每步的备注（证据）一起给模型看（以前只给 [pending]）');
   shuo(/const zaiTuLiao = new Map<string, number>\(\)/.test(mainTs) && /skipped: 'in-flight'/.test(mainTs),
     '主进程单飞保护：同一会话还在跑时，内部续派/决策卡续跑一律跳过（不再两轮并行改同一批文件）');
-  shuo(/async function zhenZhengFaSongBen\(/.test(mainTs) && /return await zhenZhengFaSongBen\(/.test(mainTs),
+  /**
+   * 判**关系**而不是锚 `return await zhenZhengFaSongBen(` 这一行字（第 48 轮包装层要在回复落账后清半成品，
+   * 改成先 await 再 return，这条就红了 —— 红的是写法，不是"唯一入口"这件事）：
+   * IPC 注册的是包装层 `zhenZhengFaSong`，包装层里调真正的实现 `zhenZhengFaSongBen`。
+   */
+  const baoCeng = (mainTs.match(/async function zhenZhengFaSong\([\s\S]*?\r?\n}\r?\n/) || [''])[0];
+  shuo(/async function zhenZhengFaSongBen\(/.test(mainTs) && /await zhenZhengFaSongBen\(/.test(baoCeng)
+    && /chuliIpc\('warmy:liaoTianFaSong', zhenZhengFaSong\)/.test(mainTs),
     '发一轮的唯一入口包了一层（IPC 与续派共用，不会两套漂移）');
   shuo(/state\.abnormalStop/.test(app) && /abnormalStop\.has\(String\(sid\)\)/.test(app),
     '异常停止在第二列图标上亮感叹号（并入 yiChang 徽标口径）');
@@ -81,11 +88,13 @@ console.log('\n项 3 · 行动中 / 行动过程');
    * 不再写死文案（本轮把「行动中…/行动过程」改名成「执行中…/执行过程」，
    * 写死文案的门禁会因为**改名**而假红 —— 这正是交接里反复记的那条教训）。
    */
-  shuo(/zaiPao\s*\?\s*tOr\('chat\.actingNow'/.test(app) && /:\s*tOr\('chat\.actionLog'/.test(app),
+  shuo(/const biao = zhanKai \? tOr\('chat\.actingNow'/.test(app)
+    && /tOr\('chat\.actingNow'[\s\S]{0,80}tOr\('chat\.actionLog'/.test(app),
     '标题按运行状态切换（运行中 / 结束 用两个不同的键）');
   shuo(/if \(zh && b\.content\) zh\.textContent = b\.content;/.test(app),
     '空分片不许把已显示的中间回复抹成空白（真机：内容时有时无）');
-  shuo(/_liuShiHuaShangCi = 0; xuanRanLiuShiKuai\(sidHu, state\.streamBuf\[sidHu\]\)/.test(app),
+  /** 第 65 轮起节流时间戳按会话分表（A/B 同时流式不互相挤掉尾段）⇒ 两种写法都算 */
+  shuo(/(?:_liuShiHuaShangCi(?:\[sidHu\])? = 0); xuanRanLiuShiKuai\(sidHu, state\.streamBuf\[sidHu\]\)/.test(app),
     'renderChat 整块重建后**立刻**用缓冲区重画流式块（不再等下一个分片才回来）');
   shuo(/\.xingDongKuai \{/.test(css) && /\.xingDongKuai\[open\]/.test(css), '折叠块有样式（含展开箭头）');
   shuo(/dataset\.role = m\.role === 'wo' \? 'wo' : 'them'/.test(app), '消息行打标，归组才认得出"本轮的第几条"');

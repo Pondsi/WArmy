@@ -148,6 +148,22 @@ async function dianJi2(sel, pianYi) {
   return p;
 }
 
+/**
+ * **点得到这件事要重试到点得到为止**（第 38 轮真机：同一个"点标题收起"在 pass 1 绿、pass 2 红，
+ * 差别只是那一刻面板上飘着一条 toast/弹层挡住了命中测试）。`dianJi2` 在点不到时是**直接不点返回**的，
+ * 断言如果不去看它的返回值，就会把"没点到"写成"功能坏了"⇒ 假红。
+ * 这里等遮挡消失再点，最多 6 次；最后一次仍点不到，就把 `err/dao` 如实带进判据里（那是真证据）。
+ */
+async function dianJiDao(sel, pianYi) {
+  let p = null;
+  for (let i = 0; i < 6; i++) {
+    p = await dianJi2(sel, pianYi);
+    if (p && p.dao && !p.err) return p;
+    await sleep(400);
+  }
+  return p;
+}
+
 /** 真的右键（CDP 输入事件，不是合成事件） */
 async function youJian(selector) {
   const p = await c.evaluate(`(function(){ const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; e.scrollIntoView({block:'center'}); const r = e.getBoundingClientRect(); return { x: Math.round(r.left + Math.min(60, r.width / 2)), y: Math.round(r.top + r.height / 2) }; })()`);
@@ -217,10 +233,12 @@ try {
   const cunZai = await c.evaluate(`(function(){ return !!document.querySelector(${JSON.stringify(ZI_DING)}); })()`);
   panding('项10 自定义卡片渲染出来了', cunZai === true, cunZai);
   const ziQian = JSON.parse(await c.evaluate("(function(){ const ka = document.querySelector('#panZiDingYiJi .mianBanKuai[data-custom-card]'); return JSON.stringify({ h: Math.round(ka.getBoundingClientRect().height) }); })()"));
-  await dianJi2(ZI_DING); await sleep(700);
+  const dian1 = await dianJiDao(ZI_DING); await sleep(900);
   const ziHou = JSON.parse(await c.evaluate("(function(){ const ka = document.querySelector('#panZiDingYiJi .mianBanKuai[data-custom-card]'); return JSON.stringify({ cls: String(ka.className), h: Math.round(ka.getBoundingClientRect().height) }); })()"));
-  panding('项10 自定义卡片点标题能收起', /shouQi/.test(ziHou.cls) && ziHou.h < Math.max(48, ziQian.h * 0.4), JSON.stringify(ziHou) + ' 原高 ' + ziQian.h);
-  await dianJi2(ZI_DING); await sleep(500);
+  panding('项10 自定义卡片点标题能收起（点不到的话把证据写进来，不含糊判成功也不含糊判失败）',
+    dian1 && dian1.dao === true && /shouQi/.test(ziHou.cls) && ziHou.h < Math.max(48, ziQian.h * 0.4),
+    JSON.stringify(ziHou) + ' 原高 ' + ziQian.h + ' 点击=' + JSON.stringify({ dao: !!(dian1 && dian1.dao), err: String((dian1 && dian1.err) || '') }));
+  await dianJiDao(ZI_DING); await sleep(500);
   const FEN_BIAO = '#mianBanFenShenKuai > .mianBanBiaoTi';
   const fb = await dianJi2(FEN_BIAO);
   await sleep(700);
@@ -298,7 +316,7 @@ try {
   const jiHuaDu = "(function(){ return JSON.stringify(Array.from(document.querySelectorAll('#jiHuaLieBiao .jiHuaHang2')).map(function(h){ return { hao: h.getAttribute('data-jh'), zt: ((h.querySelector('.jiHuaZhuangTai')||{}).textContent||'') }; })); })()";
   const rows = JSON.parse(await c.evaluate(jiHuaDu));
   const ztXian = rows.map((r) => r.zt).join(',');
-  panding('项11 计划显示顺序 = 已完成 → 已停止 → 进行中 → 刚创建', ztXian === '已完成,已完成,已暂停,进行中,已创建', ztXian);
+  panding('项11 计划显示顺序 = 已完成 → 已停止 → 进行中 → 刚创建', ztXian === '已完成,已完成,已停止,进行中,已创建', ztXian);
   /** 编号不能因为我重排**显示**而漂移：连续重画两次，号序列必须一模一样 */
   await c.evaluate('window.__renderJiHuaKa && window.__renderJiHuaKa()');
   await sleep(600);

@@ -53,7 +53,9 @@ const UNIVERSAL = {
   'verify-office-doc-suite': 'Office 生成 / 文档抽取 / 技能规范 / 凭据保管 / 门禁留档（生成→读回逐字比对）',
   'verify-gate-manifest': '门禁清单必须与磁盘一致（这份审计本身不许腐烂）',
   'verify-audio-first-class': '语音一等公民：型号必须被认成 asr/tts；只暴露 /chat/completions 的网关要有兜底；401 不许"换形状"硬试',
-  'verify-research-pipeline': '调研管线：搜索条目必须带 URL、抓取要摘录、**没密钥就如实失败**（不许编结果）',
+  'verify-research-pipeline': '调研管线：搜索条目必须带 URL、抓取要摘录、**免注册可用**；额度用尽/出错必须如实失败（不许编结果）',
+  'verify-local-search': '统一本地搜索：分区顺序、敏感打码、后台索引与按需扫描、只读、模型全盘权限（本地搜索产品通用）',
+  'verify-search-providers': '联网搜索供应商编排：默认关闭、Tavily/DeepSeek/自定义映射、429 与回退（多供应商产品通用）',
 };
 
 /**

@@ -113,9 +113,9 @@ function loadPack(loc) {
 }
 
 const BRAND = {
-  'zh-CN': { ming: '无限牛马', tag: '让AI成为你的无限牛马' },
-  'zh-TW': { ming: '無限牛馬', tag: '讓AI成為你的無限牛馬' },
-  'en-US': { ming: 'WArmy', tag: 'An infinite army of AI workhorses working for you.' },
+  'zh-CN': { ming: '无限牛马', tag: '属于你的军团' },
+  'zh-TW': { ming: '無限牛馬', tag: '屬於你的軍團' },
+  'en-US': { ming: 'WArmy', tag: "An army that's yours." },
   ja: { ming: '無限社畜', tag: 'AIがあなたの社畜になって、無限に働きます。' },
   ko: { ming: '무한 사축', tag: 'AI가 당신 대신 사축처럼 일해줍니다.' },
 };

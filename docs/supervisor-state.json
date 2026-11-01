@@ -1,0 +1,238 @@
+{
+  "round": 79,
+  "updatedAt": "2026-10-24",
+  "rule": "Do not stop while selfRemaining > 0. Update status and evidence after each item.",
+  "items": [
+    {
+      "id": 1,
+      "task": "auto-login confirmation",
+      "self": true,
+      "status": "done",
+      "evidence": "auth/scene gates green"
+    },
+    {
+      "id": 2,
+      "task": "first-run language grid",
+      "self": true,
+      "status": "done",
+      "evidence": "auth/scene gates green"
+    },
+    {
+      "id": 3,
+      "task": "PIN login layout + back + background",
+      "self": true,
+      "status": "done",
+      "evidence": "auth/scene gates green"
+    },
+    {
+      "id": 4,
+      "task": "first-run background animation on all pages",
+      "self": true,
+      "status": "done",
+      "evidence": "auth/scene gates green"
+    },
+    {
+      "id": 5,
+      "task": "mnemonic/credential recovery explanation",
+      "self": true,
+      "status": "done",
+      "evidence": "SUPERVISOR-R78.md section 5"
+    },
+    {
+      "id": 6,
+      "task": "idiom 12 / phrase 24",
+      "self": true,
+      "status": "done",
+      "evidence": "auth/scene gates green"
+    },
+    {
+      "id": 7,
+      "task": "Chinese friendly number and word on one line",
+      "self": true,
+      "status": "done",
+      "evidence": "auth/scene gates green"
+    },
+    {
+      "id": 8,
+      "task": "roaming guide",
+      "self": true,
+      "status": "done",
+      "evidence": "auth/scene gates green"
+    },
+    {
+      "id": 9,
+      "task": "My page layout + PIN flow",
+      "self": true,
+      "status": "done",
+      "evidence": "auth/scene gates green"
+    },
+    {
+      "id": 10,
+      "task": "10-language default prompt limits",
+      "self": true,
+      "status": "done",
+      "evidence": "verify-r78-prompt-limits 29/0"
+    },
+    {
+      "id": 11,
+      "task": "FWArmy TLS/multihop/blacklist/public reachability",
+      "self": true,
+      "status": "done",
+      "evidence": "fwarmy verify-expand 41/0"
+    },
+    {
+      "id": 12,
+      "task": "same row think/budget/xiaodi",
+      "self": true,
+      "status": "done",
+      "evidence": "app.js layout"
+    },
+    {
+      "id": 13,
+      "task": "rename WeChat (personal)",
+      "self": true,
+      "status": "done",
+      "evidence": "adapter + renderer"
+    },
+    {
+      "id": 14,
+      "task": "fast QR feedback",
+      "self": true,
+      "status": "done",
+      "evidence": "r44 27/0"
+    },
+    {
+      "id": 15,
+      "task": "WeChat remark",
+      "self": true,
+      "status": "done",
+      "evidence": "r44 27/0"
+    },
+    {
+      "id": 16,
+      "task": "WeChat inbound message fix",
+      "self": true,
+      "status": "done",
+      "evidence": "r44 27/0; real inbound blocked on user"
+    },
+    {
+      "id": 17,
+      "task": "no forced top alignment after manual scroll",
+      "self": true,
+      "status": "done",
+      "evidence": "verify-r78-scroll 6/0"
+    },
+    {
+      "id": 18,
+      "task": "nm archive/PDF/web/HTML split",
+      "self": true,
+      "status": "done",
+      "evidence": "zip 8/0 + r63-nm 41/0"
+    },
+    {
+      "id": 19,
+      "task": "tool/mid replies in chronological thinking",
+      "self": true,
+      "status": "done",
+      "evidence": "chronological sort after insertion"
+    },
+    {
+      "id": 20,
+      "task": "nm in plugin list",
+      "self": true,
+      "status": "done",
+      "evidence": "verify-r78-nm-plugin"
+    },
+    {
+      "id": 21,
+      "task": "nm default install/enable consistency",
+      "self": true,
+      "status": "done",
+      "evidence": "default true + plugin gate"
+    },
+    {
+      "id": 22,
+      "task": "six scenes into first-run + scene10 fix + preview",
+      "self": true,
+      "status": "done",
+      "evidence": "auth/scene gates green"
+    },
+    {
+      "id": 23,
+      "task": "default names for project/group + local",
+      "self": true,
+      "status": "done",
+      "evidence": "default name + host env"
+    },
+    {
+      "id": 24,
+      "task": "network card only host mode/provider",
+      "self": true,
+      "status": "done",
+      "evidence": "app.js hidden legacy block"
+    },
+    {
+      "id": 25,
+      "task": "narrower second column without covering logo",
+      "self": true,
+      "status": "done",
+      "evidence": "list default 200/ min 180"
+    },
+    {
+      "id": 26,
+      "task": "remove second-column button frames",
+      "self": true,
+      "status": "done",
+      "evidence": "header buttons borderless"
+    },
+    {
+      "id": "A",
+      "task": "last-5-rounds 3x",
+      "self": true,
+      "status": "done",
+      "evidence": "R79 verify-r78-3x PASSED (15 gates x3) after fixes"
+    },
+    {
+      "id": "B",
+      "task": "full project 10 real-model rounds",
+      "self": true,
+      "status": "done",
+      "evidence": "R79 verify-r79-ten-rounds: 10 rounds / 40 checks / 0 FAIL"
+    },
+    {
+      "id": "C",
+      "task": "delete profile + first-run delivery",
+      "self": true,
+      "status": "done",
+      "evidence": "R79 user approved; profile backed up to TEMP and removed; first-run opened"
+    },
+    {
+      "id": 27,
+      "task": "nm default enabled (settings-store/main)",
+      "self": true,
+      "status": "done",
+      "evidence": "verify-r79-regressions 6/0"
+    },
+    {
+      "id": 28,
+      "task": "restart keeps instance display names",
+      "self": true,
+      "status": "done",
+      "evidence": "R79 round10 + verify-r79-regressions"
+    },
+    {
+      "id": 29,
+      "task": "second column watermark responsive",
+      "self": true,
+      "status": "done",
+      "evidence": "verify-r79-regressions"
+    },
+    {
+      "id": 30,
+      "task": "FWArmy project separated from WArmy repo",
+      "self": true,
+      "status": "done",
+      "evidence": "../FWArmy; r58/r59/r60/r64 + expand green"
+    }
+  ]
+}

@@ -2192,7 +2192,7 @@ try {
     await navTo('settings');
     // Owner rule: #biaoTiLanPinPai = logo + tagline ONLY (chanPin ming lives in #logoMing).
     const zhBrand = await brandMarkup('R1-2 中文（tagline）');
-    ok(zhBrand.text === '让AI成为你的无限牛马', 'R1-2 中文下顶栏就是品牌 tagline「让AI成为你的无限牛马」（产品名在 #logoMing，不在这一行）', zhBrand.text);
+    ok(zhBrand.text === '属于你的军团', 'R1-2 中文下顶栏就是品牌 tagline「属于你的军团」（产品名在 #logoMing，不在这一行）', zhBrand.text);
     ok((await txt('#logoMing')) === '无限牛马', 'R1-2 中文下 #logoMing = 产品名「无限牛马」', String(await txt('#logoMing')));
     await okContrast('#biaoTiLanPinPai', 'R1-2 亮色下品牌 tagline 对比度 ≥ 3.0');
 
@@ -2200,7 +2200,7 @@ try {
     await c.evaluate(`(function(){var s=document.querySelector('#xuanZeYuYan'); s.value='en-US'; s.dispatchEvent(new Event('change',{bubbles:true})); return true;})()`);
     await c.waitFor(`document.querySelector('#logoMing').textContent === 'WArmy'`, { timeout: 10000, biaoQian: '15：切到 en-US' });
     const enBrand = await brandMarkup('R1-3 英文（tagline）');
-    ok(enBrand.text === 'An infinite army of AI workhorses working for you.' && enBrand.w > 0,
+    ok(enBrand.text === "An army that's yours." && enBrand.w > 0,
       'R1-3 英文下顶栏就是官方 tagline（产品名 WArmy 在 #logoMing）', JSON.stringify(enBrand));
     ok((await txt('#logoMing')) === 'WArmy', 'R1-3 英文下 #logoMing = WArmy', String(await txt('#logoMing')));
     await c.evaluate(`(function(){var s=document.querySelector('#xuanZeYuYan'); s.value='zh-CN'; s.dispatchEvent(new Event('change',{bubbles:true})); return true;})()`);
@@ -5486,16 +5486,16 @@ try {
   // changes, brand naming is correct, and no raw i18n key leaks into the DOM.
   at = 'L10N 全 10 种语言可达';
   const L10N_EXPECT = {
-    'zh-CN': { ming: '无限牛马', tagline: '让AI成为你的无限牛马', sample: '设置' },
-    'zh-TW': { ming: '無限牛馬', tagline: '讓AI成為你的無限牛馬', sample: '設定' },
-    'en-US': { ming: 'WArmy', tagline: 'An infinite army of AI workhorses working for you.', sample: 'Settings' },
-    'ja': { ming: '無限社畜', tagline: 'AIがあなたの社畜になって、無限に働きます。', sample: '設定' },
-    'ko': { ming: '무한 사축', tagline: 'AI가 당신 대신 사축처럼 일해줍니다.', sample: '설정' },
-    'ru': { ming: 'WArmy', tagline: 'An infinite army of AI workhorses working for you.', sample: 'Настройки' },
-    'es': { ming: 'WArmy', tagline: 'An infinite army of AI workhorses working for you.', sample: 'Ajustes' },
-    'fr': { ming: 'WArmy', tagline: 'An infinite army of AI workhorses working for you.', sample: 'Réglages' },
-    'pt': { ming: 'WArmy', tagline: 'An infinite army of AI workhorses working for you.', sample: 'Definições' },
-    'eo': { ming: 'WArmy', tagline: 'An infinite army of AI workhorses working for you.', sample: 'Agordoj' },
+    'zh-CN': { ming: '无限牛马', tagline: '属于你的军团', sample: '设置' },
+    'zh-TW': { ming: '無限牛馬', tagline: '屬於你的軍團', sample: '設定' },
+    'en-US': { ming: 'WArmy', tagline: "An army that's yours.", sample: 'Settings' },
+    'ja': { ming: '無限社畜', tagline: 'あなたの軍団', sample: '設定' },
+    'ko': { ming: '무한 사축', tagline: '당신의 군단', sample: '설정' },
+    'ru': { ming: 'WArmy', tagline: 'Ваша армия', sample: 'Настройки' },
+    'es': { ming: 'WArmy', tagline: 'Tu propia legión', sample: 'Ajustes' },
+    'fr': { ming: 'WArmy', tagline: 'Votre propre légion', sample: 'Réglages' },
+    'pt': { ming: 'WArmy', tagline: 'A sua própria legião', sample: 'Definições' },
+    'eo': { ming: 'WArmy', tagline: 'Via propra legio', sample: 'Agordoj' },
   };
   const L10N_CODES = Object.keys(L10N_EXPECT);
   // select element must list all 10

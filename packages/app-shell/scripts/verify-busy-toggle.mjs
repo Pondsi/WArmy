@@ -49,7 +49,7 @@ const mock = http.createServer((req, res) => {
 const mockHits = [];
 const mockPort = await new Promise((r) => mock.listen(0, '127.0.0.1', () => r(mock.address().port)));
 
-const env = { ...process.env };
+const env = { ...process.env, WARMY_AUTH_BYPASS: '1' };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(electron, [
   `--remote-debugging-port=${PORT}`,
@@ -76,7 +76,7 @@ await c.evaluate(`(function(){ const z=document.getElementById('yinSiDuiHuaKuang
 await sleep(3600);
 await c.evaluate(`(function(){ const b=document.querySelector('#duiHuaKuangDongZuoJi button.anNiuZhuYao'); if(b&&!b.disabled){ b.click(); return true;} return false; })()`);
 await sleep(1500);
-await c.evaluate(`(function(){ const b=document.querySelector('#yinDaoTiao [data-yd="skip"]'); if(b) b.click(); return 1; })()`);
+await c.evaluate(`(function(){ window.__startGuide?.close?.(); return 1; })()`);
 await sleep(600);
 
 // ════════ 1. 拉取模型动画 ════════

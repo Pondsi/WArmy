@@ -23,6 +23,8 @@ import path from 'node:path';
 import { shengChengDocx, shengChengPptx, keYongPptx, shengChengXlsx } from './office-tools.js';
 import { shengChengPdf } from './pdf-tools.js';
 import { lieYaSuoBaoTiaoMu, duYaSuoBaoTiaoMu, tiaoMuMingAnQuan } from './zip-look.js';
+import { shiJianChuoWen } from './time-utils.js';
+import { protectedPathReason, consumeProtectedOnce } from './protected-paths.js';
 
 /** 工具名（与 function calling 暴露给模型的 name 一致） */
 export const WORK_TOOL_NAMES = [
@@ -81,6 +83,10 @@ export interface WorkToolResult {
     abs?: string;
     error?: string;
     truncated?: boolean;
+    /** read_file：本段从正文第几字符起读（分页游标） */
+    offset?: number;
+    /** read_file：本段**真实正文**字符数（不含末尾提示行；宿主收口时靠它算下一游标） */
+    bodyChars?: number;
     entries?: number;
     /** write_file：写了多少**字符**（用户问"是不是真的写了 N 字"要看它） */
     chars?: number;
@@ -170,23 +176,43 @@ export function yingSheYongHuWenJianJia(raw: string): { abs: string; rest: strin
  * 模型一 read_file 就被 `workspace-escape` 挡住 —— 用户明明把文件递过来了。
  */
 let yiCiZhiDuGen: string[] = [];
-export function sheZhiYiCiZhiDuGen(paths: Array<string | undefined | null>): void {
-  yiCiZhiDuGen = (paths || [])
+const yiCiZhiDuGenHuiHua = new Map<string, string[]>();
+function guiFanZhiDu(paths: Array<string | undefined | null>): string[] {
+  return (paths || [])
     .map((p) => String(p || '').trim())
     .filter(Boolean)
     .map((p) => { try { return path.resolve(p); } catch { return ''; } })
     .filter(Boolean);
 }
-export function qingKongYiCiZhiDuGen(): void { yiCiZhiDuGen = []; }
-export function yiCiZhiDuGenLieBiao(): string[] { return yiCiZhiDuGen.slice(); }
-/** 这个绝对路径是否落在一次性只读授权里（它就是被授权的文件，或在其被授权的目录下） */
-function zaiYiCiZhiDuNei(abs: string): boolean {
+/** 一次性只读授权按会话隔离；不传 sessionId 的旧调用只作为测试/兼容的全局集合。 */
+export function sheZhiYiCiZhiDuGen(paths: Array<string | undefined | null>, sessionId?: string): void {
+  const list = guiFanZhiDu(paths);
+  const sid = String(sessionId || '').trim();
+  if (sid) yiCiZhiDuGenHuiHua.set(sid, list);
+  else yiCiZhiDuGen = list;
+}
+export function qingKongYiCiZhiDuGen(): void { yiCiZhiDuGen = []; yiCiZhiDuGenHuiHua.clear(); }
+export function yiCiZhiDuGenLieBiao(sessionId?: string): string[] {
+  const sid = String(sessionId || '').trim();
+  return (sid ? (yiCiZhiDuGenHuiHua.get(sid) || []) : [...yiCiZhiDuGen, ...[...yiCiZhiDuGenHuiHua.values()].flat()]).slice();
+}
+/** 这个绝对路径是否落在本会话的一次性只读授权里（它就是被授权的文件，或在其被授权的目录下） */
+function zaiYiCiZhiDuNei(abs: string, sessionId?: string): boolean {
   const a = path.resolve(abs);
-  for (const gen of yiCiZhiDuGen) {
-    if (a === gen) return true;
-    if (a.startsWith(gen + path.sep)) return true;
+  const sid = String(sessionId || '').trim();
+  const lists = sid
+    ? [yiCiZhiDuGenHuiHua.get(sid) || [], ...(yiCiZhiDuGen.length ? [yiCiZhiDuGen] : [])]
+    : [...(yiCiZhiDuGen.length ? [yiCiZhiDuGen] : []), ...yiCiZhiDuGenHuiHua.values()];
+  for (const list of lists) {
+    for (const gen of list) {
+      if (a === gen) return true;
+      if (a.startsWith(gen + path.sep)) return true;
+    }
   }
   return false;
+}
+function huiHuaIdOfBase(baseDir: string): string {
+  try { return path.basename(path.resolve(baseDir)); } catch { return ''; }
 }
 
 /**
@@ -199,6 +225,13 @@ export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false, z
   const raw = String(rel ?? '').trim();
   if (!raw) throw new Error('empty-path');
   if (raw.includes('\0')) throw new Error('nul-byte');
+  const sessionId = huiHuaIdOfBase(baseDir);
+  /** 第 93 轮：完全授权也不能碰其他会话工作区/历史与程序安装目录；用户单独授权的一次性放行除外 */
+  const shenCha = (abs: string): string => {
+    const why = protectedPathReason(abs, baseDir);
+    if (why && !consumeProtectedOnce(abs)) throw new Error('protected-path: ' + why);
+    return abs;
+  };
   /**
    * 系统用户文件夹别名（Desktop/桌面/…）⇒ 真实路径（绝对）。
    * 走下面同一套越权判定：普通授权下它在工作区外 ⇒ 如实拒绝/问用户。
@@ -208,8 +241,8 @@ export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false, z
     const jt = yingSheYongHuWenJianJia(raw);
     if (jt) {
       const zhen = jt.rest ? path.resolve(jt.abs, jt.rest) : path.resolve(jt.abs);
-      if (kuaiQuan) return zhen;
-      if (zuoYong === 'read' && zaiYiCiZhiDuNei(zhen)) return zhen;
+      if (kuaiQuan) return shenCha(zhen);
+      if (zuoYong === 'read' && zaiYiCiZhiDuNei(zhen, sessionId)) return shenCha(zhen);
       throw new Error('absolute-path-not-allowed: ' + raw + ' 映射到系统目录 ' + zhen + '（在工作区外，需要授权）');
     }
   }
@@ -217,20 +250,28 @@ export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false, z
    * **完全授权**（用户显式选的）：允许绝对路径、允许工作区外 —— 此时 AI 可以直接操作本机。
    * 但仍然不许 NUL、不许空路径；且"做什么"始终受最高信念/戒律约束（策略层，不在这里）。
    */
-  if (kuaiQuan) return path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(path.resolve(baseDir), raw);
+  if (kuaiQuan) return shenCha(path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(path.resolve(baseDir), raw));
   // Windows 盘符 / UNC / POSIX 绝对路径：默认拒绝 —— 但命中「一次性只读授权」且是读取操作时放行
   if (path.isAbsolute(raw) || /^[a-zA-Z]:/.test(raw) || raw.startsWith('\\\\') || raw.startsWith('/')) {
     const absJue = path.resolve(raw);
-    if (zuoYong === 'read' && zaiYiCiZhiDuNei(absJue)) return absJue;
+    /**
+     * **落在本会话工作区里的绝对路径就是工作区路径**（第 48 轮 live 真事故，`verify-round28-live`）：
+     * write_file 的返回里给的是绝对路径，模型照着它调 read_file ⇒ 以前一律当"越权"去弹授权卡，
+     * 门禁/用户不点就一直等，整轮卡 8 分钟。与相对路径同一个判据（在 base 之内），不放宽任何越界情况。
+     */
+    const jiDi = path.resolve(baseDir);
+    const bi = (s: string) => (process.platform === 'win32' ? s.toLowerCase() : s);
+    if (bi(absJue) === bi(jiDi) || bi(absJue).startsWith(bi(jiDi) + path.sep)) return shenCha(absJue);
+    if (zuoYong === 'read' && zaiYiCiZhiDuNei(absJue, sessionId)) return shenCha(absJue);
     throw new Error('absolute-path-not-allowed');
   }
   const base = path.resolve(baseDir);
   const target = path.resolve(base, raw);
   if (target !== base && !target.startsWith(base + path.sep)) {
-    if (zuoYong === 'read' && zaiYiCiZhiDuNei(target)) return target;
+    if (zuoYong === 'read' && zaiYiCiZhiDuNei(target, sessionId)) return shenCha(target);
     throw new Error('workspace-escape');
   }
-  return target;
+  return shenCha(target);
 }
 
 /** 展示用：把绝对路径折回 base 相对路径（失败则原样返回） */
@@ -384,7 +425,17 @@ export function workSearchFiles(baseDir: string, args: { path?: string; query?: 
     const query = String(args.query || '');
     if (!query) return fail(tool, new Error('query-required'));
     const root = resolveInside(baseDir, args.path || '.', kuaiQuan, 'read');
-    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return fail(tool, new Error('not-a-directory'), relOf(baseDir, root));
+    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+      /**
+       * 第 51 轮真机事故：模型把 path 传成**文件**（想在这一个文件里找词），旧返回只有
+       * `not-a-directory` 五个字 ⇒ 模型不懂怎么补救，转头反复撞 run_shell（被拒 9 次、602 秒零产出）。
+       * 现在如实给出可执行的出路。
+       */
+      if (fs.existsSync(root) && fs.statSync(root).isFile()) {
+        return fail(tool, new Error('path-is-a-file：search_files 的 path 只能是**目录**。想在这一个文件里找内容：用 read_file 读它，返回里出现「续读用 offset=N」就带上 offset 接着往下读（别用本工具、别绕 run_shell）。想搜整个目录：把 path 传它所在的目录（工作区内可传 "."）。'), relOf(baseDir, root));
+      }
+      return fail(tool, new Error('not-a-directory'), relOf(baseDir, root));
+    }
     const fileRe = globZhengZe(args.pattern || '**/*');
     const hitRe = args.regex ? new RegExp(query, 'i') : null;
     const cap = Math.max(1, Math.min(Number(args.maxResults) || 100, 500));
@@ -417,9 +468,13 @@ export function workSearchFiles(baseDir: string, args: { path?: string; query?: 
 }
 
 /** 精确局部编辑：默认要求 oldText 只出现一次；replaceAll=true 才替换全部。 */
+/** 会话「要求」目录（第 92 轮）：用户亲写，模型不能写/改名/覆盖 */
+const shiYaoQiuLuJing = (p: unknown): boolean => /(^|[\\/])yaoqiu([\\/]|$)/i.test(String(p || ''));
+
 export function workEditFile(baseDir: string, args: { path?: string; oldText?: string; newText?: string; replaceAll?: boolean }, kuaiQuan = false): WorkToolResult {
   const tool = 'edit_file';
   try {
+    if (shiYaoQiuLuJing(args.path)) return fail(tool, new Error('yaoqiu-readonly：会话「要求」只能由用户修改（产品硬门禁 E）'), String(args.path || ''));
     const file = resolveInside(baseDir, args.path, kuaiQuan, 'write');
     if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) return fail(tool, new Error('not-a-file'), relOf(baseDir, file));
     const oldText = String(args.oldText ?? '');
@@ -439,6 +494,7 @@ export function workEditFile(baseDir: string, args: { path?: string; oldText?: s
 export function workCopyFile(baseDir: string, args: { path?: string; destination?: string; overwrite?: boolean }, kuaiQuan = false): WorkToolResult {
   const tool = 'copy_file';
   try {
+    if (shiYaoQiuLuJing(args.destination)) return fail(tool, new Error('yaoqiu-readonly：会话「要求」只能由用户修改（产品硬门禁 E）'), String(args.destination || ''));
     const src = resolveInside(baseDir, args.path, kuaiQuan, 'read');
     const dst = resolveInside(baseDir, args.destination, kuaiQuan, 'write');
     if (!fs.existsSync(src) || !fs.statSync(src).isFile()) return fail(tool, new Error('source-not-a-file'), relOf(baseDir, src));
@@ -453,6 +509,7 @@ export function workCopyFile(baseDir: string, args: { path?: string; destination
 export function workMoveFile(baseDir: string, args: { path?: string; destination?: string; overwrite?: boolean }, kuaiQuan = false): WorkToolResult {
   const tool = 'move_file';
   try {
+    if (shiYaoQiuLuJing(args.path) || shiYaoQiuLuJing(args.destination)) return fail(tool, new Error('yaoqiu-readonly：会话「要求」只能由用户修改（产品硬门禁 E）'), String(args.path || args.destination || ''));
     const src = resolveInside(baseDir, args.path, kuaiQuan, 'write');
     const dst = resolveInside(baseDir, args.destination, kuaiQuan, 'write');
     if (!fs.existsSync(src) || !fs.statSync(src).isFile()) return fail(tool, new Error('source-not-a-file'), relOf(baseDir, src));
@@ -467,28 +524,12 @@ export function workMoveFile(baseDir: string, args: { path?: string; destination
 }
 
 /** 读文件 */
-export function workReadFile(baseDir: string, args: { path?: string; maxChars?: number }, kuaiQuan = false): WorkToolResult {
+export function workReadFile(baseDir: string, args: { path?: string; maxChars?: number; offset?: number }, kuaiQuan = false): WorkToolResult {
   const tool = 'read_file';
   try {
     let file = resolveInside(baseDir, args && args.path, kuaiQuan, 'read');
-    /**
-     * **回落解析**（真机事故：模型 `read_file` 读截图报 not-found）。
-     *
-     * 附件清单里给的是「工作区根」相对路径（`inst-xxx/shot-1.png`），而 `baseDir`
-     * 已经是**会话工作区**（`…/workspace/inst-xxx`）⇒ 拼成了
-     * `…/workspace/inst-xxx/inst-xxx/shot-1.png`（会话 id 叠了两遍）⇒ 必然找不到。
-     * 修法：原路径不存在时，再试「相对工作区根」一次（仍限制在工作区根内）。
-     */
-    if (!fs.existsSync(file)) {
-      const raw = String((args && args.path) || '').trim();
-      if (raw && !path.isAbsolute(raw)) {
-        const root = path.resolve(baseDir, '..');
-        const shang = path.resolve(root, raw);
-        if (shang !== root && shang.startsWith(root + path.sep) && fs.existsSync(shang)) {
-          file = shang;
-        }
-      }
-    }
+    // 只允许“本会话 id 被重复拼了一遍”的回落；绝不向工作区父目录找兄弟会话。
+    file = huiLuoHuiHuaGen(baseDir, String((args && args.path) || ''), file);
     if (!fs.existsSync(file)) return fail(tool, new Error('not-found'), relOf(baseDir, file));
     if (fs.statSync(file).isDirectory()) return fail(tool, new Error('is-a-directory'), relOf(baseDir, file));
     const cap = Math.max(1, Math.min(Number(args?.maxChars) || WORK_TOOL_LIMITS.maxReadChars, WORK_TOOL_LIMITS.maxReadChars));
@@ -504,7 +545,7 @@ export function workReadFile(baseDir: string, args: { path?: string; maxChars?: 
       try {
         const xin = JSON.parse(raw) as { kind?: string; createdAt?: number; meta?: Record<string, unknown>; data?: string };
         const shiMingWen = String(xin.data || '').startsWith('plain.');
-        zhaiYao += `[.nm 包] 类型=${xin.kind || '?'} 导出于=${xin.createdAt ? new Date(xin.createdAt).toLocaleString() : '?'}\n`;
+        zhaiYao += `[.nm 包] 类型=${xin.kind || '?'} 导出于=${xin.createdAt ? shiJianChuoWen(Number(xin.createdAt)) : '?'}\n`;
         if (xin.meta && typeof xin.meta === 'object') zhaiYao += `元信息：${JSON.stringify(xin.meta)}\n`;
         if (!shiMingWen) {
           zhaiYao += '这是**加密包**，需要口令才能解开内容（可以让用户在界面上导入，或让用户告知口令后用 nmYueDu 通道读）。\n';
@@ -586,11 +627,34 @@ ${shiSvg
       };
     }
     const text = buf.toString('utf8');
-    const truncated = text.length > cap;
+    /**
+     * **分页读**（第 51 轮真机事故：模型只看到 youxi.html 前 4000 字，后半段的 `draw()`/主循环
+     * 永远看不见 ⇒ 没法定点编辑 ⇒ 第 3 轮 602 秒 mtime 不前进判红）。
+     * 每条结果的字符上限**不动**（宿主仍按 `zuiDaJieGuoZiShu` 收口），这里只给模型一条**往下走**的路。
+     */
+    const pianYi = Math.max(0, Math.floor(Number(args?.offset) || 0));
+    if (pianYi >= text.length) {
+      return {
+        ok: true,
+        content: `[read_file] offset=${pianYi} 已到/超过文件末尾：${path.basename(file)} 正文共 ${text.length} 字符，后面没有内容了。`,
+        meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), truncated: false, offset: pianYi, bodyChars: 0 },
+      };
+    }
+    const xian = text.slice(pianYi, pianYi + cap);
+    const beiQie = text.length - pianYi > cap;
+    const jie = pianYi + xian.length;
+    /**
+     * **续读提示写在最前面**（第 52 轮真机红：模型说"只看到前 130 行，后半段看不到"）：
+     * 提示原先挂在段尾，而工具结果进上下文时还会再被投影/迟注入截一刀 ⇒ 尾巴连同"带 offset=N 再读一次"
+     * 一起被切掉，模型于是改用 run_shell 绕（被授权档拒 ⇒ 整轮没做成）。写在开头就截不到。
+     */
+    const tou = beiQie
+      ? `[本段是第 ${pianYi}~${jie} 字符，原文共 ${text.length} 字符，后面还有；往下看请再调一次 read_file 带 offset=${jie}（别猜内容、也别用 run_shell 绕）]\n`
+      : pianYi > 0 ? `[本段是第 ${pianYi}~${text.length} 字符，已到文件末尾]\n` : '';
     return {
       ok: true,
-      content: truncated ? text.slice(0, cap) + `\n…（已截断，原文 ${text.length} 字符）` : text,
-      meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), truncated },
+      content: tou + xian,
+      meta: { tool, ok: true, bytes: buf.length, path: relOf(baseDir, file), truncated: beiQie, offset: pianYi, bodyChars: xian.length },
     };
   } catch (e) {
     return fail(tool, e);
@@ -638,6 +702,8 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
      * 如实拒绝并指向真正的生成器。
      */
     const rawP = String((args && args.path) || '');
+    /** 会话「要求」只能用户改（第 92 轮，产品硬门禁 E） */
+    if (shiYaoQiuLuJing(rawP)) return fail(tool, new Error('yaoqiu-readonly：会话「要求」只能由用户修改（产品硬门禁 E）'), rawP);
     /**
      * **硬门禁文件不许被改**（产品定稿：硬门禁＝随产品发的验证脚本，模型不得修改/删除）。
      * 只按"仓库内 scripts/ 下的门禁脚本"这个形状拦（工作区里的同名文件不受影响）。
@@ -1099,7 +1165,7 @@ export function runWorkTool(baseDir: string, call: { function?: { name?: string;
     case 'list_dir': return workListDir(baseDir, args as { path?: string }, kuaiQuan);
     case 'find_files': return workFindFiles(baseDir, args as { pattern?: string; path?: string; maxResults?: number }, kuaiQuan);
     case 'search_files': return workSearchFiles(baseDir, args as { query?: string; path?: string; pattern?: string; maxResults?: number; caseSensitive?: boolean }, kuaiQuan);
-    case 'read_file': return workReadFile(baseDir, args as { path?: string; maxChars?: number }, kuaiQuan);
+    case 'read_file': return workReadFile(baseDir, args as { path?: string; maxChars?: number; offset?: number }, kuaiQuan);
     case 'write_file': return workWriteFile(baseDir, args as { path?: string; content?: string; append?: boolean }, kuaiQuan);
     case 'edit_file': return workEditFile(baseDir, args as { path?: string; oldText?: string; newText?: string; replaceAll?: boolean }, kuaiQuan);
     case 'copy_file': return workCopyFile(baseDir, { path: String(args.path || args.source || ''), destination: String(args.destination || ''), overwrite: !!args.overwrite }, kuaiQuan);
@@ -1125,12 +1191,12 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'write_file',
-        description: '写入/追加一个文本文件（会自动建父目录）。默认写在**工作区**内（相对路径）。可直接写系统「桌面/文档/下载」：用 Desktop/xxx.txt、Documents/xxx.txt、~/Desktop/xxx.txt 这类路径（会映射到真实系统目录，需要用户授权；返回里会给绝对路径）。**产出物必须在最终回复里原样给出返回的绝对路径**，否则用户找不到文件。'
+        description: '写入/追加一个文本文件（会自动建父目录）。**默认且优先写在会话工作区内（相对路径）**；用户没有明确要求桌面/文档/下载时，禁止自行使用 Desktop/… 等系统目录。只有用户明确要求时，才可用 Desktop/xxx.txt、Documents/xxx.txt、~/Desktop/xxx.txt（会映射到真实系统目录，需要用户授权；返回里会给绝对路径）。**产出物必须在最终回复里原样给出返回的绝对路径**，否则用户找不到文件。'
           + '**长文必须分段写**：要写超过 1500 字的长文时，不要在一次调用里塞整篇（会被截断、写不完）。正确做法：第 1 次 write_file 只写第 1 段（不带 append），之后每次调用都带 append:true 续写下一段，一段一段写到完结；每次返回里会告诉你文件当前总字数，可据此判断还需不需要再写。',
         parameters: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: '【必填】文件路径字符串，例如 identity.txt 或 Desktop/identity.txt。不要省略本字段。' },
+            path: { type: 'string', description: '【必填】文件路径字符串，默认写工作区相对路径，例如 identity.txt；只有用户明确要求桌面时才用 Desktop/identity.txt。不要省略本字段。' },
             content: { type: 'string', description: '本次要写入的内容（分段写时就是这一段）' },
             append: { type: 'boolean', description: 'true = 追加到该文件已有内容的末尾（长文分段续写用）；false/省略 = 覆盖整文件' },
             overwrite: { type: 'boolean', description: '只在确实要把本任务已写过的文件整篇换成更短的内容时才设 true（续写请用 append）' },
@@ -1151,8 +1217,18 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
          */
         description: '**查看/读取一个文件**（读取类工具，不会改动文件）。可以给绝对路径（工作区外会先征求用户同意）。'
           + '文本文件返回正文（超长截断）；图片、exe、压缩包等二进制返回**类型/大小/修改时间**等元信息 —— '
-          + '这就是"它是什么"的答案，不要再换工具读第二遍。用户说"看看这个文件是什么"就用本工具。',
-        parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
+          + '这就是"它是什么"的答案，不要再换工具读第二遍。用户说"看看这个文件是什么"就用本工具。'
+          + '**正文太长会分段给你**：段首出现「本段是第 X~Y 字符…后面还有」就说明后半段还没看到，'
+          + '要改后半段就再调一次并带上 `offset=Y`（别猜内容、也别换 run_shell 去绕）。',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string' },
+            offset: { type: 'number', description: '从正文第几个字符开始读（默认 0）。上一段段首写的「offset=Y」就是它。' },
+            maxChars: { type: 'number', description: '本段最多给多少字符（默认与上限见返回提示；工具总上限 20000）。' },
+          },
+          required: ['path'],
+        },
       },
     },
     {
@@ -1349,8 +1425,8 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
  */
 export const HOST_TOOL_NAMES = [
   'open_path', 'open_file', 'open_url', 'schedule_task', 'monitor_process', 'lsp_diagnostics', 'ask_user', 'plan_update', 'plan_verify', 'write_skill',
-  'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'download_file',
-  'get_time', 'wait_seconds', 'read_profile',
+  'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'local_search', 'download_file',
+  'get_time', 'wait_seconds', 'read_profile', 'image_generate', 'video_generate',
 ] as const;
 export function isHostTool(name: unknown): boolean {
   return typeof name === 'string' && (HOST_TOOL_NAMES as readonly string[]).includes(name);
@@ -1485,7 +1561,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'schedule_task',
-        description: '登记一条定时任务：每隔 N 分钟（或每天 HH:mm）由系统自动替用户发一轮「prompt」。返回任务 id，可在界面「定时任务」卡片里看到。',
+        description: '登记一条定时任务：支持 ① 每隔 N 分钟；② 每天 HH:mm；③ **Cron 表达式 + 时区**（推荐，能表达「工作日 9:07」「每月 1 号 8:03」这类规则）。到点会以「分身」形式自动跑一轮，完成后把结果直接写回本会话聊天（开头【XX定时任务汇报】）。返回任务 id，可在界面「定时任务」卡片里看到。',
         parameters: {
           type: 'object',
           properties: {
@@ -1493,6 +1569,8 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             prompt: { type: 'string', description: '到点要发给牛马的内容' },
             everyMinutes: { type: 'number', description: '每隔多少分钟（与 dailyAt 二选一）' },
             dailyAt: { type: 'string', description: '每天 HH:mm（24 小时制，与 everyMinutes 二选一）' },
+            cron: { type: 'string', description: 'Cron 表达式（5 字段：分 时 日 月 周），有它时优先。例：`7 9 * * 1-5` = 工作日 09:07' },
+            tz: { type: 'string', description: 'IANA 时区名（如 Asia/Shanghai）。不填按本机时区；填了不认识的时区会被拒绝，不会静默忽略。' },
           },
           required: ['name', 'prompt'],
         },
@@ -1527,6 +1605,70 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             timeoutMs: { type: 'number', description: '超时毫秒（默认 60000，上限 10 分钟）' },
           },
           required: ['command'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'knowledge_query',
+        description: '查本机结构化知识库（实体/事件）。适合：用户提到某人/项目/工具而你找不到来历；要给"以前定过的事"下结论；需要某项目的目录、某人的偏好这类结构化属性；用户问"我们以前是不是说过"。闲聊/当前上下文已写清的事/纯创作不要查。每条知识有记录时间与发生时间两个轴，问"什么时候"时两个轴都会查。',
+        parameters: {
+          type: 'object',
+          properties: { query: { type: 'string', description: '关键词（人名/项目名/主题）' } },
+          required: ['query'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'knowledge_add',
+        description: '往本机知识库写一条**有原文依据**的事实（实体和/或事件）。事件必须能在用户原话里找到 ≥10 字连续重合，或带锚点，否则会被拒绝（防止把猜测沉淀成事实）。同标题+同实体+同内容不会重复写；内容不同会取代旧说法（旧说法保留可审计）。实体只是名字，不受证据闸限制。**互斥口径**：同一条内容只能放在知识库或模型可改的提示词（术/印象）中的一处；已在术/印象里的内容会拒绝重复写知识库。规范与只能人写的提示词（道/教条/束缚/认知）不参与互斥，可以重复。',
+        parameters: {
+          type: 'object',
+          properties: {
+            layer: { type: 'string', description: 'session / internal / private（可省略，默认按内容敏感度自动归层）' },
+            entity: {
+              type: 'object',
+              description: '实体（可选）',
+              properties: {
+                id: { type: 'string' },
+                kind: { type: 'string', description: 'person / org / project / tool / concept / goal' },
+                ming: { type: 'string', description: '名称' },
+                attrs: { type: 'object', description: '结构化属性（键值都是字符串）' },
+              },
+              required: ['ming'],
+            },
+            event: {
+              type: 'object',
+              description: '事件（可选；与实体至少给一个）',
+              properties: {
+                biaoTi: { type: 'string', description: '一句话标题（同一说法的不同版本用同一个标题）' },
+                result: { type: 'string', description: '结果/结论（尽量包含用户原话片段）' },
+                tool: { type: 'string' },
+                method: { type: 'string' },
+                entityIds: { type: 'array', items: { type: 'string' }, description: '关联实体 id' },
+              },
+              required: ['biaoTi'],
+            },
+          },
+          required: [],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'capability_propose',
+        description: '提议一条新的"能力类别"加入对外白名单（脱敏概要只能说白名单里的类别）。只在确实出现了一个**现有类别覆盖不了**的新能力时调用。短语必须是类别：≤14 字、不带数字/标点/客户名/"做过"/路径；并给 1–6 个 2–12 字的关键词（用来判断哪些内部内容支持它）。宿主会逐条校验，不合格直接拒。加入后仍需至少 2 条独立证据支撑才会出现在对外概要里。',
+        parameters: {
+          type: 'object',
+          properties: {
+            capability: { type: 'string', description: '能力类别短语，如「音视频转写与字幕」' },
+            keywords: { type: 'array', items: { type: 'string' }, description: '匹配关键词，如 ["转写","字幕"]' },
+          },
+          required: ['capability', 'keywords'],
         },
       },
     },
@@ -1659,7 +1801,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'web_search',
-        description: '**联网搜索**：返回排名 + 标题 + 摘要 + **URL**（先看再决定打开哪几条）。要查"现在的事实/新闻/文档"用它，**不要凭记忆编造**。没配搜索密钥时会如实失败并告诉你去哪配。写结论时必须带上出处 URL。',
+        description: '**联网搜索**：返回排名 + 标题 + 摘要 + **URL**（先看再决定打开哪几条）。要查"现在的事实/新闻/文档"用它，**不要凭记忆编造**。默认走 Firecrawl 免注册额度，不需要用户配置密钥；额度用尽会如实失败并说明。写结论时必须带上出处 URL。',
         parameters: {
           type: 'object',
           properties: {
@@ -1676,7 +1818,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'web_extract',
-        description: '**抓正文**：把网页抽成干净文本，并按查询词**摘录**命中段落（每条都带 URL）。搜索结果里挑 1~5 条用它看细节；比 fetch_url 更适合"有据可查"的调研。',
+        description: '**抓正文**：把网页抽成干净文本，并按查询词**摘录**命中段落（每条都带 URL）。搜索结果里挑 1~5 条用它看细节；比 fetch_url 更适合"有据可查"的调研。默认 Firecrawl 免注册额度，失败自动回退 Jina Reader，同样不需要密钥。',
         parameters: {
           type: 'object',
           properties: {
@@ -1684,6 +1826,23 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             query: { type: 'string', description: '想在这几页里找什么（用于摘录）' },
           },
           required: ['urls'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'local_search',
+        description: '**只读本地搜索**：按当前会话已授权的范围搜索——当前会话记录、程序界面文案、本会话知识库层、本会话工作区文件。不会修改/删除任何内容。`include_other_sessions:true` 用于用户明确要求查看其他会话时：我的牛马会弹授权（完全授权直接放行）；项目只能看项目和群聊且需授权；群聊/联系人直接拒绝且无授权途径。`include_disk:true` 仅「我的牛马」会话可用，且每次会弹用户授权。敏感内容会以 ***** 返回，不要尝试还原。',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: '搜索词（用户会用的自然语言关键词）' },
+            include_other_sessions: { type: 'boolean', description: '用户明确要求查看其他会话时才置 true；受会话类型权限限制' },
+            include_disk: { type: 'boolean', description: '是否请求全盘搜索（仅我的牛马可用，需用户授权；默认 false）' },
+            limit: { type: 'number', description: '每个分区最多返回多少条（默认 10，最多 30）' },
+          },
+          required: ['query'],
         },
       },
     },
@@ -1705,15 +1864,38 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
     {
       type: 'function',
       function: {
-        name: 'download_file',
-        description: '下载一个文件（http/https）保存到指定路径（可写 Desktop/xx 等系统目录，需授权）。返回保存后的绝对路径。',
+        name: 'image_generate',
+        description: '用本机 ComfyUI（默认 127.0.0.1:8188）生成一张图片，保存到会话工作区并返回绝对路径。需要本机已启动 ComfyUI 且有图像 checkpoint（SD1.5/Flux 等）；没有就如实报错，不会伪装成功。',
         parameters: {
           type: 'object',
           properties: {
-            url: { type: 'string', description: 'http/https 网址' },
-            path: { type: 'string', description: '保存路径，如 Desktop/资料.pdf 或 out/a.bin' },
+            prompt: { type: 'string', description: '画面描述（英文效果通常更稳）' },
+            negative: { type: 'string', description: '不想要的内容（可选）' },
+            width: { type: 'number', description: '宽，默认 512' },
+            height: { type: 'number', description: '高，默认 512' },
+            steps: { type: 'number', description: '步数，默认 20' },
+            seed: { type: 'number', description: '随机种子（可选）' },
           },
-          required: ['url', 'path'],
+          required: ['prompt'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'video_generate',
+        description: '用本机 ComfyUI 生成一段短视频（SVD 图生视频；没有给图片就先生成一张），保存到会话工作区并返回绝对路径。需要本机已启动 ComfyUI 且有 SVD 视频 checkpoint；生成较慢（数十秒到数分钟），没有就如实报错。',
+        parameters: {
+          type: 'object',
+          properties: {
+            prompt: { type: 'string', description: '画面描述（用于生成首帧）' },
+            image_path: { type: 'string', description: '可选：以这张图为首帧（工作区相对路径或绝对路径）' },
+            width: { type: 'number', description: '宽，默认 512' },
+            height: { type: 'number', description: '高，默认 512' },
+            frames: { type: 'number', description: '帧数 2–25，默认 14' },
+            fps: { type: 'number', description: '帧率 1–30，默认 6' },
+          },
+          required: ['prompt'],
         },
       },
     },

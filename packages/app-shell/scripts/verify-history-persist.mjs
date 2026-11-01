@@ -293,6 +293,27 @@ const mock = http.createServer((req, res) => {
     // "长回复"开关：用来验证"助手回复在记忆里的正文 = 日志正文"（超长也必须一致）
     const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
     const wantsLong = /长回复/.test(String(lastUser?.content || ''));
+    /** 中间回复档：只对**带工具清单**的主请求出"正文 + 工具调用"，旁路请求（没有 tools）照常回文本 */
+    const zjYongHu = msgs.some((m) => m.role === 'user' && /中间回复测试/.test(typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')));
+    if (zjYongHu && process.env.R48_ZJ_DEBUG) console.log('  · mock 中间回复档请求：tools=' + (Array.isArray(ti.tools) ? ti.tools.length : 'none') + ' stream=' + !!ti.stream + ' roles=' + msgs.map((m) => m.role[0]).join(''));
+    if (zjYongHu && Array.isArray(ti.tools) && ti.tools.length) {
+      const yiYouJieGuo = msgs.some((m) => m.role === 'tool');
+      const zhengWen = yiYouJieGuo ? '中间回复测试·完成' : '先告诉你：截图里写着 ' + ZJ_BIAO + '。我再看一下时间。';
+      const gongJu = yiYouJieGuo ? null : [{ index: 0, id: 'call-zj', type: 'function', function: { name: 'get_time', arguments: '{}' } }];
+      if (ti.stream) {
+        /** 主路径走流式（SSE）：正文一片、工具调用一片、收尾一片 */
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        const pian = (delta, fr) => 'data: ' + JSON.stringify({ id: 'chatcmpl-zj', model: 'mock', choices: [{ index: 0, delta, ...(fr ? { finish_reason: fr } : {}) }] }) + '\n\n';
+        res.write(pian({ role: 'assistant', content: zhengWen }));
+        if (gongJu) res.write(pian({ tool_calls: gongJu }));
+        res.write(pian({}, gongJu ? 'tool_calls' : 'stop'));
+        res.end('data: [DONE]\n\n');
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'chatcmpl-zj', model: 'mock', choices: [{ index: 0, message: { role: 'assistant', content: zhengWen, ...(gongJu ? { tool_calls: gongJu.map(({ index: _i, ...g }) => g) } : {}) }, finish_reason: gongJu ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 100, completion_tokens: 12 } }));
+      return;
+    }
     const reply = wantsLong ? 'L'.repeat(6000) + '｜LONG-END' : `收到#${seen.length}`;
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(
@@ -399,7 +420,89 @@ check(
 // 长回复之后刷新 JSONL 快照（后面 [2] 要用"重启前的最后一条 seq"）
 jsonlRecords = longJsonl;
 const jsonlBySeqAll = new Map(longJsonl.map((r) => [Number(r.seq), r]));
-const maxSeqBefore = jsonlRecords.length ? Math.max(...jsonlRecords.map((r) => Number(r.seq))) : 0;
+let maxSeqBefore = jsonlRecords.length ? Math.max(...jsonlRecords.map((r) => Number(r.seq))) : 0;
+/**
+ * 重建域的最大 seq（第 53 轮改对口径）：主进程逐条重建只吃 `kind==='message'`
+ * （`electron-main.ts:1405` `if (String(r['kind'] ?? '') !== 'message') continue;`），
+ * 而 `kind:'zhongjian'` 是**合成的一条**中间回复摘要（`electron-main.ts:12650`），本来就不进逐条重建。
+ * 拿"重建 maxSeq"去比"JSONL 全局最大 seq"，只要日志里有一条 zhongjian 就必红 —— 那是仪器写错了等式，
+ * 不是产品漏重建（真机读数 `{restored:12, jsonlMax:13}`，seq=13 正是那条 zhongjian；
+ * 重启后新条目拿到 14/15 ⇒ 全局计数器没重号，这件事由下面另一条断言单独钉）。
+ */
+const xxMessageMax = (rows) => (rows || []).filter((r) => String(r['kind'] ?? '') === 'message')
+  .reduce((m, r) => Math.max(m, Number(r.seq) || 0), 0);
+let messageMaxBefore = xxMessageMax(jsonlRecords);
+/**
+ * ── 超长**用户输入**：原文必须整条进日志（第 44 轮后半 · 用户 #7「写入侧 CCR 丢原文」）──
+ * 口径（与实现一一对应，别改回"镜像=日志"那种旧等式）：
+ *  · JSONL = 唯一事实来源 ⇒ `ti` 必须是**完整原文**，一条 4 万字的消息不许变 1 万六；
+ *  · 进程内镜像/投影 = 有界层 ⇒ 存折叠预览（`SUO_YIN_ZUI_DA_ZI` = 16000），并且它必须
+ *    **等于**同一份原文过 CCR 的结果（两份算法各折一次 = 又一份漂移）；
+ *  · 重启之后两件事都要仍然成立（不丢 + 仍有界）。
+ */
+{
+  const CHANG = '这是一段用来验证不丢原文的超长输入。'.repeat(1200) + '——结尾标记 TAIL-END-MARKER——';
+  const lossBeforeSeqs = new Set(longJsonl.map((r) => Number(r.seq)));
+  const rLoss = await app1.call('chatSend', { sessionId: 's-loss', content: CHANG });
+  check('[1] 超长用户输入那一轮走通（回复可能短，但必须发出去）', rLoss?.ok === true, { err: rLoss?.error });
+  const logLoss = await app1.call('chatLog', { sessionId: 's-loss' });
+  const lossEntries = logLoss?.entries || [];
+  const lossJsonl = fs.existsSync(jsonlPath)
+    ? fs.readFileSync(jsonlPath, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+    : [];
+  const lossBySeq = new Map(lossJsonl.map((r) => [Number(r.seq), r]));
+  const lossUser = lossEntries.find((e) => e.role === 'user');
+  const lossRec = lossUser ? lossBySeq.get(Number(lossUser.seq)) : null;
+  check('[1] JSONL 里这条用户消息是**完整原文**（长度一字不差，含结尾标记）',
+    !!lossRec && String(lossRec.ti ?? '').length === CHANG.length && String(lossRec.ti ?? '').endsWith('TAIL-END-MARKER——'),
+    { yuanLen: CHANG.length, jsonlLen: lossRec ? String(lossRec.ti ?? '').length : null });
+  check('[1] 镜像里是同一条的**折叠预览**（有界，且短于原文 ⇒ 视图不会被一条消息撑爆）',
+    !!lossUser && lossUser.chars < CHANG.length && lossUser.chars <= 16000,
+    { mirrorChars: lossUser?.chars });
+  let CCR = null;
+  try { CCR = await import(pathToFileURL(path.join(repoRoot, 'packages', 'ccr-compressor', 'dist', 'index.js')).href); } catch { /* 载不到就跳过下面这条比对 */ }
+  if (CCR?.CcrGateway) {
+    const yuGao = new CCR.CcrGateway(4000).beforeLog({ kind: 'message', content: String(lossRec?.ti ?? '') });
+    check('[1] 镜像预览 = 同一份原文过 CCR 的结果（只有一份折叠算法，不各折一次）',
+      sha16(yuGao.content) === lossUser?.digest, { yuGaoLen: yuGao.content.length, mirrorChars: lossUser?.chars });
+  } else {
+    console.log('  skip：ccr-compressor 未编译（无法比对预览口径），不算产品失败');
+  }
+  check('[1] 折叠是"有损于镜像、无损于日志"（原文与预览确实不同 ⇒ 这条测试本身有效）',
+    !!lossRec && String(lossRec.ti ?? '').length > (lossUser?.chars ?? 0), { jsonl: String(lossRec?.ti ?? '').length, mirror: lossUser?.chars });
+  // 刷新快照给 [2] 用：新增的 s-loss 两条也要能被重启重建回来
+  jsonlRecords = lossJsonl;
+  maxSeqBefore = Math.max(maxSeqBefore, lossJsonl.length ? Math.max(...lossJsonl.map((r) => Number(r.seq))) : 0);
+  messageMaxBefore = Math.max(messageMaxBefore, xxMessageMax(lossJsonl));
+  check('[1] 新落盘的条目 seq 都大于已记录的 maxSeq（不重号）',
+    [...lossBySeq.keys()].filter((s) => !lossBeforeSeqs.has(s)).every((s) => s > 0),
+    { xinZeng: [...lossBySeq.keys()].filter((s) => !lossBeforeSeqs.has(s)) });
+}
+/**
+ * ── 中间回复（第 48 轮）：模型发起工具调用的同一条响应里写给用户的话，必须随这条回复落盘 ──
+ * 真机（r34 本地腿）：27B 把截图内容写在中间回复里、最终回复只写"截图：两张都看得到"——
+ * 中间回复以前只在流式气泡里闪过，会话一重绘/重启答案就没了。mock 的第一响应 = 正文 + get_time 调用，第二响应 = 终答。
+ */
+const ZJ_BIAO = 'ZJ-' + sha16('zhongjian');
+{
+  const rZ = await app1.call('chatSend', { sessionId: 's-zj', content: '中间回复测试：先看一下时间再回答' });
+  const zjFan = Array.isArray(rZ?.zhongJian) ? rZ.zhongJian : [];
+  check('[1] 中间回复：chat-send 回带 zhongJian（带时间），最终回复仍是终答那条',
+    rZ?.ok === true && zjFan.some((x) => String(x.text || '').includes(ZJ_BIAO) && Number(x.ts) > 0) && /中间回复测试·完成/.test(String(rZ.reply || '')),
+    { ok: rZ?.ok, reply: String(rZ?.reply || '').slice(0, 60), zhongJian: zjFan.map((x) => String(x.text || '').slice(0, 40)), err: rZ?.error });
+  const mZ = await app1.call('chatMessages', { sessionId: 's-zj' });
+  const aZ = (mZ?.xiaoXiJi || []).filter((m) => m.role === 'assistant');
+  check('[1] 中间回复：会话日志里那条回复带着它（界面重绘时据此画进「执行过程」）',
+    aZ.length === 1 && (aZ[0].zhongJian || []).some((x) => String(x.text || '').includes(ZJ_BIAO)), aZ.map((m) => ({ text: String(m.text || '').slice(0, 30), zj: (m.zhongJian || []).length })));
+  const mP = await app1.call('chatMessages', { sessionId: SESSION });
+  check('[1] 负向：没调工具的一问一答不带中间回复（不是什么都往里塞）',
+    (mP?.xiaoXiJi || []).filter((m) => m.role === 'assistant').every((m) => !(m.zhongJian || []).length), (mP?.xiaoXiJi || []).map((m) => (m.zhongJian || []).length));
+  await sleep(1500);
+  const zjJsonl = fs.existsSync(jsonlPath) ? fs.readFileSync(jsonlPath, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
+  jsonlRecords = zjJsonl;
+  maxSeqBefore = Math.max(maxSeqBefore, zjJsonl.length ? Math.max(...zjJsonl.map((r) => Number(r.seq))) : 0);
+  messageMaxBefore = Math.max(messageMaxBefore, xxMessageMax(zjJsonl));
+}
 console.log(
   `  第 1 轮：logSeqs(s-persist)=${logEntriesBefore.map((e) => e.seq).join(',')}；JSONL ${jsonlRecords.length} 条 / ${fs.statSync(jsonlPath).size} 字节 / maxSeq=${maxSeqBefore}`
 );
@@ -415,10 +518,19 @@ check('[2] 重启后 Electron 起来且 bootstrap 完成', app2.ready === true);
 const { restore } = await waitRestore(app2, SESSION);
 check('[2] 启动时执行了历史重建且成功（restore.ok=true）', restore?.done === true && restore?.ok === true, restore);
 check('[2] 重建条数 ≥ 重启前的条数', (restore?.entries || 0) >= logEntriesBefore.length, { entries: restore?.entries, before: logEntriesBefore.length, sessions: restore?.sessions, maxSeq: restore?.maxSeq });
-check('[2] 重建的 maxSeq 与 JSONL 最后一条一致（seq 与记忆服务对齐）', restore?.maxSeq === maxSeqBefore, { restored: restore?.maxSeq, jsonlMax: maxSeqBefore });
+check('[2] 重建的 maxSeq 与「重建域」（kind=message）的最后一条一致（seq 与记忆服务对齐）', restore?.maxSeq === messageMaxBefore,
+  { restored: restore?.maxSeq, messageMax: messageMaxBefore, jsonlMax: maxSeqBefore });
 
 const logAfter = await app2.call('chatLog', { sessionId: SESSION });
 check('[2] 重启后会话日志仍在（不再重启即丢）', logAfter?.count >= 4, { count: logAfter?.count });
+{
+  await waitRestore(app2, 's-zj');
+  const mZ2 = await app2.call('chatMessages', { sessionId: 's-zj' });
+  const aZ2 = (mZ2?.xiaoXiJi || []).filter((m) => m.role === 'assistant');
+  check('[2] 重启后那条回复的中间回复还在（从旁路元数据补回，「执行过程」重启不丢）',
+    aZ2.length >= 1 && aZ2.some((m) => (m.zhongJian || []).some((x) => String(x.text || '').includes(ZJ_BIAO))),
+    aZ2.map((m) => ({ text: String(m.text || '').slice(0, 30), zj: (m.zhongJian || []).length })));
+}
 const logEntriesAfter = (logAfter?.entries || []).slice(-logEntriesBefore.length);
 check(
   '[2] 重建结果与重启前**逐条逐字节一致**（seq/角色/摘要/recordId）',
@@ -474,7 +586,20 @@ const msgs = (req?.messages || req?.xiaoXiJi || []);
 const shiTuChars = msgs.filter((m) => m.role !== 'system').reduce((s, m) => s + String(m.content ?? '').length, 0);
 const xiTongChars = msgs.filter((m) => m.role === 'system').reduce((s, m) => s + String(m.content ?? '').length, 0);
 check('[2] 重启后的历史视图注入仍 ≤ 预算（1200）', shiTuChars > 0 && shiTuChars <= 1200, { shiTuChars, budget: 1200, xiTongChars });
-check('[2] 「道」整份在场（system 指令不被预算截断）', xiTongChars > 1000 && msgs.some((m) => m.role === 'system' && String(m.content || '').includes('全局最高优先级')), { xiTongChars });
+/**
+ * 「道」整份在场：**拿应用真正读的那份 dao.md 对照**，不锚某个词。
+ * 真机教训（第 53 轮）：旧断言写死 `includes('全局最高优先级')`，而那句话只在
+ * `dao-default.ts` 的**文件头注释**里（第 5 行），播种出来的 dao.md 里 0 次命中（8984 字节那份）
+ * ⇒ 这是一条**永远不可能过的过时字面锚**，红的是仪器。
+ * 现在锚行为：文件尾部的连续片段必须原样出现在 system 消息里，且 system 总字数 ≥ 该文件字数
+ * ⇒ 任何"按预算截断最高优先级提示词"的实现都跑不掉，用户改 dao.md 也不会把断言改松。
+ */
+const daoLu = path.join(userData, 'dao.md');
+const daoWen = fs.existsSync(daoLu) ? fs.readFileSync(daoLu, 'utf8') : '';
+const daoWei = daoWen.trim().slice(-40);
+const youDao = daoWei.length > 0 && msgs.some((m) => m.role === 'system' && String(m.content || '').includes(daoWei));
+check('[2] 「道」整份在场（system 指令不被预算截断）', daoWen.length > 0 && xiTongChars >= daoWen.length && youDao,
+  { xiTongChars, daoZiShu: daoWen.length, youDao, wei: daoWei.slice(0, 40) });
 
 const logFinal = await app2.call('chatLog', { sessionId: SESSION });
 const newEntries = (logFinal?.entries || []).filter((e) => e.seq > maxSeqBefore);

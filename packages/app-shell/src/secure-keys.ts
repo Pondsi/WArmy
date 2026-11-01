@@ -126,6 +126,34 @@ export class AnQuanMiyaoCang {
     fs.writeFileSync(this.file, JSON.stringify(all), { encoding: 'utf8', mode: 0o600 });
   }
 
+  /** 已保存条目的 id（只给脱敏器枚举用；不暴露值，也不把值写日志） */
+  ids(): string[] {
+    return Object.keys(this.loadRaw());
+  }
+
+  /**
+   * 第 111 轮：把历史明文/base64 条目迁移成当前 OS 保护下的密文。
+   * 身份轮换/换证不会删密钥；这里保证“换证之后密钥仍是密文”，而不是留在旧格式。
+   */
+  async migrate(): Promise<{ ok: boolean; migrated: number; failed: number; unprotected: number }> {
+    let migrated = 0;
+    let failed = 0;
+    let unprotected = 0;
+    for (const id of this.ids()) {
+      if (!this.isUnprotected(id)) continue;
+      unprotected += 1;
+      try {
+        const v = await this.load(id);
+        if (!v) { failed += 1; continue; }
+        await this.save(id, v);
+        migrated += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    return { ok: failed === 0, migrated, failed, unprotected };
+  }
+
   private loadRaw(): YuanwenWenjian {
     try {
       const parsed = JSON.parse(fs.readFileSync(this.file, 'utf8')) as YuanwenWenjian;

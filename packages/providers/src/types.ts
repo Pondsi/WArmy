@@ -56,6 +56,11 @@ export interface GongJuDiaoYong {
   id: string;
   type: 'function';
   function: { name: string; arguments: string };
+  /**
+   * 供应商私有扩展（原样回传）。Gemini 3 的 OpenAI 兼容端点要求在 functionCall 上带回
+   * `extra_content.google.thought_signature`，丢了就 400 "missing a thought_signature"。
+   */
+  extra_content?: Record<string, unknown>;
 }
 
 export interface GongJuGuiGe {
@@ -182,6 +187,12 @@ export interface MoxingGongYing {
 
   /** 连通性探测 */
   ping(signal?: AbortSignal): Promise<{ ok: boolean; latencyMs: number; detail?: string }>;
+
+  /**
+   * 服务端取消（第 104 轮 项 11）：只有供应商**真的有** cancel/stop 接口时才实现。
+   * 没有接口的返回 `supported:false`，调用方仍会本地 abort（客户端断开），并如实记审计。
+   */
+  cancel?(req: { id?: string; signal?: AbortSignal }): Promise<{ supported: boolean; ok: boolean; detail?: string }>;
 }
 
 // ─────────────────────────────────────────────

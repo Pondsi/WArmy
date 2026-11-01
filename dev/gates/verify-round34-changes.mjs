@@ -51,7 +51,12 @@ jian('项2 调用链行内的对齐交给 CSS（不再写 inline flex-wrap:wrap�
 
 /* ── 项 3：计划任务由模型按门禁规则添加（宿主不按句拆） ─────────────────── */
 {
-  const miao = (workTools.match(/name: 'plan_update'[\s\S]*?description: '(.*?)',\n/) || [])[1] || '';
+  /**
+   * ⚠️ 第 44 轮改过这一条：原来抓描述写的是 `description: '(.*?)',\n` —— 要求**裸 LF**。
+   * 而工作树里 `work-tools.ts` 是 CRLF（别的会话改写过行尾），于是描述明明还在，正则却抓不到 ⇒
+   * 门禁红在"行尾风格"上，不是红在产品行为上。跨行锚一律改 `\\r?\\n`，别再拿行尾当判据。
+   */
+  const miao = (workTools.match(/name: 'plan_update'[\s\S]*?description: '(.*?)',\r?\n/) || [])[1] || '';
   jian('项3 plan_update 说明里写死了门禁（步数上下限/去重/单 doing/verified 只走 plan_verify）',
     /3 个及以上|至少 2 步/.test(miao) && /最多 10 步/.test(miao) && /同一时刻只能有 1 步 doing/.test(miao) && /逐句照抄用户原话/.test(miao), miao.slice(0, 120));
   jian('项3 宿主不再按句/按行替用户造计划行（host-seed 只被读来退役历史数据，没有任何地方写它）',
@@ -104,7 +109,11 @@ jian('项7 监听有边界（忽略 node_modules/.git、项目目录只盯一层
 jian('项7 窗口销毁会回收 watcher', /wc\.once\('destroyed'/.test(main));
 jian('项7 移动/删除也会广播变化', /broadcastToWindows\('warmy:wenJianBianGeng', \{ sessionId, path: zhenAbs/.test(main));
 jian('项7 preload 暴露 onWenJianBianGeng（并给退订）', /onWenJianBianGeng: \(cb\) =>/.test(preload) && /removeListener\('warmy:wenJianBianGeng'/.test(preload));
-jian('项7 渲染层收到变化会防抖重画、按会话过滤', /window\.warmy\.onWenJianBianGeng\?\.\(/.test(appJs) && /500\)/.test(appJs) && /!g\.sid \|\| g\.sid === String\(\(state\.selectedChat/.test(appJs));
+/**
+ * 第 65 轮 项 24：文件事件**必须有明确 sid**，不再退到"当前选中会话"
+ *（这正是项目卡冒出我的智能体文件的根因）⇒ 按会话过滤的判据改成显式 sid 比较。
+ */
+jian('项7 渲染层收到变化会防抖重画、按会话过滤', /window\.warmy\.onWenJianBianGeng\?\.\(/.test(appJs) && /500\)/.test(appJs) && /g\.sid !== sid/.test(appJs) && !/\|\| g\.sid === String\(\(state\.selectedChat/.test(appJs));
 jian('项7 产物按真实存在性剪掉（删掉的不再挂着）', /g\.missing = true/.test(appJs) && /filter\(\(g\) => !g\.missing/.test(appJs));
 jian('项7 段落折叠状态在自动重画后仍然保持', /window\.__pfSectionShou/.test(appJs));
 
@@ -186,9 +195,19 @@ jian('项12 同参数已成功写过的重复 = 幂等缓存，不记循环异�
 jian('项12 跨轮 ≥3 次的重复也先判幂等：只读/幂等只记中性事件，不再触发 tool-repeat-3x',
   /if \(zong >= 3 && !benMing\) \{[\s\S]{0,200}chat\.tool-repeat-3x/.test(main)
   && /else if \(zong >= 3\) \{[\s\S]{0,160}chat\.tool-repeat-cached/.test(main));
+/**
+ * 这条原来把三个守卫的**调用式原文**钉死（`fuGaiDiuGao(ri, a, base) || zhuiJiaCuoWei(ri, a, base) || changWenFuZhiLan(ri, a, base)`）。
+ * 第 44 轮给 `changWenFuZhiLan` 多传一个 `sid`（要读用户原话判"是不是用户自己要副本"），措辞一变就红 ⇒
+ * 又是"钉措辞"那类仪器缺陷（见 HANDOFF-R44 §7）。改判**事实**：防护函数在、挂在 write_file 那条链上、拒绝时用那条文案。
+ */
 jian('项12 长文"换个名字另存一份去自己数字数"被拒（所有轮都拦）',
-  /function changWenFuZhiLan/.test(main) && /fuGaiDiuGao\(ri, a, base\) \|\| zhuiJiaCuoWei\(ri, a, base\) \|\| changWenFuZhiLan\(ri, a, base\)/.test(main)
-  && /longTextCopyBlocked/.test(main));
+  /function changWenFuZhiLan/.test(main) && /ming === 'write_file'/.test(main)
+  && /changWenFuZhiLan\(ri, a, base/.test(main) && /longTextCopyBlocked/.test(main));
+/** 第 44 轮真机：模型不改用 write_file 另存，而是用 `copy_file` 把整篇拷一份 ⇒ 只挂一条工具路等于没挂 */
+jian('项12（第 44 轮补）copy_file 换一条工具路另存长文，也过同一个副本防护',
+  /function changWenFuZhiLanCongFuZhi/.test(main)
+  && (main.match(/changWenFuZhiLanCongFuZhi\(/g) || []).length >= 2
+  && /ming === 'copy_file'/.test(main));
 /** 文件系统事实版：不再依赖内存台账（真机 r34-c1 台账没对上 ⇒ 同一个 PPT 被重造、还 copy_file 出"验证副本"） */
 jian('项12 本任务刚产出的文件不再被整篇重造（按 mtime 判，不靠台账）',
   /function benRenWuZiJiChanChuLan/.test(main) && /x\.mtime < kai/.test(main) && /regenOwnBlocked/.test(main));

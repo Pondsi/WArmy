@@ -28,7 +28,7 @@ function check(l, c, d) {
 
 const CHAIN = ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'];
 
-console.log('[1] 决策顺序');
+console.log('[1] 决策顺序：显式 > 默认 > 调用链严格顺序 > 角色表 > 兜底');
 {
   const a = M.jueCeMoXing({ explicit: 'explicit-model', defaultModel: 'x', chain: CHAIN, urgency: 'P2' });
   check('显式指定优先于一切', a.model === 'explicit-model' && a.why === 'explicit', a);
@@ -36,23 +36,59 @@ console.log('[1] 决策顺序');
   const b = M.jueCeMoXing({ defaultModel: 'my-model', chain: CHAIN, urgency: 'P2' });
   check('牛马默认模型优先于调用链', b.model === 'my-model' && b.why === 'default', b);
 
-  const c = M.jueCeMoXing({ defaultModel: '__smart__', chain: CHAIN, urgency: 'P2' });
-  check('「智能」+P2 ⇒ 调用链第 2 个', c.model === 'deepseek-reasoner' && c.why === 'chain-p2' && c.chainIndex === 1, c);
+  const c = M.jueCeMoXing({ smartMode: false, defaultModel: '', chain: CHAIN, urgency: 'P2' });
+  check('非智能 ⇒ 调用链第 1 个（严格顺序）', c.model === 'deepseek-chat' && c.why === 'chain' && c.chainIndex === 0, c);
 
-  const d = M.jueCeMoXing({ defaultModel: '', chain: CHAIN, urgency: 'P0' });
-  check('「智能」+P0 ⇒ 调用链第 1 个（最强）', d.model === 'deepseek-chat' && d.why === 'chain-p0p1' && d.chainIndex === 0, d);
+  const d = M.jueCeMoXing({ smartMode: false, defaultModel: '', chain: CHAIN, urgency: 'P0' });
+  check('P0 不再改变链位次（仍取链头）', d.model === 'deepseek-chat' && d.why === 'chain' && d.chainIndex === 0, d);
 
-  const e = M.jueCeMoXing({ defaultModel: '__smart__', chain: CHAIN, urgency: 'P3' });
-  check('「智能」+P3 ⇒ 调用链最后 1 个（最省）', e.model === 'deepseek-coder' && e.why === 'chain-p3' && e.chainIndex === 2, e);
+  const e = M.jueCeMoXing({ smartMode: false, defaultModel: '', chain: CHAIN, urgency: 'P3' });
+  check('P3 不再跳本地/链尾（仍取链头）', e.model === 'deepseek-chat' && e.why === 'chain' && e.chainIndex === 0, e);
+
+  const f = M.jueCeMoXing({ defaultModel: '__smart__', chain: ['cloud-a', 'ollama-b', 'cloud-c'], benDiMoXing: ['ollama-b'], urgency: 'P3' });
+  check('本地模型清单不再影响选型（链头 cloud-a）', f.model === 'cloud-a' && f.chainIndex === 0, f);
+  const g = M.jueCeMoXing({ defaultModel: '__smart__', chain: ['ollama-a', 'cloud-b'], benDiMoXing: ['ollama-a'], urgency: 'P1' });
+  check('P1 急 ⇒ 智能模式优先云端/快模型（cloud-b）', g.model === 'cloud-b' && g.chainIndex === 1, g);
+
+  const h = M.jueCeMoXing({ defaultModel: 'not-in-list', keYongMoXing: ['a', 'b'], chain: ['a', 'b'] });
+  check('默认不存在 ⇒ 严格从链头开始', h.model === 'a' && h.why === 'chain' && h.chainIndex === 0, h);
+
+  const i = M.jueCeMoXing({ defaultModel: 'a', keYongMoXing: ['a', 'b'], chain: ['a', 'b'], tiaoGuo: ['a'] });
+  check('默认已失败 ⇒ 顺链到下一个（b）', i.model === 'b' && i.why === 'chain' && i.chainIndex === 1, i);
+
+  const j = M.jueCeMoXing({ defaultModel: '__smart__', chain: ['a', 'b', 'c'], tiaoGuo: ['a', 'b'] });
+  check('链上前两个已失败 ⇒ 取 c', j.model === 'c' && j.chainIndex === 2, j);
 }
 
-console.log('\n[2] 【核心】被禁用的模型绝不会被选中');
+console.log('\n[2] 智能模式：按难易度档位挑链位');
+{
+  const chain = ['cloud-a', 'ollama-b', 'cloud-c'];
+  const benDi = ['ollama-b'];
+  const hi = M.jueCeMoXing({ smartMode: true, modelTier: 'high', chain, benDiMoXing: benDi });
+  check('high ⇒ 优先云端强模型（cloud-a）', hi.model === 'cloud-a' && hi.why === 'smart' && hi.chainIndex === 0, hi);
+  const mid = M.jueCeMoXing({ smartMode: true, modelTier: 'mid', chain, benDiMoXing: benDi });
+  check('mid ⇒ 链头（cloud-a）', mid.model === 'cloud-a' && mid.why === 'smart' && mid.chainIndex === 0, mid);
+  const low = M.jueCeMoXing({ smartMode: true, modelTier: 'low', chain, benDiMoXing: benDi });
+  check('low ⇒ 本地/免费（ollama-b）', low.model === 'ollama-b' && low.why === 'smart' && low.chainIndex === 1, low);
+  const hi2 = M.jueCeMoXing({ smartMode: true, modelTier: 'high', chain: ['ollama-a', 'cloud-b'], benDiMoXing: ['ollama-a'] });
+  check('high 且链头本地 ⇒ 跳过到云端', hi2.model === 'cloud-b' && hi2.chainIndex === 1, hi2);
+  const low2 = M.jueCeMoXing({ smartMode: true, modelTier: 'low', chain: ['cloud-a', 'ollama-b'], benDiMoXing: ['ollama-b'] });
+  check('low 且链头云端 ⇒ 选本地', low2.model === 'ollama-b' && low2.chainIndex === 1, low2);
+  const noLocal = M.jueCeMoXing({ smartMode: true, modelTier: 'low', chain: ['cloud-a', 'cloud-b'], benDiMoXing: [] });
+  check('low 没有本地 ⇒ 回链头（不选链尾）', noLocal.model === 'cloud-a' && noLocal.chainIndex === 0, noLocal);
+  const withDefault = M.jueCeMoXing({ smartMode: true, modelTier: 'high', defaultModel: 'my-model', chain: ['a', 'b'] });
+  check('智能模式不把默认模型当硬指定', withDefault.model === 'a' && withDefault.why === 'smart', withDefault);
+  const skipped = M.jueCeMoXing({ smartMode: true, modelTier: 'high', chain: ['a', 'b'], tiaoGuo: ['a'] });
+  check('智能模式也跳过本轮已失败', skipped.model === 'b' && skipped.chainIndex === 1, skipped);
+}
+
+console.log('\n[3] 【核心】被禁用的模型绝不会被选中');
 {
   const dis = ['deepseek-reasoner'];
   const a = M.jueCeMoXing({ defaultModel: 'deepseek-reasoner', chain: CHAIN, chainDisabled: dis, urgency: 'P2' });
   check('默认模型被禁用 ⇒ 不能返回它', a.model !== 'deepseek-reasoner', a);
   const b = M.jueCeMoXing({ defaultModel: '__smart__', chain: CHAIN, chainDisabled: dis, urgency: 'P2' });
-  check('智能跳过禁用项（P2 不再选第 2 个）', b.model !== 'deepseek-reasoner' && b.model === 'deepseek-coder', b);
+  check('智能跳过禁用项（P2 取链头可用项）', b.model !== 'deepseek-reasoner' && b.model === 'deepseek-chat', b);
   // 禁用只作用于「调用链/默认模型」；链全禁用 ⇒ 走角色表/兜底。
   // 若兜底本身也在禁用名单里，如实标注 why='fallback-disabled'（否则这一轮没法对话）。
   const c = M.jueCeMoXing({ defaultModel: '__smart__', chain: CHAIN, chainDisabled: CHAIN, urgency: 'P2', roles: { duty: 'm-duty' } });
@@ -68,21 +104,21 @@ console.log('\n[3] 调用链启用过滤');
   check('空链返回空', JSON.stringify(M.qiYongLian([], [])) === '[]');
 }
 
-console.log('\n[4] 紧急度 → 链位次');
+console.log('\n[4] 紧急度/本地清单不再影响链位次（严格链顺序）');
 {
-  check('P0/P1 → 0', M.zhiNengTiaoLian(CHAIN, 'P0') === 0 && M.zhiNengTiaoLian(CHAIN, 'P1') === 0);
-  check('P2 → 1', M.zhiNengTiaoLian(CHAIN, 'P2') === 1);
-  check('P2 且链只有 1 个 → 0', M.zhiNengTiaoLian(['only'], 'P2') === 0);
-  check('P3 → 末位', M.zhiNengTiaoLian(CHAIN, 'P3') === 2);
-  check('空链 → -1', M.zhiNengTiaoLian([], 'P2') === -1);
+  for (const u of ['P0', 'P1', 'P2', 'P3']) {
+    const r = M.jueCeMoXing({ smartMode: false, defaultModel: '', chain: CHAIN, urgency: u, benDiMoXing: ['deepseek-reasoner'] });
+    check(`${u} ⇒ 仍取链头（不跳位）`, r.model === 'deepseek-chat' && r.chainIndex === 0, r);
+  }
+  check('空链不崩（走角色/兜底）', typeof M.jueCeMoXing({ chain: [], urgency: 'P2' }).model === 'string');
 }
 
-console.log('\n[5] 角色表与兜底');
+console.log('\n[5] 角色表与兜底（固定顺序，不看紧急度）');
 {
   const r = { duty: 'm-duty', executor: 'm-exec', summary: 'm-sum' };
-  check('P2 无链 ⇒ 角色 executor', M.jueCeMoXing({ urgency: 'P2', roles: r }).model === 'm-exec');
-  check('P3 无链 ⇒ 角色 summary', M.jueCeMoXing({ urgency: 'P3', roles: r }).model === 'm-sum');
-  check('P0 无链 ⇒ 角色 duty', M.jueCeMoXing({ urgency: 'P0', roles: r }).model === 'm-duty');
+  check('无链 ⇒ 固定先 duty（P2 也一样）', M.jueCeMoXing({ urgency: 'P2', roles: r }).model === 'm-duty');
+  check('无 duty ⇒ executor', M.jueCeMoXing({ roles: { executor: 'm-exec', summary: 'm-sum' } }).model === 'm-exec');
+  check('只有 summary ⇒ summary', M.jueCeMoXing({ roles: { summary: 'm-sum' } }).model === 'm-sum');
   check('什么都没有 ⇒ 兜底', M.jueCeMoXing({ fallback: 'fb-model' }).model === 'fb-model');
   check('默认兜底 deepseek-chat', M.jueCeMoXing({}).model === 'deepseek-chat');
 }

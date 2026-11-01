@@ -88,8 +88,13 @@ check('两份 .xiaoXi .bubbleWrap 的 max-width 一致', ma !== null && ma === m
 console.log('\n[3] 思考块高度');
 check('两份 .siKaoKuai pre 的 max-height 一致', quShu(a.get('.siKaoKuai pre') || '', 'max-height') === quShu(r.get('.siKaoKuai pre') || '', 'max-height'));
 
-console.log('\n[4] 引导卡');
-check('两份 .yinDaoTiao 不能有 translateY(-50%)', !/translateY\(-50%\)/.test(a.get('.yinDaoTiao') || '') && !/translateY\(-50%\)/.test(r.get('.yinDaoTiao') || ''));
+console.log('\n[4] 开始使用清单');
+check('旧 .yinDaoTiao 已从两份 CSS 删除', !a.has('.yinDaoTiao') && !r.has('.yinDaoTiao'));
+check('新 .startGuide 只在 app.css 定义（避免双份打架）', a.has('.startGuide') && !r.has('.startGuide'));
+check('.startGuide 固定右上角、按内容收高（不自动收起、不压聊天输入）', /position:\s*fixed/.test(a.get('.startGuide') || '')
+  && /top:\s*64px/.test(a.get('.startGuide') || '')
+  && /bottom:\s*auto/.test(a.get('.startGuide') || '')
+  && /max-height:/.test(a.get('.startGuide') || ''));
 
 console.log('\n==== verify-css-consistency: ' + pass + ' ok / ' + fail + ' FAIL ====');
 if (fails.length) console.log('失败项：\n - ' + fails.join('\n - '));

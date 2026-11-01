@@ -2,7 +2,7 @@
   "name": "@warmy/providers",
   "version": "0.1.0",
   "private": true,
-  "description": "多协议模型 Provider：OpenAI 兼容 / Anthropic / Ollama",
+  "description": "Multi-protocol model providers: OpenAI-compatible / Anthropic / Ollama",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

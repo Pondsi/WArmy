@@ -15,11 +15,12 @@
  *        以及真实解引用 API `recall()` / `retrieve()`。
  *   · 真模块 3：`packages/ccr-compressor/dist/index.js` 的 `CcrGateway.beforeLog()`
  *     —— 写入侧 CCR（消息类预算 = 4000×4 = 16000 字符），与产品聊天写入路径一致。
- *   · **复刻**：`youPeizhiSuanShangXiaWenYuSuan()`（主进程 electron-main.ts:2846）**没有可独立 import
- *     的入口**（它是 electron-main.ts 的内部函数，import 该文件会拉进 electron）。本脚本按源码
- *     **逐行复刻**了它的算法与常量（MIN_CONTEXT_TOKENS=2048 / CHARS_PER_TOKEN_EST=1.6 / MODEL_CTX_MAP /
- *     percent 夹 10..100 / minPercent / min(2000000, max(MIN_CONTEXT_BUDGET_CHARS, chars))）。
- *     复刻处均以 `[复刻]` 注释标出。渲染器与记忆服务是**原始模块**，未复刻。
+ *   · **第 45 轮起不再复刻预算算术**：`youPeizhiSuanShangXiaWenYuSuan` 的算术被抽成纯函数
+ *     `yuSuan-jiage.ts:peizhiYuSuan()`（主进程与压力档**调同一个**），本脚本直接 import 编译产物。
+ *     以前这里"逐行复刻"过一遍（带万能系数 1.6），产品改了它不知道 ⇒ 压力档跑的预算比生产宽，
+ *     测得再绿也证不了产品。现在窗口/输出上限仍按官方表传进来（那是事实，不是算法）。
+ *   · 真模块 4：`yuSuan-jiage.js` 的 `peizhiYuSuan / jiageQingQiu / fenPeiYuSuan` —— 整条请求的分配算法；
+ *   · 真模块 5：`token-jiliang.js` —— token 折算与校准口径。
  *
  * 真调模型（无任何模拟）：
  *   · 主体：MiMo 云端 `mimo-v2.6-flash`（OpenAI 兼容 /v1/chat/completions，key 从 `MIMO_KEY_FILE` 环境变量读）
@@ -47,6 +48,19 @@ function can(name, dflt) {
   return v;
 }
 const ROUNDS = Number(can('rounds', 1000));
+/**
+ * 每轮"用户送进来的内容"长度（第 45 轮 · 用户口径：**2M 指的是用户这一轮送进来的内容**，不是发给模型的量）。
+ * 默认 5200 是历史压力档；2M 档用 `--turnChars 2000000`。
+ */
+const TURN_CHARS = Math.max(200, Number(can('turnChars', 5200)) || 5200);
+/**
+ * **固定开销按生产实测值喂进来**（第 45 轮）：压力档以前只把 `SYS_PROMPT`（95 token）当固定开销，
+ * 于是视图永远宽裕，压不出生产真实形态 —— 本机审计实测 `chat.budget.allocated` 的固定开销是 18065 token
+ * （用户的「道」自己写长了）。要测的是“只剩 512 token 视图时，记忆还丢不丢、能不能召回”，
+ * 所以这一档必须按生产的量级压。可用 --guDingTok 调。
+ */
+const GU_DING_TOK = Math.max(0, Number(can('guDingTok', 18065)) || 0);
+const GU_DING_WEN = GU_DING_TOK > 0 ? '固'.repeat(Math.max(1, Math.round(GU_DING_TOK / 0.78))) : '';
 const RUNS = Number(can('runs', 2));
 const STATE_DIR = path.resolve(ROOT, String(can('stateDir', '.memory-stress-state')));
 const DO_PROBE = can('no-probe', false) !== true;
@@ -64,6 +78,43 @@ const MIMO_BASE = 'https://token-plan-cn.xiaomimimo.com/v1/chat/completions';
 const OLLAMA_BASE = 'http://127.0.0.1:11434/api/chat';
 
 // ───────────────────── 真模块（import 编译产物） ─────────────────────
+/**
+ * **原生 sqlite 的解析**（第 45 轮）：开发态仓库里 `packages/memory-os/node_modules/better-sqlite3`
+ * 是个空目录（真机事故过：junction 被清理工具折腾没 ⇒ 记忆子进程 `MODULE_NOT_FOUND` 起不来）。
+ * 产品侧在启动时会自愈链接**自己那份**；压力档不许去改仓库，所以只在**本进程**里把
+ * `better-sqlite3` 指到候选副本（vendor 自留副本优先，其次 pnpm 虚拟存储），
+ * 全都找不到就如实打印原因并退出 —— 不许把"环境缺原生模块"报成"记忆功能坏了"。
+ */
+import Mod from 'node:module';
+const SQLITE_HOUXUAN = [
+  path.join(ROOT, 'packages/memory-os/vendor/better-sqlite3'),
+  path.join(ROOT, 'node_modules/.pnpm/better-sqlite3@13.0.3/node_modules/better-sqlite3'),
+  path.join(ROOT, 'node_modules/better-sqlite3'),
+];
+const yuanShiJieXi = Mod._resolveFilename;
+Mod._resolveFilename = function (qingQiu, ...rest) {
+  if (qingQiu === 'better-sqlite3') {
+    for (const h of SQLITE_HOUXUAN) {
+      const er = path.join(h, 'lib', 'index.js');
+      if (fs.existsSync(er)) return yuanShiJieXi.call(Mod, er, ...rest);
+    }
+  }
+  return yuanShiJieXi.call(this, qingQiu, ...rest);
+};
+function yuanShengOk() {
+  try {
+    const req = createRequire(path.join(ROOT, 'packages/memory-os/package.json'));
+    const D = req('better-sqlite3');
+    const db = new D(':memory:');
+    db.close();
+    return true;
+  } catch { return false; }
+}
+if (!yuanShengOk()) {
+  console.log('FATAL: 本机取不到可用的 better-sqlite3 原生绑定（候选：' + SQLITE_HOUXUAN.join(' ; ') + '）');
+  console.log('这是**环境缺件**，不是产品缺陷：压力档需要真记忆服务（SQLite FTS 投影）。装好原生模块或换一台构建过的机器再跑。');
+  process.exit(2);
+}
 const { xuanranYoujieShitu, DEFAULT_KEEP_HEAD, DEFAULT_KEEP_TAIL, DEFAULT_CONTEXT_BUDGET_CHARS } =
   await import(pathToFileURL(path.join(ROOT, 'packages/app-shell/dist/context-renderer.js')).href);
 const { JiyiCangFuwu } = await import(pathToFileURL(path.join(ROOT, 'packages/memory-os/dist/index.js')).href);
@@ -73,55 +124,69 @@ const { CcrGateway, compress: ccrCompress } = await import(
 /** 写入侧 CCR：与产品一致（默认预算 4000；message 类 ×4 = 16000） */
 const ccrGateway = new CcrGateway(4000);
 
-// ═══════════════════ [复刻] 主进程上下文预算函数 ═══════════════════
-// 源码：packages/app-shell/src/electron-main.ts:2809-2867 与 2909-2929
-// 复刻原因：该函数与 electron 运行时耦合、没有可独立 import 的出口（见文件头说明）。
-const MIN_CONTEXT_TOKENS = 2048;
-const CHARS_PER_TOKEN_EST = 1.6;
-const MIN_CONTEXT_BUDGET_CHARS = 200;
-/** 与 electron-main.ts:2814 MODEL_CTX_MAP 一致 */
-const MODEL_CTX_MAP = {
-  'deepseek-chat': 65536,
-  'deepseek-reasoner': 65536,
-  'mimo-v2.5-pro': 1048576,
-  'mimo-v2.5': 1048576,
-  'mimo-v2.6-flash': 1048576,
-  'mimo-v2.6-pro': 1048576,
-  'qwen3.7-max': 131072,
-  'qwen3.8-27b': 32768,
-  'gpt-4o': 128000,
-  'gpt-4o-mini': 128000,
-  'claude-3-5-sonnet': 200000,
-};
-/** [复刻] electron-main.ts:2846 youPeizhiSuanShangXiaWenYuSuan（模型真实窗口这里用已知表表示） */
-function youPeizhiSuanShangXiaWenYuSuan(modelId, settings = {}) {
-  let percent = 60;
-  let maxTokens = 32768;
-  let youZhenShi = false;
-  const mw = MODEL_CTX_MAP[String(modelId || '').split('/').pop()] || MODEL_CTX_MAP[modelId] || null;
-  if (mw && mw >= 4096) {
-    maxTokens = mw;
-    youZhenShi = true;
-  }
-  const p = Number(settings.contextBudgetPercent);
-  if (Number.isFinite(p)) percent = Math.min(100, Math.max(10, Math.round(p)));
-  const m = Number(settings.modelContextTokens);
-  if (!youZhenShi && Number.isFinite(m) && m >= 4096) maxTokens = m;
-  const minPercent = Math.min(100, Math.ceil((MIN_CONTEXT_TOKENS / maxTokens) * 100));
-  const effPercent = Math.max(percent, minPercent);
-  const tokens = Math.max(MIN_CONTEXT_TOKENS, Math.round((effPercent / 100) * maxTokens));
-  const chars = Math.max(200, Math.round(tokens * CHARS_PER_TOKEN_EST));
-  return { chars, percent: effPercent, tokens, maxTokens, minPercent };
+// ═══════════ 主进程同款预算算术（真模块 import，不再复刻）═══════════
+const YS = await import(pathToFileURL(path.join(ROOT, 'packages/app-shell/dist/yuSuan-jiage.js')).href);
+const TJ = await import(pathToFileURL(path.join(ROOT, 'packages/app-shell/dist/token-jiliang.js')).href);
+const { peizhiYuSuan, jiageQingQiu, fenPeiYuSuan, MIN_CONTEXT_TOKENS, MIN_CONTEXT_BUDGET_CHARS, SHI_TU_ZUI_XIAO_TOKENS, ZHI_XING_YU_LIANG } = YS;
+const { guJiTokenXiaoZhun } = TJ;
+/**
+ * **不许再抄一份窗口表**（第 44 轮自查抓出来的"两条腿各说各话"之一）：
+ * 上一版这里写死 `deepseek 65536 / mimo 1048576`，而主进程已按官网改成 1,000,000 ⇒
+ * 压力档算出来的预算**不是生产预算**，测得再绿也证不了产品。现在从 `dist/mo-xing-gui-ge.js` import 那一份事实源。
+ */
+const GUIGE = (await import(pathToFileURL(path.join(ROOT, 'packages/app-shell/dist/mo-xing-gui-ge.js')).href)).MODEL_GUIGE;
+const MODEL_CTX_MAP = Object.fromEntries(Object.entries(GUIGE).map(([k, v]) => [k, Number(v.chuangKou)]));
+/** 官方写过的输出上限 ⇒ 复刻主进程"给输出留位"那一步（以前漏了 ⇒ 预算比生产宽，测的是假数） */
+const SHU_CHU_BIAO = Object.fromEntries(Object.entries(GUIGE).filter(([, v]) => Number(v.shuChu) > 0).map(([k, v]) => [k, Number(v.shuChu)]));
+/** 与主进程 `contextBudgetChars` 同一串：整条预算（字符） */
+function onTiaoYuSuan(modelId, settings = {}, yangBen = '') {
+  const key = String(modelId || '').split('/').pop();
+  const pei = peizhiYuSuan({
+    percent: Number(settings.contextBudgetPercent),
+    windowTokens: MODEL_CTX_MAP[key] || MODEL_CTX_MAP[modelId] || 0,
+    fallbackTokens: Number(settings.modelContextTokens) || 0,
+    shuChuYueDing: SHU_CHU_BIAO[key] || SHU_CHU_BIAO[modelId] || 0,
+    yangBen,
+  });
+  return { ...pei, chars: Math.min(2000000, Math.max(MIN_CONTEXT_BUDGET_CHARS, Math.floor(pei.chars))) };
 }
-/** [复刻] electron-main.ts:2909 contextBudgetChars（含 200 万上限与 200 下限） */
-function contextBudgetChars(modelId, settings = {}) {
-  const suan = youPeizhiSuanShangXiaWenYuSuan(modelId, settings);
-  return Math.min(2000000, Math.max(MIN_CONTEXT_BUDGET_CHARS, Math.floor(suan.chars)));
+/**
+ * **视图额度 = 整条预算 − 固定开销 − 工具 − 本轮 − 注入层 − 图片**（生产口径，同一个 `fenPeiYuSuan`）。
+ * 压力档以前把"整条预算"直接当视图额度喂给渲染器 ⇒ 测出来的注入量比生产大，
+ * 而产品真正会做的事是"先扣固定开销"。这一版两边一致，超限/退化行为才可比。
+ */
+function shiTuYuSuan(modelId, settings, guDingWen, benLunWen, yangBen) {
+  const pei = onTiaoYuSuan(modelId, settings, yangBen);
+  const cheng = jiageQingQiu({
+    shangXiaWen: [{ role: 'system', content: guDingWen }],
+    benLunZi: benLunWen || '',
+    zhun: null,
+  });
+  const fp = fenPeiYuSuan({
+    yuSuanTokens: pei.tokens,
+    guDingTokens: cheng.guDing,
+    gongJuTokens: 0,
+    benLunTokens: cheng.benLun,
+    chuangKouTokens: pei.anQuanChuangKou,
+  });
+  return {
+    onTiaoChars: pei.chars,
+    guDingTok: cheng.guDing,
+    shiTuTok: fp.shiTuTokens,
+    chars: Math.min(2000000, Math.max(MIN_CONTEXT_BUDGET_CHARS,
+      Math.floor(TJ.tokenDaoZiFu(Math.max(MIN_CONTEXT_TOKENS, fp.shiTuTokens), yangBen || guDingWen || '样本', null)))),
+    chaoYu: fp.chaoYu === true,
+    jiangJi: fp.jiangJi.join('+'),
+  };
 }
-/** [复刻] electron-main.ts:2869-2876 超限收缩阶梯 1.0 → 0.6 → 0.35 → 0.2 */
+/** 主进程超限收缩阶梯（同一个数组，从 dist 读不到就按源码常量） */
 const SHANGXIAWEN_CHONGSHI_BUZHOU = [1.0, 0.6, 0.35, 0.2];
-const isContextLengthError = (err) =>
-  /context|token|too long|maximum length|context_length|maximum context/i.test(String(err?.message || err || ''));
+/**
+ * 超限判据**用主进程同一份**（cuowu-fenlei.ts 的错误分类表）。以前这里抄了一条裸正则 ——
+ * 主进程第 48 轮改成"先认鉴权/风控/IPC、剥掉 URL 再判超限"之后，两边就各说各话了。
+ */
+const { shiShangXiaWenChaoXian } = await import(pathToFileURL(path.join(ROOT, 'packages/app-shell/dist/cuowu-fenlei.js')).href);
+const isContextLengthError = (err) => shiShangXiaWenChaoXian(err);
 const budgetCharsForStep = (base, buZhou) =>
   Math.max(MIN_CONTEXT_BUDGET_CHARS, Math.round(base * buZhou));
 
@@ -225,7 +290,9 @@ function zaoLunNeiRong(runId, round, sizeChars, dian) {
     for (const d of dian) if (d.weizhi === 'head') out += d.ti + '\n';
   }
   let guard = 0;
-  while (out.length < sizeChars - 400 && guard++ < 400) {
+  /** 迭代保护必须跟着目标长度走（写死 400 ⇒ 2M 档实际只生成约 6 万字，压力档名不副实） */
+  const BAO_HU = Math.max(400, Math.ceil(sizeChars / 100) + 100);
+  while (out.length < sizeChars - 400 && guard++ < BAO_HU) {
     out += WEN_BEN_CHI[Math.floor(rnd() * WEN_BEN_CHI.length)] + '\n';
     out += `（记录片段 ${round}-${guard}，观测值 ${Math.floor(rnd() * 100000)}，耗时 ${Math.floor(rnd() * 900) + 100}ms）\n`;
   }
@@ -364,16 +431,26 @@ class Paotai {
     this.svc = new JiyiCangFuwu({ CangLu: this.dir });
     this.sessionId = `stress-run${runId}`;
     /** 日志镜像（与 JSONL 同源）：从真服务 tail 重建 */
+    /** 镜像重建要取**全量**：以前固定 tail(5000)，跑 6000 轮的档一续跑就把前 1000 轮当没有（压力档自己丢了事实来源） */
+    /**
+     * **镜像只留「有界预览」**（第 51 轮真缺陷）：1000 轮 × 2M 字符若整段留在内存，
+     * 光这一份镜像就 4GB ⇒ V8 堆必然 OOM（实测第 991 轮崩）。
+     * 这里只留每轮前 8000 字 + 真实长度 `len`；`totalChars` 用 `len` 求和，
+     * 视图与预算仍按真实长度算，"原文不丢"由 JSONL + retrieve 校验（不依赖这份镜像）。
+     */
     this.log = this.svc
-      .tail(5000)
+      .tail(Math.max(5000, ROUNDS * RUNS + 500))
       .slice()
       .sort((a, b) => a.seq - b.seq)
-      .map((r) => ({ seq: r.seq, role: r.role || (String(r.id).startsWith('a-') ? 'assistant' : 'user'), content: String(r.ti || ''), recordId: r.id, ts: r.ts }));
+      .map((r) => {
+        const quan = String(r.ti || '');
+        return { seq: r.seq, role: r.role || (String(r.id).startsWith('a-') ? 'assistant' : 'user'), content: Buffer.from(quan.slice(0, 8000), 'utf8').toString('utf8'), len: quan.length, recordId: r.id, ts: r.ts };
+      });
     const st = duZhuangTai(this.stateFile);
     this.next = st?.nextRound || 1;
     this.ok = st?.okRounds || 0;
     this.failed = st?.failedRounds || 0;
-    this.totalChars = this.log.reduce((s, e) => s + e.content.length, 0);
+    this.totalChars = this.log.reduce((s, e) => s + Number(e.len ?? String(e.content || '').length), 0);
     this.dianYing = st ? this.log.filter((e) => e.role === 'user').length : 0;
     /** 累计指标 */
     this.m = st?.m || {
@@ -402,9 +479,25 @@ class Paotai {
     for (const d of JIYI_DIAN[runId] || []) this.duanFen.set(d.round, [...(this.duanFen.get(d.round) || []), d]);
   }
 
-  /** 渲染有界视图（真渲染器 + 真/复刻预算） */
+  /** 渲染有界视图（真渲染器 + **生产同款分配器**：整条预算先扣固定开销，视图只拿余额） */
+  /** 最近几条的内容当"形状样本"（token↔字符折算要跟生产一样用真实文本，不许用万能系数） */
+  zuiJinYangBen() {
+    return this.log.slice(-4).map((e) => String(e.content || '')).join('\n').slice(0, 60000);
+  }
+  /** 记下这一轮真实的分配结果（整条预算 / 固定开销 / 视图额度 / 是否超预算），进指标账本 */
+  jiLuYuSuan(st) {
+    this.zuiHouYuSuan = st;
+    if (!st) return;
+    this.m.guDingTokMax = Math.max(this.m.guDingTokMax || 0, st.guDingTok);
+    this.m.onTiaoCharsMax = Math.max(this.m.onTiaoCharsMax || 0, st.onTiaoChars);
+    this.m.shiTuCharsMax = Math.max(this.m.shiTuCharsMax || 0, st.chars);
+    if (st.chaoYu) this.m.chaoYuRounds = (this.m.chaoYuRounds || 0) + 1;
+    if (st.jiangJi) this.m.jiangJiSeen = st.jiangJi;
+  }
   xuanRan(modelId, recallHint) {
-    const budget = contextBudgetChars(modelId, SETTINGS);
+    const st = shiTuYuSuan(modelId, SETTINGS, SYS_PROMPT + (GU_DING_WEN ? '【固定开销占位 · 按生产实测 ' + GU_DING_TOK + ' token 量级压入】' + GU_DING_WEN : ''), '', this.zuiJinYangBen());
+    const budget = st.chars;
+    this.jiLuYuSuan(st);
     const t0 = Date.now();
     const view = xuanranYoujieShitu(this.log, {
       budgetChars: budget,
@@ -421,15 +514,27 @@ class Paotai {
     const provider = this.runId === 2 && round > ROUNDS - OLLAMA_TAIL_ROUNDS ? 'ollama' : 'mimo';
 
     // ① 生成用户消息（埋点 + 可能的大块工具输出）
-    let renWen = zaoLunNeiRong(this.runId, round, 5200, dian) + yingTiGongShuChu(this.runId, round);
-    // ② 写入侧 CCR（真模块）
+    let renWen = zaoLunNeiRong(this.runId, round, TURN_CHARS, dian) + yingTiGongShuChu(this.runId, round);
+    // ② 写入侧 CCR（真模块）—— 产品口径（第 44 轮后半 · 用户 #7）：**原文进 JSONL，折叠预览只进镜像/投影**
     const ccr = ccrGateway.beforeLog({ kind: 'message', content: renWen });
-    // ③ 真落盘（真记忆服务，只追加 JSONL + 三路投影）
+    // ③ 真落盘（真记忆服务，只追加 JSONL + 三路投影）—— `ti` 传**整条原文**，不再传折叠后的半截
     const rec = this.svc.append(
-      { id: `m-${this.runId}-${round}`, sessionId: this.sessionId, kind: 'message', role: 'user', ti: ccr.content, groupId: this.sessionId, entityType: 'chat' },
+      { id: `m-${this.runId}-${round}`, sessionId: this.sessionId, kind: 'message', role: 'user', ti: renWen, groupId: this.sessionId, entityType: 'chat' },
       'duty'
     );
-    this.log.push({ seq: rec.seq, role: 'user', content: ccr.content, recordId: rec.id, ts: rec.ts });
+    this.log.push({ seq: rec.seq, role: 'user', content: Buffer.from(String(ccr.content).slice(0, 8000), 'utf8').toString('utf8'), len: String(ccr.content).length, recordId: rec.id, ts: rec.ts });
+    /**
+     * **每轮都验一次"原文真的一个字没丢"**（以前只在看报告时抽查，中段丢失要等几小时后才发现）。
+     * 读的是 JSONL 那一条事实来源本身，不是镜像：`retrieve` 必须能拿回 `renWen.length` 字符。
+     */
+    if (round % Math.max(1, Math.floor(ROUNDS / 20)) === 0 || round === 1) {
+      const hui = this.svc.retrieve({ seq: rec.seq });
+      const quHui = String((hui && (hui.raw || hui.ti)) || '');
+      if (quHui.length !== renWen.length) {
+        this.m.losslessFail = (this.m.losslessFail || 0) + 1;
+        console.log(`  !! 第 ${round} 轮原文不丢校验失败：落盘 ${renWen.length} 字符，取回 ${quHui.length} 字符（via=${(hui && hui.via) || 'null'}）`);
+      } else this.m.losslessOk = (this.m.losslessOk || 0) + 1;
+    }
 
     // ④ 渲染有界视图（真渲染器）
     const r = this.xuanRan(modelId, `第 ${round} 轮工作记录`);
@@ -487,7 +592,7 @@ class Paotai {
       { id: `a-${this.runId}-${round}`, sessionId: this.sessionId, kind: 'message', role: 'assistant', ti: reply, groupId: this.sessionId, entityType: 'chat' },
       'duty'
     );
-    this.log.push({ seq: arc.seq, role: 'assistant', content: reply, recordId: arc.id, ts: arc.ts });
+    this.log.push({ seq: arc.seq, role: 'assistant', content: Buffer.from(String(reply).slice(0, 8000), 'utf8').toString('utf8'), len: String(reply).length, recordId: arc.id, ts: arc.ts });
 
     // ⑦ 指标
     const roundChars = ccr.content.length + reply.length;
@@ -582,7 +687,7 @@ async function chaoRun(runId, stateDir) {
 async function chouCha(p, cfg) {
   const { modelId, provider, tag } = cfg;
   // 注意：抽查就是"产品在最后一轮会看到的那份视图"再追加一个提问，日志不再改动
-  const budget = contextBudgetChars(modelId, SETTINGS);
+  const budget = shiTuYuSuan(modelId, SETTINGS, SYS_PROMPT, '', p.log.slice(-6).map((x) => String(x.content || '')).join('\n')).chars;
   const t0 = Date.now();
   const view = xuanranYoujieShitu(p.log, {
     budgetChars: budget,
@@ -774,6 +879,14 @@ function tongJi(a) {
     renderMsMax: m.renderMsMax,
     prefillTokensSum: m.prefillTokensSum,
     cachedTokensSum: m.cachedTokensSum,
+    /** 第 45 轮新增：与生产同一分配器的读数 + 每轮原文不丢的回读结果 */
+    losslessOk: m.losslessOk || 0,
+    losslessFail: m.losslessFail || 0,
+    guDingTokMax: m.guDingTokMax || 0,
+    onTiaoCharsMax: m.onTiaoCharsMax || 0,
+    shiTuCharsMax: m.shiTuCharsMax || 0,
+    chaoYuRounds: m.chaoYuRounds || 0,
+    jiangJiSeen: m.jiangJiSeen || '无',
   };
 }
 
@@ -843,7 +956,23 @@ async function main() {
     process.exit(0);
   }
   console.log(`=== WArmy 记忆压测 === 轮数/次=${ROUNDS} 次数=${RUNS} 状态目录=${STATE_DIR}`);
-  console.log(`预算(复刻 youPeizhiSuanShangXiaWenYuSuan)：${MIMO_MODEL} → ${contextBudgetChars(MIMO_MODEL, SETTINGS)} 字符；${OLLAMA_MODEL} → ${contextBudgetChars(OLLAMA_MODEL, SETTINGS)} 字符`);
+  console.log(`预算(与主进程同一个 peizhiYuSuan)：${MIMO_MODEL} → ${onTiaoYuSuan(MIMO_MODEL, SETTINGS, '样本样本样本').chars} 字符；${OLLAMA_MODEL} → ${onTiaoYuSuan(OLLAMA_MODEL, SETTINGS, '样本样本样本').chars} 字符`);
+  {
+    /**
+     * **大档先算账**（第 45 轮 · 用户点名"记忆 6000 轮 × 每轮 2M"这一档）：
+     * 2M 字符 × 6000 轮 = **约 12 GB** 只追加日志（还不算 SQLite 投影），一块普通盘上跑完要几小时。
+     * 所以不闷头跑：先把体积与预计代价打出来，**必须显式 `--yesBig` 才继续**。
+     * 这不是把门禁调松 —— 缩放档（`--turnChars` 小一点、轮数少一点）测的是同一套算术与同一个真记忆服务，
+     * 而 12 GB 那一档是"运维级实验"，不该在无人知情的情况下发生。
+     */
+    const ji = (ROUNDS * RUNS * TURN_CHARS) / (1024 * 1024 * 1024);
+    const yiDi = can('yesBig', false) === true;
+    console.log(`这一档会写日志约 ${ji.toFixed(2)} GiB（${ROUNDS} 轮 × ${RUNS} 遍 × 每轮 ${TURN_CHARS} 字符），另加 SQLite 投影与索引`);
+    if (ji > 2 && !yiDi) {
+      console.log(`超过 2 GiB ⇒ 拒绝开跑。确认要跑就加 --yesBig（或先用 --rounds/--turnChars 跑缩放档测代价）`);
+      process.exit(2);
+    }
+  }
   const t0 = Date.now();
   /**
    * 两条 1000 轮对话**并行**跑（各自内部严格串行：每一轮都依赖上一轮的日志/视图）。

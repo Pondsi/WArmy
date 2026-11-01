@@ -55,6 +55,26 @@ console.log('\n[2] 沙箱：绝对路径 / .. 逃逸 / NUL 一律拒绝（fail-c
 {
   const abs = W.runWorkTool(base, { function: { name: 'write_file', arguments: { path: path.join(os.tmpdir(), 'warmy-should-not-exist.txt'), content: 'x' } } });
   check('绝对路径被拒', abs.ok === false && /absolute-path-not-allowed/.test(abs.meta.error || ''), abs.meta.error);
+  /**
+   * 第 48 轮 live 真事故（`verify-round28-live` 卡 8 分钟）：write_file 返回绝对路径，模型照着它 read_file，
+   * 以前被当成越权弹授权卡、一直等。**落在本工作区里的绝对路径**与相对路径同一判据：照常读写，不需要授权；
+   * 而工作区外的绝对路径（上一条、下面的盘符路径）照旧拒绝。
+   */
+  const neiJue = path.join(base, 'jue-dui-nei.txt');
+  const wNei = W.runWorkTool(base, { function: { name: 'write_file', arguments: { path: neiJue, content: '绝对路径写在工作区里' } } });
+  const rNei = W.runWorkTool(base, { function: { name: 'read_file', arguments: { path: neiJue } } });
+  const rNeiDa = W.runWorkTool(base, { function: { name: 'read_file', arguments: { path: neiJue.toUpperCase() } } });
+  check('落在本工作区里的绝对路径照常可写可读（不当越权，不弹授权卡）', wNei.ok === true && rNei.ok === true && String(rNei.content).includes('绝对路径写在工作区里'), { w: wNei.meta.error, r: rNei.meta.error });
+  check('Windows 下大小写不同的同一工作区路径也认（盘符/目录名大小写不敏感）', process.platform !== 'win32' || rNeiDa.ok === true, rNeiDa.meta.error);
+  const linJu = W.runWorkTool(base, { function: { name: 'read_file', arguments: { path: base + '-linju' + path.sep + 'x.txt' } } });
+  check('前缀相同的隔壁目录不算工作区（base-linju\\x.txt 照旧拒绝）', linJu.ok === false && /absolute-path-not-allowed/.test(linJu.meta.error || ''), linJu.meta.error);
+  const linJuDir = base + '-linju';
+  fs.mkdirSync(linJuDir, { recursive: true });
+  fs.writeFileSync(path.join(linJuDir, 'secret.txt'), 'sibling-secret');
+  const linJuXiang = W.runWorkTool(base, { function: { name: 'read_file', arguments: { path: path.basename(linJuDir) + '/secret.txt' } } });
+  check('相对路径也不能回落到工作区父目录读兄弟会话', linJuXiang.ok === false, linJuXiang.meta.error);
+  const dieJia = W.runWorkTool(base, { function: { name: 'read_file', arguments: { path: path.basename(base) + '/notes/todo.txt' } } });
+  check('重复本会话 id 前缀仍能回落到本工作区（附件兼容）', dieJia.ok === true && dieJia.content === '第一条\n第二条\n', dieJia.meta.error);
 
   const up = W.runWorkTool(base, { function: { name: 'write_file', arguments: { path: '../warmy-should-not-exist2.txt', content: 'x' } } });
   check('`..` 逃逸被拒', up.ok === false && /workspace-escape/.test(up.meta.error || ''), up.meta.error);
@@ -75,6 +95,27 @@ console.log('\n[2] 沙箱：绝对路径 / .. 逃逸 / NUL 一律拒绝（fail-c
     path.join(os.tmpdir(), 'warmy-should-not-exist3.txt'),
   ];
   check('[3] 越界尝试没有在磁盘上留下任何文件', outside.every((p) => !fs.existsSync(p)), outside);
+}
+
+/* ── [2b] 一次性只读授权按会话隔离 ── */
+{
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-attach-scope-'));
+  try {
+    const wsRoot = path.join(root, 'userData', 'workspace');
+    const a = path.join(wsRoot, 'session-a');
+    const b = path.join(wsRoot, 'session-b');
+    const extDir = path.join(root, 'outside');
+    const ext = path.join(extDir, 'shared-ext.txt');
+    fs.mkdirSync(a, { recursive: true }); fs.mkdirSync(b, { recursive: true }); fs.mkdirSync(extDir, { recursive: true }); fs.writeFileSync(ext, 'attachment-visible');
+    W.sheZhiYiCiZhiDuGen([ext], 'session-a');
+    const ra = W.runWorkTool(a, { function: { name: 'read_file', arguments: { path: ext } } });
+    const rb = W.runWorkTool(b, { function: { name: 'read_file', arguments: { path: ext } } });
+    check('附件只读授权在授权会话内可读', ra.ok === true && ra.content === 'attachment-visible', ra.meta.error);
+    check('另一个会话不能借用同一附件授权', rb.ok === false, rb.meta.error);
+  } finally {
+    W.qingKongYiCiZhiDuGen();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 }
 
 /* ── [4] 列目录 / 建目录 ── */

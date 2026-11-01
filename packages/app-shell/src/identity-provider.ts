@@ -152,6 +152,11 @@ export interface ShenfenQianmingzhe {
   unlockState(): QianMingZheJieSuoTai | null;
   /** raw 64 字节 Ed25519 签名；不能签时抛 IdentityUnavailableError */
   sign(xiaoXi: Buffer): Promise<Buffer>;
+  /**
+   * 同步签名（邀请签发这类**必须同步产出 token** 的调用）。
+   * 私钥同样只在本次调用内解密、用完清零，不导出、不缓存。
+   */
+  signSync(xiaoXi: Buffer): Buffer;
   /** 校验任意公钥的签名；返回 null = 这次**没有**真的验过（公钥无法解释） */
   verify(xiaoXi: Buffer, sig: Buffer, pub: Buffer | string | Uint8Array): boolean | null;
 }
@@ -219,6 +224,29 @@ export function chuangjianShenfenQianmingzhe(store: ShenFenCang): ShenfenQianmin
         return sig;
       } finally {
         // 私钥明文副本用完即清（不缓存 KeyObject、不返回给调用方）
+        der.fill(0);
+      }
+    },
+
+    signSync(xiaoXi: Buffer): Buffer {
+      if (!Buffer.isBuffer(xiaoXi)) {
+        throw new ShenFenBuKeYongCuoWu('identity-unusable', 'signSync 只接受 Buffer');
+      }
+      const yiJiaZai = store.load();
+      if (!yiJiaZai.ok) {
+        throw new ShenFenBuKeYongCuoWu(
+          'identity-locked',
+          `身份未解锁，无法签名（${yiJiaZai.error}）：请先在身份设置里用口令解锁`
+        );
+      }
+      const der = yiJiaZai.privateKeyDer;
+      try {
+        const sig = crypto.sign(null, xiaoXi, keyObjectFromPrivateDer(der));
+        if (sig.length !== 64) {
+          throw new ShenFenBuKeYongCuoWu('identity-unusable', `Ed25519 签名长度异常：${sig.length}（应为 64）`);
+        }
+        return sig;
+      } finally {
         der.fill(0);
       }
     },

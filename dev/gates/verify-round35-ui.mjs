@@ -53,6 +53,8 @@ fs.writeFileSync(path.join(profile, 'plans.json'), JSON.stringify({ version: 1, 
 
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
+// 本门禁只量聊天界面：跳过认证门，直接进主界面（认证另有 verify-r68-auth-ui / r78-auth-tour）
+env.WARMY_AUTH_BYPASS = '1';
 const child = spawn(electron, ['--remote-debugging-port=' + PORT, '--disable-features=CalculateNativeWinOcclusion', '--user-data-dir=' + profile, mainJs],
   { cwd: pkgRoot, stdio: ['ignore', 'ignore', 'ignore'], windowsHide: false, env });
 console.log('PID', child.pid, 'profile', profile);
@@ -201,12 +203,54 @@ try {
       cls: String(sk.className),
     });
   })()`));
-  panding('项14/36-5 执行明细在「思考/执行过程」块里（独立的行动过程区块已消失）',
-    !kuai.err && kuai.jiuKuai === false && /执行过程/.test(String(kuai.yao)) && Number(kuai.rows) === 3, JSON.stringify(kuai));
+  panding('项14/36-5 执行明细在「思考与执行」块里（独立的行动过程区块已消失）',
+    !kuai.err && kuai.jiuKuai === false && /思考与执行/.test(String(kuai.yao)) && Number(kuai.rows) === 3, JSON.stringify(kuai));
   panding('项14 执行过程展开后不限高、没有滚动条', kuai.maxH === 'none' && (kuai.overflow === 'visible'), 'maxH=' + kuai.maxH + ' ov=' + kuai.overflow);
   panding('项14 思考正文也不限高、不出滚动条（完整显示）', kuai.skMaxH === 'none' && kuai.skOv === 'visible', 'skMaxH=' + kuai.skMaxH + ' skOv=' + kuai.skOv);
 
-  /* ── 项 12 / 36-3：行动行（木马强调色 / 单行 / 浮雕 / 状态色） ───────── */
+  /* 项 11：虚拟路径不挂右键菜单 */
+  const xu = JSON.parse(await c.evaluate(`(function(){
+    const sid = window.__r35.huiHua();
+    window.__r35.tian({ role: 'them', text: '示例路径：C:\\\\Users\\\\你\\\\Desktop\\\\不存在的文件.txt ，还有一个真的：' + ${JSON.stringify(path.join(profile, 'settings.json'))}, ts: Date.now(), moXing: 'MiMo（R35 验收） · mimo-v2.6-flash' });
+    return JSON.stringify({ ok: true });
+  })()`));
+  await sleep(1400);
+  const lu = JSON.parse(await c.evaluate(`(function(){
+    const as = Array.from(document.querySelectorAll('.xiaoXi.them a.luJingLian'));
+    return JSON.stringify(as.slice(-6).map(function(a){ return { t: a.getAttribute('data-open'), r: a.getAttribute('data-real') }; }));
+  })()`));
+  panding('项11 真实存在的路径保留超链接并标记 data-real=1', lu.some((x) => x.r === '1' && /settings\.json$/.test(String(x.t))), JSON.stringify(lu));
+  panding('项11 虚拟/占位路径**退回纯文字**（不再是超链接、没有右键菜单）', !lu.some((x) => /不存在的文件\.txt/.test(String(x.t))), JSON.stringify(lu));
+
+  /* ── 第 37 轮【项 9】：**流式期间就要看到工具操作**（不能等最终回复落地） ── */
+  const liuShiRaw = await c.evaluate(`(function(){
+   try {
+    const sid = window.__r35.huiHua();
+    /** 造一个"正在流式输出"的气泡（真实运行时由 xuanRanLiuShiKuai 建，结构相同） */
+    const heZi = document.getElementById('xiaoXiJi');
+    const jiu = heZi && heZi.querySelector('[data-streaming="1"]');
+    if (jiu) jiu.remove();
+    const d = document.createElement('div');
+    d.className = 'xiaoXi liuShiKuai';
+    d.setAttribute('data-streaming', '1');
+    d.innerHTML = '<div class="bubbleWrap"><div class="bubble md"></div></div>';
+    heZi.appendChild(d);
+    window.__r35.hangDong({ hao: 'liu1', ts: Date.now() - 1000, tsEnd: Date.now(), op: '运行命令 dir', raw: 'run_shell', detail: 'cmd /c dir', lei: 'cmd', ms: 900, status: 'ok' });
+    /** hangDong 会整屏重画（把刚造的流式气泡冲掉）⇒ 重画之后再造一次，再手工跑一次归组 */
+    const d2 = document.createElement('div');
+    d2.className = 'xiaoXi liuShiKuai';
+    d2.setAttribute('data-streaming', '1');
+    d2.innerHTML = '<div class="bubbleWrap"><div class="bubble md"></div></div>';
+    document.getElementById('xiaoXiJi').appendChild(d2);
+    window.__r35.guiNa();
+    const sk = d2.querySelector('.siKaoKuai');
+    const n = d2.querySelectorAll('.xingDongHang').length;
+    return JSON.stringify({ you: !!sk, n: n, yao: sk && sk.querySelector('summary') ? sk.querySelector('summary').textContent : '' });
+   } catch (e) { return JSON.stringify({ you: false, n: 0, err: String(e && e.message || e).slice(0, 160) }); }
+  })()`);
+  const liuShi = (function () { try { return typeof liuShiRaw === 'string' ? JSON.parse(liuShiRaw) : (liuShiRaw || {}); } catch { return {}; } })();
+  panding('项9 流式气泡里也能看到工具操作（执行明细不再等最终回复）', liuShi.you === true && Number(liuShi.n) >= 1, JSON.stringify(liuShi));
+
   const rows = JSON.parse(await c.evaluate(`(function(){
     const hs = Array.from(document.querySelectorAll('.xingDongHang'));
     const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
@@ -247,15 +291,26 @@ try {
     if (!d) return JSON.stringify({ err: 'not-open' });
     const xs = Array.from(d.querySelectorAll('.xdXian')).map(function(x){ return x.textContent; });
     const a = d.querySelector('a.luJingLian');
-    return JSON.stringify({ xs, aText: a ? a.textContent : '', aReal: a ? a.getAttribute('data-real') : '', aCls: a ? String(a.className) : '' });
+    return JSON.stringify({ xs, wei: (d.closest('.xingDongHang') ? (d.closest('.xingDongHang').querySelector('.xdZhuang') || {}).textContent : '') || '', aText: a ? a.textContent : '', aReal: a ? a.getAttribute('data-real') : '', aCls: a ? String(a.className) : '' });
   })()`));
   panding('项12 点开后有明细行', !xiang.err && Array.isArray(xiang.xs) && xiang.xs.length >= 3, JSON.stringify(xiang));
   panding('项4 第 1 行 = 「开始 ·年月日时分秒」（状态写在前面，不再带"进行中"尾巴）',
     /^开始\s·\d{4}[\/-]\d{1,2}[\/-]\d{1,2}/.test(String(xiang.xs && xiang.xs[0])), String(xiang.xs && xiang.xs[0]));
   panding('项4 第 2 行 = 「操作 ·具体内容」（写明是什么操作 + 完整路径）',
     /^读取|^创建|^修改/.test(String(xiang.xs && xiang.xs[1])) && /报告 v2\.docx$/.test(String(xiang.aText)), String(xiang.xs && xiang.xs[1]) + ' | ' + String(xiang.aText));
-  panding('项4 第 3 行 = 「状态 ·更新时间 · 耗时」（不再有那条重复的「更新 …」）',
-    /^(完成|失败)\s·\d{4}[\/-]\d{1,2}[\/-]\d{1,2}.*耗时/.test(String(xiang.xs && xiang.xs[2])), String(xiang.xs && xiang.xs[2]));
+  /**
+   * 第 3 行**不该钉那个名词**：第 35 轮这条写的是「状态 ·更新时间 · 耗时」，第 38 轮按用户原话把状态
+   * 收成"只在行尾出现一次" ⇒ 展开区这行改成「结束 · 时间 · 耗时」（`verify-round38-changes` 项3 钉的是新版）。
+   * 两轮的要求只差一个词，把词钉死就会让"后来那次正确的改动"把老门禁打红 —— 本轮真机就是这么红的。
+   * ⇒ 改判**事实**：这一行必须给出结束时间戳与耗时；并且**状态词在整条记录里只出现一次**（第 38 轮的原意，
+   *   老判据反而放不过这条：它要求的正是"行首再写一遍状态"，等于钉死了要被改掉的那个形状）。
+   */
+  const di3 = String((xiang.xs && xiang.xs[2]) || '');
+  panding('项4 第 3 行给出结束时间与耗时（不钉「完成/失败/结束」这个名词）',
+    /\d{4}[\/-]\d{1,2}[\/-]\d{1,2}.*耗时/.test(di3), di3);
+  const zhuangWen = String(xiang.wei || '').trim().replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, '');
+  panding('项4 状态只在行尾出现一次（展开区第 3 行不许把同一个状态词再说一遍）',
+    !zhuangWen || !new RegExp('^' + zhuangWen).test(di3.trim()), { wei: zhuangWen, di3 });
   panding('项4 **不存在**多余的「更新 …」行（用户明确要求删掉那条）',
     !(xiang.xs || []).some((t) => /^更新/.test(String(t))), JSON.stringify(xiang.xs));
   panding('项11 明细里的路径可点、走"打开编辑"通道；空格没有被截断',
@@ -321,48 +376,87 @@ try {
   panding('项9 播放中按钮上有扩散光环（::after 有动画）', /langDuHuan/.test(String(bo.ringAnim)) && bo.ringBorder !== '0px', 'ring=' + bo.ringAnim + ' border=' + bo.ringBorder);
   panding('项9 播放中按钮底色变成强调色（不只是图标变色）', String(bo.box) !== 'rgba(0, 0, 0, 0)' && String(bo.box) !== 'transparent', bo.box);
 
-  /* 项 11：虚拟路径不挂右键菜单 */
-  const xu = JSON.parse(await c.evaluate(`(function(){
-    const sid = window.__r35.huiHua();
-    window.__r35.tian({ role: 'them', text: '示例路径：C:\\\\Users\\\\你\\\\Desktop\\\\不存在的文件.txt ，还有一个真的：' + ${JSON.stringify(path.join(profile, 'settings.json'))}, ts: Date.now(), moXing: 'MiMo（R35 验收） · mimo-v2.6-flash' });
-    return JSON.stringify({ ok: true });
-  })()`));
-  await sleep(1400);
-  const lu = JSON.parse(await c.evaluate(`(function(){
-    const as = Array.from(document.querySelectorAll('.xiaoXi.them a.luJingLian'));
-    return JSON.stringify(as.slice(-6).map(function(a){ return { t: a.getAttribute('data-open'), r: a.getAttribute('data-real') }; }));
-  })()`));
-  panding('项11 真实存在的路径保留超链接并标记 data-real=1', lu.some((x) => x.r === '1' && /settings\.json$/.test(String(x.t))), JSON.stringify(lu));
-  panding('项11 虚拟/占位路径**退回纯文字**（不再是超链接、没有右键菜单）', !lu.some((x) => /不存在的文件\.txt/.test(String(x.t))), JSON.stringify(lu));
+  /* ── 项 12 / 36-3：行动行（木马强调色 / 单行 / 浮雕 / 状态色） ───────── */
 
-  /* ── 第 37 轮【项 9】：**流式期间就要看到工具操作**（不能等最终回复落地） ── */
-  const liuShiRaw = await c.evaluate(`(function(){
-   try {
-    const sid = window.__r35.huiHua();
-    /** 造一个"正在流式输出"的气泡（真实运行时由 xuanRanLiuShiKuai 建，结构相同） */
-    const heZi = document.getElementById('xiaoXiJi');
-    const jiu = heZi && heZi.querySelector('[data-streaming="1"]');
-    if (jiu) jiu.remove();
-    const d = document.createElement('div');
-    d.className = 'xiaoXi liuShiKuai';
-    d.setAttribute('data-streaming', '1');
-    d.innerHTML = '<div class="bubbleWrap"><div class="bubble md"></div></div>';
-    heZi.appendChild(d);
-    window.__r35.hangDong({ hao: 'liu1', ts: Date.now() - 1000, tsEnd: Date.now(), op: '运行命令 dir', raw: 'run_shell', detail: 'cmd /c dir', lei: 'cmd', ms: 900, status: 'ok' });
-    /** hangDong 会整屏重画（把刚造的流式气泡冲掉）⇒ 重画之后再造一次，再手工跑一次归组 */
-    const d2 = document.createElement('div');
-    d2.className = 'xiaoXi liuShiKuai';
-    d2.setAttribute('data-streaming', '1');
-    d2.innerHTML = '<div class="bubbleWrap"><div class="bubble md"></div></div>';
-    document.getElementById('xiaoXiJi').appendChild(d2);
-    window.__r35.guiNa();
-    const sk = d2.querySelector('.siKaoKuai');
-    const n = d2.querySelectorAll('.xingDongHang').length;
-    return JSON.stringify({ you: !!sk, n: n, yao: sk && sk.querySelector('summary') ? sk.querySelector('summary').textContent : '' });
-   } catch (e) { return JSON.stringify({ you: false, n: 0, err: String(e && e.message || e).slice(0, 160) }); }
-  })()`);
-  const liuShi = (function () { try { return typeof liuShiRaw === 'string' ? JSON.parse(liuShiRaw) : (liuShiRaw || {}); } catch { return {}; } })();
-  panding('项9 流式气泡里也能看到工具操作（执行明细不再等最终回复）', liuShi.you === true && Number(liuShi.n) >= 1, JSON.stringify(liuShi));
+  // 时间线切段后保持顺序，中间回复始终可见并保留浮雕。
+  {
+    const t0 = Date.now() - 20000;
+    const beforeLen = Number(await c.evaluate('(function(){ const sid=window.__r35.huiHua(); return (window.__msgs && window.__msgs[sid] || []).length; })()')) || 0;
+    await c.evaluate(`(function(){
+      document.querySelectorAll('#xiaoXiJi [data-streaming="1"]').forEach((n) => n.remove());
+      window.__r35.qingHangDong();
+      window.__r35.tian({ role: 'them', text: '最终回复。', ts: ${t0 + 9000},
+        reasoningDuan: [
+          { ts: ${t0 + 1000}, text: '先读文件。' },
+          { ts: ${t0 + 5000}, text: '改完再校验。' },
+        ],
+        zhongJian: [
+          { ts: ${t0 + 2000}, text: '中间回复一：准备读文件。' },
+          { ts: ${t0 + 7000}, text: '中间回复二：开始校验。' },
+        ],
+        moXing: 'MiMo（R35 验收） · mimo-v2.6-flash' });
+      window.__r35.hangDong({ hao: 'b1', ts: ${t0 + 1500}, tsEnd: ${t0 + 1700}, op: '读取文件', raw: 'read_file', detail: 'a.txt', ms: 200, status: 'ok' });
+      window.__r35.hangDong({ hao: 'b2', ts: ${t0 + 3000}, tsEnd: ${t0 + 3500}, op: '运行命令', raw: 'run_shell', detail: 'cmd /c echo 1', ms: 500, status: 'ok' });
+      window.__r35.hangDong({ hao: 'b3', ts: ${t0 + 6000}, tsEnd: ${t0 + 6400}, op: '运行检查', raw: 'run_shell', detail: 'check', ms: 400, status: 'ok' });
+      window.__r35.hangDong({ hao: 'b4', ts: ${t0 + 8000}, tsEnd: ${t0 + 8300}, op: '写文件', raw: 'write_file', detail: 'b.txt', ms: 300, status: 'ok' });
+      window.__r35.guiNa();
+      return true;
+    })()`);
+    await sleep(900);
+    const du = JSON.parse(await c.evaluate(`(function(){
+      const all = document.querySelectorAll('.xiaoXi.them .guoChengLie');
+      const d = all.length ? all[all.length - 1] : null;
+      if (!d) return JSON.stringify({ err: 'no-process' });
+      const segs = [...d.querySelectorAll(':scope > .guoChengDuan')];
+      const cards = [...d.querySelectorAll(':scope > .zhongJianKa')];
+      const collapsed = () => segs.length === 3 && segs.every((n) => n.tagName === 'DETAILS' && !n.open);
+      const visible = () => cards.length === 2 && cards.every((n) => {
+        const body = n.querySelector('.zhongJianHuiFu');
+        return !!body && !!body.textContent.trim() && body.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && body.getBoundingClientRect().height > 0;
+      });
+      const read = () => Array.from(d.children).flatMap((n) => n.classList.contains('zhongJianKa') ? [n] : [...n.children].filter((c) => c.matches('.siKaoDuanKuai, .xingDongZu')))
+        .map((n) => ({ ts: Number(n.dataset.ts) || 0, fen: Number(n.closest('[data-fen]').dataset.fen), kind: n.classList.contains('xingDongZu') ? 'act' : (n.classList.contains('zhongJianKa') ? 'mid' : 'think'), text: (n.textContent || '').trim().slice(0, 24) }));
+      const first = read();
+      const before = { collapsed: collapsed(), visible: visible() };
+      segs.forEach((n) => n.querySelector('summary').click());
+      const expanded = segs.every((n) => n.open);
+      const expandedVisible = visible();
+      segs.forEach((n) => n.querySelector('summary').click());
+      cards.forEach((n) => n.click());
+      const second = read();
+      const mid = d.querySelector('.zhongJianHuiFu');
+      const bubble = d.closest('.xiaoXi').querySelector('.bubble.md');
+      const ms = mid ? getComputedStyle(mid) : null;
+      const cs = mid ? getComputedStyle(mid.parentElement) : null;
+      const bs = bubble ? getComputedStyle(bubble) : null;
+      return JSON.stringify({ first, second, before, expanded, expandedVisible, after: { collapsed: collapsed(), visible: visible() },
+        cardsOk: cards.length === 2 && cards.every((n) => n.tagName === 'DIV' && !n.hasAttribute('open') && !n.querySelector('summary') && !n.closest('details')),
+        style: ms ? { bg: ms.backgroundColor, bt: ms.borderTopWidth, br: ms.borderRightWidth, bb: ms.borderBottomWidth, bl: ms.borderLeftWidth, fs: ms.fontSize, bubFs: bs ? bs.fontSize : null,
+          pt: ms.paddingTop, pr: ms.paddingRight, pb: ms.paddingBottom, pl: ms.paddingLeft, shadow: cs.boxShadow, gradient: cs.backgroundImage, cardBorders: [cs.borderTopWidth, cs.borderRightWidth, cs.borderBottomWidth, cs.borderLeftWidth] } : null });
+    })()`));
+    const want = ['think', 'act', 'mid', 'act', 'think', 'act', 'mid', 'act'];
+    const kinds = (du.first || []).map((x) => x.kind);
+    const sorted = (du.first || []).every((x, i, a) => i === 0 || a[i - 1].ts <= x.ts);
+    panding('#7 完成后执行过程仍按时间混排（思考/操作/中间回复）', du.err ? false : JSON.stringify(kinds) === JSON.stringify(want) && sorted, JSON.stringify({ kinds, want, sorted }));
+    panding('#7 操作仍属于各中间回复时间边界对应的段', !du.err && du.first.map((x) => x.fen).join(',') === '0,0,0,1,1,1,1,2', JSON.stringify(du.first));
+    panding('#7 执行过程默认折叠，展开再折叠后内容和顺序不变', !du.err && du.before.collapsed && du.expanded && du.after.collapsed && JSON.stringify(du.first) === JSON.stringify(du.second), JSON.stringify(du));
+    panding('#8 中间回复无标题且不可折叠，点击卡片和切换过程段都不隐藏正文', !du.err && du.cardsOk && du.before.visible && du.expandedVisible && du.after.visible, JSON.stringify(du));
+    panding('#8 中间回复正文无重复边框，字号与正式回复一致，四周保留浮雕留白',
+      du.style && du.style.bg === 'rgba(0, 0, 0, 0)' && du.style.bt === '0px' && du.style.br === '0px' && du.style.bb === '0px'
+      && du.style.bl === '0px' && du.style.fs === du.style.bubFs
+      && du.style.pt === '9px' && du.style.pb === '9px' && du.style.pr === '11px' && du.style.pl === '11px'
+      && du.style.shadow.includes('inset') && du.style.gradient.includes('linear-gradient') && du.style.cardBorders.every((b) => b === '1px'),
+      JSON.stringify(du.style));
+    // 撤销夹具：后面的断言继续看原来的消息/台账
+    await c.evaluate(`(function(){
+      const sid = window.__r35.huiHua();
+      if (window.__msgs && window.__msgs[sid]) window.__msgs[sid].length = ${beforeLen};
+      window.__r35.qingHangDong();
+      window.__r35.chongHua();
+      return true;
+    })()`);
+    await sleep(500);
+  }
 
   panding('本轮真机界面未出现未捕获异常', true, 'ok');
 } catch (e) {

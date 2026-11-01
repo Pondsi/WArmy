@@ -107,14 +107,16 @@ function scan(src) {
     }
     funcs.push({ name, start, end, depth: depth0 });
   }
-  // 调用点（排除 .foo( / function foo( / 关键字）
+  // 调用点（排除 .foo( / function foo( / 关键字 / `get foo()` 取器声明）
   const calls = [];
   {
     const re = /(^|[^.\w$])([A-Za-z_$][\w$]*)\s*\(/g;
     let c2;
     while ((c2 = re.exec(clean))) {
       const name = c2[2];
-      if (['if', 'for', 'while', 'switch', 'catch', 'function', 'return', 'typeof', 'new', 'await', 'async', 'do', 'else', 'try', 'in', 'of', 'void', 'delete', 'yield'].includes(name)) continue;
+      if (['if', 'for', 'while', 'switch', 'catch', 'function', 'return', 'typeof', 'new', 'await', 'async', 'do', 'else', 'try', 'in', 'of', 'void', 'delete', 'yield', 'get', 'set'].includes(name)) continue;
+      /** `get providers()` 是对象取器，不是调用 */
+      if (/\bget\s+$/.test(clean.slice(Math.max(0, c2.index - 6), c2.index + c2[1].length))) continue;
       calls.push({ name, line: hangHao[c2.index] || 0 });
     }
   }

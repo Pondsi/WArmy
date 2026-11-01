@@ -14,12 +14,11 @@ import path from 'node:path';
 
 const PKG = path.join(process.cwd(), 'packages', 'app-shell');
 /**
- * **隔离的 userData**：main 里 userData 被硬固定到 `%APPDATA%\@warmy\app-shell`，
- * 而用户本机**可能正开着**同一个应用（占着锁与端口）。所以这里把子进程的 `APPDATA`
- * 指到临时目录 ⇒ userData = `<tmp>\@warmy\app-shell`，探针与用户的实时实例互不干扰。
+ * **隔离的 userData**（第 49 轮改，第 22 缺陷的最后一支）：以前这里靠"把子进程的 `APPDATA` 指到临时目录"来隔离 ——
+ * 真机取证：`%APPDATA%\@warmy\app-shell\DevToolsActivePort` 里躺着本门禁的端口 9461，说明**覆盖 APPDATA 根本不生效**，
+ * 门禁是把用户的实时配置当试验场在跑（它还真的往供应商列表加了一行）。现在与其余真机门禁同一口径：显式 `--user-data-dir`，每次一个带时间戳的临时目录，跑完删掉。
  */
-const APPDATA = path.join(process.env.TEMP || process.env.TMP || '.', 'warmy-verify-appdata');
-const DATA = path.join(APPDATA, '@warmy', 'app-shell');
+const DATA = path.join(process.env.TEMP || process.env.TMP || '.', 'warmy-click-lag-' + Date.now());
 const PORT = 9461;
 
 try {
@@ -31,10 +30,10 @@ try {
   fs.writeFileSync(sp, JSON.stringify(s, null, 2));
 } catch { /* noop */ }
 
-const env = { ...process.env, APPDATA };
+const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(path.join(PKG, 'node_modules', 'electron', 'dist', 'electron.exe'),
-  [`--remote-debugging-port=${PORT}`, path.join(PKG, 'dist', 'electron-main.js')],
+  [`--remote-debugging-port=${PORT}`, `--user-data-dir=${DATA}`, path.join(PKG, 'dist', 'electron-main.js')],
   { cwd: PKG, stdio: ['ignore', 'pipe', 'pipe'], env });
 
 const logs = [];
@@ -136,5 +135,6 @@ say(sameFirst === true, 'settings page NOT fully re-rendered (pageTi first child
 
 ws.close();
 try { child.kill(); } catch { /* noop */ }
+if (!process.argv.includes('--keep')) { try { fs.rmSync(DATA, { recursive: true, force: true }); } catch { /* noop */ } }
 console.log(pass ? 'LAG TEST PASS' : 'LAG TEST FAIL');
 process.exit(pass ? 0 : 1);

@@ -12,10 +12,10 @@
 import type {
   ZhibanTai,
   QunPeizhi,
-  QunLei,
   OrchestrationDecision,
   OrchestrationRequest,
   Jinji,
+  QuanxianJuzhen,
 } from '@warmy/contracts';
 
 export interface LuyouqiShili {
@@ -230,7 +230,7 @@ export class GroupChatRouter {
   }
 
   private sortQueue(groupId: string): void {
-    const paiMing: Record<Jinji, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
+    const paiMing: Record<Jinji, number> = { P0: 0, P1: 1, P2: 2, P3: 3, P4: 4 };
     const q = this.queues.get(groupId);
     if (!q) return;
     q.sort((a, b) => {
@@ -319,6 +319,14 @@ export class GroupChatRouter {
         action: 'dispatch',
         decision: {
           executorIds: targets.map((t) => t.id),
+          candidateIds: targets.map((t) => t.id),
+          assignments: targets.map((t) => ({
+            executorId: t.id,
+            ming: String((t as unknown as { ming?: string }).ming || t.id),
+            thinkLevel: 'auto' as const,
+            interrupt: 'none' as const,
+            why: '用户定向 @ 点名',
+          })),
           taskBrief: Qiu.content,
           contextBudget: 2000,
           shouldQueue: false,
@@ -337,18 +345,29 @@ export class GroupChatRouter {
     }
 
     this.dutyState.set(Qiu.groupId, 'orchestrating');
-    const zhiXingQiJi = (this.members.get(Qiu.groupId) || [])
-      .filter((m) => m.id !== duty.id && m.status === 'idle' && !m.pureDispatcher)
-      .slice(0, 3)
+    const chengYuan = this.members.get(Qiu.groupId) || [];
+    /**
+     * 候选池：除值班者外所有未离线成员（含忙碌的），按“空闲优先、序号其次”排。
+     * 以前这里直接取前 3 个空闲成员，值班者没有“按紧急度/难易度挑人”的余地；
+     * 现在把池子交给编排层，由派发计划（zhi-ban-pai-fa）决定谁上、思考级别和插话方式。
+     */
+    const candidateIds = chengYuan
+      .filter((m) => m.id !== duty.id && m.local && !m.pureDispatcher && m.status !== 'dead' && m.status !== 'offline')
+      .sort((a, b) => (a.status === 'idle' ? 0 : 1) - (b.status === 'idle' ? 0 : 1) || a.order - b.order)
+      .slice(0, 8)
       .map((m) => m.id);
-
-    // 值班者本身也可执行（非 pureDispatcher）
-    if (!zhiXingQiJi.length && !duty.pureDispatcher) {
-      zhiXingQiJi.push(duty.id);
-    }
+    const zhiXingQiJi = candidateIds
+      .filter((id) => (chengYuan.find((m) => m.id === id)?.status === 'idle'))
+      .slice(0, 3);
+    /**
+     * 第 121 轮：值班者本体**永不作为执行者**。没有候选执行者时返回空列表，
+     * 由编排器在“无执行者/执行者全失败/用户点名值班者”时派它的**唯一分身**去干活；
+     * 值班者本体始终留在岗位上做派发与汇总。
+     */
 
     const decision: OrchestrationDecision = {
       executorIds: zhiXingQiJi,
+      candidateIds,
       taskBrief: Qiu.content.slice(0, 500),
       contextBudget: 2000,
       shouldQueue: false,
@@ -446,4 +465,8 @@ export const DEFAULT_PERMISSIONS = {
     talk_to_duty: true,
     view_board: 'readonly',
   },
-} as const;
+  /**
+   * `satisfies` 契约 `QuanxianJuzhen`：四个角色 × 十项权限一项都不许少、值只能是 boolean / 'readonly'。
+   * 以前没有这层约束，宿主侧只能 `as never` 强转塞进 QunPeizhi（electron-main 两处）。
+   */
+} as const satisfies QuanxianJuzhen;

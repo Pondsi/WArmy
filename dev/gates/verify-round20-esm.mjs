@@ -105,7 +105,10 @@ shuo(chaGuo > 0, `确实扫到了产物文件（${chaGuo} 个 .js）`);
     shuo(/from 'electron'/.test(wen) && /\bclipboard\b/.test(wen),
       'clipboard 由顶部 import 提供（不是运行时 require）');
     shuo(wen.includes('Set-Clipboard -LiteralPath'), '复制文件本体仍走 Set-Clipboard');
-    shuo(wen.includes("clipboard.writeBuffer('FileNameW'"), '保留 FileNameW 原生剪贴板退路');
+    // Electron 45 起剪贴板是 W3C 异步 API，writeBuffer 已移除；FileNameW 退路改走自定义 MIME
+    shuo(wen.includes('electron application/osclipboard;format="FileNameW"') && /clipboard\.write\(\[new ClipboardItem\(/.test(wen),
+      '保留 FileNameW 原生剪贴板退路（Electron 45 ClipboardItem）');
+    shuo(!wen.includes("clipboard.writeBuffer('FileNameW'"), '负向：不再调用已移除的 writeBuffer');
   }
 }
 

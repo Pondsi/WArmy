@@ -18,7 +18,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { attach, sleep } from './packages/app-shell/scripts/cdp-lib.mjs';
+import { attach, sleep } from '../../packages/app-shell/scripts/cdp-lib.mjs';
 
 const GEN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const pkgRoot = path.join(GEN, 'packages', 'app-shell');
@@ -155,10 +155,27 @@ try {
   console.log('  · 真跑：ok=' + fa.ok + ' 用时 ' + miao + 's 工具轮次=' + JSON.stringify(fa.tools || {}).slice(0, 160));
   check('多步任务真的跑完并回了话（真实 Ollama 模型）', fa.ok === true && String(fa.reply || '').length > 8, { ok: fa.ok, err: fa.error, hui: String(fa.reply || '').slice(0, 120) });
 
-  const luo = path.join(profile, 'workspace', sid, biao + '.txt');
-  const cunZai = fs.existsSync(luo);
-  const neiRong = cunZai ? fs.readFileSync(luo, 'utf8') : '';
-  check('文件真的落盘且内容正确（不是嘴上说做了）', cunZai && neiRong.includes(biao), { luo: cunZai, nei: neiRong.slice(0, 60) });
+  /**
+   * 落点**不许钉成"工作区根下那一个精确路径"**：任务原话只是"在我的工作区里创建一个文件 X.txt"，
+   * 模型把它放进 `work/` 子目录同样算交付（真机三次实测：两次落根、一次落 `work/` ⇒ 老判据约 1/3 概率假红，
+   * 本轮遍 4 就是这样红的，而产品侧什么都没做错）。
+   * 这条判据真正要防的是"**嘴上说做了，其实没落盘**" ⇒ 判"这份会话的工作区里存在这个文件、内容与要求一致"，
+   * 再加一条"回复里得把这份文件说出来"（要路径可以给相对路径，但不能说一个不存在的）。
+   */
+  const gen = path.join(profile, 'workspace', sid);
+  const zhaoWenJian = (mu, ming) => {
+    const chu = [];
+    if (!fs.existsSync(mu)) return chu;
+    const die = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) die(p); else if (e.name === ming) chu.push(p); } };
+    die(mu);
+    return chu;
+  };
+  const xia = zhaoWenJian(gen, biao + '.txt');
+  const neiRong = xia.length ? fs.readFileSync(xia[0], 'utf8') : '';
+  check('文件真的落盘且内容正确（在这份会话工作区里，位置由模型定；不是嘴上说做了）', xia.length >= 1 && neiRong.includes(biao),
+    { zhaoDao: xia.map((p) => path.relative(gen, p)), nei: neiRong.slice(0, 60) });
+  check('回复里把这份文件说了出来（说的与写的是同一份，路径可以给相对位置）', String(fa.reply || '').includes(biao),
+    { hui: String(fa.reply || '').slice(0, 140), zhaoDao: xia.map((p) => path.relative(gen, p)) });
 
   // ③ 计划里不许留"永远验证不了的说明行"
   const jiHua = await js(`(async function(){ const r = await window.warmy.jiHuaLieBiao({ sessionId: ${JSON.stringify(sid)} }); return r || { ok: false }; })()`);
@@ -201,7 +218,12 @@ try {
       const d = await js(`(function(){
         const hui = [...document.querySelectorAll('.xiaoXi.them')];
         return { huiFuShu: hui.length, wenBenChang: hui.length ? String(hui[hui.length-1].textContent||'').length : 0,
-          kuai: document.querySelectorAll('.xingDongKuai').length,
+          kuai: document.querySelectorAll('.guoChengLie > .zhongJianKa').length,
+          cardsOk: [...document.querySelectorAll('.guoChengLie > .zhongJianKa')].every((n) => {
+            const body = n.querySelector('.zhongJianHuiFu');
+            return n.tagName === 'DIV' && !n.hasAttribute('open') && !n.querySelector('summary') && !n.closest('details')
+              && !!body && !!body.textContent.trim() && body.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+          }),
           kong: [...document.querySelectorAll('.liuShiZhengWen')].filter((n)=>!n.textContent.trim()).length };
       })()`);
       if (d && !d.__err) zui = d;
@@ -211,7 +233,7 @@ try {
   })();
   console.log('  · DOM：' + JSON.stringify(dom));
   check('没有"空白的流式正文"残留（空分片不再把内容抹掉）', dom.kong === 0, dom);
-  if (dom.huiFuShu >= 3) check('多条中间回复被归进「行动过程」折叠块', dom.kuai >= 1, dom);
+  if (dom.huiFuShu >= 3) check('中间回复在过程时间线中保持可见，无标题且不可折叠', dom.kuai >= 1 && dom.cardsOk === true, dom);
   else console.log('  · 界面里 ' + dom.huiFuShu + ' 条回复（列表需 UI 自身刷新，不足 3 条 ⇒ 归组断言按实际跳过）');
 
   // ⑤ 看图：**真的把图片喂给本机视觉模型**（Ollama /api/chat 的 images 通道），

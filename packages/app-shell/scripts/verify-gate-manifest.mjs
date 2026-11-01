@@ -46,7 +46,9 @@ const onDisk = fs.readdirSync(scriptsDir)
   .map((f) => f.replace(/\.mjs$/, ''))
   .sort();
 const inManifest = entries.map((e) => e.id).sort();
-const missingOnDisk = inManifest.filter((id) => !onDisk.includes(id));
+const missingOnDisk = entries
+  .filter((e) => !e.file || !fs.existsSync(path.join(repoRoot, e.file)))
+  .map((e) => e.id);
 const missingInManifest = onDisk.filter((id) => !inManifest.includes(id));
 check('清单里每一条在磁盘上都有对应脚本', missingOnDisk.length === 0, missingOnDisk);
 check('磁盘上每个 verify-/probe- 脚本都登记在清单里', missingInManifest.length === 0, missingInManifest);

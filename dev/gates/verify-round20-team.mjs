@@ -63,8 +63,20 @@ console.log('\n多牛马协同 · 接线');
   shuo(/executorTools:/.test(main) && /workToolSpecs\(\)/.test(main), 'E 执行者拿到干活工具');
   shuo(/if \(isWorkTool\(toolName\)\)/.test(main) && /runWorkTool\(base/.test(main),
     'E 项目路径真的执行干活工具（工作区按项目隔离）');
-  shuo(/jiaJu = \[\.\.\.ganHuoTools/.test(main) && !/jiyiJiuxu\s*\?\s*\[\.\.\.ganHuoTools/.test(main),
-    '记忆不可用时只砍记忆工具，干活工具照常暴露');
+  /**
+   * 记忆不可用时只砍记忆工具（第 48 轮改判据）：第 44 轮后半把"拼工具规格"收成唯一入口 `zuJingGongJuGuiGe`，
+   * 原来的字面锚 `jiaJu = [...ganHuoTools` 随之失效 —— 这一支连红两轮是**仪器陈旧**，产品逻辑没变。
+   * 现在钉结构：记忆工具只看 jiyiJiuxu、干活工具只看 keGanHuo（与记忆可不可用无关），两者拼在一起发。
+   * 负向：把干活工具也挂到 jiyiJiuxu 上（第 20 轮的原始事故）⇒ 这条必须翻红。
+   */
+  const zuJing = (wen) => {
+    const ti = (wen.match(/async function zuJingGongJuGuiGe\([\s\S]*?\n}\n/) || [''])[0];
+    const ganHuo = ((ti.match(/const ganHuoTools = ([\s\S]*?);\n/) || ['', ''])[1] || '').trim();
+    return /const jiyiTools = jiyiJiuxu \?/.test(ti) && /^keGanHuo\s*\?/.test(ganHuo) && !/jiyiJiuxu/.test(ganHuo)
+      && /\[\.\.\.ganHuoTools, \.\.\.jiyiTools/.test(ti);
+  };
+  const huaiYang = 'async function zuJingGongJuGuiGe(a, b, jiyiJiuxu, keGanHuo) {\n  const jiyiTools = jiyiJiuxu ? m() : [];\n  const ganHuoTools = jiyiJiuxu && keGanHuo ? w() : [];\n  const quan = [...ganHuoTools, ...jiyiTools];\n}\n';
+  shuo(zuJing(main) && !zuJing(huaiYang), '记忆不可用时只砍记忆工具，干活工具照常暴露（负向：干活工具挂在记忆可用上 ⇒ 判红）');
 }
 
 // ── 真实模型：值班编排 + 执行者真的写文件（A/E） ───────────
@@ -79,6 +91,27 @@ console.log('\n多牛马协同 · 真机（真实模型 + 真实工具）');
   const { workToolSpecs, runWorkTool, isWorkTool } = await import(
     pathToFileURL(path.join(GEN, 'packages/app-shell/dist/work-tools.js')).href
   );
+  /**
+   * 第 48 轮：黑板 / 产物核实 / 超长结论存档用**主进程同一份工厂**（hei-ban-cun.ts），
+   * 接的是**真记忆服务**（memory-os JiyiCangFuwu）—— 真实模型下验"写得进、取得回、核实如实"。
+   */
+  const CUN = await import(pathToFileURL(path.join(GEN, 'packages/app-shell/dist/hei-ban-cun.js')).href);
+  {
+    const SQ = [
+      path.join(GEN, 'packages/memory-os/vendor/better-sqlite3'),
+      path.join(GEN, 'node_modules/.pnpm/better-sqlite3@13.0.3/node_modules/better-sqlite3'),
+      path.join(GEN, 'node_modules/better-sqlite3'),
+    ];
+    const Mod = (await import('node:module')).default;
+    const yuan = Mod._resolveFilename;
+    Mod._resolveFilename = function (q, ...rest) {
+      if (q === 'better-sqlite3') {
+        for (const h of SQ) { const er = path.join(h, 'lib', 'index.js'); if (fs.existsSync(er)) return yuan.call(Mod, er, ...rest); }
+      }
+      return yuan.call(this, q, ...rest);
+    };
+  }
+  const { JiyiCangFuwu } = await import(pathToFileURL(path.join(GEN, 'packages/memory-os/dist/index.js')).href);
 
   const key = (() => {
     const f = process.env.MIMO_KEY_FILE || '';
@@ -99,6 +132,11 @@ console.log('\n多牛马协同 · 真机（真实模型 + 真实工具）');
   if (!key && yongOllama) console.log('  [提示] 没有 MiMo key ⇒ 只跑本地 Ollama 那一遍');
   {
     const gen = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-team-'));
+    const jiYiMu = fs.mkdtempSync(path.join(os.tmpdir(), 'warmy-team-mem-'));
+    const svc = new JiyiCangFuwu({ CangLu: jiYiMu });
+    /** 与记忆服务 IPC 的 append 处理器同形（{ ok:true, seq }） */
+    const kou = { isReady: true, append: async (rec, Bi) => { const x = svc.append(rec, Bi); return { ok: true, seq: x.seq }; } };
+    const shenJi = [];
     const QUN = 'proj-team-test';
     const router = new GroupChatRouter({ queueWhenFixedBusy: false });
     router.createGroup({
@@ -138,6 +176,9 @@ console.log('\n多牛马协同 · 真机（真实模型 + 真实工具）');
       },
       projectMemory: () => '',
       decisionContext: () => '',
+      heiBanCun: CUN.zaoHeiBanCun(() => kou, (code, data) => shenJi.push({ code, ...data })),
+      heShiChanWu: CUN.zaoHeShiChanWu(() => gen),
+      cunZhengLiuQuanWen: CUN.zaoCunZhengLiuQuanWen(() => kou, (code, data) => shenJi.push({ code, ...data })),
     };
     /**
      * Ollama 走 OpenAI 兼容 /v1 端点（与项目里 ollama 供应商的工具调用路径一致）。
@@ -176,6 +217,36 @@ console.log('\n多牛马协同 · 真机（真实模型 + 真实工具）');
       shuo(fs.readFileSync(luo, 'utf8').includes(BIAO), 'E 文件内容正确');
     }
     shuo(String(r.reply || '').trim().length > 0, '有回复内容（不是空回复）');
+
+    /**
+     * 第 48 轮：共享黑板 + 结构化蒸馏在**真实模型**下的协议不崩、宿主核实如实。
+     * 走哪一档（jiao_fu / 正文 json / 正文兜底）取决于模型 ⇒ 只记录、不强求；
+     * 但"报有的产物真存在、报没找到的真不存在、落盘的条目都取得回"与模型无关，必须成立。
+     */
+    const zl = r.zhengLiu || [];
+    const hb = r.renWuHeiBan || null;
+    console.log(`     蒸馏：${zl.map((x) => `${x.ming}=${x.laiYuan}${x.chaoChang ? '(超长' + (x.fullRecordId ? '·已存档' : '·未存档') + ')' : ''} 产物${x.artifacts.length}/没找到${x.unverified.length}`).join(' · ') || '（无）'}`);
+    console.log(`     黑板：${hb ? JSON.stringify(hb) : '（无）'}`);
+    shuo(zl.length === (r.executorIds || []).length && zl.every((x) => ['jiao_fu', 'json', 'zheng_wen'].includes(String(x.laiYuan)) || !!x.error),
+      '蒸馏：每个执行者都交回了契约形状的结果（GongzuozheJieguo），记下走的是哪一档', JSON.stringify(zl).slice(0, 300));
+    const heShi = CUN.zaoHeShiChanWu(() => gen);
+    shuo(zl.every((x) => x.artifacts.every((a) => fs.existsSync(a)) && x.unverified.every((u) => heShi(QUN, u) === '')),
+      '蒸馏：宿主核实如实（报"有"的都真存在，报"没找到"的确实不存在）', JSON.stringify(zl.map((x) => [x.artifacts, x.unverified])));
+    shuo(!!hb && hb.yiLuoPan === hb.tiaoShu, '黑板：记忆服务在线时每条都落盘', JSON.stringify(hb));
+    if (hb && hb.tiaoShu) {
+      const qu = Array.from({ length: hb.tiaoShu }, (_, i) => svc.retrieve({ recordId: `hb-${hb.renWuId}-${i + 1}` }));
+      shuo(qu.every((x) => x && String(x.raw).includes(hb.renWuId)), `黑板：${hb.tiaoShu} 条都能按 recordId 取回原文`);
+    }
+    for (const x of zl.filter((y) => y.chaoChang && y.fullRecordId)) {
+      const q = svc.retrieve({ recordId: x.fullRecordId }, { maxChars: 20000 });
+      shuo(!!q && String(q.raw).length > 0 && String(r.reply || '').includes(x.fullRecordId), `蒸馏：${x.ming} 的超长结论存了档，回复里的指针取得回`);
+    }
+    if (fs.existsSync(luo)) {
+      const heShiGuo = zl.some((x) => x.artifacts.some((a) => path.resolve(a) === path.resolve(luo)));
+      ti.push(`文件落盘后宿主核实${heShiGuo ? '找到了' : '没被执行者报成产物（模型没在交付里写路径；不判红）'}`);
+    }
+    try { svc.close(); } catch { /* noop */ }
+    try { fs.rmSync(jiYiMu, { recursive: true, force: true }); } catch { /* noop */ }
 
     // B：干完活成员回到 idle（否则下一条消息没人接）
     const chengYuan = router.listMembers(QUN);

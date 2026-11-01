@@ -4,12 +4,20 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 const ROOT = process.cwd();
 const PKG = path.join(ROOT, 'packages', 'app-shell');
 const ROUND = (() => { const i = process.argv.indexOf('--round'); return i >= 0 ? String(process.argv[i + 1] || '1') : '1'; })();
 const PORT = 9770 + (Number(ROUND) || 1);
-const DATA = path.join(process.env.APPDATA || '', '@warmy', 'app-shell');
+/**
+ * **隔离的 userData**（第 48 轮）：以前这里直接用 `%APPDATA%\@warmy\app-shell`（注释说 `--user-data-dir` 无效 —— 那是早期主进程写死路径时的事，
+ * 现在其它真机门禁都靠 `--user-data-dir` 隔离且已验证生效）。用真实目录的代价是**每跑一遍 live 档就把用户真实配置整个删掉重建**
+ * （round18 系列与 round19 开头就是 `rmSync(DATA)`：首启备份、本机语音模型、身份与密钥仓一起没了）。现在每次一个临时目录（系统临时目录下，名字带时间戳），不再碰用户真实配置。
+ */
+const DATA = path.join(os.tmpdir(), 'warmy-round19-' + Date.now());
+fs.mkdirSync(DATA, { recursive: true });
 const MARK = `R19-${ROUND}-${Date.now().toString(36)}`;
 const key = (() => {
   const k = String(process.env.MIMO_KEY || '').trim();
@@ -52,7 +60,7 @@ fs.writeFileSync(path.join(DATA, 'settings.json'), JSON.stringify(s, null, 2), '
 const env = { ...process.env, MIMO_KEY: key };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(path.join(PKG, 'node_modules', 'electron', 'dist', 'electron.exe'),
-  [`--remote-debugging-port=${PORT}`, path.join(PKG, 'dist', 'electron-main.js')],
+  [`--remote-debugging-port=${PORT}`, `--user-data-dir=${DATA}`, path.join(PKG, 'dist', 'electron-main.js')],
   { cwd: PKG, stdio: ['ignore', 'pipe', 'pipe'], env });
 const logs = [];
 child.stdout.on('data', (d) => logs.push(String(d)));
@@ -125,7 +133,46 @@ async function main() {
   ok('① 自动添加模型', app.includes('自动添加模型'));
   ok('② 手动添加模型+弹窗', app.includes('手动添加模型') && app.includes('kaiShouDongMoXing'));
   ok('③ 复制=文件本体', em.includes('Set-Clipboard -LiteralPath') && app.includes('已复制文件'));
-  ok('④⑤ 偏好 v3 软门禁', ac.includes('soft-gate') && ac.includes('biaoJiZanShiTiaoGuo') && ac.includes('RuanMenJinGuiZe'));
+  /**
+   * 这条以前钉的是三个**字面**（`soft-gate` / `biaoJiZanShiTiaoGuo` / `RuanMenJinGuiZe`）。
+   * 真实现状（本轮查出来的）：那两个自愈函数早就被删成两行空注释，规则表 `GONG_YING_SHANG_RUAN_MEN_JIN`
+   * 全仓**没有任何调用方** ⇒ "v3 软门禁"只剩一张没人读的表。所以这里不只是改判据，是把机制补回来再验：
+   * ① 纯函数真值表（命中/自愈/复盘）② 宿主真的在"整条链都失败"时把官方协议提示附给用户。
+   */
+  {
+    const AC = await import(pathToFileURL(path.join(PKG, 'dist/archive-cleanup.js')).href);
+    const BIAO = AC.GONG_YING_SHANG_RUAN_MEN_JIN;
+    ok('④⑤ 偏好 v3 软门禁：规则表在、字段齐（id/match/action/severity/status/message/source）',
+      Array.isArray(BIAO) && BIAO.length >= 4
+      && BIAO.every((r) => r.id && r.match && r.action && r.severity && r.status && r.message && r.source));
+    ok('④⑤ 命中判定按 match 类型走（keyword 大小写不敏感 / regex / always），skipped 的不再说话',
+      (() => {
+        const mimo = AC.piPeiRuanMenJin(BIAO, 'mimo 401 Invalid API Key');
+        const tiao = mimo.map((r) => r.id);
+        const gai = BIAO.map((r) => (r.id === 'provider-mimo-site-key' ? AC.biaoJiZanShiTiaoGuo(r, '这次不是站点问题', 'model') : r));
+        const zai = AC.piPeiRuanMenJin(gai, 'mimo 401 Invalid API Key').map((r) => r.id);
+        return tiao.includes('provider-mimo-site-key')
+          && !zai.includes('provider-mimo-site-key')                       // 跳过之后不再命中
+          && AC.piPeiRuanMenJin(BIAO, '完全无关的一句话').length === 0      // 不该命中的不命中
+          && AC.piPeiRuanMenJin([{ id: 'x', category: 'style', match: { type: 'always', pattern: '' }, action: 'advise', severity: 'low', message: 'm', status: 'active', source: 'user' }], '任意').length === 1;
+      })());
+    ok('④⑤ 自愈必须**留痕**（谁跳的/为什么/什么时候），归档复盘能把 skipped 的捞出来',
+      (() => {
+        const yuan = BIAO[0];
+        const gai = AC.biaoJiZanShiTiaoGuo(yuan, '模型判断这次异常与它无关', 'model');
+        const fuPan = AC.guiDangFuPanRuanMenJin([yuan, gai]);
+        return gai.status === 'skipped' && gai !== yuan                      // 不改原对象
+          && (gai.skipHistory || []).length === 1
+          && gai.skipHistory[0].by === 'model' && gai.skipHistory[0].reason.includes('无关')
+          && fuPan.length === 1 && fuPan[0].id === yuan.id;
+      })());
+    ok('④⑤ 坏正则不许把整张表废掉（一条规则写错，其它规则照常命中）',
+      AC.piPeiRuanMenJin([{ id: 'huai', category: 'style', match: { type: 'regex', pattern: '(' }, action: 'warn', severity: 'low', message: 'x', status: 'active', source: 'user' }, ...BIAO], 'ollama 连接被拒绝').some((r) => r.id === 'provider-ollama-local'));
+    ok('④⑤ 宿主接线：整条调用链都失败时，把命中的官方协议提示附给用户（并记 chat.soft-gate）',
+      /piPeiRuanMenJin\(GONG_YING_SHANG_RUAN_MEN_JIN,/.test(em) && /chat\.soft-gate'/.test(em)
+      && /官方协议提示（软门禁 · 只引导不拦截）/.test(em)
+      && em.indexOf('piPeiRuanMenJin(') > em.indexOf('if (zuiHouCuo) {'));
+  }
   ok('⑧ 协议选择框', app.includes("['openai-compatible', 'openai', 'anthropic']"));
   ok('⑨ 决策卡 24h', em.includes('24 * 60 * 60 * 1000'));
   ok('⑩ 配速 1.7 倍', app.includes('/ 1.7'));

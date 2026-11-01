@@ -42,6 +42,12 @@ Scan the QR code below.
 
 <img src="sponsors/zfbd.png" width="240" alt="Alipay QR code (支付宝收款码)">
 
+### PayPal
+
+Donate through PayPal · 通过 PayPal 赞助：
+
+[paypal.me/pondsi](https://www.paypal.com/paypalme/pondsi)
+
 ---
 
 ## Other ways to help · 其他支持方式

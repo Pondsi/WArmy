@@ -113,7 +113,7 @@ const checks = [
   ['成员 id 插值', gs.includes('`inst:${instId}`') && gs.includes('`m-${Date.now().toString(36)}-${LieBiao.length}`')],
   ['max 上限插值', gs.includes('max ${QUN_CHENGYUAN_SHANGXIAN}')],
   ['IPC sender fail-closed', em.includes('forbidden sender') && /return false/.test(em) && em.includes('senderFrame')],
-  ['IPC 非 file 默认拒', /startsWith\('file:'\)/.test(em)],
+  ['IPC 只接受业务窗口主 frame（index.html / nm-viewer.html 精确白名单，不再用 URL 前缀放行）', em.includes('frame !== wc.mainFrame') && em.includes("'index.html'") && em.includes("'nm-viewer.html'") && !em.includes('IPC_RENDERER_PREFIX') && !/if \(u\.startsWith\('file:'\)\) return true/.test(em)],
   ['devtools 默认不放行 IPC', /WARMY_ALLOW_DEVTOOLS_IPC/.test(em)],
   ['updater 拒远程 http', up.includes('http refused')],
   ['updater 无 sha256 不落盘', up.includes('refuse unverified')],

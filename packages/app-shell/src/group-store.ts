@@ -11,12 +11,18 @@
  * - 只做本地存储，不引入任何 electron 依赖，便于脱离主进程直接跑验证脚本
  */
 import { duJsonWenJianGeLi, anQuanYuanZiXieJson } from './atomic-json.js';
+import type { QunLei as QiYueQunLei, QunJuese } from '@warmy/contracts';
 
 /** 与旧实现保持一致的成员上限 */
 export const QUN_CHENGYUAN_SHANGXIAN = 50;
 
-export type QunLei = 'internal' | 'external';
-export type QunChengyuanJuese = 'creator' | 'admin' | 'member';
+/**
+ * 群类型 / 成员角色**只有一份定义**（契约 v1.1 `QunLei` / `QunJuese`）。
+ * 本地存储只支持其中一部分（还没有 direct 群、没有外部成员角色），所以这里是**有意收窄**的子集，
+ * 而不是另写一份：契约改名或删值时这里会编译不过，不会再像以前那样悄悄少一个值。
+ */
+export type QunLei = Extract<QiYueQunLei, 'internal' | 'external'>;
+export type QunChengyuanJuese = Extract<QunJuese, 'creator' | 'admin' | 'member'>;
 export type QunChengyuanLaiyuan = 'instance' | 'invite' | 'migrated';
 
 export interface qunJilu {
@@ -30,6 +36,11 @@ export interface qunJilu {
   updatedAt: number;
   /** ipc=由群创建接口写入；migrated=启动时从旧会话状态回填 */
   origin: 'ipc' | 'migrated';
+  /**
+   * 第 111 轮：无指纹旧群被“重建/重新邀请”后，旧记录保留作只读历史，
+   * 这里记下新群 id，避免界面反复提示“重建”。新版本不再假装兼容无指纹旧群。
+   */
+  rebuiltTo?: string;
   /**
    * 建群者（= 本机身份）的指纹；**拿不到就留空**（例如从旧会话状态回填的群）。
    * 用途：校验成员证书的签发者必须是本群创建者 —— 本机建的群这一步是确定的，
@@ -255,6 +266,7 @@ function normalize(raw: unknown): QunCangZhuangtai {
     // 旧记录没有 creatorFingerprint → 保持缺失（不编造）
     const chuangJianZheZhiWen = asString(jiLu.creatorFingerprint);
     if (chuangJianZheZhiWen) hang.creatorFingerprint = chuangJianZheZhiWen;
+    if (asString(jiLu.rebuiltTo)) hang.rebuiltTo = asString(jiLu.rebuiltTo);
     // 旧记录没有项目属性 → 保持缺失（上层回退到本机设置的兼容路径，见 projectOf）
     const xiangMu = guiFanHuaXiangMu(jiLu.project);
     if (xiangMu) hang.project = xiangMu;
@@ -783,6 +795,40 @@ export class QunCang {
     const w = this.persist(state);
     if (!w.ok) return { ok: false, error: w.error };
     return { ok: true };
+  }
+
+  /**
+   * 第 111 轮：无指纹旧群 = 新版本不再兼容。
+   * 不做“假装补一个指纹”的兼容；保留旧群只读，另建一个新群（成员需重新邀请）。
+   */
+  rebuildLegacy(groupId: string, creatorFingerprint: string, ming?: string): { ok: boolean; error?: string; groupId?: string; oldGroupId?: string } {
+    const fp = String(creatorFingerprint || '').trim();
+    if (!fp) return { ok: false, error: 'creator-fingerprint-required' };
+    const state = this.snapshot();
+    const old = state.groups.find((x) => x.groupId === groupId);
+    if (!old) return { ok: false, error: 'group not found' };
+    if (old.creatorFingerprint) return { ok: false, error: 'not-legacy' };
+    if (old.rebuiltTo) return { ok: false, error: 'already-rebuilt', groupId: old.rebuiltTo };
+    const now = Date.now();
+    const nextId = old.groupId + '-r' + now.toString(36);
+    if (state.groups.some((x) => x.groupId === nextId)) return { ok: false, error: 'id-collision' };
+    state.groups.push({
+      groupId: nextId,
+      ming: String(ming || old.ming || old.groupId) + '（重建）',
+      type: old.type,
+      directedMode: !!old.directedMode,
+      dutyInstanceId: null,
+      createdAt: now,
+      updatedAt: now,
+      origin: 'ipc',
+      creatorFingerprint: fp,
+    });
+    state.members[nextId] = [];
+    old.rebuiltTo = nextId;
+    old.updatedAt = now;
+    const w = this.persist(state);
+    if (!w.ok) return { ok: false, error: w.error || 'persist-failed' };
+    return { ok: true, groupId: nextId, oldGroupId: old.groupId };
   }
 
   /** 一次性回填（旧版本把群列表存在 settings.json 的 state.groups 里）；只做一次 */

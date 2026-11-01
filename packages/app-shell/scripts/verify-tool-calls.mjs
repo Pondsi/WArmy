@@ -419,8 +419,8 @@ const finalText = loop.xiangYingTi.choices[0]?.message?.content || '';
 
   // 超长记录分段取回：逐字节可拼回全文
   const longBody = '分段取回验证｜' + 'P'.repeat(9000) + '｜END';
-  const longRec = await memory.append({ id: `m-${Date.now()}-pager`, sessionId: 's-tools', kind: 'message', ti: longBody }, 'duty');
   const longId = `m-${Date.now()}-pager`;
+  const longRec = await memory.append({ id: longId, sessionId: 's-tools', kind: 'message', ti: longBody }, 'duty');
   let assembled = '';
   let offset = 0;
   let pages = 0;
@@ -501,6 +501,36 @@ console.log('\n[3] 工具结果总预算生效');
     http: mock.state.requests.length,
   });
   console.log(`  单条 ${sizes.join(' / ')} 字符（上限 ${PER}）；总计 ${loop.toolResultChars} 字符（预算 ${TOTAL}）；rounds=${loop.lunShu}`);
+  mock.server.close();
+}
+
+// ══════════════════════════════════════════════════════════════
+// [4] 优雅降级
+// ══════════════════════════════════════════════════════════════
+console.log('\n[3b] 中间回复：发起工具调用的同一条响应里写给用户的话要带回宿主（第 48 轮）');
+{
+  const SHUO = '先回答你：截图里是 WArmy 的任务面板，写着「全面验证WArmy项目」。我再去查一下记录。';
+  const mock = await startModelServer((ti) => {
+    const n = toolMsgsOf(ti).length;
+    if (n === 0) {
+      const r = toolCallResponse('call-zj1', 'retrieve', { seq: markerSeq });
+      r.choices[0].message.content = SHUO;
+      return r;
+    }
+    if (n === 1) return toolCallResponse('call-zj2', 'retrieve', { seq: markerSeq, maxChars: 100 });
+    return textResponse('都做完了：截图已答。');
+  });
+  const provider = congYuSheChuangJian('deepseek', { apiKey: 'sk-mock', baseURL: mock.base, model: 'mock' });
+  const loop = await liaoTianDaiGongJu(
+    provider,
+    { model: 'mock', xiaoXiJi: view.xiaoXiJi, maxTokens: 64, tools: specs },
+    (call, ctx) => yunxingJiyiCangGongju(memory, call, { maxChars: ctx.zuiDaJieGuoZiShu }).then((r) => r.content),
+    { zuiDaLunShu: 4 }
+  );
+  const zj = Array.isArray(loop.zhongJianHuiFu) ? loop.zhongJianHuiFu : [];
+  check('带正文的工具轮 ⇒ 正文进 zhongJianHuiFu（带轮次与时间）；最终答复仍是最后那条', zj.length === 1 && zj[0].text === SHUO && zj[0].lun === 1 && Number(zj[0].ts) > 0
+    && String(loop.xiangYingTi.choices[0].message.content) === '都做完了：截图已答。', { zj, final: loop.xiangYingTi.choices[0].message.content });
+  check('负向：只调工具、正文为空的那一轮不进中间回复（第 2 轮 content=null）', zj.every((x) => x.lun !== 2), zj.map((x) => x.lun));
   mock.server.close();
 }
 

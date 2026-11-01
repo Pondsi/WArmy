@@ -4,12 +4,19 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 const ROOT = process.cwd();
 const PKG = path.join(ROOT, 'packages', 'app-shell');
 const ROUND = (() => { const i = process.argv.indexOf('--round'); return i >= 0 ? String(process.argv[i + 1] || '1') : '1'; })();
 const PORT = 9750 + (Number(ROUND) || 1);
-const DATA = path.join(process.env.APPDATA || '', '@warmy', 'app-shell');
+/**
+ * **隔离的 userData**（第 48 轮）：以前这里直接用 `%APPDATA%\@warmy\app-shell`（注释说 `--user-data-dir` 无效 —— 那是早期主进程写死路径时的事，
+ * 现在其它真机门禁都靠 `--user-data-dir` 隔离且已验证生效）。用真实目录的代价是**每跑一遍 live 档就把用户真实配置整个删掉重建**
+ * （round18 系列与 round19 开头就是 `rmSync(DATA)`：首启备份、本机语音模型、身份与密钥仓一起没了）。现在每次一个临时目录（系统临时目录下，名字带时间戳），不再碰用户真实配置。
+ */
+const DATA = path.join(os.tmpdir(), 'warmy-round18e-' + Date.now());
+fs.mkdirSync(DATA, { recursive: true });
 const MARK = `R18E-${ROUND}-${Date.now().toString(36)}`;
 const key = (() => {
   const k = String(process.env.MIMO_KEY || '').trim();
@@ -30,23 +37,24 @@ const s = {
   yuYan: 'zh-CN', setupDone: true, guideDone: true, privacyConsent: true, providersSeeded: true,
   asrEnabled: true, asrLang: 'auto', globalSecurity: 'full', askOnExceed: false, autoSelectRecommended: true,
   providers: [
-    { id: 'mimo-r18e', biaoQian: 'MiMo(r18e)', protocol: 'openai-compatible', baseURL: 'https://token-plan-cn.xiaomimimo.com/v1', defaultModel: 'mimo-v2.5', models: ['mimo-v2.5', 'mimo-v2.6-flash'], staleModels: {}, hasKey: true },
+    { id: 'mimo-r18e', biaoQian: 'MiMo(r18e)', protocol: 'openai-compatible', baseURL: 'https://token-plan-cn.xiaomimimo.com/v1', defaultModel: 'mimo-v2.6-flash', models: ['mimo-v2.6-flash', 'mimo-v2.6-flash'], staleModels: {}, hasKey: true },
   ],
-  specialModels: { chatChain: ['mimo-v2.5'] },
+  /** 供应商已把聊天模型换成 2.6 系（实测 `GET /models` 只有 mimo-v2.6-flash/-pro；`mimo-v2.5` 回 400 Unsupported model） */
+  specialModels: { chatChain: ['mimo-v2.6-flash'] },
   instances: [{
     id: 'inst-r18e', ming: '牛马-1', name: '牛马-1', status: 'running',
-    model: 'mimo-v2.5', defaultModel: 'mimo-v2.5',
-    availableModels: ['mimo-v2.5'], chain: ['mimo-v2.5'], chainDisabled: [],
+    model: 'mimo-v2.6-flash', defaultModel: 'mimo-v2.6-flash',
+    availableModels: ['mimo-v2.6-flash'], chain: ['mimo-v2.6-flash'], chainDisabled: [],
     smartMode: false, allModels: true, currentModel: '', avatarPreset: 1, avatarDataUrl: '',
   }],
-  modelCaps: { 'mimo-v2.5': { kind: 'chat', tools: true, vision: 'unknown', contextLen: 32768 } },
+  modelCaps: { 'mimo-v2.6-flash': { kind: 'chat', tools: true, vision: 'unknown', contextLen: 32768 } },
 };
 fs.writeFileSync(path.join(DATA, 'settings.json'), JSON.stringify(s, null, 2), 'utf8');
 
 const env = { ...process.env, MIMO_KEY: key };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(path.join(PKG, 'node_modules', 'electron', 'dist', 'electron.exe'),
-  [`--remote-debugging-port=${PORT}`, path.join(PKG, 'dist', 'electron-main.js')],
+  [`--remote-debugging-port=${PORT}`, `--user-data-dir=${DATA}`, path.join(PKG, 'dist', 'electron-main.js')],
   { cwd: PKG, stdio: ['ignore', 'pipe', 'pipe'], env });
 const logs = [];
 child.stdout.on('data', (d) => logs.push(String(d)));

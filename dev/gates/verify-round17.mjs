@@ -22,15 +22,42 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 const ROOT = process.cwd();
 const PKG = path.join(ROOT, 'packages', 'app-shell');
 const ROUND = (() => { const i = process.argv.indexOf('--round'); return i >= 0 ? String(process.argv[i + 1] || '1') : '1'; })();
 const PORT = 9702 + (Number(ROUND) || 1);
-const DATA = path.join(process.env.APPDATA || '', '@warmy', 'app-shell');
+/**
+ * **隔离的 userData**（第 48 轮）：以前这里直接用 `%APPDATA%\@warmy\app-shell`（注释说 `--user-data-dir` 无效 —— 那是早期主进程写死路径时的事，
+ * 现在其它真机门禁都靠 `--user-data-dir` 隔离且已验证生效）。用真实目录的代价是**每跑一遍 live 档就把用户真实配置整个删掉重建**
+ * （round18 系列与 round19 开头就是 `rmSync(DATA)`：首启备份、本机语音模型、身份与密钥仓一起没了）。现在每次一个临时目录（系统临时目录下，名字带时间戳），不再碰用户真实配置。
+ */
+const DATA = path.join(os.tmpdir(), 'warmy-round17-' + Date.now());
+fs.mkdirSync(DATA, { recursive: true });
 const ONLY = (() => { const i = process.argv.indexOf('--only'); return i >= 0 ? String(process.argv[i + 1] || '') : ''; })();
 
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'huihui_ai/qwen3-vl-abliterated:4b';
+/**
+ * 选一只**真能写长文**的本机模型（`OLLAMA_MODEL` 可覆盖）。
+ * 原来写死 4B：这一支的「追加A」要它一次对话写 5000+ 字并**分段 append**，4B 在本机上写不满是常态，
+ * 于是每遍都红 —— 红的是仪器选型，不是产品（与 `verify-round16` 同一条毛病，同一轮一起修）。
+ * 判据是体积 + 名字（嵌入/语音模型不算对话模型）；选不到就退回原来那只并在读数里写明用的是谁。
+ */
+const OLLAMA_MODEL_XU = String(process.env.OLLAMA_MODEL || '').trim();
+async function xuanMoXing() {
+  if (OLLAMA_MODEL_XU) return OLLAMA_MODEL_XU;
+  try {
+    const r = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(6000) });
+    const lie = ((await r.json()).models) || [];
+    const keXuan = lie
+      .map((m) => ({ n: String(m.name || ''), gb: Number(m.size || 0) / 1e9 }))
+      .filter((x) => x.n && x.gb >= 6 && !/whisper|bge|embed|tts|asr/i.test(x.n));
+    if (keXuan.length) return keXuan.sort((a, b) => b.gb - a.gb)[0].n;
+  } catch { /* Ollama 没起 ⇒ 退回默认，后面自然会红并给出原因 */ }
+  return 'huihui_ai/qwen3-vl-abliterated:4b';
+}
+const OLLAMA_MODEL = await xuanMoXing();
+console.log(`· 本机模型 = ${OLLAMA_MODEL}${OLLAMA_MODEL_XU ? '（由 OLLAMA_MODEL 指定）' : '（按体积自动选，可用 OLLAMA_MODEL 覆盖）'}`);
 const key = (() => {
   const k = String(process.env.MIMO_KEY || '').trim();
   if (k) return k;
@@ -41,6 +68,16 @@ const key = (() => {
 
 // 引导跳过 + 两个真实供应商就位（Ollama 本地 + MiMo 云端）
 try {
+  /**
+   * 密钥必须真的装进 profile 的安全仓，否则 ttsChain 上的 MiMo 合成拿不到 key ⇒ 0 字节。
+   * 此前这里只把 key 读进变量、从没落盘（同 18f 的写法补上）。
+   */
+  if (key) {
+    fs.mkdirSync(path.join(DATA, 'secure'), { recursive: true });
+    fs.writeFileSync(path.join(DATA, 'secure', 'keys.enc.json'), JSON.stringify({
+      'mimo-r17': { v: 2, protector: 'plain', data: Buffer.from(key, 'utf8').toString('base64') },
+    }), 'utf8');
+  }
   const sp = path.join(DATA, 'settings.json');
   const s = fs.existsSync(sp) ? JSON.parse(fs.readFileSync(sp, 'utf8')) : {};
   s.setupDone = true; s.guideDone = true; s.privacyConsent = true; s.providersSeeded = true;
@@ -55,6 +92,7 @@ try {
   you('mimo-r17', {
     biaoQian: 'MiMo(r17)', protocol: 'openai-compatible', baseURL: 'https://token-plan-cn.xiaomimimo.com/v1',
     defaultModel: 'mimo-v2.5', models: ['mimo-v2.5', 'mimo-v2.5-asr', 'mimo-v2.5-tts', 'mimo-v2.6-flash'],
+    hasKey: !!key,
   });
   s.providers = ps;
   s.specialModels = {
@@ -62,13 +100,25 @@ try {
     chatChain: [OLLAMA_MODEL], asrChain: ['mimo-v2.5-asr', 'dimavz/whisper-tiny:latest'],
     ttsChain: ['mimo-v2.5-tts'], embedChain: [], imageUndChain: [],
   };
+  /**
+   * ⑩ 与「其他文件」那几步要认第四列的牛马卡片 / 按实例列会话 ⇒ 先把一台牛马铺进夹具自己那份 profile。
+   * 应用出厂不预置牛马（那是待用户拍板的口径），所以补的是**夹具的前置条件**，判据一条没减。
+   */
+  if (!Array.isArray(s.instances) || s.instances.length === 0) {
+    s.instances = [{
+      id: 'inst-r17', ming: '牛马-1', name: '牛马-1', status: 'running',
+      model: OLLAMA_MODEL, defaultModel: OLLAMA_MODEL,
+      availableModels: [OLLAMA_MODEL], chain: [OLLAMA_MODEL], chainDisabled: [],
+      smartMode: false, allModels: true, currentModel: '', avatarPreset: 1, avatarDataUrl: '',
+    }];
+  }
   fs.writeFileSync(sp, JSON.stringify(s, null, 2));
 } catch { /* noop */ }
 
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(path.join(PKG, 'node_modules', 'electron', 'dist', 'electron.exe'),
-  [`--remote-debugging-port=${PORT}`, path.join(PKG, 'dist', 'electron-main.js')],
+  [`--remote-debugging-port=${PORT}`, `--user-data-dir=${DATA}`, path.join(PKG, 'dist', 'electron-main.js')],
   { cwd: PKG, stdio: ['ignore', 'pipe', 'pipe'], env });
 const logs = [];
 child.stdout.on('data', (d) => logs.push(String(d)));
@@ -309,8 +359,11 @@ if (want('settings')) {
       out.inkPreset = ink ? ink.querySelectorAll('button[data-ink]').length : -1;
       out.inkZD = !!(ink && ink.querySelector('[data-zdink]'));
       out.inkVar = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
-      // ⑥ 语音识别
-      out.asrKai = !!document.getElementById('asrKaiQi');
+      // ⑥ 语音识别：断言"当前产品保证的东西"（语言下拉在、默认 auto = 不传 language、ASR 启用入口在）。
+      // 旧的 #asrKaiQi 元素第 27 轮已并入「本地语音与文字互转」卡（开关是 #benDiYuYinKaiGuan）⇒ 钉旧 id 每遍都红，红的是仪器。
+      // ⚠️ 这段注释在 ev() 的模板字符串**里面**：不许出现反引号（会把模板提前收尾，整支门禁变成 SyntaxError）。
+      out.asrKai = !!document.getElementById('benDiYuYinKaiGuan');
+      out.asrKaiJiu = !!document.getElementById('asrKaiQi');
       const sel = document.getElementById('asrYuYan');
       out.asrOpts = sel ? sel.options.length : -1;
       out.asrFirst = sel && sel.options[0] ? sel.options[0].value : '';
@@ -325,7 +378,7 @@ if (want('settings')) {
     say(r?.oldCustomHang === false, `⑧c 下面那行「自定义颜色 + 色块」已删除`);
     say(r?.inkPreset === 50 && r?.inkN === 51 && r?.inkZD, `⑨ 字体颜色 = 首格自定义 + 50 个预设色圈（共 ${r?.inkN} 格）`);
     say(!!r?.inkVar, `⑨b 字体颜色已生效到 --ink（当前 ${r?.inkVar}）`);
-    say(!!r?.asrKai && r?.asrOpts >= 100 && r?.asrFirst === 'auto', `⑥ 「语音识别」开关 + 语言下拉：${r?.asrOpts} 个选项、默认「${r?.asrFirst}」`);
+    say(!!r?.asrKai && r?.asrOpts >= 100 && r?.asrFirst === 'auto', `⑥ 识别语言下拉（${r?.asrOpts} 个选项、默认「${r?.asrFirst}」= 不传 language）+ ASR 启用入口（本地语音开关=${!!r?.asrKai}）`);
     say(!!(r?.asrHasZh && r?.asrHasEn), `⑥b 语言表覆盖主流语种（含 zh=${r?.asrHasZh} / en=${r?.asrHasEn}）`);
   } catch (e) { say(false, `设置页检查异常：${String(e.message || e)}`); }
 }

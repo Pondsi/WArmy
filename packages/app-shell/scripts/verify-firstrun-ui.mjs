@@ -29,7 +29,7 @@ const check = (l, ok, d) => {
   else { fail++; console.log('  FAIL ' + l + (d !== undefined ? '  ' + String(d).slice(0, 300) : '')); }
 };
 
-const env = { ...process.env };
+const env = { ...process.env, WARMY_AUTH_BYPASS: '1' };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(electron, [
   `--remote-debugging-port=${PORT}`,
@@ -107,71 +107,68 @@ while (Date.now() - t1 < 7000) {
 }
 check('确认语言后仍然保持英文', !reverted2, reverted2 ? JSON.stringify(reverted2) : '7s 采样全 en');
 
-// ── E. 引导条：拖动区必须不被窗口拖动区吃掉 ──
-const hasBar = await c.waitForQuiet(`!!document.getElementById('yinDaoTiao')`, { timeout: 15000 });
-check('首启出现引导条', hasBar);
-if (hasBar) {
-  // ── 引导文案里嵌**真实图标**（设置 / 我的牛马 / 牛马管理局）+ 新文案 ──
-  const step1 = await c.evaluate(`(function(){
-    const bar = document.getElementById('yinDaoTiao');
-    return { text: (bar.innerText || ''), icons: bar.querySelectorAll('.yinDaoTuBiao').length };
+// ── E. 开始使用清单（R98 新清单；旧引导条/漫游层必须消失） ──
+const hasGuide = await c.waitForQuiet(`!!document.getElementById('startGuide')`, { timeout: 15000 });
+check('首启出现「开始使用」清单', hasGuide);
+if (hasGuide) {
+  const g1 = await c.evaluate(`(function(){
+    const card = document.getElementById('startGuide');
+    return {
+      steps: card.querySelectorAll('.startGuideStep').length,
+      done: card.querySelectorAll('.startGuideStep.isDone').length,
+      active: [...card.querySelectorAll('.startGuideStep')].findIndex((e) => e.classList.contains('isActive')),
+      title: (card.querySelector('.startGuideTitle') || {}).textContent || '',
+      sub: (card.querySelector('.startGuideSub') || {}).textContent || '',
+      oldBar: !!document.getElementById('yinDaoTiao'),
+      oldTour: !!document.getElementById('warmyTour'),
+      card: (() => { const r = card.getBoundingClientRect(); return { l: Math.round(r.left), t: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) }; })(),
+      vw: innerWidth, vh: innerHeight,
+      topHit: (() => { const e = document.elementFromPoint(Math.round(innerWidth / 2), 60); return !!(e && e.closest && e.closest('#startGuide')); })(),
+    };
   })()`);
-  check('第 1 步文案里有「设置」的真实图标', step1.icons >= 1, JSON.stringify({ icons: step1.icons, text: step1.text.slice(0, 70) }));
-  check('第 1 步指向「设置 → 模型 → 拉取模型」', /设置|Settings/.test(step1.text) && /模型|Model/.test(step1.text) && /拉取|Fetch/.test(step1.text), step1.text.slice(0, 90));
-  await c.evaluate(`(function(){ const b=[...document.querySelectorAll('#yinDaoTiao [data-yd="next"]')][0]; if(b) b.click(); return !!b; })()`);
-  await sleep(700);
-  const step1b = await c.evaluate(`(function(){
-    const bar = document.getElementById('yinDaoTiao');
-    return { text: (bar.innerText || ''), icons: bar.querySelectorAll('.yinDaoTuBiao').length };
-  })()`);
-  check('第 1 步没做完时点「下一步」：图标不许被 textContent 冲掉', step1b.icons >= 1 && !step1b.text.includes('{icon:'), JSON.stringify({ icons: step1b.icons, raw: step1b.text.includes('{icon:') }));
-  // 第 2 步要真的建供应商/牛马才会推进（步骤有达成条件）——这里直接验**文案与图标占位**是否就位
-  const packs = await c.evaluate(`window.warmy.i18n('zh-CN').then(p => p.strings)`);
-  const b2 = packs && packs['guide.step2.body'] || '';
-  const v2 = packs && packs['guide.step2.value'] || '';
-  check('第 2 步文案是「我的牛马 → 牛马管理局」', /我的牛马/.test(b2) && /牛马管理局/.test(b2), b2.slice(0, 80));
-  check('第 2 步两个导航都带真实图标占位', b2.includes('{icon:niuMa}') && b2.includes('{icon:guanLiJu}'), b2.slice(0, 80));
-  // 产品要求（2026-10-02）：删掉「创建完成后，点开它并给它选默认模型。」—— 默认模型已并入调用链
-  check('第 2 步含「管理模型要正确而有效」且不再提默认模型', /管理模型/.test(b2) && /正确而有效/.test(b2) && !/默认模型/.test(b2), b2.slice(80, 190));
-  check('第 2 步收益行只说「能随时差遣的 AI 牛马」', /能随时差遣/.test(v2) && !/创建完成后/.test(v2), v2);
+  check('旧引导条与漫游层都已删除', g1 && g1.oldBar === false && g1.oldTour === false, JSON.stringify(g1));
+  check('清单是 4 步、第 1 步展开、进度 0/4', g1 && g1.steps === 4 && g1.done === 0 && g1.active === 0, JSON.stringify({ steps: g1 && g1.steps, done: g1 && g1.done, active: g1 && g1.active }));
+  check('清单有标题与进度，且完整在视口内', g1 && g1.title.length > 0 && /0\/4/.test(g1.sub) && g1.card.l >= 0 && g1.card.t >= 0 && g1.card.l + g1.card.w <= g1.vw && g1.card.t + g1.card.h <= g1.vh, JSON.stringify(g1));
+  check('清单非阻塞（页面顶部仍可点到底层内容）', g1 && g1.topHit === false, JSON.stringify({ topHit: g1 && g1.topHit }));
 
-  const region = await c.evaluate(`(function(){
-    const bar = document.getElementById('yinDaoTiao');
-    const g = (e) => e ? getComputedStyle(e).webkitAppRegion : null;
-    return { bar: g(bar), head: g(bar.querySelector('.yinDaoHead')), btn: g(bar.querySelector('button')), title: g(document.getElementById('biaoTiLan')), titleBottom: Math.round(document.getElementById('biaoTiLan').getBoundingClientRect().bottom) };
+  await c.evaluate(`(function(){ const b=document.querySelector('#startGuide [data-sg="go"]'); if(b) b.click(); return !!b; })()`);
+  await sleep(1000);
+  const go = await c.evaluate(`(function(){
+    const nav = document.querySelector('.ceLanTiaoMu.jiHuo')?.getAttribute('data-nav') || '';
+    const sec = document.getElementById('peiZhiDaoHang')?.querySelector('button[data-sec="model"]');
+    const host = document.getElementById('provTianJiaRuKou');
+    return { nav, modelBtn: !!sec, host: !!host, pulse: !!(host && host.classList.contains('startGuidePulse')) };
   })()`);
-  check('引导条是 no-drag（标题栏仍是 drag）', region.bar === 'no-drag' && region.head === 'no-drag' && region.btn === 'no-drag' && region.title === 'drag', JSON.stringify(region));
+  check('点「去添加供应商」真的进入 设置 → 模型 并定位供应商入口', go && go.nav === 'settings' && go.modelBtn === true && go.host === true, JSON.stringify(go));
+  await sleep(500);
+  const afterGo = await c.evaluate(`(function(){ return { panel: !!document.getElementById('startGuide'), pill: !!document.getElementById('startGuidePill') }; })()`);
+  check('去操作后清单仍保留（第 98 轮口径：不自动收起）', afterGo && afterGo.panel === true && afterGo.pill === false, JSON.stringify(afterGo));
+  await c.evaluate(`(function(){ document.getElementById('startGuidePill')?.click(); return true; })()`);
+  await sleep(450);
 
-  const rect = () => c.evaluate(`(function(){ const r=document.getElementById('yinDaoTiao').getBoundingClientRect(); return { l:Math.round(r.left), t:Math.round(r.top), w:Math.round(r.width), h:Math.round(r.height) }; })()`);
-  const headXY = () => c.evaluate(`(function(){ const r=document.getElementById('yinDaoTiao').querySelector('.yinDaoHead').getBoundingClientRect(); return { x:Math.round(r.left+r.width/2), y:Math.round(r.top+r.height/2) }; })()`);
-  const drag = async (fromX, fromY, toX, toY) => {
-    await c.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: fromX, y: fromY, button: 'left', clickCount: 1, buttons: 1 });
-    for (let i = 1; i <= 12; i++) {
-      await c.send('Input.dispatchMouseEvent', { type: 'mouseMoved', button: 'left', buttons: 1, x: Math.round(fromX + (toX - fromX) * i / 12), y: Math.round(fromY + (toY - fromY) * i / 12) });
-      await sleep(16);
-    }
-    await c.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: toX, y: toY, button: 'left', clickCount: 1, buttons: 0 });
-  };
-  const r0 = await rect();
-  // 拖到顶部：y=4 落在标题栏（40px）里
-  let h = await headXY();
-  await drag(h.x, h.y, 600, 4);
-  await sleep(700);
-  const r1 = await rect();
-  check('引导条能被拖到顶部（贴顶 8px）', r1.t <= 12 && r1.t !== r0.t, `初始 t=${r0.t} → 顶部 t=${r1.t}`);
-  const hit = await c.hitTest(600, 20);
-  check('顶部重叠区命中的是引导条自身（不是窗口拖动区）', String(hit).includes('yinDao'), String(hit));
-  // 再从顶部拖回来：这正是"拖到顶部就再也拖不动"的现场
-  h = await headXY();
-  await drag(h.x, h.y, 500, 420);
-  await sleep(700);
-  const r2 = await rect();
-  check('从顶部仍能拖动（不再被主界面拖动抢走）', r2.t > 60, `t=${r2.t}`);
-  check('松手后四边吸附（贴边 8px 或贴顶/贴底）', [8, Math.round(8)].includes(r2.t) || r2.l === 8 || r2.t > 60, `l=${r2.l} t=${r2.t}`);
+  await c.evaluate(`(function(){ const b=document.querySelector('#startGuide [data-sg="later"]'); if(b) b.click(); return !!b; })()`);
+  await sleep(500);
+  const later = await c.evaluate(`(function(){
+    return { panel: !!document.getElementById('startGuide'), pill: !!document.getElementById('startGuidePill') };
+  })()`);
+  const stAfter = await c.evaluate(`window.warmy.setupState().then((s) => ({ guideDone: s.guideDone === true }))`);
+  check('「稍后设置」收起为准出胶囊，并落盘 guideDone', later && later.panel === false && later.pill === true && stAfter && stAfter.guideDone === true, JSON.stringify({ later, stAfter }));
+
+  await c.evaluate(`window.__startGuideOpen(true)`);
+  await sleep(500);
+  const reopened = await c.evaluate(`(function(){ return { open: !!document.getElementById('startGuide'), active: [...document.querySelectorAll('#startGuide .startGuideStep')].findIndex((e) => e.classList.contains('isActive')) }; })()`);
+  check('重看入口能重新打开清单并回到第 1 步', reopened && reopened.open === true && reopened.active === 0, JSON.stringify(reopened));
+
+  await c.evaluate(`(function(){ const b=document.querySelector('#startGuide [data-sg="skip"]'); if(b) b.click(); return !!b; })()`);
+  await sleep(400);
+  const skipped = await c.evaluate(`(function(){ return { active: [...document.querySelectorAll('#startGuide .startGuideStep')].findIndex((e) => e.classList.contains('isActive')), tag: !!document.querySelector('#startGuide .startGuideSkipTag') }; })()`);
+  check('单步可跳过：当前步标记已跳过并展开下一步', skipped && skipped.active === 1 && skipped.tag === true, JSON.stringify(skipped));
+  await c.evaluate(`window.__startGuide?.close()`);
+  await sleep(400);
 }
 
 // ── F. 设置页：分区必须都在内容列里 ──
-await c.evaluate(`(function(){ const b=document.querySelector('#yinDaoTiao [data-yd="skip"]'); if(b) b.click(); return 1; })()`);
+await c.evaluate(`(function(){ window.__startGuide?.close?.(); return 1; })()`);
 await sleep(400);
 await c.evaluate(`(function(){ document.querySelector('[data-nav="settings"]').click(); return 1; })()`);
 await sleep(1200);

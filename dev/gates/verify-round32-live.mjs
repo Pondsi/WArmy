@@ -18,7 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { attach, sleep } from './packages/app-shell/scripts/cdp-lib.mjs';
+import { attach, sleep } from '../../packages/app-shell/scripts/cdp-lib.mjs';
 
 const GEN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const pkgRoot = path.join(GEN, 'packages', 'app-shell');

@@ -17,7 +17,7 @@ const PORT = Number(process.env.WARMY_LIVE_CDP_PORT || 9899);
 const electron = path.join(pkgRoot, 'node_modules', 'electron', 'dist', 'electron.exe');
 const mainJs = path.join(pkgRoot, 'dist', 'electron-main.js');
 
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, blocked = 0;
 const failures = [];
 function check(biaoQian, ok, detail) {
   if (ok) { pass++; console.log('  ok  ' + biaoQian); }
@@ -94,7 +94,9 @@ async function main() {
       };
     })()`);
     if (bannerGeom.skip) {
-      check('横幅几何（无聊天区时跳过）', true);
+      // 前置 DOM 缺失 = 环境/加载失败，不是"通过"。阻塞必须显式计数并让退出码变红。
+      blocked += 1;
+      console.log('  [BLOCKED] 横幅几何：缺少 #wangLuoBanner 或 #liaoTianBuJu（聊天区未加载）');
     } else if (!bannerGeom.shown) {
       check('横幅未显示时聊天区不被挤压', bannerGeom.overlapPx <= 2, bannerGeom);
     } else {
@@ -722,9 +724,9 @@ async function main() {
     try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* noop */ }
   }
 
-  console.log(`\n==== verify-live-ui: ${pass} ok / ${fail} FAIL ====`);
+  console.log(`\n==== verify-live-ui: ${pass} ok / ${fail} FAIL / ${blocked} BLOCKED ====`);
   if (failures.length) console.log('失败项：\n - ' + failures.join('\n - '));
-  process.exit(fail === 0 ? 0 : 1);
+  process.exit(fail === 0 && blocked === 0 ? 0 : 1);
 }
 
 main().catch((e) => { console.error(e); process.exit(3); });

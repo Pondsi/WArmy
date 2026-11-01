@@ -41,8 +41,17 @@ panding('项1 头像文件都在（person-1 / person-10）', p1.length > 100 && 
     /const PERSON_DEFAULT = '\.\/icons\/avatars\/user-default\.svg'/.test(appJs));
   panding('项1 新默认头像**不含性别/年龄/种族/职业线索**（无头发形状、无肤色色块、无职业服饰）',
     !/hair|uniform|suit|beard/i.test(df) && !/#(FFE0B2|F8BBD0|D7A86E)/i.test(df), 'tokens checked');
-  panding('项1 与其它头像同一套风格（扁平矢量 + 整圆底 + 100×100）',
-    /<circle cx="50" cy="50" r="50"/.test(df) && /linearGradient/.test(df));
+  /**
+   * 第 44 轮改这条：原来判 `linearGradient` 存在，而第 42 轮把默认头像重做成**纯色扁平**的第 5 版
+   * （注释就写着"最多 4 种颜色"）⇒ 渐变被有意去掉，门禁红在设计演进上而不是缺陷上。
+   * 改成守"同一套风格"的真正不变量：**整圆底 + 100×100 + 实色填充 + 颜色数受限**，
+   * 比原来更严（原来只要求"有渐变"，而渐变根本不是"扁平矢量"的必要条件）。
+   */
+  panding('项1 与其它头像同一套风格（整圆底 + 100×100 + 扁平实色 + 颜色数 ≤4）', (() => {
+    const se = new Set((df.match(/#[0-9A-Fa-f]{6}/g) || []));
+    return /<circle cx="50" cy="50" r="50"/.test(df) && /viewBox="0 0 100 100"/.test(df)
+      && /fill="#[0-9A-Fa-f]{6}"/.test(df) && se.size <= 4 && !/radialGradient/.test(df);
+  })(), '颜色数=' + new Set(df.match(/#[0-9A-Fa-f]{6}/g) || []).size);
 }
 
 /* ═══ 项 2：社交接入搬到牛马设置 ═══════════════════════════════════════ */
@@ -82,15 +91,17 @@ panding('项4 第 3 行只在有结局时出现，且**不重复状态**（第 3
 panding('项4 删掉了那条重复的「更新 …」行', !/chat\.xdUpdated'\) \+ ' ' \+ geng/.test(appJs) && !/xdXian3\.textContent = tOr\('chat\.xdUpdated'/.test(appJs));
 
 /* ═══ 项 5：执行内容放进思考块 ═════════════════════════════════════════ */
-panding('项5 行动行追加进本轮最后一条回复的 .siKaoKuai（不再单开区块）',
-  /let kuai = wrap\.querySelector\('\.siKaoKuai'\)/.test(appJs) && /kuai\.appendChild\(xingDongHangNode\(m\)\)/.test(appJs));
+panding('项5 行动行追加进分段执行过程（不再单开区块）',
+  /guoChengLieHtml/.test(appJs) && /guoChengDuan/.test(appJs) && /xingDongHangNode\(x\)\.outerHTML/.test(appJs));
 panding('项5 不再创建 details.xingDongKuai', !/className = 'xingDongKuai zhiXingKuai'/.test(appJs));
-panding('项5 按时间升序插入（一条时间线）', /mingXi\.sort\(\(a, b\) => \(Number\(a\.ts\) \|\| 0\) - \(Number\(b\.ts\) \|\| 0\)\)/.test(appJs));
+panding('项5 按时间升序插入（一条时间线）',
+  /const ev = \[\.\.\.think, \.\.\.mids, \.\.\.tools\]/.test(appJs) && /\.sort\(\(a, b\) => \(a\.ts - b\.ts\)/.test(appJs));
 
 /* ═══ 项 6：反复授权 + 完不成 ═══════════════════════════════════════════ */
-panding('项6 思考档位先净化成供应商词汇（l3 → medium；否则 MiMo 直接 400 整轮失败）',
-  /function jingHuaSiKaoCanShu/.test(main) && /if \(\['none', 'low', 'medium', 'high'\]\.includes\(s\)\) return s;/.test(main)
-  && /const siKaoExtra = jingHuaSiKaoCanShu\(siKaoCanShu\(/.test(main));
+panding('项6 思考档位按模型真实档位映射（不再发 l3 给供应商；reasoning_effort 用标准词）',
+  /function siKaoCanShu/.test(main) && /thinking_level: shi/.test(main)
+  && /reasoning_effort: std/.test(main) && /const siKaoExtra = siKaoCanShu\(/.test(main)
+  && !/jingHuaSiKaoCanShu/.test(main));
 panding('项6 授权按「路径 + 读写类别」记，换工具不再重复询问',
   /function luJingQuanPiPei/.test(main) && /const yaoLei = gongJuQuanLei\(gongJuMing\)/.test(main) && /jiLuLuJingQuan\(sessionId, zhenLu, yaoLei\)/.test(main));
 panding('项6 写授权覆盖读、读授权不覆盖写（权限不外溢）',
@@ -103,8 +114,9 @@ panding('项7 read_file 的说明不再限制"只能工作区内相对路径"（
   /读取类工具，不会改动文件/.test(workTools) && /可以给绝对路径（工作区外会先征求用户同意）/.test(workTools));
 panding('项7 二进制/可执行也给"它是什么"的结论（类型/大小/修改时间 + 别再换工具）',
   /已读到这个文件的\*\*元信息\*\*/.test(workTools) && /不要换个工具再读一遍/.test(workTools) && /Windows 可执行程序（PE，MZ 头）/.test(workTools));
-panding('项7 会改动文件的那一类中文标签改成「修改」，与「读取」彻底区分',
-  /return '修改' \+ \(p \? '文件' \+ houZhui : '文件'\)/.test(appJs));
+panding('项7 会改动文件的那一类中文标签改成「修改文件」，与「读取文件」彻底区分',
+  /if \(\/edit_file\|append_file\|patch_file\|replace_in_file\/\.test\(m\)\) return '修改文件';/.test(appJs)
+  || /return '修改' \+ \(p \? '文件' \+ houZhui : '文件'\)/.test(appJs));
 
 /* ═══ 项 8：蹦跶预留位加宽 ═════════════════════════════════════════════ */
 panding('项8 预留位加宽到 22px（两份 CSS 一致）',
@@ -133,11 +145,11 @@ panding('项8 蹦跶图标放大到 16px', /\.niuMaBeng img \{ width: 16px; heig
 panding('dist/preload.cjs 已含社交接入桥',
   ['sheJiaoPingTai:', 'sheJiaoBaoCunPeiZhi:'].every((k) => rd(path.join(DIST, 'preload.cjs')).includes(k)));
 panding('dist 渲染层含本轮改动（xdStart / siKaoKuai 追加 / user-default）',
-  (() => { const d = rd(path.join(DIST, 'renderer/app.js')); return d.includes('chat.xdStart') && d.includes("querySelector('.siKaoKuai')") && d.includes('user-default.svg'); })());
+  (() => { const d = rd(path.join(DIST, 'renderer/app.js')); return d.includes('chat.xdStart') && d.includes('guoChengLie') && d.includes('user-default.svg'); })());
 panding('dist CSS 含木马蒙版与 22px 预留位',
   (() => { const d = rd(path.join(DIST, 'renderer/app.css')); return d.includes('muMa.svg') && d.includes('flex: 0 0 22px'); })());
-panding('dist 主进程含净化函数与路径授权',
-  (() => { const d = rd(path.join(DIST, 'electron-main.js')); return d.includes('jingHuaSiKaoCanShu') && d.includes('luJingQuanPiPei'); })());
+panding('dist 主进程含思考档位映射与路径授权',
+  (() => { const d = rd(path.join(DIST, 'electron-main.js')); return d.includes('siKaoCanShu') && d.includes('gouJianDangWeiAnShe') && d.includes('luJingQuanPiPei'); })());
 
 /* ═══ 单元：真跑编译产物 ═══════════════════════════════════════════════ */
 {

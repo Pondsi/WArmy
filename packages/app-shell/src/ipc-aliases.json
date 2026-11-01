@@ -229,7 +229,6 @@
   "warmy:audit-log": "warmy:shenJiRiZhi",
   "warmy:audit-clear": "warmy:shenJiQingChu",
   "warmy:secure-key-save": "warmy:anQuanMiYaoBaoCun",
-  "warmy:secure-key-load": "warmy:anQuanMiYaoJiaZai",
   "warmy:archive-external": "warmy:guiDangWaiBu",
   "warmy:session-summary": "warmy:huiHuaZhaiYao",
   "warmy:archive-list": "warmy:guiDangLieBiao",

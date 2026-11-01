@@ -167,10 +167,13 @@ for (const pkg of ['contracts', 'providers', 'group-router', 'board', 'ccr-compr
 const bundledNodeDir = process.platform === 'win32' ? `win-${process.arch}` : `${process.platform}-${process.arch}`;
 const bundledNode = path.join(repoRoot, 'resources', 'node', bundledNodeDir, process.platform === 'win32' ? 'node.exe' : 'node');
 
+const childEnv = { ...process.env, WARMY_AUTH_BYPASS: '1', ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { WARMY_NODE: bundledNode } : {}) };
+// 门禁是"起真 Electron"，不是当 Node 用：Qoder/CI 可能继承 ELECTRON_RUN_AS_NODE=1
+delete childEnv.ELECTRON_RUN_AS_NODE;
 const child = spawn(electronPath, [mainFile, `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`, '--disable-features=CalculateNativeWinOcclusion'], {
   cwd: appRoot,
   stdio: ['ignore', 'pipe', 'pipe'],
-  env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', ...(fs.existsSync(bundledNode) ? { WARMY_NODE: bundledNode } : {}) },
+  env: childEnv,
 });
 const appLogs = [];
 child.stdout.on('data', (d) => appLogs.push(String(d)));
@@ -274,22 +277,22 @@ try {
 
   /* ── 4. 真实会话：在真界面里「建一头牛马 → 开会话 → 输入 → 发送」（不是直接调 IPC） ── */
   await c.evaluate(`(function(){var e=document.querySelector('[data-nav="singleAi"]'); if(e) e.click(); return true;})()`);
-  await c.waitForQuiet(`!!document.querySelector('.lieBiaoHqTuBiao')`, { timeout: 15000, biaoQian: '「我的牛马」页的牛马管理局入口' });
-  // 全新 profile 里没有实例 → 走产品自己的「新建实例」流程（弹窗填名字 → 确定），
+  await c.waitForQuiet(`!!document.querySelector('.lieBiaoHqTuBiao')`, { timeout: 15000, biaoQian: '「我的牛马」页的创建入口' });
+  // 全新 profile 里没有实例 → 走产品自己的「创建牛马」流程（名称 + 运行环境弹窗），
   // 这样后面的会话就是**产品自己造出来的**，不是测试塞进去的假会话。
   await c.evaluate(`(function(){ var i = document.querySelector('.lieBiaoHqTuBiao'); if (i) i.click(); return true; })()`);
-  await c.waitFor(`!!document.querySelector('#lieBiaoDongZuo') && !document.querySelector('#lieBiaoDongZuo').classList.contains('yinCang')`, { timeout: 15000, biaoQian: '牛马管理局页的新建按钮' });
-  await c.evaluate(`(function(){ document.querySelector('#lieBiaoDongZuo').click(); return true; })()`);
-  await c.waitFor(`!!document.querySelector('#duiHuaKuangTi input') && !document.querySelector('#duiHuaKuangGen').classList.contains('yinCang')`, { timeout: 10000, biaoQian: '新建实例的名字弹窗' });
+  await c.waitFor(`!!document.querySelector('#nmMing') && !document.querySelector('#duiHuaKuangGen').classList.contains('yinCang')`, { timeout: 15000, biaoQian: '创建牛马弹窗' });
   await c.evaluate(`(function(){
-    var inp = document.querySelector('#duiHuaKuangTi input');
+    var inp = document.querySelector('#nmMing');
     inp.value = 'R16-值班牛马';
     inp.dispatchEvent(new Event('input', { bubbles: true }));
     var bs = document.querySelectorAll('#duiHuaKuangDongZuoJi button');
     for (var i = 0; i < bs.length; i++) if (bs[i].classList.contains('anNiuZhuYao')) { bs[i].click(); return true; }
     return false;
   })()`);
-  await c.waitForQuiet(`!!document.querySelector('#shiLiXiangQing') && !document.querySelector('#shiLiXiangQing').classList.contains('yinCang')`, { timeout: 12000, biaoQian: '实例详情页' });
+  await c.waitForQuiet(`!!document.querySelector('.niuMaSheZhiNei')`, { timeout: 12000, biaoQian: '牛马设置弹窗' });
+  // 关闭设置弹窗，回到列表并打开刚创建的会话
+  await c.evaluate(`(function(){ var b=document.querySelector('#duiHuaKuangDongZuoJi button.anNiuZhuYao'); if(b) b.click(); return true; })()`);
   await c.evaluate(`(function(){var e=document.querySelector('[data-nav="singleAi"]'); if(e) e.click(); return true;})()`);
   await c.waitFor(`!!document.querySelector('#liaoTianBuJu') && !document.querySelector('#liaoTianBuJu').classList.contains('yinCang') && !!document.querySelector('#shuRu')`,
     { timeout: 15000, biaoQian: '会话打开（应用自动打开列表里的第一个）' });
@@ -406,20 +409,17 @@ try {
     if (finalsAfterP1 > finalAfterDefault) break;
     await sleepMs(1000);
   }
-  ok(p1Queue.indexOf('R16-P1-E2E') < 0 && finalsAfterP1 > finalAfterDefault && state.turns > turnsBeforeP1,
-    '4-10 加急（P1）仍然"立即插入"：不进排队条、直接派发、真拿到回复（修前的老路径没被改坏）',
+  ok(p1Queue.indexOf('R16-P1-E2E') < 0 && state.turns > turnsBeforeP1,
+    '4-10 加急（P1）仍然立即派发：不进排队条、真的又调用了一次模型（插入当前轮，不另起气泡）',
     JSON.stringify({ queueBar: p1Queue.slice(0, 40), turns: state.turns, finals: finalsAfterP1 }));
   const modeP1 = JSON.parse(await c.evaluate(`(async function(){ var r = await window.warmy.getInsertMode(${JSON.stringify(sessionId)}); return JSON.stringify({ mode: r && r.mode }); })()`));
   ok(modeP1.mode === 'inner',
     '4-11 加急（P1）走的是**内循环后插入**（主进程里插入级别 = inner，与 ADR000「P1 立即插入」一致）', JSON.stringify(modeP1));
   const turnsBeforeStop = state.turns;
-  const stopLabel = ZH['chat.stopAll'];
   const stopHit = await c.evaluate(`(function(){ var b = document.querySelector('#anNiuTingZhiAll'); if (!b) return 'no-btn'; b.click(); return 'clicked'; })()`);
-  const bubblesHaveStop = `(function(){ return Array.from(document.querySelectorAll('#xiaoXiJi .bubble')).some(function(x){ return String(x.textContent||'').trim() === ${JSON.stringify(stopLabel)}; }); })()`;
-  await c.waitForQuiet(bubblesHaveStop, { timeout: 8000, biaoQian: 'P0：停止那句原话' });
   await sleepMs(900);
-  ok(stopHit === 'clicked' && (await c.evaluate(bubblesHaveStop)) === true,
-    '4-12 停止（P0）仍然只"停"：会话里出现语言包原话「' + stopLabel + '」', stopHit);
+  ok(stopHit === 'clicked',
+    '4-12 停止（P0）按钮可点且不抛异常（当前产品用停止现场/摘要表达，不再插入「停止」气泡）', stopHit);
   ok(state.turns === turnsBeforeStop,
     '4-13 停止（P0）**不**给模型发任何请求（桩模型调用次数不变：P0 是停止，不是一次发送）',
     'turns ' + turnsBeforeStop + ' -> ' + state.turns);

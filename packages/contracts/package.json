@@ -4,7 +4,7 @@
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty"
   },
-  "description": "P0冻结的全部TS接口契约",
+  "description": "Frozen TypeScript interface contracts (P0)",
   "type": "module",
   "types": "./dist/index.d.ts",
   "version": "0.1.0",

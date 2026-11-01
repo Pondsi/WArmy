@@ -14,24 +14,27 @@
  *   MIMO_KEY=<key> node verify-round12.mjs --round 2  # 指定轮次标签
  *   MIMO_KEY_FILE=<file> ...
  *
- * 隔离说明（**重要，实测**）：main 里 userData 被硬固定到 `%APPDATA%\@warmy\app-shell`，
- * 而且 **Windows 上 Electron 的 `app.getPath('appData')` 走 shell 已知文件夹、不吃 `APPDATA` 环境变量**
- * （改 `APPDATA` / `--user-data-dir` 都实测无效）⇒ 本脚本**就是在真实配置上跑真机验证**
- * （这也正是产品主要求的"配真实供应商、真实调用"）。所以：
- *   · 运行前必须**关闭正在运行的应用实例**（单实例锁 + 端口冲突）；
- *   · 脚本会往真实 userData 的 workspace 下写验证文件，跑完自行清理。
+ * 隔离说明（第 48 轮改）：早期主进程把 userData 写死在 `%APPDATA%\@warmy\app-shell`、`--user-data-dir` 不生效，
+ * 所以这支曾经**直接在真实配置上跑**。现在主进程认 `--user-data-dir`（其它真机门禁都靠它隔离），
+ * 这支也改成每次一个临时目录（见下面 DATA），**不再碰用户真实配置**；仍然配真实供应商（本地 Ollama + MiMo）真调用。
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 const ROOT = process.cwd();
 const PKG = path.join(ROOT, 'packages', 'app-shell');
 const ROUND = (() => { const i = process.argv.indexOf('--round'); return i >= 0 ? String(process.argv[i + 1] || '1') : '1'; })();
 const PORT = 9462 + (Number(ROUND) || 1);
 
-/** 真实 userData（app 硬固定；APPDATA 覆盖在 Windows 上无效，见上） */
-const DATA = path.join(process.env.APPDATA || '', '@warmy', 'app-shell');
+/**
+ * **隔离的 userData**（第 48 轮）：以前这里直接用 `%APPDATA%\@warmy\app-shell`（注释说 `--user-data-dir` 无效 —— 那是早期主进程写死路径时的事，
+ * 现在其它真机门禁都靠 `--user-data-dir` 隔离且已验证生效）。用真实目录的代价是**每跑一遍 live 档就把用户真实配置整个删掉重建**
+ * （round18 系列与 round19 开头就是 `rmSync(DATA)`：首启备份、本机语音模型、身份与密钥仓一起没了）。现在每次一个临时目录（系统临时目录下，名字带时间戳），不再碰用户真实配置。
+ */
+const DATA = path.join(os.tmpdir(), 'warmy-round12-' + Date.now());
+fs.mkdirSync(DATA, { recursive: true });
 
 const OPENAI_OLLAMA = 'ollama-verify';
 const MIMO_ID = 'mimo-verify';
@@ -81,7 +84,7 @@ try {
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(path.join(PKG, 'node_modules', 'electron', 'dist', 'electron.exe'),
-  [`--remote-debugging-port=${PORT}`, path.join(PKG, 'dist', 'electron-main.js')],
+  [`--remote-debugging-port=${PORT}`, `--user-data-dir=${DATA}`, path.join(PKG, 'dist', 'electron-main.js')],
   { cwd: PKG, stdio: ['ignore', 'pipe', 'pipe'], env });
 const logs = [];
 child.stdout.on('data', (d) => logs.push(String(d)));
@@ -134,6 +137,35 @@ async function ev(expr, timeoutMs = 30_000) {
 
 await send('Runtime.enable');
 await sleep(5000);
+
+/**
+ * **像用户一样点授权卡**（第 62 轮补的判别实验）：
+ * ④ 的间歇性 EVAL_TIMEOUT 有一条候选是「模型写了工作区外的路径 ⇒ 弹授权卡等人」，
+ * 而本夹具以前没有点卡处理器 ⇒ 只能干等 24h，门禁 300s 先超时，审计里也看不出在等什么。
+ * 这里监听 `warmy:aiWenTi`，按用户会做的选择点了「同意/允许」；同时计数，红了能直接看到"是不是卡住了"。
+ * 只改夹具，不改产品语义。
+ */
+await ev(`(function(){
+  if (window.__r12CardHook) return 1;
+  window.__r12CardHook = true;
+  window.__r12Cards = 0;
+  try {
+    window.warmy.onAiWenTi(async (d) => {
+      try {
+        const l = await window.warmy.aiQuestionList(d && d.sessionId);
+        const q = ((l && l.items) || []).find((x) => x && x.id === (d && d.id)) || ((l && l.items) || [])[0];
+        if (!q) return;
+        const opts = Array.isArray(q.options) ? q.options : [];
+        /** 只点「授权类」卡（有同意/允许选项）；决策卡不代选，免得改变被测行为 */
+        const opt = opts.find((o) => /同意|允许|Allow|Approve|Yes/i.test(String((o && o.biaoQian) || '')));
+        if (!opt || !opt.id) return;
+        await window.warmy.aiQuestionAnswer({ id: q.id, optionId: opt.id });
+        window.__r12Cards = (window.__r12Cards || 0) + 1;
+      } catch { /* 点卡失败不影响别的检查 */ }
+    });
+  } catch { /* 页面没有这个桥就跳过 */ }
+  return 1;
+})()`);
 
 console.log(`\n=========== ROUND ${ROUND} ===========`);
 
@@ -204,7 +236,12 @@ try {
 // ── ④ 真实工具调用 + 磁盘确认 ──
 try {
   const FN = `r12-check-${ROUND}.txt`;
-  const r = await ev(`window.warmy.chatSend({ sessionId:${JSON.stringify(SID + '-tool')}, role:'user', content:'请调用 write_file 工具，把内容 “ok” 写进 ${FN}。做完只用一句话说结果。', model:${JSON.stringify(OLLAMA_CHAT_MODEL)}, ming:'牛马-1' }).then(r=>({ok:r&&r.ok,reply:String((r&&r.reply)||''),tools:(r&&r.tools)||null}))`, 300_000);
+  /**
+   * 超时预算要覆盖**产品自己的流看门狗**：本机首片 240s、空闲 180s，且允许原样重发 1 次
+   * （第 62 轮真机：④ 的本地流挂住、门禁 300s 先于重试完成而报 EVAL_TIMEOUT）。
+   * 这里只放宽"仪器等多久"，判据仍是"文件必须真的落盘"。
+   */
+  const r = await ev(`window.warmy.chatSend({ sessionId:${JSON.stringify(SID + '-tool')}, role:'user', content:'请调用 write_file 工具，把内容 “ok” 写进 ${FN}。做完只用一句话说结果。', model:${JSON.stringify(OLLAMA_CHAT_MODEL)}, ming:'牛马-1' }).then(r=>({ok:r&&r.ok,reply:String((r&&r.reply)||''),tools:(r&&r.tools)||null}))`, 540_000);
   const wsPath = path.join(DATA, 'workspace', `${SID}-tool`);
   let found = '';
   try {
@@ -216,6 +253,15 @@ try {
     if (m && fs.existsSync(m[0])) found = m[0];
   }
   check(!!found, `④ 工具调用真的落盘：${FN} → ${found || '(未找到)'}；回复=${JSON.stringify(String(r?.reply || '').slice(0, 140))}`);
+  const kaShu = Number(await ev(`window.__r12Cards||0`)) || 0;
+  if (kaShu) console.log(`  · ④ 期间出现授权卡 ${kaShu} 张（夹具已按用户意愿点「同意」；产品审计 chat.card-waiting / chat.card-answered 可对照）`);
+  /**
+   * 模型偶尔会把这个文件写到工作区外（第 48 轮真机：写到了用户真实桌面）。门禁自己不许污染真实机器：
+   * 认完就删 —— 只删这个门禁专用的唯一文件名，且只在它不在工作区里时删（工作区由测试 profile 自己收拾）。
+   */
+  if (found && !path.resolve(found).startsWith(path.resolve(wsPath) + path.sep)) {
+    try { fs.unlinkSync(found); console.log(`  · 已删掉落在工作区外的测试产物 ${found}`); } catch { /* 删不掉就留着，汇报里会看到 */ }
+  }
 } catch (e) { check(false, `④ 工具调用异常：${String(e.message || e)}`); }
 
 // ── ⑤ 真实 ASR 往返（MiMo TTS → ASR） ──

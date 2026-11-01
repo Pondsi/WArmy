@@ -34,7 +34,7 @@ check('是预警上限而不是硬上限', /YANXU_YUJING_CI/.test(emTs) && /tai\
 check('时间预警 + 固定加一档（不是翻倍）', /YANXU_YUJING_SHIJIAN_MS/.test(emTs) && /tai\.shiJianYuJing \+ YANXU_YUJING_SHIJIAN_MS/.test(emTs));
 check('到达预警点请模型判卡死', /panDuanKaSi/.test(emTs));
 check('分析云模型优先、本地兜底', /yun\.forEach\(jia\)/.test(emTs) && /benDi\.forEach\(jia\)/.test(emTs));
-check('分析最多试 5 个模型', /KASI_CHANGSHI = PAN_MO_XING_SHANG_XIAN/.test(emTs) && /PAN_MO_XING_SHANG_XIAN = 5/.test(etaTs));
+check('分析模型有明确上限（KASI_CHANGSHI）+ 共享上限 5', /const KASI_CHANGSHI = \d+/.test(emTs) && /PAN_MO_XING_SHANG_XIAN = 5/.test(etaTs));
 check('「只说不做」也会续派', /talk-only/.test(emTs) && /ZHISHUO_BUZUO/.test(emTs));
 
 console.log('\n[2] 第二列：第二行 [N] 最新回复 + 打断标记');
@@ -48,7 +48,7 @@ check('无新回复显示灰色 [无]', /weiDuQianZhui wu/.test(appJs));
 console.log('\n[3] 流式思考过程');
 check('流式包装 baoZhuangLiuShi', /baoZhuangLiuShi/.test(emTs));
 check('增量广播 suiXingPianDuan', /suiXingPianDuan/.test(emTs) && /onSuiXingPianDuan/.test(appJs));
-check('思考块默认展开', /siKaoKuai" open/.test(appJs) || /class="siKaoKuai" open/.test(appJs));
+check('思考块默认展开（siKaoKai 控制 open）', /siKaoKai \? ' open' : ''/.test(appJs));
 check('正式回复到了就折叠', /shouLiuShiKuai/.test(appJs));
 check('流式缓冲上限', /200000/.test(appJs));
 
@@ -57,7 +57,7 @@ check('kind 含 imageUnd', /imageUnd/.test(neng));
 check('kindZhongWen 认识它', /'imageUnd': return '看图模型'/.test(neng) || /case 'imageUnd': return '看图模型'/.test(neng));
 check('链里有 imageUnd', /imageUnd: 'smImageUndLian'/.test(appJs));
 check('i18n 有看图模型', !!zh['model.kind.imageUnd'] && !!zh['settings.imageUndModel']);
-check('放行带视觉的对话模型', /key === 'imageUnd' && n\.kind === 'chat' && n\.vision === true/.test(appJs));
+check('放行带视觉的对话模型', /key === 'imageUnd' && k === 'chat' && \(n && n\.vision === true/.test(appJs));
 
 console.log('\n[5] 加强 AI 语言约束');
 check('界面勾选项', /yanGeYuYan/.test(appJs));
@@ -73,11 +73,10 @@ check('导出项目为 .nm', /warmy:xiangMuDaoChu/.test(emTs));
 check('内置查看 .nm（read_file 认 .nm）', /\.nm\$/i.test(fs.readFileSync(path.join(root, 'packages/app-shell/src/work-tools.ts'), 'utf8')));
 
 console.log('\n[7] 自动滚动语义（产品定稿）');
-// 统一一条式子：`min(lastTop, maxScroll)` ⇒ 长回复把开头对齐顶部、短回复顶到不能再顶（底部对齐）
-check('未勾选：长回复顶部对齐 / 短回复底部对齐', /Math\.min\(lastTop, maxScroll\)/.test(appJs));
-// **有新内容就滚**：不许再用"那一刻在不在底部"短路（真机：上一条被顶到顶部后本来就不在底部 ⇒ 后面再也不滚了）
-check('未勾选时有新内容就滚（不再被 wasAtBottom 短路）', /else if \(last\)/.test(appJs) && !/else if \(last && wasAtBottom\)/.test(appJs));
-check('勾选 = 滚到底', /autoScrollChat\)\s*\{[\s\S]{0,80}scrollToBottom/.test(appJs));
+// 第 97 轮滚动体系：未勾选时把本轮新内容的第一行钉在视口顶部；用户接管后一像素不动
+check('未勾选：新内容首行顶部对齐（anchorEl + chatAnchorTop）', /chatAnchorTop\(heZi, st\)/.test(appJs) && /st\.anchorEl = anchorNode/.test(appJs));
+check('未勾选时有新内容就滚（用户接管逻辑保留）', /youXinNeiRong && anchorNode/.test(appJs) && /topAlignSuppress\.has\(sid\)/.test(appJs));
+check('勾选 = 滚到底（zhuiDi 分支）', /else if \(zhuiDi\)\s*\{[\s\S]{0,120}maxScrollNow\(\)/.test(appJs));
 
 console.log('\n[8] 分类模型 = 决策模型（RLCD）');
 check('简中叫「分类模型」', zh['model.fenLei'] === '分类模型');
@@ -91,7 +90,7 @@ check('创建那一刻就播音（广播入口）', /onAiWenTi/.test(appJs) && /
 check('只有真播出去才记账', /if \(ok\) \{[\s\S]{0,90}yiJingXiangGuo\.add\(id\)/.test(appJs));
 check('音效与"卡片画得出来"解耦（没选中会话也照响）', (() => {
   const iYin = appJs.indexOf('xiangKaPianYin(pending.map');
-  const iTui = appJs.indexOf("if (!qunId) { host.innerHTML = ''; return; }");
+  const iTui = appJs.indexOf("if (!qunId) { if (host.innerHTML) host.innerHTML = ''; return; }");
   return iYin > 0 && iTui > 0 && iYin < iTui;
 })());
 check('决策卡标题读 biaoTi（以前读不存在的 q.title ⇒ 永远空白）', /q\.biaoTi \|\| q\.title/.test(appJs));
@@ -100,7 +99,7 @@ check('徽章 CSS', /\.aiqJiShu/.test(css));
 
 console.log('\n[10] 文件卡片 / 看板');
 check('文件名超链接样式', /\.pfMing/.test(css) && /text-decoration: underline/.test(css));
-check('工作区只显文件夹名', /jianMing\(state\.gongZuoQuLuJing\)/.test(appJs));
+check('工作区只显文件夹名', /const jianMing = \(p\) =>/.test(appJs) && /jianMing\(workRoot\)/.test(appJs));
 check('去掉「生成于」', !/panel\.workfiles\.genAt/.test(appJs) || !/生成于/.test(appJs));
 check('📁 右对齐', /margin-left: auto/.test(css));
 check('词元消耗', zh['dashboard.tokenCost'] === '词元消耗');
@@ -127,20 +126,16 @@ check('手动添加下拉', /data-sml-add/.test(appJs) && !!zh['model.addManuall
 check('牛马局分类模型已移除', !/id="iFenLei"/.test(appJs));
 check('预警点固定加一档', /ciYuJing \+ YANXU_YUJING_CI/.test(emTs) && !/ciYuJing \*=/.test(emTs));
 
-console.log('\n[14] 引导卡：两份 CSS 必须一致，且在主界面右下角');
+console.log('\n[14] 开始使用清单：旧漫游层已删，新清单固定右下角');
 {
   const appCss = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/app.css'), 'utf8');
   const rCss = fs.readFileSync(path.join(root, 'packages/app-shell/src/renderer/renderer.css'), 'utf8');
-  // 取各自 .yinDaoTiao 规则块
-  const block = (s) => (s.match(/\.yinDaoTiao\s*\{[^}]*\}/s) || [''])[0];
+  const block = (s) => (s.match(/\.startGuide\s*\{[^}]*\}/s) || [''])[0];
   const bApp = block(appCss);
-  const bRen = block(rCss);
-  check('两份 .yinDaoTiao 都存在', !!bApp && !!bRen);
-  check('都不能有 translateY(-50%)（会让卡片拉高）', !/translateY\(-50%\)/.test(bApp) && !/translateY\(-50%\)/.test(bRen));
-  check('都必须 top:auto（与 bottom 同时生效会拉伸）', /top:\s*auto/.test(bApp) && /top:\s*auto/.test(bRen));
-  check('都必须有 bottom（右下角定位）', /bottom:\s*\d+px/.test(bApp) && /bottom:\s*\d+px/.test(bRen));
-  check('都必须 height:auto（按内容收）', /height:\s*auto/.test(bApp) && /height:\s*auto/.test(bRen));
-  check('两份定位参数一致（不许一份 top 一份 bottom）', /right:\s*16px/.test(bApp) === /right:\s*16px/.test(bRen) && /bottom:\s*16px/.test(bApp) && /bottom:\s*16px/.test(bRen));
+  check('app.css 有新 .startGuide，两份 CSS 都不再有 .yinDaoTiao', !!bApp && !/\.yinDaoTiao\s*\{/.test(appCss) && !/\.yinDaoTiao\s*\{/.test(rCss));
+  check('新清单固定定位且不追目标', /position:\s*fixed/.test(bApp) && /right:\s*\d+px/.test(bApp) && /bottom:\s*\d+px/.test(bApp));
+  check('新清单有最大高度与滚动（短窗口不溢出）', /max-height:/.test(bApp) && /overflow-y:\s*auto/.test(bApp));
+  check('清单可收起（小胶囊样式与主卡同一定位）', /\.startGuidePill\s*\{/.test(appCss));
 }
 
 console.log('\n[15] 历史不许被全省略 + 多任务能跑完 + 手动添加留得住');
@@ -154,9 +149,9 @@ console.log('\n[15] 历史不许被全省略 + 多任务能跑完 + 手动添加
 
 console.log('\n[16] 思考过程：可滚动 + 自动跟最新 + 用户滚动就停');
 {
-  check('思考块可滚动（max-height + overflow）', /\.siKaoKuai pre\s*\{[^}]*max-height/.test(css) && /\.siKaoKuai pre\s*\{[^}]*overflow:\s*auto/.test(css));
-  check('用户手动滚动就停止跟随', /userScrolled/.test(appJs));
-  check('流式只改文本不重建 DOM（否则滚动被拍回顶部）', /si\.textContent = b\.reasoning/.test(appJs) && !/kuai\.innerHTML =[\s\S]{0,80}siKaoKuai/.test(appJs));
+  check('思考块展开后完整显示（不限高、不出滚动条）', /\.siKaoKuai pre\s*\{[^}]*max-height:\s*none/.test(css) && /\.siKaoKuai pre\s*\{[^}]*overflow:\s*visible/.test(css));
+  check('用户手动滚动就停止跟随（topAlignSuppress）', /topAlignSuppress/.test(appJs) && /markUserScrolled/.test(appJs));
+  check('流式思考按缓冲更新，不整块重建', /_liuShiDaiHua/.test(appJs) && !/kuai\.innerHTML =[\s\S]{0,80}siKaoKuai/.test(appJs));
   check('限频带尾随（最后一段不丢）', /_liuShiDaiHua/.test(appJs));
 }
 

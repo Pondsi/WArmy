@@ -71,3 +71,7 @@ scripts/fixtures/r34-replay/*.png
 .build-log.txt
 .ci-log.txt
 packages/app-shell/.eb-run.mjs
+
+# 含硬编码凭据，勿入库（MiMo 卡顿修复任务追加）
+dev/gates/verify-r111-data.mjs
+packages/app-shell/scripts/verify-local-search.mjs

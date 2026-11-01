@@ -5,12 +5,19 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 const ROOT = process.cwd();
 const PKG = path.join(ROOT, 'packages', 'app-shell');
 const ROUND = (() => { const i = process.argv.indexOf('--round'); return i >= 0 ? String(process.argv[i + 1] || '1') : '1'; })();
 const PORT = 9730 + (Number(ROUND) || 1);
-const DATA = path.join(process.env.APPDATA || '', '@warmy', 'app-shell');
+/**
+ * **隔离的 userData**（第 48 轮）：以前这里直接用 `%APPDATA%\@warmy\app-shell`（注释说 `--user-data-dir` 无效 —— 那是早期主进程写死路径时的事，
+ * 现在其它真机门禁都靠 `--user-data-dir` 隔离且已验证生效）。用真实目录的代价是**每跑一遍 live 档就把用户真实配置整个删掉重建**
+ * （round18 系列与 round19 开头就是 `rmSync(DATA)`：首启备份、本机语音模型、身份与密钥仓一起没了）。现在每次一个临时目录（系统临时目录下，名字带时间戳），不再碰用户真实配置。
+ */
+const DATA = path.join(os.tmpdir(), 'warmy-round18c-' + Date.now());
+fs.mkdirSync(DATA, { recursive: true });
 const MARK = `R18C-${ROUND}-${Date.now().toString(36)}`;
 const key = (() => {
   const k = String(process.env.MIMO_KEY || '').trim();
@@ -72,7 +79,7 @@ fs.writeFileSync(path.join(DATA, 'settings.json'), JSON.stringify(s, null, 2), '
 const env = { ...process.env, MIMO_KEY: key };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(path.join(PKG, 'node_modules', 'electron', 'dist', 'electron.exe'),
-  [`--remote-debugging-port=${PORT}`, path.join(PKG, 'dist', 'electron-main.js')],
+  [`--remote-debugging-port=${PORT}`, `--user-data-dir=${DATA}`, path.join(PKG, 'dist', 'electron-main.js')],
   { cwd: PKG, stdio: ['ignore', 'pipe', 'pipe'], env });
 const logs = [];
 child.stdout.on('data', (d) => logs.push(String(d)));
@@ -161,7 +168,7 @@ async function main() {
   ok('消息已发送', sent === true, String(sent).slice(0, 60));
 
   let sawMimo = false, sawOllamaOnly = false, sawPlan = false, sawWrite = false, sawDone = false;
-  let planSteps = 0, authPops = 0, authPass = 0;
+  let planSteps = 0, authPops = 0, authPass = 0, planN = 0, planRejected = 0;
   for (let i = 0; i < 90; i++) {
     await ev(`(()=>{
       document.querySelectorAll('.aiqKa button').forEach((b) => {
@@ -175,7 +182,10 @@ async function main() {
     if (picks.some((x) => /mimo/i.test(String(x.detail?.model || '')))) sawMimo = true;
     // 若第一轮就完全没碰 mimo、只用 ollama ⇒ 问题
     if (picks.length && picks.every((x) => /ollama|qwen/i.test(String(x.detail?.model || '')))) sawOllamaOnly = true;
-    if (au0.some((x) => x.op === 'plan.host-seed' || (x.detail && x.detail.tool === 'plan_update'))) sawPlan = true;
+    /** 第 24 轮起计划由模型按门禁规则自己建（宿主不再按句子拆）⇒ 认的是 plan.update（门禁收下的那次）与被拒收的记录 */
+    const shou = au0.filter((x) => x.op === 'plan.update' && Number(x.detail?.n || 0) > 0);
+    if (shou.length) { sawPlan = true; planN = Number(shou[shou.length - 1].detail.n) || 0; }
+    planRejected = au0.filter((x) => x.op === 'plan.gate-rejected').length;
     const writes = au0.filter((x) => x.op === 'chat.work-tool' && x.detail && x.detail.tool === 'write_file' && x.detail.ok !== false);
     if (writes.length) sawWrite = true;
     if (au0.some((x) => x.op === 'chat.tools.done')) sawDone = true;
@@ -185,15 +195,20 @@ async function main() {
     } catch { /* */ }
     authPops = au0.filter((x) => x.op === 'aiq.open' || x.op === 'auth.request').length;
     authPass = au0.filter((x) => x.op === 'auth.auto-pass').length;
-    if (sawWrite && sawDone && planSteps > 0) break;
+    if (sawWrite && sawDone && (!sawPlan || planSteps > 0)) break;
     if (sawDone && i > 20) break;
     await sleep(2000);
   }
 
   ok('使用了配置的 MiMo 模型', sawMimo);
   ok('不是只用 Ollama', !sawOllamaOnly || sawMimo);
-  ok('计划卡有步骤', planSteps > 0, `steps=${planSteps}`);
-  ok('plan_update/host-seed 有记录', sawPlan);
+  /**
+   * 计划卡（第 48 轮按现行产品规则改的判据）：这件事只有 **2 步**，门禁规则是"新计划至少 2 步、3 步以上才建议建"
+   * ⇒ 模型建不建计划都合规。原来的"计划卡必须有步骤"是第 18 轮宿主按句子拆计划时的口径，第 24 轮已撤。
+   * 现在钉的是原 bug 本身（"计划卡不生成"）：**门禁收下了计划 ⇒ 计划卡上必须有这些步骤**。
+   */
+  console.log(`  · 计划：模型${sawPlan ? `建了 ${planN} 步` : '没有建计划'}（门禁拒收 ${planRejected} 次）· 计划卡步骤 ${planSteps}`);
+  ok('计划卡与门禁收下的计划一致（建了 ⇒ 卡上有这些步骤；2 步任务不建也合规）', !sawPlan || planSteps >= planN, `steps=${planSteps} n=${planN}`);
   ok('write_file 成功', sawWrite);
   ok('工具循环已结束', sawDone);
 

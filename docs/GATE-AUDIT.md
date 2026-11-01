@@ -4,7 +4,7 @@
 > 一致性由**硬门禁** `verify-gate-manifest.mjs` 双向校验（清单多一条/少一条/写错类别、主进程
 > `MEN_JIN_YING` 与清单不一致、界面列表与清单不一致、探针没声明"不进 CI"、**已知红门禁没写证据或没在本文登记**
 > —— 任何一条都判红）。
-> 本轮统计：**83 支**（通用 30 / 项目专项 48 / 探针 5）；其中**已知红 8 支**（第 22 轮：`verify-context-renderer` 已修绿，见下表）。
+> 本轮统计：**121 支**（通用 30 / 项目专项 86 / 探针 5）；其中**已知红 7 支**（`verify-history-persist` 已于 2026-10-29 复跑转绿；`verify-context-renderer` 已修绿，见下表）。
 
 ## 〇、当前状态：哪些门禁**事实上是红的**（附证据）
 
@@ -14,7 +14,7 @@
 | 门禁 | 类别 | 为什么红 / 证据 |
 |---|---|---|
 | `verify-context-renderer` | project | **已修绿（第 22 轮）**。两支历史红项都不是产品缺陷：① `budgetChars=200 指针完整可执行` —— 渲染器在"绝不给空视图"那一步把最后一条真实消息塞在最前，把**已完整的指针**挤到预算外截断（`seq 1..30` 这种解不了引用的半根指针）；现在先**预留极简指针的字数**再给真实消息分配，指针三线索齐全、`pointers` 也如实计数。② `verify-all 跑完且零失败` —— `spikes/verify-all/run-full.mjs` 把 `memory-os/node_modules`（pnpm 下常是空壳）junction 进临时目录，`Cannot find module 'better-sqlite3'` **未捕获**直接把整个套件炸掉；现在按本平台 `prebuilds/*.node` 找真可用的包，并把该节包在 try 内（缺依赖只红那一条，不许拖垮全 suite） |
-| `verify-history-persist` | project | 临时 userData 里 `memory-start-failed`，拿不到注入 prompt 里的「道」⇒ 断言必红（环境依赖） |
+| `verify-history-persist` | project | **已修绿（2026-10-19，2026-10-29 再跑 ALL PASS）并进 live 档**：`failures=0`（[0] 静态契约 / [1] 落盘 / [2] 真重启重建 / [3] 记忆坏掉降级 全过）。旧红因是"临时 userData 里记忆服务起不来"，早已不成立；真正挡着它的是第 [1] 段两条——超长助手回复那一轮被 `chat.budget.stop-send` 拦下（模型窗口未知 ⇒ 兜底窗口偏小 ⇒ 道（不可压缩）+ 工具顶满，缺 3356 token），缺口其实全在**我们自己留的垫子**里（输出留位 12288 + 2% 安全垫 + 5% 执行余量）⇒ 新增阶梯第④·六级「让出余量」（`rangChuYuLiang`，输出留位地板 `max(2048, 窗口×4%)`、执行余量退到 2%），排在停止发送之前。审计实证：`chat.budget.give-back-reserve rangChu=10895 yuZhan 12288→2048 chuangKouYou=30720 rengQue=false` + `chat.budget.output-cap-lowered you=12288 xian=2048`（发送侧输出上限跟着降，两边同一个数） |
 | `verify-tool-calls` | universal | **已修绿（第 6 轮）**：ALL PASS。旧语义断言按现实现重写（工具面 2→35、`supportsTools`/`tool_choice` 收敛、`maxResultChars`→`zuiDaJieGuoZiShu`、字段名 `qingQiuJi`/`tingZhiYuanYin`）；真 node 启动记忆服务；mock 支持 SSE；顺带修产品两处真 bug（视图硬界在「绝不给空视图」后越界、记忆服务挂了仍暴露干活工具） |
 | `verify-tool-call-e2e` | universal | **33/34（第 6 轮，原 19/34）**：旧断言已改（报文 `messages`、紧急度 DOM `#jinJiTrigger` aria-label、工具面全套、metrics 字段 `gongJuDiaoYongJi`）；mock 支持 SSE。**余 1 红：4-10**——P1 加急路径经 `fenLei` 分类模型（桩环境缺该能力位，审计有 `err.capability-missing cap=fenLei`）后再收束，终答气泡计数对不上「桩模型终答」；消息本身已进会话且模型被调用（turns 2→4） |
 | `verify-e2e` | project | 需要**没有别的实例在跑**（单实例锁）；桌面应用开着时必然 `no devtools port` |
@@ -153,3 +153,36 @@ node packages/app-shell/scripts/verify-gate-manifest.mjs   # 校验一致性（�
 - 合理性：通用/项目专项/探针三档正确；verify-gate-manifest 防清单腐烂是关键资产。
 - 问题：①75 支不适合当 CI 硬闸；②环境耦合红灯多；③缺发布 smoke 与密钥落盘/静默 catch。
 - 建议：CI 只跑 smoke 包（安全+清单一致+工具链路+持久化+build）；全量夜间/发版前；下轮补 secret-at-rest、no-empty-catch、smoke-critical-path。
+
+## 六、第 48 轮门禁变化（2026-10-20，逐条原因见 `docs/HANDOFF-R44.md` §17.4）
+
+| 门禁 | 变化 | 定性 |
+|---|---|---|
+| `dev/gates/verify-r48-heiban.mjs` | **新增**（fast 档，60 项）：任务黑板 + 结构化蒸馏 + 队列冲刷同协议 + 三层缓存顺序；假 OpenAI 兼容端点驱动编排器整条链 + 真记忆服务 | 行为判据；变异测试 10 体全抓（1 个等价变异体已说明） |
+| `dev/gates/verify-r48-qiyue.mjs` | **新增**（fast 档，25 项）：契约每个类型有着落、包外无同名定义、本包无值、运行时返回值 ⊇ 契约必填字段、错误分类真值表 | 每类判据配伪造夹具负向 |
+| `verify-r44-yuSuan` ⑨ | 多执行者汇总：字面锚 → 行为（新口径 5 人全在且每节 ≤ 配额；旧口径同数据只保住 3/5 人） | 旧锚指向的代码被公平配额取代 |
+| `verify-context-renderer` [5] | 视图 = 冻结系统提示与状态卡片之间；新增"卡片在最后""系统提示跨轮逐字相同" | 产品改了三层顺序 |
+| `verify-round20-team` | "记忆不可用只砍记忆工具"字面锚陈旧（第 44 轮收成 `zuJingGongJuGuiGe` 后一直红）→ 结构判据 + 负向样本；接真记忆服务验黑板/蒸馏；LIVE 加一遍 MiMo | **仪器陈旧**，不是产品回归 |
+| `verify-round18c` | "计划卡有步骤" → "门禁收下了计划 ⇒ 卡上有这些步骤；2 步任务不建也合规" | 第 24 轮起计划由模型按门禁规则建，旧判据是宿主按句拆计划时代的口径 |
+| `verify-round16` ③ | 桌面取系统已知文件夹（与产品 `app.getPath('desktop')` 同源），验完删自己写的文件 | 桌面重定向到别的盘时旧判据误判"未找到" |
+| `dev/gates/verify-memory-stress.mjs` | 超限判据改为 import 主进程同一个 `shiShangXiaWenChaoXian` | 消除"两条腿各说各话" |
+| `dev/gates/verify-r44-token-live.mjs` ④ | 用"人为写入比值 0.6 后按公式变化"证明预算读了校准表；真实校准值只判方向 | 真实比值碰巧贴着先验（0.89 vs 0.9）时旧判据必红，**仪器假设错误** |
+| `dev/gates/verify-round34-live.mjs`（MiMo 腿） | 看图路由按主模型能力判（官方规格表能看 ⇒ 不转交） | 第 45 轮能力判定改口径后旧判据陈旧 |
+| `verify-r44-yuSuan` 工具截尾两条 | 字面锚 → 对 `gong-ju-fen-dang.ts` 的行为判据 + 第 48 轮 live 事故复现（用户点名的 list_archive 被裁） | 截尾逻辑收进纯模块 |
+| `verify-work-tools` [2] | 新增 3 条：工作区内的绝对路径照常读写、大小写不同也认、前缀相同的隔壁目录照旧拒绝 | 第 48 轮 live 真缺陷 #13（工作区内绝对路径被当越权、弹卡一直等） |
+| `verify-r44-yuSuan` | 新增"完成核对轮整篇重写已交付文件被宿主拦下"接线判据 | 第 48 轮 live 真缺陷 #14；行为由 `verify-round34-live` 的"同一个文件没有被整篇重写"兜底 |
+| `verify-round12` ④ | 模型把测试文件写到工作区外时，认完就删（只删门禁专用的唯一文件名） | 门禁不许污染真实桌面（第 48 轮 live 第 1 遍在真实桌面留下过 `r12-check-1.txt`） |
+| `dev/gates/verify-r48-nengli-tongbu.mjs` | **新增**（live 档，17 项）：设置 API 写能力 ⇒ 不重启预算窗口当场跟上；真界面「手动添加模型」→ 真 Ollama 验证 → 能力与模型列表落盘；同 profile 重启一条不丢 | 第 48 轮真缺陷 #15/#16（`verify-round34-live` 本地腿 7 红的根因）；负向：去掉同步与落盘的主进程副本 7 项翻红 |
+| `verify-r44-yuSuan` 点名工具 | 新增"产物类型 / 等待也算点名"（make_pptx、wait_seconds 在截尾时保留；无关句子不点名） | 第 48 轮真缺陷 #18 |
+| `verify-r44-yuSuan` 工具指纹 | 新增全文指纹真值表 + 旧算法（前 400 字）同组输入必撞的负向对照 | 第 48 轮真缺陷 #19 |
+| `verify-tool-calls` [3b] / `verify-history-persist` | 中间回复：循环层带回、落盘层写入 + 重启补回（假模型改成 SSE 才走得到主路径的工具调用） | 第 48 轮真缺陷 #20 |
+| `dev/gates/verify-r48-zhongjian-ui.mjs` | **新增**（live 档，9 项）：中间回复画进「执行过程」、顺序、观感、不并进最终气泡、重启仍在；写完的一轮重启后不出现中断块与「继续/重试」 | 第 48 轮真缺陷 #20/#21；#21 那条在旧构建上截图实锤为红 |
+| `verify-round34-live` 内容类判据 | **仪器变更**：读"最终回复 + 中间回复"；svg 判据的"没收到其他附件"不再算没看到图 | 中间回复落盘后它就是写给用户的话；旧正则把如实话判红 |
+
+## 七、第 49 轮门禁变化（2026-10-20，逐条原因见 `docs/HANDOFF-R44.md` §18.4）
+
+| 门禁 / 工具 | 变化 | 为什么 |
+|---|---|---|
+| `verify-click-lag` | 由"覆盖子进程 `APPDATA`"改为显式 `--user-data-dir=<临时目录>`，跑完删 | **真机取证**：真实配置里的 `DevToolsActivePort` 正是这支的端口 9461 ⇒ 覆盖 APPDATA 在 Windows 上不生效，它一直在拿用户实时配置当试验场（它还会真的往供应商列表加一行）。复核后：验收清单上会起 Electron 的 66 支门禁**全部显式隔离** |
+| `verify-round27-live` | 点开技能市场弹窗后**轮询到有结果为止**（最多 26 秒，读数带 `dengMs`/`rengZaiJiaZai`）；上游真不可达时把"筛选生效"两条换成一条真不变量（不造假控件、不把加载说成完成），不静默跳过 | 同构建复跑打出 3 条红而主遍绿：产品侧 `duShiChangMuLu` 自己有 `AbortSignal.timeout(15000)`，门禁却**固定睡 6 秒**就取证 ⇒ 上游慢时抓在"正在读取上游目录…"那一秒，判成"不实话"。修法：过完产品自己的上限还在转圈才是真红。复跑过 14 · 败 0 |
+| 串跑驱动器（一次性工具，跑完删） | 教训补一条：**自持驱动器的子进程 stdio 必须接进日志**，否则只留下 exit code 与耗时、条数全丢；且**"主遍 exit=0"不等于"这一档没有红"** —— `verify-round27-live` 就是靠同构建复跑才暴露的 | 第 40 轮记过一次同样教训，本轮又踩；写进 §18.4 供下次直接照做 |

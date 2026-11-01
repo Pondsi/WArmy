@@ -6,8 +6,12 @@
   <title>WArmy</title>
   <link rel="stylesheet" href="./app.css" />
   <link rel="stylesheet" href="./renderer.css" />
+  <link rel="stylesheet" href="./auth-gate.css" />
 </head>
 <body>
+  <!-- 独立会话窗：必须在任何界面节点之前打标记，避免先画出完整主界面再切走。
+       外部脚本是因为 CSP script-src 'self' 不允许内联；文件很小、同步执行。 -->
+  <script src="./chat-window-boot.js"></script>
   <div id="app">
     <div id="biaoTiLan">
       <div class="biaoTiLanTuoZhuai">
@@ -16,8 +20,9 @@
         <span class="biaoTiLanPinPai" id="biaoTiLanPinPai"></span>
       </div>
       <div class="biaoTiLanDongZuoJi" id="biaoTiLanDongZuoJi">
-        <button id="anNiuZongShiDing" title="置顶窗口" aria-label="always qiYong top" data-i18n-title="tip.pin">
-          <svg class="biaoTiLansvg" viewBox="0 0 100 100" aria-hidden="true"><rect x="18" y="14" width="64" height="12" rx="6" fill="currentColor"/><polygon points="32,26 68,26 58,58 42,58" fill="none" stroke="currentColor" stroke-width="9" stroke-linejoin="round"/><rect x="45" y="58" width="10" height="28" rx="5" fill="currentColor"/></svg>
+        <button id="anNiuZhuXiFu" title="吸附（靠近屏幕边缘自动贴边）" aria-label="snap"><svg class="biaoTiLansvg" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M716.8 409.6v204.8a204.8 204.8 0 1 1-409.6 0V409.6H204.8v204.8a307.2 307.2 0 1 0 614.4 0V409.6H716.8z m0-51.2h102.4V256H716.8v102.4z m-409.6 0V256H204.8v102.4h102.4z m51.2-153.6v409.6a153.6 153.6 0 0 0 307.2 0V204.8h204.8v409.6a358.4 358.4 0 0 1-716.8 0V204.8h204.8z"/></svg></button>
+        <button id="anNiuZongShiDing" title="置顶窗口" aria-label="always on top" data-i18n-title="tip.pin">
+          <svg class="biaoTiLansvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 6 4 3v2H6v-2l4-3-1-6Z"/><path d="M12 15v5"/></svg>
         </button>
         <button id="anNiuuiRefresh" title="刷新并清除缓存" aria-label="refresh" data-i18n-title="tip.refresh">
           <svg class="biaoTiLansvg" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.7 0 3.2.7 4.2 1.9V3h1.5v4.5H9.2V6.2h1.9A4 4 0 1 0 12 8h1.5z"/></svg>
@@ -41,14 +46,16 @@
           <img class="touXiangTuPian yinCang" id="selfAvatarImg" alt="" />
           <span class="touXiang" id="selfAvatar" data-i18n="nav.touXiang">我</span>
         </button>
+        <!-- 第 65 轮 项 21：我的智能体 = 牛马管理局图标（agents-hq.svg 同一形状） -->
         <button class="ceLanTiaoMu jiHuo" data-nav="singleAi" data-i18n-title="tip.singleAi">
-          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M14,78 C14,60 24,54 34,54 C40,54 45,56 49,60"/><rect x="58" y="26" width="24" height="24" rx="4"/><circle cx="70" cy="38" r="3" fill="currentColor"/><line x1="70" y1="26" x2="70" y2="18"/><circle cx="70" cy="16" r="3" fill="currentColor"/></g></svg>
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M30,38 C18,32 12,20 16,10"/><path d="M70,38 C82,32 88,20 84,10"/><path d="M28,38 L72,38 L62,68 L50,80 L38,68 Z"/><line x1="40" y1="52" x2="48" y2="52"/><line x1="52" y1="52" x2="60" y2="52"/></g><rect x="36" y="46" width="8" height="8" fill="currentColor"/><rect x="56" y="46" width="8" height="8" fill="currentColor"/></svg>
         </button>
         <button class="ceLanTiaoMu" data-nav="internalGroup" data-i18n-title="tip.internalGroup">
           <svg viewBox="0 0 100 100"><path d="M50,14 A36,36 0 1,1 21,71" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M34,50 C30,38 42,38 50,50 C58,62 70,62 66,50 C62,38 50,38 50,50" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/></svg>
         </button>
+        <!-- 第 65 轮 项 21：联系人 = 旧「我的智能体」图标 -->
         <button class="ceLanTiaoMu" data-nav="externalChat" data-i18n-title="tip.externalChat">
-          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><circle cx="42" cy="34" r="14"/><path d="M18,82 C18,62 30,56 42,56 C48,56 53,58 57,62"/><path d="M68,32 C74,38 74,50 68,56"/><path d="M78,24 C88,36 88,52 78,64"/></g></svg>
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M14,78 C14,60 24,54 34,54 C40,54 45,56 49,60"/><rect x="58" y="26" width="24" height="24" rx="4"/><circle cx="70" cy="38" r="3" fill="currentColor"/><line x1="70" y1="26" x2="70" y2="18"/><circle cx="70" cy="16" r="3" fill="currentColor"/></g></svg>
         </button>
         <button class="ceLanTiaoMu" data-nav="externalGroup" data-i18n-title="tip.externalGroup">
           <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="34" r="12"/><path d="M16,78 C16,62 24,54 34,54 C44,54 52,62 52,78"/><circle cx="66" cy="34" r="12"/><path d="M48,78 C48,62 56,54 66,54 C76,54 84,62 84,78"/></g></svg>
@@ -265,6 +272,9 @@
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                         <path d="M12 8v6M9 11h6"/>
                       </svg>
+                      <svg class="ico chaRuIco yinCang" data-u="P4" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>
+                      </svg>
                     </button>
                     <div class="jinJiCaiDan yinCang" id="jinJiCaiDan" role="menu">
                       <!-- 标题 + 问号（说明收进问号里，不再直接铺在外面） -->
@@ -275,6 +285,7 @@
                       <button type="button" data-u="P1"><svg class="ico chaRuIco" data-u="P1" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 8v4M12 15h.01"/></svg><span data-i18n="urgency.urgentLabel"></span></button>
                       <button type="button" class="qiYong" data-u="P2"><svg class="ico chaRuIco" data-u="P2" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7l-2 4h3l-2 4"/></svg><span data-i18n="urgency.insertLabel"></span></button>
                       <button type="button" data-u="P3"><svg class="ico chaRuIco" data-u="P3" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 8v6M9 11h6"/></svg><span data-i18n="urgency.queueLabel"></span></button>
+                      <button type="button" data-u="P4"><svg class="ico chaRuIco" data-u="P4" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span data-i18n="urgency.verySlowLabel"></span></button>
                     </div>
                   </div>
                   <!-- 思考级别（放在插入右边）：点开是**横向滑块**
@@ -314,6 +325,29 @@
                     <!-- 话筒图标：**更镂空**（细线 1.5 + 简单分件，不再用粗密路径） -->
                     <svg viewBox="0 0 24 24" class="ico hollowIco" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="8.5" y1="21" x2="15.5" y2="21"/></svg>
                   </button>
+                  <div class="yuYinDd" id="yuYinDd">
+                    <button class="yuYinXiaLa" id="anNiuYuYinXiaLa" type="button" data-i18n-title="chat.voiceOptions" title="语音输入选项" aria-haspopup="menu" aria-expanded="false">
+                      <svg viewBox="0 0 24 24" class="ico" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10l5 5 5-5"/></svg>
+                    </button>
+                    <div class="yuYinCaiDan yinCang" id="yuYinCaiDan" role="menu">
+                      <!-- 勾选项只写名称；说明收进名称后的问号（悬停/聚焦展开），不再铺两行小字占版面 -->
+                      <div class="yuYinHang">
+                        <label class="yuYinXuanXiang" title="">
+                          <input type="checkbox" id="yuYinChongZuBox" checked />
+                          <span data-i18n="chat.voiceReorg">重组语言</span>
+                        </label>
+                        <button type="button" class="ddWen" aria-label="?"><svg class="ico hollowIco" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.8.36-1.1.9-1.1 1.8v.4"/><path d="M12 17.2h.01"/></svg><span class="ddDesc" data-i18n="chat.voiceReorgHint">识别完成后，用整理模型把内容改得更清晰通顺（不改语义、不加内容）</span></button>
+                      </div>
+                      <div class="yuYinHang">
+                        <label class="yuYinXuanXiang" title="">
+                          <input type="checkbox" id="yuYinZiDongFaSongBox" />
+                          <span data-i18n="chat.voiceAutoSend">自动发送</span>
+                        </label>
+                        <button type="button" class="ddWen" aria-label="?"><svg class="ico hollowIco" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.8.36-1.1.9-1.1 1.8v.4"/><path d="M12 17.2h.01"/></svg><span class="ddDesc" data-i18n="chat.voiceAutoSendHint">重组完成后自动发送</span></button>
+                      </div>
+                      <div class="jingYin yuYinXuanXiangShuo yinCang" id="yuYinChongZuNoModel" data-i18n="chat.voiceReorgNoModel">还没有可用的整理模型。请到 设置 → 模型 → 整理模型 配置调用链后使用。</div>
+                    </div>
+                  </div>
                   <button id="anNiuFaSong" class="anNiuZhuYao" data-i18n="chat.faSong"></button>
                 </div>
               </div>
@@ -363,14 +397,6 @@
             <div class="ctgDim" id="xiangMuTaiXiaoXi"></div>
           </div>
 
-        <!-- 项目记忆（项目规矩 / 目标）：**只属于项目**，所以只出现在右栏，
-             且渲染层按「这个会话是不是项目」决定显隐 —— 我的牛马/联系人/群聊不该看到它。
-             文案复用既有的 pm.* 键（不新增语言包键）。 -->
-        <div class="mianBanKuai yinCang" id="xiangMuJiYiKuai">
-          <div class="mianBanBiaoTi"><span data-i18n="pm.title">项目记忆</span></div>
-          <div id="xiangMuJiYiHe"></div>
-        </div>
-
           <!-- 聊天类会话（联系人/群聊）：本会话自己的知识库 -->
           <div class="mianBanKuai" id="mianBanZhiShiKuKuai" style="display:none">
             <h3 data-i18n="panel.kb.biaoTi"></h3>
@@ -388,6 +414,21 @@
                 <span data-i18n="panel.summary.auto"></span>
               </label>
               <span class="jingYin" id="zhaiYaoXiaoXi" style="font-size:11px"></span>
+            </div>
+          </div>
+
+          <!-- 「要求」（第 92 轮）：**只作用于当前这一个会话**、由用户亲写的约束。
+               每个会话一份、互相隔离；默认排在第四列底部并默认折叠；
+               存 userData/yaoqiu/<sessionId>.md，优先级在「术」之后、「短记忆」之前。
+               模型只能读、不能改（产品硬门禁 E）。原「规范」卡已移除，改为不可见的“短记忆”。 -->
+          <div class="mianBanKuai" id="mianBanYaoQiuKuai" style="display:none">
+            <h3 data-i18n="panel.yaoqiu.biaoTi"></h3><span class="panInjectBadge" title="每轮注入当前会话">注入</span>
+            <p class="jingYin" style="font-size:11px" data-i18n="panel.yaoqiu.tiShi"></p>
+            <textarea id="shuRuKuangYaoQiu" rows="5" style="width:100%;box-sizing:border-box"></textarea>
+            <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <button class="anNiuXiao" id="anNiuYaoQiuBaoCun" data-i18n="panel.yaoqiu.baoCun"></button>
+              <button class="anNiuXiao" id="anNiuYaoQiuChongZhi" data-i18n="panel.yaoqiu.chongZhi"></button>
+              <span class="jingYin" id="yaoQiuXiaoXi" style="font-size:11px"></span>
             </div>
           </div>
 
@@ -562,6 +603,14 @@
   <script src="./niu-ma-templates.js"></script>
   <script src="./persona-templates.js"></script>
   <script src="./persona-templates-user.js"></script>
+  <script src="./du-yin.js"></script>
+  <!-- 主机地址/服务商的纯解析函数：经典脚本，挂在 window.WarmyNetHost；
+       与 scripts/verify-r63-net.mjs 共用同一份实现（不在测试里另写一套）。 -->
+  <script src="./net-host-pure.js"></script>
+  <!-- 界面时间唯一入口：记录存 epoch，显示按用户时区换算（第 91 轮） -->
+  <script src="./time-tz.js"></script>
+  <!-- 第 66 轮 项 20：登录/注册/助记词门禁先于 app.js 加载 -->
+  <script src="./auth-gate.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

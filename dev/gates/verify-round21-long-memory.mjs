@@ -11,7 +11,7 @@ let fail=0;const ok=(x,m)=>{console.log((x?'PASS ':'FAIL ')+m);if(!x)fail++;};
 // 24h+持久运行基础
 ok(main.includes('24 * 60 * 60 * 1000'),'决策卡最长等待24小时');
 ok(main.includes('scheduled-tasks.json')&&main.includes('dingShiRenWuJi'),'定时任务持久化');
-ok(main.includes('checkpoint.round-start')&&main.includes('checkpoint.session-rollback'),'每轮checkpoint与回滚');
+ok(main.includes('checkpoint.round-start')&&main.includes('checkpoint.hui-dang'),'每轮checkpoint与回档');
 ok(main.includes('LeaseRegistry')&&main.includes('lease.acquire')&&main.includes('lease.release'),'写操作租约与释放');
 ok(main.includes('plan.auto-continue')&&main.includes('ziDongXuPai'),'多轮自动续派');
 ok(main.includes('eta-live.json')||main.includes('etaHuo()'),'ETA/进度持久追踪');
@@ -24,7 +24,7 @@ ok(main.includes('chat.attachment-grant')&&main.includes('trusted-folders-grant'
 ok(main.includes('memoryReady')&&main.includes('jiyiTools'),'记忆不可用只降级记忆工具');
 // 缓存
 ok(metrics.includes('cacheHitTokens')&&metrics.includes('cacheHitRate'),'原生缓存命中率指标');
-ok(main.includes('当前时间：')&&main.includes('最后一条用户消息'),'动态时间戳放用户消息尾部，避免打穿system前缀缓存');
+ok(main.includes('shiJianHang')&&main.includes('当前时间戳 epochMs=')&&main.includes("role === 'user'"),'动态时间戳挂在最后一条用户消息末尾（epoch+UTC，不进 system）');
 ok(!/system[^\n]{0,80}当前时间：/.test(main),'system提示前缀不含动态时间戳');
 ok(settings.includes('autoSummary'),'空闲自动摘要可配置');
 console.log(`round21 long/memory/cache: ${fail?'FAIL':'PASS'} (${fail})`);process.exit(fail?1:0);

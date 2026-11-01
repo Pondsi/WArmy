@@ -4,10 +4,19 @@ import {
   pinJieUrl,
   zhuanHuanOpenAI,
   jieXiOpenAIXiangYing,
+  guiFanYongLiang,
   FEI_LIU_CHAT_MS,
 } from './base.js';
 import { chouNengLiCongDuanDian, moXingNengLi } from './mo-xing-neng-li.js';
 import type { LiaoTianPian, LiaoTianQingQiu, LiaoTianXiangYing, GongYingRenZheng } from './types.js';
+
+/**
+ * **不吃 `stream_options` 的中转**（第 44 轮）。
+ * 流式默认不吐 usage，要显式 `stream_options.include_usage` 才有最后一帧；
+ * 个别中转把这个字段当非法参数直接 400。遇到一次就把这个 baseURL 记下来不再带，
+ * 行为退回"流式无用量 ⇒ 上层按保守上界估算"，绝不因为要拿用量而把对话打挂。
+ */
+const BU_YAO_STREAM_OPTIONS = new Set<string>();
 
 /**
  * OpenAI 兼容协议
@@ -33,6 +42,26 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
     return h;
   }
 
+  /**
+   * 第 104 轮 项 11：Chat Completions **没有**服务端取消接口；只有 Responses API
+   * 的 `resp_…` 才可 `POST /responses/{id}/cancel`。拿到 chatcmpl id 时如实返回 unsupported，
+   * 调用方仍会 abort 本地连接。
+   */
+  override async cancel(req: { id?: string; signal?: AbortSignal }): Promise<{ supported: boolean; ok: boolean; detail?: string }> {
+    const id = String(req.id || '');
+    if (!/^resp_/.test(id)) return { supported: false, ok: false, detail: 'chat/completions has no cancel endpoint' };
+    try {
+      const res = await fetch(pinJieUrl(this.baseURL, `responses/${encodeURIComponent(id)}/cancel`), {
+        method: 'POST',
+        headers: { ...this.headers(), ...this.auth.headers },
+        signal: req.signal,
+      });
+      return { supported: true, ok: res.ok, detail: `HTTP ${res.status}` };
+    } catch (e) {
+      return { supported: true, ok: false, detail: String((e as Error).message || e) };
+    }
+  }
+
   private qingQiuTi(Qiu: LiaoTianQingQiu, stream: boolean): Record<string, unknown> {
     return {
       model: Qiu.model,
@@ -44,6 +73,7 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
       tools: Qiu.tools,
       tool_choice: Qiu.toolChoice,
       stream,
+      ...(stream && !BU_YAO_STREAM_OPTIONS.has(this.baseURL) ? { stream_options: { include_usage: true } } : {}),
       ...Qiu.extra,
     };
   }
@@ -70,6 +100,8 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
+      /** 这个中转不吃 `stream_options` ⇒ 记进黑名单，之后的流式不再带（宁可少一次用量，不许打挂对话） */
+      if (!res.ok && /stream_options/i.test(text)) BU_YAO_STREAM_OPTIONS.add(this.baseURL);
       throw new Error(`stream HTTP ${res.status}: ${text.slice(0, 200)}`);
     }
     const duQuQi = res.body.getReader();
@@ -102,6 +134,19 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
         try {
           const j = JSON.parse(data);
           const c = j.choices?.[0];
+          /**
+           * **最后一帧：只有 usage、没有 choices**（`stream_options.include_usage` 换来的那帧）。
+           * 必须带出去，否则流式路径永远拿不到原生用量 ⇒ 预算校准闭环启动不了。
+           */
+          if (!c && j.usage) {
+            yield {
+              id: j.id || '',
+              model: j.model || Qiu.model,
+              choices: [{ index: 0, delta: {}, finishReason: null }],
+              usage: guiFanYongLiang(j.usage as Record<string, unknown>, 'openai-compatible'),
+            };
+            continue;
+          }
           /**
            * **工具调用必须一起带出去**（真事故：流式包装只取了 content ⇒ 工具调用被丢掉 ⇒
            * 界面变成"纯文本对话"）。OpenAI 的 `delta.tool_calls` 是**增量**的（同一个 id
@@ -137,6 +182,8 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
                 finishReason: c?.finish_reason ?? null,
               },
             ],
+            /** 有的中转把 usage 挂在带 choices 的最后一帧上 ⇒ 这条路径也要把它带出去 */
+            ...(j.usage ? { usage: guiFanYongLiang(j.usage as Record<string, unknown>, 'openai-compatible') } : {}),
           };
         } catch {
           // ignore partial

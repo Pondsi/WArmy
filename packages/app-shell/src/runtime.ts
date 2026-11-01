@@ -366,9 +366,13 @@ export interface PaishengShiliXuanxiang {
   args?: string[];
 }
 
-/** 硬件建议：CPU 核数/2，夹在 1..8 */
+/**
+ * 最大实例数：一个逻辑 CPU 一个，夹在 10..16。
+ * 实例本身只是轻量 Node stub（真正吃资源的是模型调用）；
+ * 低配机器也允许 10 只，避免「10 只牛马」这种正常项目配置直接起不来。
+ */
 export function jianYiZuiDaShiLiShu(cpuCount = os.cpus().length): number {
-  return Math.max(1, Math.min(8, Math.floor(cpuCount / 2)));
+  return Math.max(10, Math.min(16, Math.floor(cpuCount)));
 }
 
 export class ShiliGuanliqi extends EventEmitter {

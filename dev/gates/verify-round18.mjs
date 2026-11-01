@@ -4,12 +4,19 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 const ROOT = process.cwd();
 const PKG = path.join(ROOT, 'packages', 'app-shell');
 const ROUND = (() => { const i = process.argv.indexOf('--round'); return i >= 0 ? String(process.argv[i + 1] || '1') : '1'; })();
 const PORT = 9710 + (Number(ROUND) || 1);
-const DATA = path.join(process.env.APPDATA || '', '@warmy', 'app-shell');
+/**
+ * **隔离的 userData**（第 48 轮）：以前这里直接用 `%APPDATA%\@warmy\app-shell`（注释说 `--user-data-dir` 无效 —— 那是早期主进程写死路径时的事，
+ * 现在其它真机门禁都靠 `--user-data-dir` 隔离且已验证生效）。用真实目录的代价是**每跑一遍 live 档就把用户真实配置整个删掉重建**
+ * （round18 系列与 round19 开头就是 `rmSync(DATA)`：首启备份、本机语音模型、身份与密钥仓一起没了）。现在每次一个临时目录（系统临时目录下，名字带时间戳），不再碰用户真实配置。
+ */
+const DATA = path.join(os.tmpdir(), 'warmy-round18-' + Date.now());
+fs.mkdirSync(DATA, { recursive: true });
 const MARK = `R18-MARK-${ROUND}-${Date.now().toString(36)}`;
 const key = (() => {
   const k = String(process.env.MIMO_KEY || '').trim();
@@ -80,7 +87,7 @@ try {
 const env = { ...process.env, MIMO_KEY: key };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(path.join(PKG, 'node_modules', 'electron', 'dist', 'electron.exe'),
-  [`--remote-debugging-port=${PORT}`, path.join(PKG, 'dist', 'electron-main.js')],
+  [`--remote-debugging-port=${PORT}`, `--user-data-dir=${DATA}`, path.join(PKG, 'dist', 'electron-main.js')],
   { cwd: PKG, stdio: ['ignore', 'pipe', 'pipe'], env });
 const logs = [];
 child.stdout.on('data', (d) => logs.push(String(d)));
@@ -187,9 +194,28 @@ async function main() {
   ok('⑨ 授权路径归一', em.includes('路径归一'));
   ok('⑨ 打开文件去重', em.includes('huiHuaYiDaKai'));
   ok('⑨ 续派注入已完成产物', em.includes('已完成的产物'));
-  ok('⑨ 计划强制', em.includes('必须先列计划'));
+  /**
+   * 以前这条钉的是主进程源码里"必须先列计划"这句**字面**。第 44 轮把计划门禁文案搬进 i18n 键
+   * `llm.planGate`（口径也改准了：3 步及以上才建计划）之后，那句字面就没了 ⇒ 每遍都红，红的是仪器。
+   * 现在判**接线 + 口径**：文案在语言包里、真的被推进固定开销、并且口径是"多步才建计划 /
+   * 同一时刻只有 1 步 doing / 做完标 done"（这三条才是产品要保证的，措辞可以改）。
+   */
+  {
+    const i18n = JSON.parse(fs.readFileSync(path.join(PKG, 'src/i18n/zh-CN.json'), 'utf8'));
+    const menJin = String(i18n['llm.planGate'] || '');
+    ok('⑨ 计划强制（门禁文案进固定开销 + 口径：多步才建计划/只有一步 doing/做完标 done）',
+      /ju\.push\(tMain\('llm\.planGate'/.test(em) && menJin.length > 40
+      && /3 个及以上/.test(menJin) && /doing/.test(menJin) && /done/.test(menJin));
+  }
   const ac = fs.readFileSync(path.join(PKG, 'src/archive-cleanup.ts'), 'utf8');
-  ok('③ 偏好独立文件 v2', ac.includes('user-preferences.json') && ac.includes('version: 2'));
+  /**
+   * 第 18 轮这条写的是"偏好独立文件 v2"（`userData/user-preferences.json`）。
+   * 第 38 轮查清那份文件**只写不读** —— 没有任何地方把它注入上下文，是条死路径，已删除，
+   * 用户偏好统一进「印象」`userData/yinxiang.md`。口径改了，断言跟着改：
+   * 不许再出现写盘代码，且提炼入口还在。
+   */
+  ok('③ 偏好落点改为「印象」（user-preferences.json 死路径已清除，提炼函数仍在）',
+    !/path\.join\(userData,\s*['"]user-preferences\.json['"]\)/.test(ac) && /export function congGuiDangTiQuZhiShi/.test(ac));
 
   // 回到聊天发真实任务（带唯一标记）
   await ev(`(()=>{

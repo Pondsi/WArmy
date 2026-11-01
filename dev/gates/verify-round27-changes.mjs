@@ -112,7 +112,12 @@ console.log('\n项 4 · requires 门控 / 技能索引 / write_skill');
 console.log('\n项 7/8/10 · 计划任务');
 {
   // 第 34 轮 plan_update 重写：旧步骤由 baoLiu 保留、标题回退走 biaoZhun/beiYong、创建时间由宿主给（不再有宿主种子）
-  shuo(/const baoLiu = jiu\.filter\(/.test(mainTs) && /const heBing = \[\.\.\.baoLiu, \.\.\.heBingXin\]/.test(mainTs), 'plan_update 合并保留旧步骤（不再"新数组覆盖旧数组"）');
+  // 第 50 轮：旧步骤不再使用时改标 blocked（已停止）而不是丢掉或留成待办（用户口径：保留旧的、新的另加）
+  shuo(
+    /const baoLiu = jiu[\s\S]{0,80}filter\(/.test(mainTs)
+    && /const heBing = \[\.\.\.baoLiu, \.\.\.heBingXin\]/.test(mainTs)
+    && /status: 'blocked' as const/.test(mainTs),
+    'plan_update 合并保留旧步骤（不再"新数组覆盖旧数组"；不用的旧步骤标已停止）');
   shuo(/biaoZhun\(diYi\) \|\| biaoZhun\(jiuBiao\) \|\| beiYong\(String\(it\.note/.test(mainTs), '标题为空时回退旧标题/说明首行（不再整片空白）');
   shuo(/done.*只能.*plan_verify|plan_verify.*(done|verified)/s.test(mainTs) || !/case 'done'/.test(mainTs.slice(mainTs.indexOf('plan_update'), mainTs.indexOf('plan_update') + 4000)),
     'done 不由 plan_update 直接落地（要真验收才算完成 ⇒ 不再"自己宣布完成"）');
@@ -215,11 +220,17 @@ console.log('\n项 5 · 本地语音（sherpa-onnx）');
     shuo(/chuShiHuaBenDiYuYin\(\{[\s\S]{0,200}onJinDu/.test(mainTs), '主进程接了进度回调（安装进度能实时回界面）');
     shuo(/benDiYuYinZhuangTai|benDiYuYinAnZhuang|benDiYuYinShanChu|benDiYuYinQiYong|benDiYuYinZiJian/.test(pre) && (pre.match(/benDiYuYin/g) || []).length >= 6,
       'preload 暴露状态/安装/删除/启用/自检 全套接口');
-    shuo(/const bd = await benDiShiBie\(buf, geShi\);/.test(mainTs), '听话链：**本地优先**，成功就用本地结果返回');
-    shuo(/asr\.bendi\.skip/.test(mainTs) && /tts\.bendi\.skip/.test(mainTs), '本地失败会记降级原因（不静默）');
-    shuo(/if \(he\.ok && he\.wav\)/.test(mainTs), '说话链：本地成功直接返回 wav dataUrl');
-    shuo(/const mo = lian\.find[\s\S]{0,400}no-tts-model/.test(mainTs) && /bdSt && bdSt\.qiYong && bdSt\.moXing\.heCheng/.test(mainTs),
-      '本地合成在"没配说话模型"的检查**之前**（装了就能出声）');
+    shuo(/const localEnabled = !!zhuangTaiBenDiYuYin\(\)\.qiYong;/.test(mainTs)
+      && /if \(localEnabled\) \{[\s\S]{0,500}return \{ ok: true, text, model: bd\.moXing, source: luYou \}/.test(mainTs),
+      '本机语音启用即仅本地，成功就用本地结果返回（第 77 轮定稿）');
+    shuo(/bendi-yuyin-asr-failed/.test(mainTs) && /tts\.bendi\.used/.test(mainTs),
+      '本地失败如实返回错误、成功记审计（不静默、不假装成功）');
+    shuo(/he\.wav\.toString\('base64'\)/.test(mainTs), '说话链：本地成功直接返回 wav dataUrl');
+    shuo((() => {
+      const i = mainTs.indexOf("chuliIpc('warmy:ttsLangDu'");
+      const s = i < 0 ? '' : mainTs.slice(i, i + 4000);
+      return s.indexOf('if (localEnabled)') >= 0 && s.indexOf('if (localEnabled)') < s.indexOf('no-tts-model');
+    })(), '本地合成在"没配说话模型"的检查**之前**（装了就能出声）');
     shuo(/local: true, source: 'bendi-yuyin'|source: 'bendi-yuyin'/.test(mainTs), '听话/说话状态把本地也算成"可用"（界面不骗人）');
     const lk = [...app.matchAll(/tOr\('localSpeech\.([a-zA-Z]+)'/g)].map((x) => 'localSpeech.' + x[1]);
     const miss2 = [...new Set(lk)].filter((k) => !(k in i18n));

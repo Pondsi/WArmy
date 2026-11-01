@@ -1,0 +1,25 @@
+{
+  "id": "mcp-bridge",
+  "name": "warmy-plugin-mcp-bridge",
+  "displayName": "MCP Bridge",
+  "version": "1.0.0",
+  "description": "Bridge Model Context Protocol (MCP) stdio servers into WArmy agents as ordinary tools.",
+  "entry": "bridge.mjs",
+  "runtime": "node-esm",
+  "kind": "tool-bridge",
+  "defaultEnabled": false,
+  "enabled": false,
+  "configFile": "mcp-servers.json",
+  "protocolVersion": "2024-11-05",
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": false
+  },
+  "toolNamePattern": "mcp__<server>__<tool>",
+  "security": {
+    "spawn": "child_process.spawn(command, argsArray, { shell: false })",
+    "network": "none in this plugin; whatever the child server does is the child's own business",
+    "secrets": "read from mcp-servers.json env block only; never logged in full"
+  }
+}
