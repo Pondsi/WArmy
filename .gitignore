@@ -97,5 +97,6 @@ packages/app-shell/scripts/verify-local-search.mjs
 packages/app-shell/scripts/*
 !packages/app-shell/scripts/check-syntax.mjs
 !packages/app-shell/scripts/copy-assets.mjs
+/_head-app.js
 packages/sync-protocol/scripts/
 
