@@ -21,16 +21,24 @@ import os from 'node:os';
 import path from 'node:path';
 import { anQuanYuanZiXieJson } from './atomic-json.js';
 import {
+  ARGON2_M,
+  ARGON2_T,
+  ARGON2_P,
   MASTER_KDF_ITERATIONS,
   PIN_KDF_ITERATIONS,
   PIN_MAX_FAILURES,
+  PIN_LOCK_MS,
+  MNEMONIC_LOCK_MS,
+  MAX_LOCK_MS,
   PinLockout,
   bindingMatches,
   credentialFromSeed,
   decryptBlob,
   deriveMasterKey,
+  deriveMasterKeyArgon2,
   deriveKroot,
   derivePinKey,
+  derivePinKeyArgon2,
   encryptBlob,
   friendlyMnemonic,
   generateMnemonic,
@@ -66,9 +74,22 @@ export interface AuthServiceOptions {
   now?: () => number;
 }
 
+export type KdfKind = 'pbkdf2' | 'argon2id';
+export interface KdfSpec {
+  /** R125：缺省视为 pbkdf2（旧 vault 兼容）；新 vault 一律 argon2id */
+  type?: KdfKind;
+  salt: string;
+  iterations?: number;
+  m?: number;
+  t?: number;
+  p?: number;
+}
+
 interface PinRecord {
   salt: string;
   iterations: number;
+  /** R125：PIN KEK 派生方式；缺省 pbkdf2（旧 vault 兼容） */
+  kdfType?: KdfKind;
   verifier: string;
   wrappedMnemonic: AuthBlob;
 }
@@ -85,12 +106,18 @@ interface AuthVaultFile {
   updatedAt: number;
   mnemonicConfirmed: boolean;
   pinyin: boolean;
-  kdf: { salt: string; iterations: number };
+  kdf: KdfSpec;
   identity: { seed: AuthBlob; mnemonic: AuthBlob };
   pin: PinRecord | null;
   autoLogin: AutoLoginRecord | null;
   failedAttempts: number;
   lockUntil: number;
+  /** R125：PIN 连续锁定的档位（每次锁定时长 = PIN_LOCK_MS × 2^level，上限 MAX_LOCK_MS） */
+  pinLockLevel?: number;
+  /** R125：助记词直输（恢复/导入）独立的失败计数/锁定/档位（关闭程序后仍按绝对时间戳生效） */
+  mnemonicFailedAttempts?: number;
+  mnemonicLockUntil?: number;
+  mnemonicLockLevel?: number;
   lastLoginAt: number | null;
 }
 
@@ -106,7 +133,7 @@ interface PendingRecovery {
   seed: Buffer;
   mnemonic: string;
   masterKey: Buffer;
-  kdf: { salt: string; iterations: number };
+  kdf: KdfSpec;
 }
 
 export interface AuthState {
@@ -122,6 +149,9 @@ export interface AuthState {
   lockUntil: number;
   remainingAttempts: number;
   retryAfterMs: number;
+  /** R125：助记词直输路径（恢复/导入）的独立锁定信息（UI 提示用，不暴露具体时长） */
+  mnemonicLocked: boolean;
+  mnemonicRemainingAttempts: number;
   createdAt: number;
   lastLoginAt: number | null;
   hasPendingRegistration: boolean;
@@ -173,6 +203,56 @@ export class AuthService {
     this.now = options.now ?? (() => Date.now());
   }
 
+  /** R125：按 vault kdf 类型分发主密钥派生（argon2id 优先，缺省 pbkdf2） */
+  private async deriveMaster(mnemonic: string, kdf: KdfSpec): Promise<Buffer> {
+    if (kdf.type === 'argon2id') return deriveMasterKeyArgon2(mnemonic, kdf.salt, { m: kdf.m, t: kdf.t, p: kdf.p });
+    return deriveMasterKey(mnemonic, kdf.salt, kdf.iterations ?? MASTER_KDF_ITERATIONS);
+  }
+
+  /** R125：按 PIN 记录 kdfType 分发 PIN KEK 派生 */
+  private async derivePinKek(pin: string, rec: { salt: string; iterations?: number; kdfType?: KdfKind }): Promise<Buffer> {
+    if (rec.kdfType === 'argon2id') return derivePinKeyArgon2(pin, rec.salt);
+    return derivePinKey(pin, rec.salt, rec.iterations ?? PIN_KDF_ITERATIONS);
+  }
+
+  /**
+   * R125：旧 PBKDF2 vault 在成功解锁后迁移到 Argon2id（identity 重新包裹、
+   * PIN 包裹层重做、kdf 换 argon2id 参数）。返回新主密钥（调用方接管并替换 session
+   * 密钥）；无需迁移返回 null。
+   */
+  private async migrateKdfToArgon2(file: AuthVaultFile, mnemonic: string, oldMaster: Buffer, pin: string | null): Promise<Buffer | null> {
+    if (file.kdf.type === 'argon2id') return null;
+    const newSalt = crypto.randomBytes(16).toString('base64');
+    const newMaster = await deriveMasterKeyArgon2(mnemonic, newSalt);
+    try {
+      const seed = decryptBlob(oldMaster, file.identity.seed);
+      const mn = decryptBlob(oldMaster, file.identity.mnemonic).toString('utf8');
+      file.identity = {
+        seed: encryptBlob(newMaster, seed),
+        mnemonic: encryptBlob(newMaster, mn),
+      };
+      if (file.pin && pin != null) {
+        const newKek = await derivePinKeyArgon2(pin, file.pin.salt);
+        try {
+          file.pin = {
+            ...file.pin,
+            kdfType: 'argon2id',
+            verifier: pinVerifier(newKek),
+            wrappedMnemonic: encryptBlob(newKek, mn),
+          };
+        } finally {
+          wipeBuffer(newKek);
+        }
+      }
+      file.kdf = { type: 'argon2id', salt: newSalt, m: ARGON2_M, t: ARGON2_T, p: ARGON2_P };
+      file.updatedAt = this.now();
+      return newMaster;
+    } catch {
+      wipeBuffer(newMaster);
+      return null;
+    }
+  }
+
   hasAccount(): boolean {
     return this.readVault().file !== null;
   }
@@ -193,6 +273,8 @@ export class AuthService {
         lockUntil: 0,
         remainingAttempts: PIN_MAX_FAILURES,
         retryAfterMs: 0,
+        mnemonicLocked: false,
+        mnemonicRemainingAttempts: PIN_MAX_FAILURES,
         createdAt: 0,
         lastLoginAt: null,
         hasPendingRegistration: !!this.pendingRegistration,
@@ -200,7 +282,12 @@ export class AuthService {
       };
     }
     const lock = new PinLockout(
-      { failedAttempts: file.failedAttempts, lockUntil: file.lockUntil },
+      { failedAttempts: file.failedAttempts, lockUntil: file.lockUntil, lockLevel: file.pinLockLevel || 0 },
+      { lockMs: PIN_LOCK_MS, maxLockMs: MAX_LOCK_MS },
+    ).check(this.now());
+    const mlock = new PinLockout(
+      { failedAttempts: file.mnemonicFailedAttempts || 0, lockUntil: file.mnemonicLockUntil || 0, lockLevel: file.mnemonicLockLevel || 0 },
+      { lockMs: MNEMONIC_LOCK_MS, maxLockMs: MAX_LOCK_MS },
     ).check(this.now());
     let autoLoginAvailable = false;
     if (file.autoLogin) {
@@ -224,6 +311,8 @@ export class AuthService {
       lockUntil: lock.lockUntil,
       remainingAttempts: lock.remainingAttempts,
       retryAfterMs: lock.retryAfterMs,
+      mnemonicLocked: mlock.locked,
+      mnemonicRemainingAttempts: mlock.remainingAttempts,
       createdAt: file.createdAt,
       lastLoginAt: file.lastLoginAt,
       hasPendingRegistration: !!this.pendingRegistration,
@@ -233,7 +322,7 @@ export class AuthService {
 
   // ── registration ──────────────────────────────────────────────────────
 
-  registerBegin(force = false): AuthResult {
+  async registerBegin(force = false): Promise<AuthResult> {
     const { file, corrupt } = this.readVault();
     if (corrupt) return err('vault-corrupt');
     if (file && !force) return err('account-exists');
@@ -253,7 +342,8 @@ export class AuthService {
     const seed = seedFromCredential(credential);
     const mnemonic = generateMnemonic(seed);
     const salt = crypto.randomBytes(16).toString('base64');
-    const masterKey = deriveMasterKey(mnemonic, salt, MASTER_KDF_ITERATIONS);
+    // R125：新账号直接 Argon2id（内存困难 KDF）
+    const masterKey = await deriveMasterKeyArgon2(mnemonic, salt);
     const friendly = friendlyMnemonic(mnemonic);
     this.pendingRegistration = { seed, mnemonic, masterKey, salt, createdAt: this.now() };
     return {
@@ -267,13 +357,13 @@ export class AuthService {
     };
   }
 
-  registerCommit(payload: {
+  async registerCommit(payload: {
     mnemonicConfirmed?: boolean;
     pinyin?: boolean;
     autoLogin?: boolean;
     pin?: string;
     confirmPin?: string;
-  }): AuthResult {
+  }): Promise<AuthResult> {
     const pending = this.pendingRegistration;
     if (!pending) return err('no-pending-registration');
     const mnemonicConfirmed = payload?.mnemonicConfirmed === true;
@@ -301,10 +391,12 @@ export class AuthService {
       if (!pair.ok) return err(pair.error);
       try {
         const salt = crypto.randomBytes(16).toString('base64');
-        const kek = derivePinKey(String(payload.pin), salt, PIN_KDF_ITERATIONS);
+        // R125：PIN KEK 也用 Argon2id
+        const kek = await derivePinKeyArgon2(String(payload.pin), salt);
         pinRecord = {
           salt,
           iterations: PIN_KDF_ITERATIONS,
+          kdfType: 'argon2id',
           verifier: pinVerifier(kek),
           wrappedMnemonic: encryptBlob(kek, pending.mnemonic),
         };
@@ -321,7 +413,7 @@ export class AuthService {
       updatedAt: this.now(),
       mnemonicConfirmed,
       pinyin,
-      kdf: { salt: pending.salt, iterations: MASTER_KDF_ITERATIONS },
+      kdf: { type: 'argon2id', salt: pending.salt, m: ARGON2_M, t: ARGON2_T, p: ARGON2_P },
       identity: {
         seed: encryptBlob(pending.masterKey, pending.seed),
         mnemonic: encryptBlob(pending.masterKey, pending.mnemonic),
@@ -354,12 +446,13 @@ export class AuthService {
 
   // ── login ─────────────────────────────────────────────────────────────
 
-  loginPin(pin: unknown): AuthResult {
+  async loginPin(pin: unknown): Promise<AuthResult> {
     const { file } = this.readVault();
     if (!file) return err('no-account');
     if (!file.pin) return err('pin-not-configured');
     const lock = new PinLockout(
-      { failedAttempts: file.failedAttempts, lockUntil: file.lockUntil },
+      { failedAttempts: file.failedAttempts, lockUntil: file.lockUntil, lockLevel: file.pinLockLevel || 0 },
+      { lockMs: PIN_LOCK_MS, maxLockMs: MAX_LOCK_MS },
     );
     const check = lock.check(this.now());
     if (!check.allowed) {
@@ -372,7 +465,7 @@ export class AuthService {
     }
     let kek: Buffer;
     try {
-      kek = derivePinKey(String(pin ?? ''), file.pin.salt, file.pin.iterations);
+      kek = await this.derivePinKek(String(pin ?? ''), file.pin);
     } catch {
       return err('bad-pin', { remainingAttempts: check.remainingAttempts });
     }
@@ -381,6 +474,7 @@ export class AuthService {
       const snap = lock.fail(this.now());
       file.failedAttempts = snap.failedAttempts;
       file.lockUntil = snap.lockUntil;
+      file.pinLockLevel = snap.lockLevel;
       file.updatedAt = this.now();
       this.writeVault(file);
       return err(snap.locked ? 'locked' : 'bad-pin', {
@@ -396,7 +490,7 @@ export class AuthService {
     let seed: Buffer | null = null;
     try {
       mnemonic = decryptBlob(kek, file.pin.wrappedMnemonic).toString('utf8');
-      masterKey = deriveMasterKey(mnemonic, file.kdf.salt, file.kdf.iterations);
+      masterKey = await this.deriveMaster(mnemonic, file.kdf);
       seed = decryptBlob(masterKey, file.identity.seed);
       const entropy = mnemonicToEntropy(mnemonic);
       if (entropy.length !== seed.length || !crypto.timingSafeEqual(entropy, seed)) {
@@ -418,9 +512,21 @@ export class AuthService {
     }
     if (!masterKey || !seed) return err('vault-corrupt');
 
+    // R125：旧 PBKDF2 vault 成功解锁后迁移到 Argon2id（失败不影响本次登录）
+    try {
+      const migrated = await this.migrateKdfToArgon2(file, mnemonic, masterKey, String(pin ?? ''));
+      if (migrated) {
+        wipeBuffer(masterKey);
+        masterKey = migrated;
+      }
+    } catch {
+      /* 迁移失败不阻断登录；下次成功解锁再试 */
+    }
+
     const reset = lock.success();
     file.failedAttempts = reset.failedAttempts;
     file.lockUntil = reset.lockUntil;
+    file.pinLockLevel = reset.lockLevel;
     file.lastLoginAt = this.now();
     file.updatedAt = this.now();
     const written = this.writeVault(file);
@@ -442,7 +548,7 @@ export class AuthService {
     };
   }
 
-  loginAuto(): AuthResult {
+  async loginAuto(): Promise<AuthResult> {
     const { file } = this.readVault();
     if (!file) return err('no-account');
     if (!file.autoLogin) return err('auto-login-not-enabled');
@@ -456,7 +562,7 @@ export class AuthService {
     let seed: Buffer | null = null;
     try {
       mnemonic = this.protector.unprotect(file.autoLogin.wrappedMnemonicOs);
-      masterKey = deriveMasterKey(mnemonic, file.kdf.salt, file.kdf.iterations);
+      masterKey = await this.deriveMaster(mnemonic, file.kdf);
       seed = decryptBlob(masterKey, file.identity.seed);
       const applied = this.applyIdentity(seed, masterKey);
       if (!applied.ok) {
@@ -470,6 +576,18 @@ export class AuthService {
       return err('auto-login-failed', { state: this.state() });
     }
     if (!masterKey || !seed) return err('auto-login-failed', { state: this.state() });
+
+    // R125：旧 PBKDF2 vault 成功解锁后迁移到 Argon2id（自动登录无 PIN，只迁 master 部分）
+    try {
+      const migrated = await this.migrateKdfToArgon2(file, mnemonic, masterKey, null);
+      if (migrated) {
+        wipeBuffer(masterKey);
+        masterKey = migrated;
+      }
+    } catch {
+      /* 迁移失败不阻断登录 */
+    }
+
     file.lastLoginAt = this.now();
     file.failedAttempts = 0;
     file.lockUntil = 0;
@@ -488,20 +606,46 @@ export class AuthService {
 
   // ── mnemonic recovery ─────────────────────────────────────────────────
 
-  recoverBegin(mnemonicInput: unknown): AuthResult {
+  async recoverBegin(mnemonicInput: unknown): Promise<AuthResult> {
     const { file } = this.readVault();
     if (!file) return err('no-account');
+    // R125：助记词直输路径独立锁定（5 次失败锁 10 分钟起步，连续锁定翻倍，上限 48h；
+    // lockUntil 是绝对时间戳，关闭程序后时间照常流逝）
+    const mlock = new PinLockout(
+      { failedAttempts: file.mnemonicFailedAttempts || 0, lockUntil: file.mnemonicLockUntil || 0, lockLevel: file.mnemonicLockLevel || 0 },
+      { lockMs: MNEMONIC_LOCK_MS, maxLockMs: MAX_LOCK_MS },
+    );
+    const mcheck = mlock.check(this.now());
+    if (!mcheck.allowed) {
+      return err('locked', {
+        lockUntil: mcheck.lockUntil,
+        remainingAttempts: mcheck.remainingAttempts,
+        retryAfterMs: mcheck.retryAfterMs,
+        state: this.state(),
+      });
+    }
     let mnemonic = '';
     try {
       mnemonic = parseMnemonicInput(String(mnemonicInput ?? ''));
       mnemonicToEntropy(mnemonic);
     } catch {
-      return err('bad-mnemonic');
+      const snap = mlock.fail(this.now());
+      file.mnemonicFailedAttempts = snap.failedAttempts;
+      file.mnemonicLockUntil = snap.lockUntil;
+      file.mnemonicLockLevel = snap.lockLevel;
+      file.updatedAt = this.now();
+      this.writeVault(file);
+      return err(snap.locked ? 'locked' : 'bad-mnemonic', {
+        lockUntil: snap.lockUntil,
+        remainingAttempts: snap.remainingAttempts,
+        retryAfterMs: snap.retryAfterMs,
+        state: this.state(),
+      });
     }
     let masterKey: Buffer | null = null;
     let seed: Buffer | null = null;
     try {
-      masterKey = deriveMasterKey(mnemonic, file.kdf.salt, file.kdf.iterations);
+      masterKey = await this.deriveMaster(mnemonic, file.kdf);
       seed = decryptBlob(masterKey, file.identity.seed);
       const entropy = mnemonicToEntropy(mnemonic);
       if (entropy.length !== seed.length || !crypto.timingSafeEqual(entropy, seed)) {
@@ -510,21 +654,39 @@ export class AuthService {
     } catch {
       wipeBuffer(masterKey);
       wipeBuffer(seed);
-      return err('bad-mnemonic');
+      const snap = mlock.fail(this.now());
+      file.mnemonicFailedAttempts = snap.failedAttempts;
+      file.mnemonicLockUntil = snap.lockUntil;
+      file.mnemonicLockLevel = snap.lockLevel;
+      file.updatedAt = this.now();
+      this.writeVault(file);
+      return err(snap.locked ? 'locked' : 'bad-mnemonic', {
+        lockUntil: snap.lockUntil,
+        remainingAttempts: snap.remainingAttempts,
+        retryAfterMs: snap.retryAfterMs,
+        state: this.state(),
+      });
     }
+    const mreset = mlock.success();
+    file.mnemonicFailedAttempts = mreset.failedAttempts;
+    file.mnemonicLockUntil = mreset.lockUntil;
+    file.mnemonicLockLevel = mreset.lockLevel;
+    file.updatedAt = this.now();
+    this.writeVault(file);
     this.clearPending();
     this.clearRecovery();
+    // R125：恢复完成时 vault 已迁移到 Argon2id 的，pendingRecovery 记录新 kdf；旧格式沿用旧 kdf（登录时迁移）
     this.pendingRecovery = { mnemonic, seed, masterKey, kdf: { ...file.kdf } };
     const friendly = friendlyMnemonic(mnemonic);
     return { ok: true, pinyin: mnemonicToPinyin(mnemonic), friendlyWords: friendly.words, friendlyIdioms: friendly.idioms };
   }
 
-  recoverCommit(payload: {
+  async recoverCommit(payload: {
     pinyin?: boolean;
     autoLogin?: boolean;
     pin?: string;
     confirmPin?: string;
-  }): AuthResult {
+  }): Promise<AuthResult> {
     const pending = this.pendingRecovery;
     if (!pending) return err('no-pending-recovery');
     const autoLogin = payload?.autoLogin === true;
@@ -547,10 +709,12 @@ export class AuthService {
       if (!pair.ok) return err(pair.error);
       try {
         const salt = crypto.randomBytes(16).toString('base64');
-        const kek = derivePinKey(String(payload.pin), salt, PIN_KDF_ITERATIONS);
+        // R125：恢复后的新 PIN 也用 Argon2id
+        const kek = await derivePinKeyArgon2(String(payload.pin), salt);
         pinRecord = {
           salt,
           iterations: PIN_KDF_ITERATIONS,
+          kdfType: 'argon2id',
           verifier: pinVerifier(kek),
           wrappedMnemonic: encryptBlob(kek, pending.mnemonic),
         };
@@ -561,7 +725,19 @@ export class AuthService {
     }
 
     // 登录方式的重设不能改变旧数据仓库仍在使用的主密钥。
-    const masterKey = Buffer.from(pending.masterKey);
+    let masterKey = Buffer.from(pending.masterKey);
+    // R125：恢复重建的 vault 统一用 Argon2id。pending.kdf 是旧 PBKDF2 时，
+    // 必须用 Argon2id 重新派生主密钥再包裹 identity（否则新 vault 按新算法派生打不开）。
+    let kdf: KdfSpec;
+    if (pending.kdf.type === 'argon2id') {
+      kdf = { ...pending.kdf };
+    } else {
+      kdf = { type: 'argon2id', salt: crypto.randomBytes(16).toString('base64'), m: ARGON2_M, t: ARGON2_T, p: ARGON2_P };
+      const upgraded = await deriveMasterKeyArgon2(pending.mnemonic, kdf.salt);
+      wipeBuffer(masterKey);
+      masterKey = Buffer.from(upgraded);
+      wipeBuffer(upgraded);
+    }
     const file: AuthVaultFile = {
       schema: 'warmy.auth.v1',
       version: 1,
@@ -569,7 +745,7 @@ export class AuthService {
       updatedAt: this.now(),
       mnemonicConfirmed: true,
       pinyin: payload?.pinyin === true,
-      kdf: { ...pending.kdf },
+      kdf,
       identity: {
         seed: encryptBlob(masterKey, pending.seed),
         mnemonic: encryptBlob(masterKey, pending.mnemonic),
@@ -662,7 +838,7 @@ export class AuthService {
     return { ok: true, state: this.state() };
   }
 
-  changePin(payload: { pin?: string; confirmPin?: string; disableAutoLogin?: boolean }): AuthResult {
+  async changePin(payload: { pin?: string; confirmPin?: string; disableAutoLogin?: boolean }): Promise<AuthResult> {
     const { file } = this.readVault();
     if (!file) return err('no-account');
     if (file.autoLogin && payload?.disableAutoLogin !== true) return err('auto-login-enabled');
@@ -673,10 +849,12 @@ export class AuthService {
     try {
       mnemonic = decryptBlob(this.sessionMasterKey, file.identity.mnemonic).toString('utf8');
       const salt = crypto.randomBytes(16).toString('base64');
-      const kek = derivePinKey(String(payload.pin), salt, PIN_KDF_ITERATIONS);
+      // R125：改 PIN 后的包裹层也用 Argon2id
+      const kek = await derivePinKeyArgon2(String(payload.pin), salt);
       file.pin = {
         salt,
         iterations: PIN_KDF_ITERATIONS,
+        kdfType: 'argon2id',
         verifier: pinVerifier(kek),
         wrappedMnemonic: encryptBlob(kek, mnemonic),
       };

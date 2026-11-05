@@ -229,17 +229,39 @@ export function zhaiLu(zhengWen: string, query: string, maxSeg = 3, kuan = 240):
 /**
  * 把搜索结果整理成**给模型看、也给用户核**的文本：每条都带编号 URL。
  * 工具**不下结论** —— 结论由模型基于这些材料写（写不出就说材料不够）。
+ * R128 N5：带**相关度自检**与「校验 → 重搜」协议 —— 结果不切题时模型要换词/换参数重搜，
+ * 而不是拿垃圾结果硬凑结论。
  */
-export function geShiYanJiu(jie: YanJiuJieGuo, opts: { kuan?: number } = {}): string {
+export function geShiYanJiu(jie: YanJiuJieGuo, opts: { kuan?: number; query?: string } = {}): string {
   if (!jie.ok) {
-    return `[web_search] 失败：${jie.error}${jie.hint ? '\n提示：' + jie.hint : ''}\n（**不要凭记忆编造搜索结果**；要么按提示重试，要么如实告诉用户查不到。）`;
+    return `[web_search] 失败：${jie.error}${jie.hint ? '\n提示：' + jie.hint : ''}\n（**不要凭记忆编造搜索结果**；换关键词或改参数重搜（最多 3 次），仍不行就如实告诉用户查不到。）`;
   }
   const kuan = opts.kuan || 220;
   const hang = jie.items.map((x, i) => `[${i + 1}] ${x.title}\n    ${x.url}\n    ${x.snippet.slice(0, kuan)}`);
+  /** 相关度自检：查询词（英文按词、中文按字）在标题+摘要里的命中面 */
+  const q = String(opts.query || '').toLowerCase();
+  const yingCi: string[] = q.match(/[a-z0-9]{2,}/g) || [];
+  const zhongZi: string[] = q.match(/[一-鿿]/g) || [];
+  const ci = Array.from(new Set([...yingCi, ...zhongZi]));
+  let qieTi = 0;
+  if (ci.length && jie.items.length) {
+    for (const x of jie.items) {
+      const wen = (String(x.title || '') + ' ' + String(x.snippet || '')).toLowerCase();
+      const fen = ci.filter((c) => wen.includes(c)).length / ci.length;
+      if (fen >= 0.3) qieTi += 1;
+    }
+  }
+  const xiangGuan = jie.items.length && ci.length ? Math.round((qieTi / jie.items.length) * 100) : null;
+  const jingGao = xiangGuan !== null && xiangGuan < 50
+    ? `\n⚠ 相关度自检：只有 ${qieTi}/${jie.items.length} 条看起来与查询词切题（${xiangGuan}%）。**先别下结论**：换关键词（换说法/加限定词）或改 topic/days 重搜。`
+    : xiangGuan !== null
+      ? `\n（相关度自检：${qieTi}/${jie.items.length} 条切题 ${xiangGuan}%）`
+      : '';
   return `[web_search] 供应商=${jie.provider || YAN_JIU_GONG_YING_SHANG} 命中 ${jie.items.length} 条`
     + (jie.answer ? `\n（供应商直接答案，**引用前请自行核对**）${jie.answer.slice(0, 400)}` : '')
     + '\n' + hang.join('\n')
-    + '\n\n写结论时**必须带上出处编号对应的 URL**；材料不足就直说不足，不要补全。';
+    + jingGao
+    + '\n\n【结果校验与重搜协议】① 逐条核对是否切题、来源是否可信、时间是否够新；② 不切题/质量不高 ⇒ 换关键词或改 topic/days **重新搜索**（最多 3 次），必要时用 web_extract 抓原文核对；③ 仍不足就如实说查到什么、缺什么。\n写结论时**必须带上出处编号对应的 URL**；材料不足就直说不足，不要补全。';
 }
 
 /** 抓取结果 → 带 URL 的摘录文本 */

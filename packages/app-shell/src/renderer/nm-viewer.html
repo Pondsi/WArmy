@@ -111,13 +111,20 @@
     本地文件源码可编辑（即时反映到网页预览）；远程网页只读且源码工具禁用。
   -->
   <div id="wangYeGongJu" hidden>
-    <!-- 第 122 轮：标签页在地址栏上方（和浏览器一致）；+ 固定在标签页右侧、不随滚动消失 -->
+    <!-- 第 122 轮：标签页在地址栏上方（和浏览器一致）；+ 固定在标签页右侧、不随滚动消失。
+         第 98 轮：关闭网站模式按钮也从地址栏移到这行右侧（标签页旁边）。 -->
     <div id="wangYeHang2" class="wangYeHang">
       <button id="anNiuWangYeTabZuo" class="tb2 tabGun" title="向左滚动标签页" aria-label="向左滚动标签页">‹</button>
       <div id="wangYeTabLie" role="tablist" aria-label="网页标签页"></div>
-      <button id="anNiuWangYeTabJia" class="tb2 tabJia" title="新建标签页（默认打开 numumu.com）" aria-label="新建标签页">+</button>
       <button id="anNiuWangYeTabYou" class="tb2 tabGun" title="向右滚动标签页" aria-label="向右滚动标签页">›</button>
+      <button id="anNiuWangYeTabJia" class="tb2 tabJia" title="新建标签页（默认打开 numumu.com）" aria-label="新建标签页">+</button>
+      <button id="anNiuWangYeYinSi" class="tb2" title="新建无痕浏览标签页（仅该标签浏览数据不留存，关闭程序即清空）" aria-label="新建无痕浏览标签页">
+        <svg viewBox="0 0 1024 1024" aria-hidden="true" focusable="false" fill="currentColor"><path d="M62.73 309.35c0-38.71 31.28-68.09 67.37-68.09h248.07c55.75 0 100.94 20.66 133.83 55.33 32.88-34.67 78.08-55.33 133.83-55.33H893.9c36.13 0 67.37 29.38 67.37 68.09v97.27c0 176.83-137.19 320.99-315.45 320.99h-25.01l-74.41 45.44c-21.18 12.93-47.64 12.93-68.82 0l-74.41-45.44h-25.01c-178.26 0-315.45-144.15-315.45-320.99v-97.27z m55.9-7.75v83.82c0 152.65 105.88 275.41 244.39 275.41h42.5c9.65 0 19.08 2.97 27.33 8.53l78.93 53.36 78.93-53.36c8.26-5.58 17.7-8.53 27.33-8.53h42.5c138.52 0 244.39-122.76 244.39-275.41V301.6H660.55c-44.03 0-72.17 21.79-90.49 59.87-11.68 23.92-34.04 38.72-58.27 38.56-19.81 0-44.76-10.54-58.27-38.56-18.32-38.08-46.46-59.87-90.49-59.87h-244.4z"/><path d="M281.04 395.27h-53.27c-6.86-0.01-13.18 4.07-16.51 10.65-3.33 6.58-3.15 14.64 0.48 21.03 34.44 60.81 95.01 97.79 160.21 97.8h56.69c7.5-0.01 14.34-4.71 17.63-12.11 3.29-7.4 2.46-16.22-2.15-22.72l-8.01-11.35c-37.22-52.57-94.45-83.31-155.07-83.3z m454.07 0h53.27c6.86-0.01 13.18 4.07 16.51 10.65 3.33 6.58 3.15 14.64-0.48 21.03-34.44 60.81-95.01 97.79-160.21 97.8h-56.69c-7.5-0.01-14.34-4.71-17.63-12.11-3.29-7.4-2.46-16.22 2.15-22.72l8.01-11.35c37.23-52.57 94.45-83.31 155.07-83.3z"/></svg>
+      </button>
       <span id="wangYeTiShi" class="jingYin" hidden></span>
+      <button id="anNiuWangYeGuan" class="tb2" title="关闭网站模式，回到文件预览" aria-label="关闭网站模式">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.2 3.2l9.6 9.6M12.8 3.2l-9.6 9.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
     </div>
     <div id="wangYeHang1" class="wangYeHang">
       <button id="anNiuWangYeHou" class="tb2" title="后退" aria-label="后退">
@@ -133,8 +140,8 @@
       <button id="anNiuWangYeLiShi" class="tb2" title="历史" aria-label="历史" aria-haspopup="menu">
         <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 4.6V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       </button>
-      <button id="anNiuWangYeXinBiaoQian" class="tb2 xinKaiAnNiu" title="在新标签页打开链接：关（点击开启）" aria-label="在新标签页打开链接" aria-pressed="false">
-        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="2.8" y="4.3" width="8.2" height="7.2" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.3 4.3V3.4c0-.4.3-.7.7-.7h6.2c.4 0 .7.3.7.7v6.2c0 .4-.3.7-.7.7h-.9" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M9.8 2.6v2.6M8.5 3.9h2.6" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      <button id="anNiuWangYeShouCang" class="tb2" title="收藏夹" aria-label="收藏夹" aria-haspopup="menu">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.2L8 11.5l-3.8 2 .7-4.2-3.1-3 4.3-.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
       </button>
       <button id="anNiuWangYeFenLan" class="tb2 fenLanAnNiu" title="分栏：只网页" aria-label="分栏" aria-pressed="false">
         <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="2.4" y="3" width="11.2" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M9.2 3v10" fill="none" stroke="currentColor" stroke-width="1.2"/><path class="fenLanYouZhi" d="M2.4 8h6.8" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0"/></svg>
@@ -142,8 +149,10 @@
       <button id="anNiuWangYeXiaZai" class="tb2" title="下载（网页触发的下载会落在系统下载目录）" aria-label="下载" aria-haspopup="dialog" aria-expanded="false">
         <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 2.6v7.2M5.2 7.2 8 10l2.8-2.8M3.2 12.8h9.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <button id="anNiuWangYeGuan" class="tb2" title="关闭网站模式，回到文件预览" aria-label="关闭网站模式">
-        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.2 3.2l9.6 9.6M12.8 3.2l-9.6 9.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <!-- R128：三个点收纳菜单（标签页下面这行）—— 启动页设置 / 新标签页打开 / 清理数据 / 查看账号密码 -->
+      <button id="anNiuWangYeXinKai" class="tb2" title="在新标签页打开链接" aria-label="在新标签页打开链接" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M9 2.6h4.4V7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M13.4 2.6 7.6 8.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M11 9.4v3.2a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
+      <button id="anNiuWangYeDianDian" class="tb2" title="更多（启动页设置、在新标签页打开链接、清理数据、账号密码）" aria-label="更多" aria-haspopup="menu">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="3.4" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12.6" cy="8" r="1.3" fill="currentColor"/></svg>
       </button>
     </div>
     <!-- 第 120 轮（W10）：最小下载管理（进度/状态/打开/定位），不新增网络能力 -->
@@ -264,6 +273,9 @@
                 <button id="yuanSuoFangZhi" class="tb2" title="点击复位 100%">100%</button>
                 <button id="anNiuYuanFangDa" class="tb2" title="放大源码" aria-label="放大">+</button>
               </span>
+              <button id="anNiuWangYeDaYin" class="tb2" title="打印网页（Ctrl+P）" aria-label="打印网页">
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.6 5.2V2.8h6.8v2.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><rect x="2.6" y="5.2" width="10.8" height="5.4" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4.6 10.6h6.8v2.8H4.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+              </button>
               <span id="yuanLeiXing" class="jingYin"></span>
             </div>
             <div id="wangYeYuanHang2" class="gongJuHang yuanHang">
@@ -277,8 +289,14 @@
                 <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h7.2l-1.8-1.8M13 11.5H5.8l1.8 1.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.2 4.5 8.4 2.7m4.6 8.8-1.8 1.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
               </button>
               <span id="yuanSouJi" class="souJiAnNiu">0/0</span>
+              <button id="anNiuWangYeYouHao" class="tb2" title="友好视图：把网页源码按阅读友好的排版显示（只读）" aria-label="友好视图" aria-pressed="false">友好视图</button>
             </div>
-            <textarea id="wangYeYuanWen" spellcheck="false" wrap="soft" aria-label="网页源码"></textarea>
+            <div id="yuanDevFenGe" title="拖动调整源码/开发者工具宽度（双击复位）"></div>
+      <div id="yuanDevLan">
+        <div id="yuanDevTou"><span>开发者工具</span><button id="anNiuDevDaKai" class="tb2" title="打开完整开发者工具（独立窗口）">打开 DevTools</button><button id="anNiuDevGuan" class="tb2" title="收起开发者工具栏">×</button></div>
+        <div id="yuanDevRiZhi" class="jingYin">页面 console 输出会显示在这里；点「打开 DevTools」可调出完整开发者工具（元素/网络/控制台）。</div>
+      </div>
+      <textarea id="wangYeYuanWen" spellcheck="false" wrap="soft" aria-label="网页源码"></textarea>
           </div>
         </div>
       </div>

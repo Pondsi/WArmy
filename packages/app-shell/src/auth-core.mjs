@@ -27,6 +27,7 @@
  *   English mnemonic.
  */
 import crypto from 'node:crypto';
+import { argon2id } from 'hash-wasm';
 import { WORDLIST } from './auth-wordlist.mjs';
 import { FRIEND_WORDS } from './auth-friend-words.mjs';
 import { FRIEND_IDIOMS } from './auth-friend-idioms.mjs';
@@ -36,9 +37,18 @@ export const MNEMONIC_WORDS = 24;
 export const PIN_MIN = 4;
 export const PIN_MAX = 20;
 export const PIN_MAX_FAILURES = 5;
-export const PIN_LOCK_MS = 60_000;
+/** R125 策略：PIN 连续 5 次失败锁定 5 分钟（原 60 秒）；连续锁定每次翻倍，上限 48 小时 */
+export const PIN_LOCK_MS = 300_000;
+/** R125 策略：助记词直输（恢复/导入）连续 5 次失败锁定 10 分钟；同样逐次翻倍，上限 48 小时 */
+export const MNEMONIC_LOCK_MS = 600_000;
+/** 连续锁定翻倍的上限（48 小时） */
+export const MAX_LOCK_MS = 1_728_000_000;
 export const MASTER_KDF_ITERATIONS = 310_000;
 export const PIN_KDF_ITERATIONS = 210_000;
+/** R125 拍板：主密钥/PIN 派生迁移 Argon2id（OWASP 推荐档位 m=19456 t=2 p=1）；新账号直接用它 */
+export const ARGON2_M = 19_456;
+export const ARGON2_T = 2;
+export const ARGON2_P = 1;
 export const CREDENTIAL_ALPHABET = '0123456789ABCDEFGHJKLMNPQRSTUVWXY';
 export const CREDENTIAL_LENGTH = 51;
 
@@ -337,6 +347,52 @@ export function derivePinKey(pin, saltB64, iterations = PIN_KDF_ITERATIONS) {
   );
 }
 
+/**
+ * R125 拍板：迁移 Argon2id（内存困难，GPU/ASIC 抵抗）。参数统一走 ARGON2_* 常量
+ * （OWASP 推荐档 m=19456(19MiB) t=2 p=1）。异步（hash-wasm WASM）。
+ */
+export async function deriveMasterKeyArgon2(mnemonic, saltB64, opts = {}) {
+  const canonical = parseMnemonicInput(mnemonic);
+  assert(typeof saltB64 === 'string' && saltB64.length > 0, 'auth: master salt required');
+  const m = Number(opts.m) || ARGON2_M;
+  const t = Number(opts.t) || ARGON2_T;
+  const p = Number(opts.p) || ARGON2_P;
+  assert(Number.isInteger(m) && m >= 8, 'auth: invalid argon2 m');
+  assert(Number.isInteger(t) && t >= 1, 'auth: invalid argon2 t');
+  assert(Number.isInteger(p) && p >= 1 && p <= 16, 'auth: invalid argon2 p');
+  const out = await argon2id({
+    password: canonical.normalize('NFKD'),
+    salt: Buffer.from(MASTER_KDF_DOMAIN + saltB64, 'utf8'),
+    parallelism: p,
+    memorySize: m,
+    iterations: t,
+    hashLength: 32,
+    outputType: 'binary',
+  });
+  return Buffer.from(out);
+}
+
+export async function derivePinKeyArgon2(pin, saltB64, opts = {}) {
+  assert(validatePin(pin).ok, 'auth: invalid PIN');
+  assert(typeof saltB64 === 'string' && saltB64.length > 0, 'auth: PIN salt required');
+  const m = Number(opts.m) || ARGON2_M;
+  const t = Number(opts.t) || ARGON2_T;
+  const p = Number(opts.p) || ARGON2_P;
+  assert(Number.isInteger(m) && m >= 8, 'auth: invalid argon2 m');
+  assert(Number.isInteger(t) && t >= 1, 'auth: invalid argon2 t');
+  assert(Number.isInteger(p) && p >= 1 && p <= 16, 'auth: invalid argon2 p');
+  const out = await argon2id({
+    password: String(pin),
+    salt: Buffer.from(PIN_KDF_DOMAIN + saltB64, 'utf8'),
+    parallelism: p,
+    memorySize: m,
+    iterations: t,
+    hashLength: 32,
+    outputType: 'binary',
+  });
+  return Buffer.from(out);
+}
+
 export function pinVerifier(key) {
   assert(Buffer.isBuffer(key) && key.length === 32, 'auth: PIN key must be 32 bytes');
   return sha256Hex(PIN_VERIFIER_DOMAIN + key.toString('hex'));
@@ -428,19 +484,28 @@ export function randomMachineId() {
   return crypto.randomBytes(16).toString('hex');
 }
 
-/** Constant-time lockout state machine; `now` is injected so gates don't sleep. */
+/** Constant-time lockout state machine; `now` is injected so gates don't sleep.
+ *  R125：连续锁定时长逐次翻倍（base × 2^level），上限 maxLockMs（48h）。
+ *  level 持久化在外部（vault）；成功登录清零，锁定到期**不清零**（连续锁定才翻倍）。 */
 export class PinLockout {
   constructor(state = {}, options = {}) {
     this.max = options.max ?? PIN_MAX_FAILURES;
-    this.lockMs = options.lockMs ?? PIN_LOCK_MS;
+    this.baseLockMs = options.lockMs ?? PIN_LOCK_MS;
+    this.maxLockMs = options.maxLockMs ?? MAX_LOCK_MS;
     this.failedAttempts = Number(state.failedAttempts || 0);
     this.lockUntil = Number(state.lockUntil || 0);
+    this.level = Number(state.lockLevel || 0);
+  }
+
+  get lockMs() {
+    return Math.min(this.baseLockMs * Math.pow(2, this.level), this.maxLockMs);
   }
 
   check(now = Date.now()) {
     if (this.lockUntil && now >= this.lockUntil) {
       this.failedAttempts = 0;
       this.lockUntil = 0;
+      // 注意：level 不清零 —— 连续锁定（没有成功登录打断）时长要逐次翻倍
     }
     const locked = this.lockUntil > now;
     return {
@@ -449,19 +514,24 @@ export class PinLockout {
       failedAttempts: this.failedAttempts,
       remainingAttempts: Math.max(0, this.max - this.failedAttempts),
       lockUntil: this.lockUntil,
+      lockLevel: this.level,
       retryAfterMs: locked ? this.lockUntil - now : 0,
     };
   }
 
   fail(now = Date.now()) {
     this.failedAttempts += 1;
-    if (this.failedAttempts >= this.max) this.lockUntil = now + this.lockMs;
+    if (this.failedAttempts >= this.max) {
+      this.lockUntil = now + this.lockMs;
+      this.level += 1; // 本次锁定已按当前档位计；下一次锁定翻倍
+    }
     return this.snapshot(now);
   }
 
   success() {
     this.failedAttempts = 0;
     this.lockUntil = 0;
+    this.level = 0; // 成功登录打断"连续锁定"，档位清零
     return this.snapshot(Date.now());
   }
 
@@ -473,6 +543,7 @@ export class PinLockout {
       failedAttempts: this.failedAttempts,
       remainingAttempts: Math.max(0, this.max - this.failedAttempts),
       lockUntil: this.lockUntil,
+      lockLevel: this.level,
       retryAfterMs: locked ? this.lockUntil - now : 0,
     };
   }

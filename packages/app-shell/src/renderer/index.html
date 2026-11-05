@@ -19,8 +19,26 @@
         <!-- Owner rule: this biaoTiLan line is logo + tagline ONLY (app.js fills #biaoTiLanPinPai with brand.tagline). -->
         <span class="biaoTiLanPinPai" id="biaoTiLanPinPai"></span>
       </div>
+      <!-- R126 任务5：顶部权限开关。R128 N8 顺序：麦克风 / 摄像头 / 扬声器 / 网络（N7 三态：全部→仅局域网→断网→恢复）。 -->
+      <div class="biaoTiLanZhongJian" id="biaoTiLanZhongJian">
+        <button id="anNiuMaiKeFeng" class="biaoTiLanQuanXian" data-perm="mic" title="允许使用麦克风" aria-label="microphone" aria-pressed="true">
+          <svg class="biaoTiLansvg" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="8.5" y1="21" x2="15.5" y2="21"/></svg>
+        </button>
+        <button id="anNiuSheXiangTou" class="biaoTiLanQuanXian" data-perm="camera" title="允许使用摄像头" aria-label="camera" aria-pressed="true">
+          <svg class="biaoTiLansvg" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M510.7 751c-178.1 0-323.1-145-323.1-323.1s145-323.1 323.1-323.1 323.1 145 323.1 323.1S688.8 751 510.7 751z m0-581.1c-142.1 0-258 115.6-258 258s115.9 258 258 258 258-115.9 258-258-115.8-258-258-258z"/><circle cx="515.9" cy="425.3" r="67.7"/><path d="M478.2 687.5h65.1v157h-65.1z"/><path d="M339.9 811.9h341.3v65.1H339.9z"/></svg>
+        </button>
+        <button id="anNiuYangShengQi" class="biaoTiLanQuanXian" data-perm="speaker" title="允许使用扬声器" aria-label="speaker" aria-pressed="true">
+          <svg class="biaoTiLansvg" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path d="M15.5 8.7a4.6 4.6 0 0 1 0 6.6"/><path d="M18.2 6.8a7.5 7.5 0 0 1 0 10.4"/></svg>
+        </button>
+        <!-- R128 N7：网络三态开关（字体色=全部可用 → 主题色=仅局域网 → 主题色+斜线=断网 → 恢复） -->
+        <button id="anNiuWangLuo" class="biaoTiLanQuanXian wangLuoTuBiao" title="网络：本地 · 局域网 · 互联网都可用（点击切换）" aria-label="network" data-wangluo="all">
+          <svg class="biaoTiLansvg" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.6 3.9 5.7 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.7-3.9-9s1.3-6.4 3.9-9z"/></svg>
+        </button>
+      </div>
       <div class="biaoTiLanDongZuoJi" id="biaoTiLanDongZuoJi">
         <button id="anNiuZhuXiFu" title="吸附（靠近屏幕边缘自动贴边）" aria-label="snap"><svg class="biaoTiLansvg" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M716.8 409.6v204.8a204.8 204.8 0 1 1-409.6 0V409.6H204.8v204.8a307.2 307.2 0 1 0 614.4 0V409.6H716.8z m0-51.2h102.4V256H716.8v102.4z m-409.6 0V256H204.8v102.4h102.4z m51.2-153.6v409.6a153.6 153.6 0 0 0 307.2 0V204.8h204.8v409.6a358.4 358.4 0 0 1-716.8 0V204.8h204.8z"/></svg></button>
+        <!-- R125 任务15.8：手动同步图标（吸附按钮右侧；同步中变主题色） -->
+        <button id="anNiuTongBu" title="手动同步" aria-label="sync" data-i18n-title="sync.topTitle"><svg class="biaoTiLansvg" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M352 960c-19.2 0-32-12.8-32-32V172.8l-201.6 201.6c-12.8 12.8-32 12.8-44.8 0s-12.8-32 0-44.8l256-256c9.6-9.6 22.4-12.8 35.2-6.4 12.8 3.2 19.2 16 19.2 28.8v832c0 16-12.8 32-32 32zM672 960c-3.2 0-9.6 0-12.8-3.2-12.8-3.2-19.2-16-19.2-28.8V96c0-19.2 12.8-32 32-32s32 12.8 32 32v755.2l201.6-201.6c12.8-12.8 32-12.8 44.8 0s12.8 32 0 44.8l-256 256c-6.4 6.4-12.8 9.6-22.4 9.6z" fill="currentColor"/></svg></button>
         <button id="anNiuZongShiDing" title="置顶窗口" aria-label="always on top" data-i18n-title="tip.pin">
           <svg class="biaoTiLansvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 6 4 3v2H6v-2l4-3-1-6Z"/><path d="M12 15v5"/></svg>
         </button>
@@ -272,9 +290,6 @@
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                         <path d="M12 8v6M9 11h6"/>
                       </svg>
-                      <svg class="ico chaRuIco yinCang" data-u="P4" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>
-                      </svg>
                     </button>
                     <div class="jinJiCaiDan yinCang" id="jinJiCaiDan" role="menu">
                       <!-- 标题 + 问号（说明收进问号里，不再直接铺在外面） -->
@@ -285,7 +300,6 @@
                       <button type="button" data-u="P1"><svg class="ico chaRuIco" data-u="P1" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 8v4M12 15h.01"/></svg><span data-i18n="urgency.urgentLabel"></span></button>
                       <button type="button" class="qiYong" data-u="P2"><svg class="ico chaRuIco" data-u="P2" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7l-2 4h3l-2 4"/></svg><span data-i18n="urgency.insertLabel"></span></button>
                       <button type="button" data-u="P3"><svg class="ico chaRuIco" data-u="P3" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 8v6M9 11h6"/></svg><span data-i18n="urgency.queueLabel"></span></button>
-                      <button type="button" data-u="P4"><svg class="ico chaRuIco" data-u="P4" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span data-i18n="urgency.verySlowLabel"></span></button>
                     </div>
                   </div>
                   <!-- 思考级别（放在插入右边）：点开是**横向滑块**
@@ -422,7 +436,7 @@
                存 userData/yaoqiu/<sessionId>.md，优先级在「术」之后、「短记忆」之前。
                模型只能读、不能改（产品硬门禁 E）。原「规范」卡已移除，改为不可见的“短记忆”。 -->
           <div class="mianBanKuai" id="mianBanYaoQiuKuai" style="display:none">
-            <h3 data-i18n="panel.yaoqiu.biaoTi"></h3><span class="panInjectBadge" title="每轮注入当前会话">注入</span>
+            <h3 data-i18n="panel.yaoqiu.biaoTi"></h3><span class="panInjectBadge" title="每轮附带当前会话">附带</span>
             <p class="jingYin" style="font-size:11px" data-i18n="panel.yaoqiu.tiShi"></p>
             <textarea id="shuRuKuangYaoQiu" rows="5" style="width:100%;box-sizing:border-box"></textarea>
             <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">

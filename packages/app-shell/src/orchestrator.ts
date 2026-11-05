@@ -81,8 +81,8 @@ export interface XietiaoqiYilai {
    */
   logOf?: (key: string) => LogEntry[];
   /** 视图预算（字符）；缺省用 context-renderer 的默认预算 */
-  /** 视图预算（字符）：模型 id 决定窗口，样本决定"这批文字折多少字符"（同一 token 预算下中文与代码的字符数必须不同） */
-  contextBudgetChars?: (modelId?: string, yangBenWen?: string, instId?: string) => number;
+  /** 视图预算（字符）：模型 id 决定窗口（同一 token 预算下中文与代码的字符数必须不同） */
+  contextBudgetChars?: (modelId?: string) => number;
   /**
    * 工具调用（ADR 002 §9.4 待办 2）：与 chat-send 共用同一套 recall/retrieve 工具与同一个循环。
    * 不给就等于"不暴露工具"（退回普通单轮对话）。

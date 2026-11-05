@@ -2,7 +2,7 @@
  * Electron 主进程 — 零原生模块
  * 注意：Windows 中文路径下 fork 子进程可能乱码，memory ipc 先拷到 userData（ASCII）
  */
-import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut, screen, desktopCapturer, shell, clipboard, ClipboardItem, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeImage, globalShortcut, screen, desktopCapturer, shell, clipboard, ClipboardItem, safeStorage, session } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -181,7 +181,7 @@ import {
   type YaoShiHuanTiaoMu,
   type LunHuanShengMing,
 } from './identity.js';
-import { QunCang, type QunLieBiaoJieGuo, type QunChengYuanJieGuo } from './group-store.js';
+import { QunCang, QUN_CHENGYUAN_SHANGXIAN, type QunLieBiaoJieGuo, type QunChengYuanJieGuo } from './group-store.js';
 import {
   Gengxinqi,
   gengXinqiBuKeYongJianCha,
@@ -215,15 +215,21 @@ import {
   nmJieRuZhuChuang, nmZhuChuangXiFu, nmShiTuQuZiJie, nmSheZhiMianBanKuan, nmSheZhiXuNiWenJian,
   nmZhuZuiDaHuaKai, nmZhuZuiDaHuaGuan, nmZhuZuiDaHuaZhuangTai, nmZhuZuiDaXiFuCe,
   nmWangYeKai, nmWangYeKuang, nmWangYeGuan, nmWangYeDaoHang, nmWangYeXinKai, nmWangYeYuan, nmWangYeChaZhao, nmWangYeDaYin,
+  nmWangYeGuanTing, nmWangYeDaYinXuanZhong, nmWangYeJieTu, nmWangYeXuanZhongGaoLiang, nmWangYeXuanZeQu, nmWangYeCaiDanList,
+  nmWangYeYinSiShe, nmWangYeShuJuGaiLan, nmWangYeShuJuQing,
   nmXiaZaiLieBiao, nmXiaZaiQingKong, nmXiaZaiDaKai, nmXiaZaiXianShi, nmSheZhiXiaZaiShenJi, nmSheZhiXiaZaiLuJing,
+  nmBrowserTool, nmZhuRuJiaoBen, nmDevToolsKai, nmDevToolsKuang,
 } from './nm-viewer-win.js';
 import { JsonlSuo } from '@warmy/memory-os/lock';
 import { saoMiaoJiNeng, duSkillMuLu, zhaiYao, zhengWen, jiNengDaFen, fenLanJiNeng, jiNengSuoYin, souSuoJiNeng, qingKongJiNengSuoYin, qingKongYiLaiManCun, chaYiLaiQueShao, jieXiYiLai, queShaoShuoMing } from './skill-md.js';
 import { jiaMiSheJiao, jieMiSheJiao, jiaMiWenBen, jieMiWenBen, type MiMaBaoHuQi } from './cred-vault.js';
 import { chuangJuJueZhang, huiBaoShouQuanJu, huiBaoYongHuJu } from './ju-jue-zhang.js';
 import { chuangJianSheJiao, SHE_JIAO_PING_TAI, type SheJiaoAdapter, type SheJiaoXiaoXi, type SheJiaoPingZheng } from './she-jiao-adapter.js';
-import { geShiYanJiu, geShiZhaiLu } from './research-tools.js';
-import { souSuoProviders, zhuaQuProviders, type SousuoGongYingPeiZhi } from './search-providers.js';
+import { geShiYanJiu, geShiZhaiLu, souSuo, zhuaQuJina, type YanJiuJieGuo } from './research-tools.js';
+import {
+  souSuoProviders, souSuoTavily, souSuoDeepSeek, souSuoCustom, souSuoExa, souSuoSerper, souSuoBrave, souSuoBocha,
+  zhuaQuProviders, type SousuoGongYingLeiXing, type SousuoGongYingPeiZhi,
+} from './search-providers.js';
 import { QuanPanSuoYin, moRenSuoYinLu } from './disk-index.js';
 import { chaUIWenAn, jianUIWenAnSuoYin, tiQuJieMianWenAn, saoMiaoQuanPan, zhengLiMingzhong, geShiSousuoJieGuo, fenQuMing, type SousuoFenQuJie, type SousuoMingzhong, type UIWenAnTiao } from './local-search.js';
 import { jiLuMenJin, duMenJinLiShi, menJinQuShi } from './gate-archive.js';
@@ -235,6 +241,7 @@ import { xiaCiCron, jieXiCron, miaoShuCron } from './cron-lite.js';
 import { daBaoNm, chaiBaoNm, duXinFeng } from './nm-wen-jian.js';
 import { XiaoDiDengJiBu, xiaoDiToolSpecs, isXiaoDiTool, type XiaoDiJiLu } from './subagents.js';
 import { JieDianMingCe, TongbuZongxian, chuangjianYaoQing, shiYongYaoQing } from '@warmy/sync-protocol';
+import { SyncService, SYNC_DOMAINS, type SyncDomain, type SyncState } from './sync-service.js';
 import { findDshPackageDir, ensureDshProfile, writeDshInstanceEntry } from '@warmy/dsh-runtime';
 // 组网：**鉴权通道**（SecureSyncServer/Client + 名册 + 持久化重放防护），旧 lan.ts/mesh.ts 只留数据层 PeerRegistry
 import { DuiDuanMingCe } from '@warmy/sync-protocol';
@@ -1023,6 +1030,8 @@ let pizhunXulie = 0;
  * 那两处是"发一行 JSON 即 ACK"，任何能被连上的进程都能发/收消息。
  */
 let secureMesh: SecureMesh | null = null;
+/** R125 任务15：终端同步服务（手动触发/选项勾选/触发设备为准删除/LWW/自锁/强制解锁） */
+let syncService: SyncService | null = null;
 /** 公开可发现（DHT）服务：默认关，只在用户显式打开且组网已监听时启动 */
 const gongKaiFaXian = new GongKaiFaXian();
 let localNodeId = 'node-local';
@@ -1340,6 +1349,26 @@ function nengLiCongLuoPan(caps: Record<string, LuoPanNengLi | undefined>, banBen
 const modelDangWeiAnShe = new Map<string, { woDaoMo: Record<string, string | null>; moDaoWo: Record<string, string> }>();
 
 /**
+ * 思考强度（外部输入）→ 我们的档位（第 54 轮 UNIT think：所有"强度/档位"换算收口在这一处）。
+ * 接受三种形状：
+ *  · 数字 0-7：0 关思考，1-7 按刻度折算 l1..l6（1→l1 … 6→l6，7 封顶 l6）；
+ *  · 外部三档英文 low/medium/high（值班者旧接口）→ l2/l4/l6；
+ *  · 我们自己的档位名 off / l1..l6 原样返回。
+ * 认不出的输入返回 undefined（不知道就不装懂，让调用方回落到默认）。
+ */
+function yingSheDangWei(siKaoQiangDu: string | number | undefined): string | undefined {
+  const s = String(siKaoQiangDu ?? '').trim();
+  if (!s) return undefined;
+  if (/^(off|l[1-6])$/i.test(s)) return s.toLowerCase();
+  const WAI: Record<string, string> = { low: 'l2', medium: 'l4', high: 'l6' };
+  const xiao = s.toLowerCase();
+  if (WAI[xiao]) return WAI[xiao];
+  const n = Number(s);
+  if (Number.isInteger(n) && n >= 0 && n <= 7) return n === 0 ? 'off' : 'l' + Math.max(1, Math.min(6, Math.ceil((n / 7) * 6)));
+  return undefined;
+}
+
+/**
  * 思考级别 → 请求附加参数。
  *
  * 第 99 轮：**按拉取模型时建好的百分比映射表**发；每个模型的实际档位都映射到
@@ -1352,10 +1381,9 @@ const modelDangWeiAnShe = new Map<string, { woDaoMo: Record<string, string | nul
 function siKaoCanShu(level: string | undefined, modelId?: string): Record<string, unknown> | undefined {
   const s = String(level || 'auto').trim();
   if (!s || s === 'auto') return undefined;
-  /** 外部三档（值班者旧接口）→ 我们的档位 */
-  const WAI: Record<string, string> = { low: 'l2', medium: 'l4', high: 'l6' };
-  const key = WAI[s] || s;
-  if (!/^(off|l[1-6])$/.test(key)) return undefined;
+  /** 外部三档/数字强度/档位名 → 我们的档位；换算唯一权威是 yingSheDangWei（这里不再有第二份表） */
+  const key = yingSheDangWei(s);
+  if (!key) return undefined;
   const mid = String(modelId || '');
   const anShe = modelDangWeiAnShe.get(mid) || gouJianDangWeiAnShe(modelThinkMeta.get(mid) || []);
   if (key === 'off') {
@@ -1794,10 +1822,14 @@ function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
     const arr0 = chatLogs.get(key) || [];
     const last = arr0[arr0.length - 1];
     const ts = Number(tiaoMu.ts || 0) || Date.now();
-    if (last && last.role === tiaoMu.role && String(last.content) === String(tiaoMu.content) && ts - Number(last.ts || 0) < 3000) {
-      return; // 跳过：同一条消息被两条路径重复写入
+    /** 第 123 轮（用户实测「第二次对话回复出现 2 条一样」）：去重窗口 3 秒 → 10 分钟 + 归一化比较（与渲染层同口径） */
+    const guiYiBi = (s: unknown) => String((s as string) || '').replace(/\s+/g, ' ').trim();
+    if (last && last.role === tiaoMu.role && guiYiBi(last.content) === guiYiBi(tiaoMu.content) && ts - Number(last.ts || 0) < 600000) {
+      return; // 跳过：同一条消息被两条路径重复写入（窗口 10 分钟）
     }
   }
+  /** 新话题判断：用户消息进入时刷新话题起点（换题设点 / 回题清除 / 超 30 分钟设点） */
+  if (tiaoMu.role === 'user') shuaXinHuaTi(key, String(tiaoMu.content || ''), Number(tiaoMu.seq) || 0);
   const shuZu = chatLogs.get(key);
   if (shuZu) shuZu.push(tiaoMu);
   else chatLogs.set(key, [tiaoMu]);
@@ -4446,7 +4478,7 @@ async function yunXingLiaoTianXunHuan(
    * **一条预算**（第 39 轮额度重做）：轮数 / 工具调用次数 / 结果字符三条仪表都从这一份账本出发，
    * 撞顶时由 `benLunXuYuSuan` 按"宿主看到的事实"决定是否抬高。
    * 每次进入工具循环都重开一条 ⇒ 自动续派轮用的是**新额度**，但进展证据是累计的
-   * （续派总次数仍受 `XUPAI_ZONG_SHANGXIAN` 限制，不会无限滚）。
+   * （续派次数不再硬顶，停/不停由 eta 预警点机制的模型判断与预估账本决定，不会无限滚）。
    */
   const yuSuanZhang = xinBenLunYuSuan(String(sessionId || ''));
   const jiyiJiuxu = await baozhangJiyiCangJiuxu();
@@ -4917,12 +4949,24 @@ async function yunXingLiaoTianXunHuan(
         }
         const lu = pai.lu;
         yiPaiXiaoDi += 1;
+        /** 派遣记录（用户要求：每次子代理行为都记录，归档时分析写入经验文件） */
+        try {
+          const muDiM = String(rawArgs || '').match(/【隔离目的】?\s*([^\n]{0,40})/);
+          const arr = ziLiPaiQianJiLu.get(String(sessionId)) || [];
+          arr.push({ ts: Date.now(), muDi: (muDiM && muDiM[1]) || '（未写明隔离目的）', renWu: String(rawArgs || '').slice(0, 160) });
+          ziLiPaiQianJiLu.set(String(sessionId), arr.slice(-20));
+        } catch { /* 记录失败不影响派遣 */ }
         // 子代理一出现就通知界面 ⇒ 第四列「分身」卡**自动加回来**（用户不用手动添加）
         try { broadcastToWindows('warmy:xiaoDiBianGeng', { sessionId, id: lu.id, status: 'running' }); } catch { /* noop */ }
         audit?.log('chat.xiao-di-spawn', { sessionId, fuMing, xiaoDi: lu.ming, hao: lu.hao, taskChars: String(args.task || '').length, shangXian: xiaoDiShangXian });
         const xdKai = Date.now();
         /** 子代理可以真干活（同一个工作区沙箱），但不给 spawn_subagent（防无限繁殖）；状态与广播在 `paoXiaoDiRenWu` 里收口 */
-        const jieGuo = await paoXiaoDiRenWu({ lu, provider, moXing: moXingId, zuiDaJieGuoZiShu: ctx.zuiDaJieGuoZiShu });
+        const jieGuo = await paoXiaoDiRenWu({
+          lu, provider, moXing: moXingId, zuiDaJieGuoZiShu: ctx.zuiDaJieGuoZiShu,
+          // 工具面 = 文件工具（workToolSpecs）；轮数 4（够干活、不失控）
+          gongJuBiao: workToolSpecs() as unknown as GongJuGuiGe[],
+          zuiDaLunShu: 4,
+        });
         /** 「等待某个行动完成」：子代理真干完一次就量一次（到点/到次走完整判断流程） */
         try {
           const haoShi = Date.now() - xdKai;
@@ -5026,38 +5070,53 @@ async function yunXingLiaoTianXunHuan(
           }
           else if (gongJuMing === 'image_generate' || gongJuMing === 'video_generate') {
             /**
-             * 本机 ComfyUI 生成（第 122 轮追加）：
+             * 图像/视频生成（第 122 轮起支持本机 ComfyUI；本轮扩展 OpenAI 兼容 images API）：
+             *  · **画图**：画图链（imageChain）上第一个启用模型优先 —— 供应商是 OpenAI 兼容端点
+             *    时走 `images/generations`（在线服务：SiliconFlow/智谱/OpenAI 等；本地 ComfyUI
+             *    装了 OpenAI 兼容插件也走这里）。链没配 / 模型不可用 / 生成失败 ⇒ **静默回退**
+             *    本机 ComfyUI 原生工作流（127.0.0.1:8188 或 WARMY_COMFYUI_URL，R122 行为不变）。
+             *  · **做视频**：在线视频生成暂无统一 OpenAI 兼容标准 ⇒ 仍只走本机 ComfyUI 原生。
              *  · 失败如实回报，不伪造产物；产物写会话工作区 `generated/` 并返回绝对路径；
              *  · 模型与工作流由 `ComfyUiKeHu` 从 /object_info 读真实列表后匹配，不写死。
              */
             const muBiao = path.join(baseH, 'generated');
-            const cli = new ComfyUiKeHu(
-              process.env.WARMY_COMFYUI_URL ? { baseUrl: String(process.env.WARMY_COMFYUI_URL) } : {}
-            );
             const timu = String(argsH.prompt || '').trim();
             if (!timu) {
               okH = false;
               huiBaoH = `[${gongJuMing}] 缺少 prompt`;
             } else if (gongJuMing === 'image_generate') {
-              const r = await cli.shengTu({
-                prompt: timu,
-                muBiaoMulu: muBiao,
-                ...(String(argsH.negative || '').trim() ? { negative: String(argsH.negative) } : {}),
-                ...(Number(argsH.width) ? { width: Number(argsH.width) } : {}),
-                ...(Number(argsH.height) ? { height: Number(argsH.height) } : {}),
-                ...(Number(argsH.steps) ? { steps: Number(argsH.steps) } : {}),
-                ...(Number(argsH.seed) ? { seed: Number(argsH.seed) } : {}),
-              });
-              okH = r.ok;
-              huiBaoH = r.ok
-                ? `[image_generate] 已生成：${r.filePath}（${r.width || '?'}x${r.height || '?'}，${r.bytes} bytes，checkpoint=${r.checkpoint}）`
-                : `[image_generate] 失败：${r.error || 'unknown'}`;
-              try { audit?.log('tool.image-generate', { sessionId, ok: r.ok, path: r.filePath, error: r.error, checkpoint: r.checkpoint }); } catch { /* noop */ }
+              const rOpen = await shengTuTongGuoOpenAI(timu, muBiao, argsH);
+              if (rOpen && rOpen.ok && rOpen.filePath) {
+                okH = true;
+                huiBaoH = `[image_generate] 已生成：${rOpen.filePath}（${rOpen.width || '?'}x${rOpen.height || '?'}，${rOpen.bytes} bytes，model=${rOpen.provider || '?'}）`;
+                try { audit?.log('tool.image-generate', { sessionId, ok: true, path: rOpen.filePath, via: 'openai-images', model: rOpen.provider }); } catch { /* noop */ }
+              } else {
+                const cli = new ComfyUiKeHu(
+                  process.env.WARMY_COMFYUI_URL ? { baseUrl: String(process.env.WARMY_COMFYUI_URL) } : {}
+                );
+                const r = await cli.shengTu({
+                  prompt: timu,
+                  muBiaoMulu: muBiao,
+                  ...(String(argsH.negative || '').trim() ? { negative: String(argsH.negative) } : {}),
+                  ...(Number(argsH.width) ? { width: Number(argsH.width) } : {}),
+                  ...(Number(argsH.height) ? { height: Number(argsH.height) } : {}),
+                  ...(Number(argsH.steps) ? { steps: Number(argsH.steps) } : {}),
+                  ...(Number(argsH.seed) ? { seed: Number(argsH.seed) } : {}),
+                });
+                okH = r.ok;
+                huiBaoH = r.ok
+                  ? `[image_generate] 已生成：${r.filePath}（${r.width || '?'}x${r.height || '?'}，${r.bytes} bytes，checkpoint=${r.checkpoint}）`
+                  : `[image_generate] 失败：${r.error || 'unknown'}${rOpen && rOpen.error ? `（画图链模型 ${rOpen.provider || ''} 也失败：${rOpen.error}）` : ''}`;
+                try { audit?.log('tool.image-generate', { sessionId, ok: r.ok, path: r.filePath, error: r.error || rOpen?.error, checkpoint: r.checkpoint, fallback: true }); } catch { /* noop */ }
+              }
             } else {
               let tu = '';
               if (String(argsH.image_path || '').trim()) {
                 try { tu = resolveInside(baseH, String(argsH.image_path), quanQuan(), 'read'); } catch { tu = ''; }
               }
+              const cli = new ComfyUiKeHu(
+                process.env.WARMY_COMFYUI_URL ? { baseUrl: String(process.env.WARMY_COMFYUI_URL) } : {}
+              );
               const r = await cli.shengShiPin({
                 prompt: timu,
                 muBiaoMulu: muBiao,
@@ -5499,7 +5558,9 @@ async function yunXingLiaoTianXunHuan(
             }
           } else if (gongJuMing === 'open_url') {
             const url = String(argsH.url || '').trim();
+            const wlX = wangLuoMoShiQu();
             if (!/^https?:\/\//i.test(url)) { okH = false; huiBaoH = '[open_url] 只接受 http/https 网址'; }
+            else if (wlX === 'off' || (wlX === 'lan' && !shiJuYuWangZhuji(url))) { okH = false; huiBaoH = WANG_LUO_TI_SHI + (wlX === 'lan' ? '（当前：仅本地与局域网）' : '（当前：网络已断开）'); }
             else { await shell.openExternal(url); huiBaoH = `[open_url] 已用系统浏览器打开 ${url}`; }
           } else if (gongJuMing === 'open_path' || gongJuMing === 'open_file') {
             const p0 = String(argsH.path || '').trim();
@@ -5773,46 +5834,24 @@ async function yunXingLiaoTianXunHuan(
             const mingPan = panDuanMingLingShouQuan(dang, yaoWen2, cmd, baseH);
             const jian = mingPan.jianCe;
             const pan = mingPan;
-            /** 第 121 轮：永久授权在“询问被关掉”时也要生效；键绑定规范化命令 + 实际 cwd */
-            const shouQuanKey = mingLingShouQuanJian(cmd, cwdAbs);
-            const yiShouQuan = (() => {
-              try {
-                const s = settingsStore?.load() as { commandGrants?: Array<{ key?: string }> } | undefined;
-                return (s?.commandGrants || []).some((g) => String(g?.key || '') === shouQuanKey);
-              } catch { return false; }
-            })();
+            /** 用户裁决：**没有跨会话永久生效的授权**（commandGrants 全局账本废止）。
+             *  授权窗口四选项 = 决策卡固定按钮「允许（本会话持久，写授权卡）/ 其他」
+             *  + 模型选项「同意（显示为『允许（仅限一次）』）/ 拒绝」。 */
             if (!cmd) { okH = false; huiBaoH = '[run_shell] 请给出 command'; }
-            else if (!pan.allow && !pan.needAsk && !yiShouQuan) {
+            else if (!pan.allow && !pan.needAsk) {
               okH = false;
               // 说清"这是权限拒绝、不是失败"，并明确要求换路子 —— 否则模型会换着命令反复试（真机 12 连拒）
               huiBaoH = huiBaoJuJue(sessionId, 'run_shell', 'shouQuan', pan.why,
                 '这是**授权拒绝**，不是命令出错：请**不要再调用 run_shell**，改用别的工具（read_file/write_file/open_path 等）完成，或如实告诉用户「需要把授权改成完全授权/勾上超出权限询问」');
             }
             else if (!pan.allow) {
-              if (yiShouQuan) {
-                try { audit?.log('run_shell.permanent-grant-used', { sessionId, cmd: guiFanMingLing(cmd).slice(0, 200), cwd: cwdAbs }); } catch { /* noop */ }
-                const r2 = await yunXingMingLing(cmd, { cwd: cwdAbs, timeoutMs: Number(argsH.timeoutMs) || 60000 });
-                huiBaoH = `[run_shell] exit=${r2.code} (${r2.ms}ms, 永久授权)\n${r2.stdout}${r2.stderr ? '\n[stderr] ' + r2.stderr : ''}`;
-                if (r2.code !== 0) okH = false;
-              } else {
-                const yongJiu = tMain('shell.grantAlways', '永久同意（相同命令和目录）');
                 const da = await qingQiuKaPian(sessionId, 'AI 请求执行命令',
                   `命令：${cmd}\n风险：${jian.summary}\n（拒绝 = 不执行）`,
-                  [{ id: 'yes', biaoQian: '同意' }, { id: 'always', biaoQian: yongJiu }, { id: 'no', biaoQian: '拒绝' }]);
-                if (/^同意/.test(da) || da === yongJiu) {
-                  if (da === yongJiu) {
-                    try {
-                      const s = (settingsStore?.load() || {}) as { commandGrants?: Array<{ key: string; cmd: string; cwd: string; createdAt: number }> };
-                      const arr = Array.isArray(s.commandGrants) ? s.commandGrants.slice() : [];
-                      if (!arr.some((g) => g.key === shouQuanKey)) arr.push({ key: shouQuanKey, cmd: guiFanMingLing(cmd), cwd: cwdAbs, createdAt: Date.now() });
-                      settingsStore?.save({ commandGrants: arr.slice(-200) } as never);
-                      audit?.log('run_shell.permanent-grant', { sessionId, cmd: guiFanMingLing(cmd).slice(0, 200), cwd: cwdAbs });
-                    } catch { /* 授权保存失败不挡本次执行；下次会再问 */ }
-                  }
+                  [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+                if (da === 'yes' || /^同意/.test(String(da)) || /^允许/.test(String(da))) {
                   const r2 = await yunXingMingLing(cmd, { cwd: cwdAbs, timeoutMs: Number(argsH.timeoutMs) || 60000 });
                   huiBaoH = `[run_shell] exit=${r2.code} (${r2.ms}ms)\n${r2.stdout}${r2.stderr ? '\n[stderr] ' + r2.stderr : ''}`;
                 } else { okH = false; huiBaoH = huiBaoJuJue(sessionId, 'run_shell', 'yongHu', '执行：' + cmd); }
-              }
             } else {
               const r2 = await yunXingMingLing(cmd, { cwd: cwdAbs, timeoutMs: Number(argsH.timeoutMs) || 60000 });
               huiBaoH = `[run_shell] exit=${r2.code} (${r2.ms}ms, 风险 ${jian.risk})\n${r2.stdout}${r2.stderr ? '\n[stderr] ' + r2.stderr : ''}`;
@@ -6011,6 +6050,11 @@ async function yunXingLiaoTianXunHuan(
              * 用来提高额度。抓取失败自动回退 Jina Reader（同样无需注册）。
              * **没额度就如实失败**，绝不返回"看起来像结果"的假数据。
              */
+            const wlX5 = wangLuoMoShiQu();
+            if (wlX5 !== 'all') {
+              okH = false;
+              huiBaoH = WANG_LUO_TI_SHI + (wlX5 === 'lan' ? '（当前：仅本地与局域网，联网搜索/抓取不可用）' : '（当前：网络已断开）');
+            } else {
             const pei = await souSuoPeiZhiDangQian();
             if (gongJuMing === 'web_search') {
               const r = await souSuoProviders(pei, String(argsH.query || ''), {
@@ -6019,7 +6063,10 @@ async function yunXingLiaoTianXunHuan(
                 days: Number(argsH.days) || undefined,
               });
               okH = r.ok;
-              huiBaoH = geShiYanJiu(r);
+              huiBaoH = geShiYanJiu(r, { query: String(argsH.query || '') });
+              /** 第 98 轮调用链记账：成功清零 / 失败暂停 24h / 连续 3 次移出链 */
+              if (r.ok) souSuoJiLuJieGuo(String(r.provider || ''), true);
+              for (const a of (r.attempts || [])) { if (a && a.provider) souSuoJiLuJieGuo(String(a.provider), false); }
               try { audit?.log('research.search', { sessionId, ok: r.ok, n: r.items.length, error: r.error, provider: r.provider, rateLimited: !!r.rateLimited, retryAfterSec: r.retryAfterSec }); } catch { /* noop */ }
             } else {
               const r = await zhuaQuProviders(pei, Array.isArray(argsH.urls) ? (argsH.urls as string[]) : [String(argsH.urls || '')]);
@@ -6028,6 +6075,7 @@ async function yunXingLiaoTianXunHuan(
                 ? geShiZhaiLu(r.items, String(argsH.query || ''))
                 : `[web_extract] 失败：${r.error}${r.hint ? '\n提示：' + r.hint : ''}`;
               try { audit?.log('research.extract', { sessionId, ok: r.ok, n: r.items.length, error: r.error }); } catch { /* noop */ }
+            }
             }
           } else if (gongJuMing === 'local_search') {
             /**
@@ -6123,11 +6171,34 @@ async function yunXingLiaoTianXunHuan(
             }
           } else if (gongJuMing === 'fetch_url') {
             const url = String(argsH.url || '').trim();
-            const r2 = await zhuaQuWangZhi(url, { maxBytes: Number(argsH.maxBytes) || 200000 });
-            okH = !!r2.ok;
-            huiBaoH = r2.ok ? `[fetch_url] HTTP ${r2.status}（${r2.bytes} 字节）\n${r2.text}` : `[fetch_url] 失败：${r2.error}`;
+            const wlX2 = wangLuoMoShiQu();
+            if (wlX2 === 'off' || (wlX2 === 'lan' && !shiJuYuWangZhuji(url))) {
+              okH = false;
+              huiBaoH = WANG_LUO_TI_SHI + (wlX2 === 'lan' ? '（当前：仅本地与局域网）' : '（当前：网络已断开）');
+            } else {
+              const r2 = await zhuaQuWangZhi(url, { maxBytes: Number(argsH.maxBytes) || 200000 });
+              okH = !!r2.ok;
+              huiBaoH = r2.ok ? `[fetch_url] HTTP ${r2.status}（${r2.bytes} 字节）\n${r2.text}` : `[fetch_url] 失败：${r2.error}`;
+            }
+          } else if (gongJuMing === 'nm_browser') {
+            /**
+             * R128：nm_browser —— 智能体操控内置浏览器（nm 窗口 WebContentsView）。
+             * open/nav/new-tab/back/forward/reload/stop/read/click/type/find/shot/status；
+             * 每个会话一个专属浏览器窗口，标签与用户自己的网页标签互不干扰。
+             */
+            const rNb = await nmBrowserTool(String(argsH.action || ''), argsH as Record<string, unknown>, String(sessionId || ''));
+            okH = !!rNb.ok;
+            huiBaoH = rNb.ok
+              ? `[nm_browser] ${String(rNb.action || argsH.action || '')} 成功：${JSON.stringify(rNb)}`
+              : `[nm_browser] 失败：${String(rNb.cuo || '未知原因')}`;
+            try { audit?.log('nm.browser', { sessionId, action: String(argsH.action || ''), ok: !!rNb.ok }); } catch { /* noop */ }
           } else if (gongJuMing === 'download_file') {
             const url = String(argsH.url || '').trim();
+            const wlX4 = wangLuoMoShiQu();
+            if (wlX4 === 'off' || (wlX4 === 'lan' && !shiJuYuWangZhuji(url))) {
+              okH = false;
+              huiBaoH = WANG_LUO_TI_SHI + (wlX4 === 'lan' ? '（当前：仅本地与局域网）' : '（当前：网络已断开）');
+            } else {
             const { dang: dang3, ask: yaoWen4 } = anQuanDangWei();
             const jian = anquanJianCeMingLing('curl ' + url);
             const pan = panDuanShouQuan(dang3, yaoWen4, 'shell', jian);
@@ -6154,6 +6225,7 @@ async function yunXingLiaoTianXunHuan(
               const r2 = await xiaZaiWenJian(url, baoCun, { maxBytes: Number(argsH.maxBytes) || 50 * 1024 * 1024 });
               okH = !!r2.ok;
               huiBaoH = r2.ok ? `[download_file] 已保存 ${r2.path}（${r2.bytes} 字节）` : `[download_file] 失败：${r2.error}`;
+            }
             }
           } else if (gongJuMing === 'knowledge_query') {
             // **知识库检索**（实体/事件；与 recall 记忆互补）
@@ -7676,8 +7748,81 @@ function contextBudgetChars(modelId?: string, yangBenWen?: string, gongYingFen?:
 }
 
 /** 统一的视图渲染入口：所有注入点都走这里，不许另写一份（不变量 #2） */
+/**
+ * 第 122 轮：**新话题判断**（用户要求）—— 判定为新话题后，**只把话题起点之后的内容注入模型上下文**，
+ * 旧话题内容不传递（避免无关上下文干扰）；需要时模型可用 recall/retrieve 工具查回全部历史。
+ *
+ * 判定（启发式，不花模型调用）：
+ *  · 会话第一条用户消息 = 话题起点；
+ *  · 距上一条用户消息超过 30 分钟 = 新话题；
+ *  · 以「换题词」开头（换个话题 / 另外 / 对了 / 话说回来 / 新话题 / 先不说这个 / 不聊这个 / 说点别的）= 新话题；
+ *  · 以「回题词」开头（回到之前 / 继续刚才 / 继续之前 / 回到最初 / 接着刚才 / 刚才那个 / 回到正题）= **回到旧话题，
+ *    清除话题起点**（恢复全量上下文）——对应「中途插入无关对话、之后又回到最初对话」的场景。
+ */
+const huaTiQiDian = new Map<string, number>();
+/**
+ * 第 123 轮（用户要求）：**派遣经验 / 话题反馈参考文件** —— 运行中只记内存（不影响对话），
+ * **归档（复盘）时**才更新文件（subagent-experience.md / topic-feedback.md），供下次派遣与话题判断参考。
+ * 文件里的「+换题词: / +回题词:」行会被读回并入判定词表（越用越准）。
+ */
+const ziLiPaiQianJiLu = new Map<string, Array<{ ts: number; muDi: string; renWu: string; jieGuo?: string }>>();
+const huaTiFanKuiJiLu = new Map<string, Array<{ ts: number; panDuan: string; jiaoZheng?: string }>>();
+function ziLiJingYanLu(): string { return path.join(app.getPath('userData'), 'subagent-experience.md'); }
+function huaTiFanKuiLu(): string { return path.join(app.getPath('userData'), 'topic-feedback.md'); }
+/** 话题反馈文件里的扩展词（+换题词: xxx / +回题词: xxx），启动/归档后读回 */
+let huaTiKuoZhanCi = { huan: [] as string[], hui: [] as string[] };
+function duHuaTiFanKuiCi(): void {
+  try {
+    const s = fs.readFileSync(huaTiFanKuiLu(), 'utf8');
+    const huan: string[] = [], hui: string[] = [];
+    for (const line of s.split(/\r?\n/)) {
+      const a = line.match(/^\+换题词[:：]\s*(.+)$/);
+      const b = line.match(/^\+回题词[:：]\s*(.+)$/);
+      if (a && a[1]) huan.push(a[1].trim());
+      if (b && b[1]) hui.push(b[1].trim());
+    }
+    huaTiKuoZhanCi = { huan: huan.slice(0, 40), hui: hui.slice(0, 40) };
+  } catch { /* 文件还没有就是空词表 */ }
+}
+try { duHuaTiFanKuiCi(); } catch { /* noop */ }
+const HUA_TI_HUAN = /^\s*(换个?话题|另外[,，]?|对了[,，]?|话说回来|新话题|先不说这个|不聊这个|说点别的)/;
+const HUA_TI_HUI = /^\s*(回到?之前|继续刚才|继续之前|回到最初|接着刚才|刚才那个|回到?正题)/;
+function shuaXinHuaTi(key: string, wenBen: string, seq: number): void {
+  try {
+    const sid = String(key || '');
+    if (!sid) return;
+    const wen = String(wenBen || '');
+    const huiCi = huaTiKuoZhanCi.hui.some((c) => c && wen.startsWith(c));
+    const huanCi = huaTiKuoZhanCi.huan.some((c) => c && wen.startsWith(c));
+    if (HUA_TI_HUI.test(wen) || huiCi) { huaTiQiDian.delete(sid); huaTiFanKuiJiLu.set(sid, [...(huaTiFanKuiJiLu.get(sid) || []), { ts: Date.now(), panDuan: '回题（清边界）：' + wen.slice(0, 40) }]); return; }
+    const arr = chatLogs.get(sid) || [];
+    let shangUserTs = 0;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if ((arr[i] as { role?: string }).role === 'user') { shangUserTs = Number((arr[i] as { ts?: number }).ts || 0); break; }
+    }
+    const shouTiao = !huaTiQiDian.has(sid);
+    const jiuGe = shangUserTs > 0 && Date.now() - shangUserTs > 30 * 60 * 1000;
+    if (shouTiao || jiuGe || HUA_TI_HUAN.test(wen) || huanCi) {
+      huaTiQiDian.set(sid, Number(seq) || 0);
+      huaTiFanKuiJiLu.set(sid, [...(huaTiFanKuiJiLu.get(sid) || []), { ts: Date.now(), panDuan: '换题（设起点 seq ' + String(seq) + '）：' + wen.slice(0, 40) }]);
+    }
+  } catch { /* 话题判定失败不挡消息写入 */ }
+}
+
 function renderChatView(key: string, recallHint?: string, budgetCharsOverride?: number) {
-  const shitu = xuanranYoujieShitu(chatLogs.get(key) || [], {
+  /** 新话题：只带话题起点之后的记录（旧话题不注入；需要时用 recall/retrieve 查回） */
+  let entries = chatLogs.get(key) || [];
+  const qiDian = huaTiQiDian.get(String(key || ''));
+  if (qiDian && Number(qiDian) > 0) {
+    const jie = entries.filter((e) => Number((e as { seq?: number }).seq || 0) >= Number(qiDian));
+    if (jie.length) {
+      entries = [
+        { seq: Number(qiDian) - 1, role: 'system', content: '【话题边界】当前话题自 seq ' + String(qiDian) + ' 的用户消息开始；更早的对话属于此前话题，未注入（避免无关上下文干扰）。需要回忆更早内容时用 recall/retrieve 检索，不要凭印象猜测。' },
+        ...jie,
+      ];
+    }
+  }
+  const shitu = xuanranYoujieShitu(entries, {
     budgetChars: Number.isFinite(budgetCharsOverride as number) ? Number(budgetCharsOverride) : contextBudgetChars(),
     keepHead: Math.max(2, DEFAULT_KEEP_HEAD),
     keepTail: DEFAULT_KEEP_TAIL,
@@ -7791,10 +7936,10 @@ async function jieMoXingGongYingShang(modelId: string): Promise<MoXingGongYingXi
 }
 
 /**
- * **决策模型**（RLCD 类：小而快、输出带置信度的判定）——
- * 紧急度还是默认 P2 时，先让决策模型判一下「急 / 一般 / 省着用」。
+ * **分类模型**（RLCD 类：小而快、输出带置信度的判定）——
+ * 紧急度还是默认 P2 时，先让分类模型判一下「急 / 一般 / 省着用」。
  * 判不动就保持 P2（宁可不判，也不瞎改用户意图）。
- * 真事故：设置里的「决策模型」链存了却**从未被调用**，是个空壳。
+ * 真事故：设置里的「分类模型」链存了却**从未被调用**，是个空壳。
  */
 /**
  * **判定「难易 + 杂简」五级**（第 99 轮最终口径）。
@@ -8058,6 +8203,67 @@ async function wenTeShuMoXing(
 /** 供应商记录的 presetId 可能为空；保持原有兜底口径。 */
 function hitPresetId(an: MoXingGongYingXinXi): string {
   return String(an.presetId || providerCfg.presetId || '');
+}
+
+/**
+ * 画图链 → OpenAI 兼容 `images/generations`（第 122 轮之后扩展）：
+ *  · 取设置里 imageChain 第一个启用模型，供应商须是 OpenAI 兼容端点（在线 API / 本地
+ *    ComfyUI 的 OpenAI 兼容插件都走这里）；
+ *  · 产物优先 `b64_json`、其次 `url` 下载，落会话工作区 `generated/`；
+ *  · 返回 null = 链没配 / 模型不可用（调用方回退本机 ComfyUI 原生工作流）；
+ *  · 返回 { ok:false } = 链配了但生成失败（调用方回退并把原因带回去如实说明）。
+ */
+async function shengTuTongGuoOpenAI(
+  timu: string,
+  muBiaoMulu: string,
+  argsH: Record<string, unknown>
+): Promise<{ ok: boolean; filePath?: string; bytes?: number; width?: number; height?: number; provider?: string; error?: string } | null> {
+  let mo = '';
+  try {
+    const sm = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
+    const lian = Array.isArray(sm.imageChain) ? (sm.imageChain as string[]) : [];
+    const jin = Array.isArray(sm.imageDisabled) ? (sm.imageDisabled as string[]) : [];
+    mo = lian.find((m) => m && !jin.includes(m)) || '';
+  } catch { mo = ''; }
+  if (!mo) return null;
+  let an: MoXingGongYingXinXi | null = null;
+  try { an = await jieMoXingGongYingShang(mo); } catch { an = null; }
+  if (!an || an.protocol !== 'openai-compatible') return null;
+  if (!an.apiKey && !String(an.baseURL || '').trim()) return null;
+  try {
+    const provider = congYuSheChuangJian(hitPresetId(an), { apiKey: an.apiKey, baseURL: an.baseURL || undefined, protocol: an.protocol } as never, an.protocol);
+    const width = Number(argsH.width) || 0;
+    const height = Number(argsH.height) || 0;
+    const size = width > 0 && height > 0 ? `${width}x${height}` : '';
+    const gongYing = provider as unknown as {
+      shengChengTu?: (p: { prompt: string; model?: string; size?: string; signal?: AbortSignal }) => Promise<{ ok: boolean; b64?: string; url?: string; error?: string }>;
+    };
+    const r = await gongYing.shengChengTu?.({
+      prompt: timu,
+      model: mo,
+      ...(size ? { size } : {}),
+    });
+    if (!r || !r.ok) return { ok: false, error: r?.error || 'no-result', provider: mo };
+    let buf: Buffer | null = null;
+    if (r.b64) {
+      try { buf = Buffer.from(r.b64, 'base64'); } catch { buf = null; }
+      if (buf && !buf.length) buf = null;
+    } else if (r.url) {
+      try {
+        const res = await fetch(String(r.url), { signal: AbortSignal.timeout(120_000) });
+        if (res.ok) buf = Buffer.from(await res.arrayBuffer());
+      } catch { buf = null; }
+    }
+    if (!buf || !buf.length) return { ok: false, error: 'bad-image-data', provider: mo };
+    fs.mkdirSync(muBiaoMulu, { recursive: true });
+    const filePath = path.join(muBiaoMulu, `img-${Date.now().toString(36)}.png`);
+    fs.writeFileSync(filePath, buf);
+    let kuan = 0, gao = 0;
+    if (buf.length >= 24 && buf.readUInt32BE(0) === 0x89504e47) { kuan = buf.readUInt32BE(16); gao = buf.readUInt32BE(20); }
+    return { ok: true, filePath, bytes: buf.length, ...(kuan ? { width: kuan, height: gao } : {}), provider: mo };
+  } catch (e) {
+    return { ok: false, error: String((e as Error)?.message || e), provider: mo };
+  }
 }
 
 /**
@@ -8805,6 +9011,8 @@ async function yindao() {
   zhuangXieRuHuiDangGouZi();
   accountStore = new BenDiZhangHuCang(path.join(userData, 'profile.json'));
   settingsStore = new PeizhiCang(path.join(userData, 'settings.json'));
+  // 第 98 轮：首启空闲时对免 key 的链内成员自动测一次（通过留链内；失败移回待测区）
+  setTimeout(() => { void souSuoShouCiZiDongCeShi(); }, 12000);
   // 后台全盘索引：默认开；构造后会按低占空比在后台增量建立，不阻塞启动
   try { void naQuanPanSuoYin(); } catch { /* 索引失败不影响启动 */ }
   secureKeys = new AnQuanMiyaoCang(userData);
@@ -9030,6 +9238,29 @@ async function yindao() {
       unprotect: (value: string) => safeStorage.decryptString(Buffer.from(value, 'base64')),
     },
   });
+  // R125 任务15：终端同步（配对/选项/op 存储/自锁/强制解锁）。传输复用 SecureMesh
+  // 控制通道与地址簿联系人（同步设备需互为联系人；见 sync-service.ts 头部注释）。
+  syncService = new SyncService({
+    userDataDir: app.getPath('userData'),
+    selfDeviceId: localNodeId,
+    selfMing: (() => { try { return String(accountStore?.loadProfile()?.username || '本机').slice(0, 40); } catch { return '本机'; } })(),
+    onStateChange: (st) => {
+      try { broadcastToWindows('warmy:syncState', st); } catch { /* noop */ }
+    },
+    sendToDevice: (fingerprint, payload) => {
+      try {
+        if (!secureMesh) return;
+        const peer = duiduanYinyong().find((p) => p.zhiWen && zhiWenXiangTong(p.zhiWen, fingerprint));
+        if (!peer) return;
+        // keepOpen：配对设备之间保持常驻会话（心跳 20s），否则 presence 判定永远离线
+        void secureMesh.sendToHost(peer.host, peer.port, { to: '*', channel: 'control', payload }, { expectFingerprints: [fingerprint], keepOpen: true });
+      } catch { /* 发送失败由同步状态兜底 */ }
+    },
+    onlinePeers: () => {
+      try { return (secureMesh?.presence() ?? []).filter((p) => p.online).map((p) => String(p.zhiWen || '').toLowerCase()).filter(Boolean); } catch { return []; }
+    },
+    domainExport: (domain, sessions) => syncDomainExport(domain, sessions, userData),
+  });
   /**
    * 第 104 轮：一次性令牌已经解开了数据仓库；这里把 AuthService 也恢复到已登录状态
    * （身份库用同一主密钥解锁）。失败就清空令牌路径，用户走正常登录。
@@ -9109,7 +9340,74 @@ async function yindao() {
         type?: string; groupId?: string; LieBiao?: unknown; chuanShu?: boolean; zhen?: ChuanShuZhen;
         joinRequest?: Partial<JiaRuJiLu>;
         joinApproved?: { groupId?: string; ming?: string; kind?: string; token?: string; publicKey?: string; issuerFp?: string; role?: string; creatorMing?: string };
+        deviceSync?: { from?: string; fromMing?: string; ts?: number; token?: string; entries?: Array<{ domain: SyncDomain; id: string; kind: string; ts: number; data?: string }>; dels?: Array<{ domain: SyncDomain; id: string; ts: number }> };
+        deviceId?: string;
       } | null;
+      // R125 任务15：设备同步消息（control 通道）。peerFingerprint 来自握手，冒充不了。
+      if (xiaoXi.channel === 'control' && syncService && payload && payload.type) {
+        try {
+          const replyTo = (msg: Record<string, unknown>) => {
+            try {
+              const peer = duiduanYinyong().find((p) => p.zhiWen && zhiWenXiangTong(p.zhiWen, xiaoXi.peerFingerprint));
+              if (peer) void secureMesh?.sendToHost(peer.host, peer.port, { to: '*', channel: 'control', payload: msg }, { expectFingerprints: [xiaoXi.peerFingerprint], keepOpen: true });
+            } catch { /* 回复失败不阻断 */ }
+          };
+          if (payload.type === 'device-sync-hello') {
+            // 配对确认：对方把我登记为同步设备后发来 hello，双向登记 + 回填指纹
+            const d = payload.deviceSync?.from || String(payload.deviceId || '');
+            const helloToken = String((payload.deviceSync as { token?: string } | undefined)?.token || '');
+            if (d && payload.deviceSync?.fromMing && xiaoXi.peerFingerprint) {
+              const r = syncService.onDeviceHello(d, payload.deviceSync.fromMing, xiaoXi.peerFingerprint, helloToken);
+              if (r === true) {
+                replyTo({ type: 'device-sync-hello-ack', deviceSync: { from: localNodeId, fromMing: shiYongHuMing() } });
+              } else if (r === 'rejected') {
+                replyTo({ type: 'device-sync-hello-reject', deviceSync: { from: localNodeId } });
+              }
+            }
+          } else if (payload.type === 'device-sync-hello-ack') {
+            const d = payload.deviceSync?.from || '';
+            if (d && payload.deviceSync?.fromMing && xiaoXi.peerFingerprint) {
+              syncService.onDeviceHello(d, payload.deviceSync.fromMing, xiaoXi.peerFingerprint);
+            }
+          } else if (payload.type === 'device-sync-hello-reject' && payload.deviceSync?.from) {
+            // 对方不认本机（token 作废/被强制解锁）：本机移除这条配对（兜底解绑）
+            syncService.onRejectedByPeer(String(payload.deviceSync.from));
+          } else if (payload.type === 'device-sync-reject' && payload.deviceId) {
+            // 同步被对方拒绝（对方已解除配对）：本机移除这条配对
+            syncService.onRejectedByPeer(String(payload.deviceId));
+          } else if (payload.type === 'device-sync-push' && payload.deviceSync) {
+            const p = payload.deviceSync;
+            const st = syncService.state();
+            const fromDevice = st.devices.find((x) => x.fingerprint && zhiWenXiangTong(x.fingerprint, xiaoXi.peerFingerprint) && !x.revoked);
+            if (!fromDevice && String(p.from || '')) {
+              // 对方已不在本机配对列表（被移除/强制解锁）：告诉对方本机不认这条配对，对方自行解绑
+              replyTo({ type: 'device-sync-reject', deviceId: String(p.from) });
+            } else if (fromDevice) {
+              const r = syncService.applyPushPayload({
+                from: String(p.from || ''), fromMing: String(p.fromMing || fromDevice.ming),
+                ts: Number(p.ts) || Date.now(),
+                entries: (Array.isArray(p.entries) ? p.entries : []).map((e) => ({
+                  domain: e.domain, id: e.id, kind: (e.kind === 'del' ? 'del' : 'add') as 'add' | 'mod' | 'del', ts: Number(e.ts) || 0, data: e.data,
+                })),
+                dels: Array.isArray(p.dels) ? p.dels : [],
+              });
+              // 宿主写回生产数据（chat/settings 域）
+              for (const dom of SYNC_DOMAINS) {
+                const ents = (Array.isArray(p.entries) ? p.entries : []).filter((e) => e.domain === dom && e.kind !== 'del');
+                if (ents.length) syncDomainApply(dom, ents);
+              }
+              syncService.recordLastSync(Number(p.ts) || Date.now());
+              replyTo({ type: 'device-sync-ack', deviceSync: { from: localNodeId, accepted: r.accepted, deleted: r.deleted, refilled: r.refilled } });
+            }
+          } else if (payload.type === 'device-sync-ack' && payload.deviceSync?.from) {
+            // 触发端收到 ack：把对端 lastSeenAt 刷新（用于「上次在线时间」）
+            const fromId = String(payload.deviceSync.from);
+            syncService.markPeerSeen(fromId, xiaoXi.peerFingerprint);
+          } else if (payload.type === 'device-sync-revoke' && payload.deviceId) {
+            syncService.onRevokedByPeer(String(payload.deviceId));
+          }
+        } catch { /* 设备同步消息处理异常不阻断其它入站 */ }
+      }
       // W07：投递业务回执（对端只在**落盘之后**才发；这里只按握手指纹认收件人）
       if (xiaoXi.channel === 'control' && payload && payload.type === 'toudi-ack') {
         try { touDiFuWu().ack(xiaoXi.peerFingerprint, payload as never); } catch { /* 回执异常不影响入站 */ }
@@ -9744,6 +10042,14 @@ function chuangjianChuangkou() {
   });
   try { win.setIcon?.(nativeImage.createFromPath(tuBiaoLuJing)); } catch { /* noop */ }
   void win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  /** 主窗口拖文件/异常导航：静默拦下，绝不把 index.html 替换成别的页面（文件走输入框拖放/编辑器） */
+  win.webContents.on('will-navigate', (e, u) => {
+    if (!/^file:\/\//i.test(String(u))) { e.preventDefault(); return; }
+    try {
+      if (path.resolve(fileURLToPath(String(u))) === path.join(__dirname, 'renderer', 'index.html')) return;
+    } catch { e.preventDefault(); return; }
+    e.preventDefault();
+  });
   win.on('ready-to-show', () => {
     if (ws.maximized) { try { win?.maximize(); } catch { /* noop */ } }
     win?.show();
@@ -9839,9 +10145,17 @@ interface ChatEditorWin {
   path: string;
   opener: Electron.WebContents;
   sessionId: string;
+  /** 聊天编辑器模式拖入的文件（与聊天框附件同步；空数组 = 还没添加过） */
+  attach: { path: string; name: string; bytes: number }[];
 }
 const chatEditorWins = new Map<number, ChatEditorWin>();
 const chatEditorDocs = new Map<string, string>();
+/** 附件清单变化 → 同时广播给聊天编辑器窗口（附件条）与主窗口（聊天框附件条） */
+function chatEditorAttachGuangBo(it: ChatEditorWin, xin: { path: string; name: string; bytes: number }[], shan: string[]) {
+  if (xin.length) { try { it.opener?.send('warmy:chatEditorAttach', { sessionId: it.sessionId, add: xin }); } catch { /* noop */ } }
+  if (shan.length) { try { it.opener?.send('warmy:chatEditorAttach', { sessionId: it.sessionId, remove: shan }); } catch { /* noop */ } }
+  try { it.win.webContents.send('warmy:chatEditorAttach', { files: it.attach }); } catch { /* noop */ }
+}
 nmSheZhiXuNiWenJian((p) => {
   const wen = chatEditorDocs.get(p);
   if (wen === undefined) return null;
@@ -9854,7 +10168,7 @@ nmSheZhiXuNiWenJian((p) => {
 });
 function dakaiLiaoTianBianJiQi(
   opener: Electron.WebContents,
-  payload: { content?: string; sessionId?: string; rect?: { left?: number; top?: number; width?: number; height?: number } },
+  payload: { content?: string; sessionId?: string; rect?: { left?: number; top?: number; width?: number; height?: number }; files?: { path?: string; name?: string; bytes?: number }[] },
 ): { ok: boolean; id?: number; reason?: string } {
   try {
     if (!nmChaJianQiYong()) {
@@ -9908,9 +10222,49 @@ function dakaiLiaoTianBianJiQi(
       },
       icon: warmyTaskbarIcon(),
     });
-    const it: ChatEditorWin = { win: bianWin, path: xuLu, opener, sessionId: String(payload?.sessionId || '') };
+    const it: ChatEditorWin = { win: bianWin, path: xuLu, opener, sessionId: String(payload?.sessionId || ''), attach: [] };
+    /**
+     * R128：打开编辑器时，把聊天框里**已经添加**的附件同步进主进程清单
+     * （主窗口拖入/截图只落在本地 state.attachments，主进程并不知情），
+     * 编辑器窗口一打开就能显示同一份附件；后续增删仍走原广播链路。
+     */
+    for (const f of Array.isArray(payload?.files) ? payload.files.slice(0, 50) : []) {
+      const p = String(f?.path || '').slice(0, 4096);
+      if (!p) continue;
+      try {
+        if (!fs.existsSync(p) || fs.statSync(p).isDirectory()) continue;
+      } catch { continue; }
+      if ((it.attach || []).some((x) => x.path === p)) continue;
+      it.attach.push({ path: p, name: String(f?.name || '').slice(0, 512) || path.basename(p), bytes: Number(f?.bytes) || 0 });
+    }
     chatEditorWins.set(bianWin.id, it);
     bianWin.once('ready-to-show', () => { try { bianWin.show(); bianWin.focus(); } catch { /* noop */ } });
+    /**
+     * 聊天编辑器窗口的拖放分流：拖文件进来 = **添加附件**（显示在窗口里并同步聊天框），
+     * 绝不导航替换当前页面；非 file:// 导航一律拦下。
+     */
+    bianWin.webContents.on('will-navigate', (e, u) => {
+      if (!/^file:\/\//i.test(String(u))) { e.preventDefault(); return; }
+      let p = '';
+      try {
+        p = fileURLToPath(String(u));
+        if (p === path.join(__dirname, 'renderer', 'nm-viewer.html')) return;
+      } catch { e.preventDefault(); return; }
+      e.preventDefault();
+      try {
+        if (fs.existsSync(p) && !fs.statSync(p).isDirectory()) {
+          const it2 = chatEditorWins.get(bianWin.id);
+          if (it2) {
+            const st = fs.statSync(p);
+            const xin = { path: p, name: path.basename(p), bytes: st.size };
+            if (!(it2.attach || []).some((x) => x.path === p)) {
+              it2.attach.push(xin);
+              chatEditorAttachGuangBo(it2, [xin], []);
+            }
+          }
+        }
+      } catch { /* 打不开就什么都不做 */ }
+    });
     bianWin.on('closed', () => {
       chatEditorWins.delete(bianWin.id);
       chatEditorDocs.delete(xuLu);
@@ -10004,6 +10358,13 @@ const IPC_SCHEMAS: Record<string, (args: any[]) => string | null> = (() => {
       && (a[0].text === undefined || str(a[0].text, 5_000_000)) && (a[0].password === undefined || str(a[0].password, 512))) ? null : 'bad-nm-read',
     'warmy:daKaiLuJing': (a) => (obj(a[0]) && str(a[0].path, 4096)) ? null : 'bad-open-path',
     'warmy:daKaiWaiBuLianJie': (a) => (str(a[0], 4096) && /^https?:\/\//i.test(String(a[0]))) ? null : 'bad-external-url',
+    'warmy:chatEditorAddFiles': (a) => (!a[0] || (obj(a[0]) && (a[0].files === undefined || (Array.isArray(a[0].files) && a[0].files.length <= 50
+      && a[0].files.every((f: unknown) => !!f && typeof f === 'object'
+        && ((f as { path?: unknown }).path === undefined || str((f as { path?: unknown }).path, 4096))
+        && ((f as { name?: unknown }).name === undefined || str((f as { name?: unknown }).name, 512))
+        && ((f as { bytes?: unknown }).bytes === undefined || typeof (f as { bytes?: unknown }).bytes === 'number')))))) ? null : 'bad-chat-editor-files',
+    'warmy:chatEditorRemoveFile': (a) => (!a[0] || (obj(a[0]) && str(a[0].path, 4096))) ? null : 'bad-chat-editor-remove',
+    'warmy:chatEditorAttachGet': (a) => (a[0] === undefined) ? null : 'bad-chat-editor-attach-get',
     'warmy:liaoTianFaSong': (a) => (obj(a[0]) && str(a[0].sessionId, 200) && (a[0].content === undefined || str(a[0].content, 400_000))) ? null : 'bad-chat-send',
     'warmy:huiFuJinXing': (a) => (obj(a[0]) && str(a[0].sessionId, 200) && (a[0].content === undefined || str(a[0].content, 400_000))) ? null : 'bad-progress-save',
     'warmy:liaoTianRiZhiZhuiJia': (a) => (obj(a[0]) && str(a[0].sessionId, 200)
@@ -10017,14 +10378,14 @@ const IPC_LOGIN_REQUIRED = new Set([
   'warmy:dingShiDaoChuSet', 'warmy:dingShiDaoChuRunNow',
   'warmy:authViewMnemonic', 'warmy:authChangePin',
 ]);
-function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => any): void {
+function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => any, extraRenderers: string[] = []): void {
   IPC_CHANNELS.add(channel);
   /**
    * 只接受**业务主窗口/独立会话窗/nm 查看器**的**主 frame**：
    *  · sender 必须是带业务 preload（preload.cjs）的 BrowserWindow；
    *  · frame 必须是该 WebContents 的 mainFrame（子 frame / iframe 一律拒绝）；
-   *  · 页面只能是随包发布的 renderer/index.html 或 renderer/nm-viewer.html
-   *    （nm 窗口与「编辑聊天内容」窗口共用这份 preload；mimic / snip 等其它页面仍没有业务通道）。
+   *  · 页面只能是随包发布的 renderer/index.html、renderer/nm-viewer.html，
+   *    以及**按通道显式放行**的额外页面（extraRenderers，如截图遮罩窗 snip.html）。
    * 旧实现只看 URL 前缀，任何 renderer 目录下的页面（含子 frame）都能打全部 IPC。
    */
   const yunXuLaiYuan = (event: import('electron').IpcMainInvokeEvent): boolean => {
@@ -10044,7 +10405,8 @@ function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeE
       if (clean.protocol !== 'file:') return false;
       const actual = path.resolve(fileURLToPath(clean));
       const rendererDir = path.resolve(path.join(__dirname, 'renderer'));
-      return actual === path.join(rendererDir, 'index.html') || actual === path.join(rendererDir, 'nm-viewer.html');
+      if (actual === path.join(rendererDir, 'index.html') || actual === path.join(rendererDir, 'nm-viewer.html')) return true;
+      return extraRenderers.some((x) => actual === path.join(rendererDir, x));
     } catch { return false; }
   };
   const guaGou = async (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => {
@@ -10092,7 +10454,7 @@ function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeE
  * `chuliIpc` 读 const `IPC_ALIASES` 触发 TDZ，主进程直接 "App threw an error during load"）。
  */
 /* 旧的“复用主界面当文本编辑器”入口已删除（第 99 轮改为 nm 查看器聊天编辑模式） */
-chuliIpc('warmy:chatEditorKai', (e, p0?: { content?: string; sessionId?: string; rect?: { left?: number; top?: number; width?: number; height?: number } }) =>
+chuliIpc('warmy:chatEditorKai', (e, p0?: { content?: string; sessionId?: string; rect?: { left?: number; top?: number; width?: number; height?: number }; files?: { path?: string; name?: string; bytes?: number }[] }) =>
   dakaiLiaoTianBianJiQi(e.sender, p0 || {}));
 chuliIpc('warmy:chatEditorSync', (e, p0?: { content?: string }) => {
   try {
@@ -10108,6 +10470,49 @@ chuliIpc('warmy:chatEditorSync', (e, p0?: { content?: string }) => {
     } catch { /* 主窗关了就算了 */ }
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+/** 聊天编辑器窗口拖入文件 → 加入附件清单并广播（主窗口聊天框 + 编辑器窗口附件条） */
+chuliIpc('warmy:chatEditorAddFiles', (e, p0?: { files?: { path?: string; name?: string; bytes?: number }[] }) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const it = win && !win.isDestroyed() ? chatEditorWins.get(win.id) : null;
+  if (!it) return { ok: false, error: 'not-chat-editor' };
+  const files = Array.isArray(p0?.files) ? p0.files.slice(0, 50) : [];
+  const add = files
+    .map((f) => ({ path: String(f?.path || '').slice(0, 4096), name: String(f?.name || '').slice(0, 512), bytes: Number(f?.bytes) || 0 }))
+    .filter((f) => {
+      if (!f.path) return false;
+      try { return fs.existsSync(f.path) && !fs.statSync(f.path).isDirectory(); } catch { return false; }
+    });
+  const xin = add.filter((a) => !(it.attach || []).some((x) => x.path === a.path));
+  if (xin.length) {
+    it.attach.push(...xin);
+    chatEditorAttachGuangBo(it, xin, []);
+  }
+  return { ok: true, files: it.attach };
+});
+
+/** R128：聊天编辑器打开时读取当前附件清单（聊天框已添加的文件在编辑器里同步显示） */
+chuliIpc('warmy:chatEditorAttachGet', (e) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const it = win && !win.isDestroyed() ? chatEditorWins.get(win.id) : null;
+  if (!it) return { ok: false, error: 'not-chat-editor' };
+  return { ok: true, files: it.attach };
+});
+
+/** 移除附件：聊天编辑器窗口或主窗口（× 按钮）都能调；主窗口发来的对全部编辑器窗口广播 */
+chuliIpc('warmy:chatEditorRemoveFile', (e, p0?: { path?: string }) => {
+  const p = String(p0?.path || '');
+  if (!p) return { ok: true };
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const benDi = win && !win.isDestroyed() ? chatEditorWins.get(win.id) : null;
+  const muBiao = benDi ? [benDi] : [...chatEditorWins.values()];
+  for (const it of muBiao) {
+    const qian = it.attach.length;
+    it.attach = it.attach.filter((x) => x.path !== p);
+    if (it.attach.length !== qian) chatEditorAttachGuangBo(it, [], [p]);
+  }
+  return { ok: true };
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -10344,6 +10749,23 @@ if (dedaoDangeSuo) {
     .then(async () => {
       qidong('whenReady');
       /**
+       * 音视频权限策略：只放行**主窗口**（renderer/index.html）的 media（麦克风/摄像头预览/测试）；
+       * 其它窗口、其它权限一律拒绝（nm 网页视图原另有"全拒"handler，已移除，统一走这里）。
+       */
+      try {
+        const zhuYeMedia = (wc: Electron.WebContents | null): boolean => {
+          try { return wc != null && String(wc.getURL() || '').includes('/renderer/index.html'); } catch { return false; }
+        };
+        session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => {
+          if ((permission === 'media' || permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') && zhuYeMedia(wc)) cb(true);
+          else cb(false);
+        });
+        session.defaultSession.setPermissionCheckHandler((wc, permission) => {
+          if ((permission === 'media' || permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') && zhuYeMedia(wc)) return true;
+          return false;
+        });
+      } catch { /* 权限策略失败不影响启动 */ }
+      /**
        * 第 104 轮：登录成功后的重启带着一次性会话令牌。必须在建窗口/建仓库之前解包，
        * 这样 yindao 读到的就是已解锁的真实数据；令牌读完立刻删除，不留在磁盘上。
        */
@@ -10390,11 +10812,6 @@ if (dedaoDangeSuo) {
       } catch { /* 取不到就按 home 下的惯例名 */ }
       chuangjianChuangkou();
       qidong('window created');
-      /**
-       * 截图预热（第 125 轮真机反馈"首次截很卡"）：窗口建好后 3 秒后台初始化
-       * 屏幕捕获管线，首次真截图不再冷启动卡顿。低优先级、失败无影响。
-       */
-      try { setTimeout(() => { void yuReJieTu().catch(() => { /* noop */ }); }, 3000); } catch { /* noop */ }
       /**
        * **窗口保底**（用户反馈"突然停止/闪退"）：
        * 上面任何一步抛错、或窗口被意外销毁，都会让用户看到"程序不见了"。
@@ -11573,7 +11990,14 @@ chuliIpc('warmy:jieTuKaiShi', async (_e, p0?: { sessionId?: string }) => {
     const disp = screen.getPrimaryDisplay();
     const { width, height } = disp.size;
     const scale = disp.scaleFactor || 1;
-    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: Math.round(width * scale), height: Math.round(height * scale) } });
+    /**
+     * 抓屏超时兜底（真机反馈"点截图后卡住"）：desktopCapturer 在个别系统/驱动下
+     * 可能长时间不返回，此时主窗口还藏着 ⇒ 20 秒后放弃并恢复主窗口，绝不无限隐藏。
+     */
+    const sources = await Promise.race([
+      desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: Math.round(width * scale), height: Math.round(height * scale) } }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('capture-timeout')), 20000)),
+    ]);
     const src = sources.find((x) => x.display_id === String(disp.id)) || sources[0];
     if (!src) { if (cangQi) win?.show(); return { ok: false, error: 'no-screen' }; }
     /**
@@ -11673,25 +12097,7 @@ chuliIpc('warmy:jieTuXuanQu', (_e, q0?: { x?: number; y?: number; w?: number; h?
   const d = jieTuDengDai;
   jieTuDengDai = null;
   if (d) d(q0 === null ? null : { x: Number(q0?.x) || 0, y: Number(q0?.y) || 0, w: Number(q0?.w) || 0, h: Number(q0?.h) || 0 });
-});
-
-/**
- * 截图预热：Windows 屏幕捕获管线首次调用很慢（真机反馈"首次截很卡"）。
- * 启动后低优先级预热一次小尺寸抓屏，初始化底层捕获会话，真实截图时不再冷启动。
- * 预热失败不影响功能（真截图时照常走）。
- */
-async function yuReJieTu(): Promise<void> {
-  try {
-    const disp = screen.getPrimaryDisplay();
-    const { width, height } = disp.size;
-    const scale = disp.scaleFactor || 1;
-    const sources = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width: Math.max(4, Math.round(width * scale / 8)), height: Math.max(4, Math.round(height * scale / 8)) },
-    });
-    void sources;
-  } catch { /* 预热失败不影响截图 */ }
-}
+}, ['snip.html']);
 
 chuliIpc('warmy:pingMuJieTu', async () => {
   try {
@@ -12079,6 +12485,45 @@ chuliIpc('warmy:qunLieBiao', () =>
       return { ok: true, groups, count: groups.length };
     },
     { ok: false, groups: [], count: 0, error: 'group store unavailable' }
+  )
+);
+
+// ── 群聊/项目改名：落盘 groups.json（渲染层弹窗点名称直接改，重启不再回退） ──
+chuliIpc('warmy:qunGaiMing', (_e, p0?: { groupId?: string; ming?: string }) =>
+  anQuanChuLi<{ ok: boolean; ming?: string; error?: string }>(
+    () => {
+      const gid = String(p0?.groupId || '').trim();
+      const ming = String(p0?.ming || '').trim();
+      if (!gid || !ming) return { ok: false, error: '参数缺失' };
+      if (ming.length > 60) return { ok: false, error: '名称过长（最多 60 字）' };
+      if (!groupStore) return { ok: false, error: 'group store unavailable' };
+      const g = groupStore.getGroup(gid);
+      if (!g) return { ok: false, error: 'group not found' };
+      if (!benJiShiGuanLiZhe(gid)) return { ok: false, error: 'not-admin', detail: '只有创建者或管理者可以改名' };
+      const r = groupStore.upsertGroup({ groupId: gid, ming, type: g.type });
+      if (!r.ok) return { ok: false, error: r.error || 'save failed' };
+      return { ok: true, ming: r.group?.ming };
+    },
+    { ok: false, error: 'group store unavailable' }
+  )
+);
+
+// ── 群聊/项目停用/启用：写 groups.json 的 stoppedAt（渲染层灰头像 + 圆形灰色停用图标） ──
+chuliIpc('warmy:qunTingYong', (_e, p0?: { groupId?: string; ting?: boolean }) =>
+  anQuanChuLi<{ ok: boolean; stoppedAt?: number | null; error?: string }>(
+    () => {
+      const gid = String(p0?.groupId || '').trim();
+      if (!gid) return { ok: false, error: '参数缺失' };
+      if (!groupStore) return { ok: false, error: 'group store unavailable' };
+      const g = groupStore.getGroup(gid);
+      if (!g) return { ok: false, error: 'group not found' };
+      if (!benJiShiGuanLiZhe(gid)) return { ok: false, error: 'not-admin', detail: '只有创建者或管理者可以停用/启用' };
+      const stoppedAt = p0?.ting ? Date.now() : null;
+      const r = groupStore.upsertGroup({ groupId: gid, ming: g.ming, type: g.type, stoppedAt });
+      if (!r.ok) return { ok: false, error: r.error || 'save failed' };
+      return { ok: true, stoppedAt };
+    },
+    { ok: false, error: 'group store unavailable' }
   )
 );
 
@@ -12947,8 +13392,8 @@ async function zhenZhengFaSongBen(
 
     await baozhangGongyingshangMiyao();
     /**
-     * **决策模型**真用起来（详见 fenLeiPanDing）：
-     * 紧急度还是默认 P2 时，先让决策模型判一下这句是急/一般/省着用。
+     * **分类模型**真用起来（详见 fenLeiPanDing）：
+     * 紧急度还是默认 P2 时，先让分类模型判一下这句是急/一般/省着用。
      */
     /**
      * **智能模式：勾选时按难易度挑链位；未勾选严格按调用链顺序。**
@@ -13304,7 +13749,8 @@ async function zhenZhengFaSongBen(
         if (dao) {
           shenFenTou.push({
             role: 'system',
-            content: '【道 · 最高优先级（除硬门禁）· 不可压缩】\n' + dao
+            // 段标保留旧前缀「道 · 最高优先级（除硬门禁）· 不可压缩」：verify-prompt-layers 按它定位阶梯顺序
+            content: '【道 · 全局最高优先级】【道 · 最高优先级（除硬门禁）· 不可压缩】\n' + dao
               + '\n（以上是用户的「道」：高于除产品硬门禁外的一切指示 —— 与术/教条/束缚/印象/惯例或后文冲突时，一律以本段为准，冲突的指示作废。'
               + '压缩上下文时本段不许缩短或省略。它与产品硬门禁冲突时按硬门禁执行，并把冲突如实说出来。）',
           } as LiaoTianXiaoXi);
@@ -13592,11 +14038,27 @@ async function zhenZhengFaSongBen(
             ));
           } catch { /* noop */ }
           /**
+           * **联网搜索**（R128 N5）：模型必须知道 —— 联网问题用 web_search（走用户配置的搜索链），
+           * 且结果要**校验**：不切题/质量不高就换关键词或换参数重搜，而不是硬着头皮用垃圾结果下结论。
+           */
+          ju.push(tMain(
+            'llm.webSearchRule',
+            '【联网搜索】用户问**现在的事**（新闻 / 价格 / 版本 / 天气 / 文档 / 规则 / 任何你训练数据里可能过时的事实）时，' +
+              '**先调用 web_search 再回答**，不要凭记忆作答。web_search 走用户在设置里配置的搜索调用链（自动选供应商、自动降级），' +
+              '用法：web_search(query=查询词, 可选 topic=news, days=最近几天)。\n' +
+              '**结果必须校验**：① 是否切题（标题/摘要是否真的在回答这个问题）；② 来源是否可信；③ 时间是否够新。' +
+              '不切题或质量不高时**重新搜索**：换关键词（换说法、加限定词、改用英文关键词），或改 topic/days 参数，' +
+              '最多重搜 3 次；仍不足就对排名靠前的 URL 用 web_extract 抓原文核对，或**如实告诉用户查到了什么、还缺什么**。\n' +
+              '写结论时**必须带出处 URL**；没有任何搜索结果支撑的内容不要写成事实。'
+          ));
+          /**
            * **社交档案按需注入**（产品要求）：只告诉模型「你有档案、怎么取」，
            * 不把邮箱/手机/钱包等正文每次塞进上下文；需要时调 read_profile。
            */
           ju.push('【档案能力提示】你（本牛马）在「牛马设置（我的牛马 → 右键该牛马 → 设置）→ 社交信息」里可能存有邮箱/网站账号/手机号/昵称/钱包等档案。它们**不会自动出现在对话里**；用户问到联系方式、账号、名片，或你要给外部服务填资料时，调用工具 read_profile 获取（可指定 field=email|website|phone|nick|wallet）。密码永不返回。没有该项就如实说没有，不要编造。');
           ju.push('【动手优先】用户若要求生成/创建/打开/写入/执行/等待/调用任何具体操作，**第一响应就是发起工具调用**（write_file、make_pptx、open_path、get_time、wait_seconds 等），不要先写长篇计划或只说「已完成」。文字只能在工具真正跑完之后做汇报。没有工具结果就不要声称文件已生成。');
+          /** R128：多步任务先列计划（llm.planFirst）—— 3 步及以上先 plan_update，单步直做 */
+          ju.push(tMain('llm.planFirst', '【先列计划】用户要做的事包含 3 个及以上不同步骤时，先调用 plan_update 列出步骤再逐步执行（每步一个可验证动作）；单一步骤、纯问答、闲聊不要建计划。'));
           /**
            * **长文分段写**（产品要求：一次写 5000+ 字要能真写完）。
            *
@@ -13621,7 +14083,8 @@ async function zhenZhengFaSongBen(
         if (zuiGao) {
           shenFenTou.push({
             role: 'system',
-            content: '【教条 · 低于硬门禁、道、术、要求、短记忆、印象、工具、软门禁】\n' + zuiGao + '\n（以上是用户的「教条」（agents.md）：为兼容其它智能体的移植而存在，位置在「软门禁」之后、「束缚」之前；与硬门禁、道、术、要求、短记忆、印象、工具任何一条冲突时以它们为准。）',
+            // 段标保留旧前缀「教条 · 低于硬门禁…」：verify-prompt-layers 按它定位阶梯顺序
+            content: '【规矩 · 仅次于「道」】【教条 · 低于硬门禁、道、术、要求、短记忆、印象、工具、软门禁】\n' + zuiGao + '\n（以上是用户的「教条」（agents.md）：为兼容其它智能体的移植而存在，位置在「软门禁」之后、「束缚」之前；与硬门禁、道、术、要求、短记忆、印象、工具任何一条冲突时以它们为准。）',
           } as LiaoTianXiaoXi);
         }
         const shuFu = duShuFu().trim();
@@ -13718,7 +14181,7 @@ async function zhenZhengFaSongBen(
             });
             if (zhu.duan.trim()) {
               const fuGaiHang = zhu.fuGai.tiaoShu > 0
-                ? tMain('llm.archivedCoverage', '\n〔本次注入覆盖第 {a}–{b} 次归档（共 {n} 次归档）〕')
+                ? tMain('llm.archivedCoverage', '\n〔本次附带第 {a}–{b} 次归档（共 {n} 次归档）〕')
                   .replace('{a}', String(zhu.fuGai.cong)).replace('{b}', String(zhu.fuGai.dao)).replace('{n}', String(gui.length))
                 : '';
               shenFenTou.push({
@@ -13870,7 +14333,7 @@ async function zhenZhengFaSongBen(
                   return `${i + 1}. seq=${c.seq ?? '?'} recordId=${c.recordId || '?'}${src ? ` 来源=${src}` : ''}：${String(c.snippet || '').replace(/\s+/g, ' ').slice(0, 200)}`;
                 }).join('\n');
                 const zheng = `【前置召回 · 宿主按本轮内容主动取回的历史线索（不代表用户本轮的新要求）】\n${hang}\n要逐字节原文：retrieve(seq=…) 或 retrieve(recordId="…")；换关键词：recall("…")。这一段的份额已经从视图额度里扣过了。`;
-                const cai = zheng.length > fenE ? zheng.slice(0, fenE) + '…（前置召回份额已用满，其余命中项未注入：用 recall 自己取）' : zheng;
+                const cai = zheng.length > fenE ? zheng.slice(0, fenE) + '…（前置召回份额已用满，其余命中项未附带：用 recall 自己取）' : zheng;
                 shenFenTou.push({ role: 'system', content: cai } as LiaoTianXiaoXi);
                 try { audit?.log('chat.pre-recall', { sessionId, tiao: ka.length, zi: cai.length, fenE, chaXun: chaXun.slice(0, 40) }); } catch { /* 记不上不影响这一轮 */ }
               } else {
@@ -13936,7 +14399,7 @@ async function zhenZhengFaSongBen(
         };
         const daiRuYangBen = (zi: number): string => {
           if (zi <= 0) return '';
-          const src = yangBenBen || benLunFaSongWen || '注入层最坏情况估算用的形状样本';
+          const src = yangBenBen || benLunFaSongWen || '上下文层最坏情况估算用的形状样本';
           let chu = '';
           while (chu.length < zi) chu += src;
           return chu.slice(0, zi);
@@ -14188,7 +14651,7 @@ async function zhenZhengFaSongBen(
           const liYou = tMain('chat.budget.stopSend',
             '本轮内容装不进模型窗口，已停止发送（没有发出任何请求，也就没有花钱）')
             + `：窗口可用 ${keZhuangShuRuChuangKou} token，固定开销 ${chengBen.guDing} + 工具 ${chengBen.gongJu}`
-            + ` + 本轮 ${chengBen.benLun} + 图片 ${chengBen.shiJue} + 注入层 ${chengBen.daiRu} + 视图下限 ${SHI_TU_ZUI_XIAO_TOKENS}，还差 ${que} token。`
+            + ` + 本轮 ${chengBen.benLun} + 图片 ${chengBen.shiJue} + 上下文层 ${chengBen.daiRu} + 视图下限 ${SHI_TU_ZUI_XIAO_TOKENS}，还差 ${que} token。`
             + (zuiDaHang ? zuiDaHang : '')
             + (tuKuaiJi.length ? `（本轮还要发 ${tuKuaiJi.length} 张图片）` : '')
             + tMain('chat.budget.stopTip', '\n可以：把上下文预算滑杆调大、减少图片张数、换一个窗口更大的模型，或点「继续 / 重试」让我们用更小的视图再试一次。');
@@ -15630,7 +16093,7 @@ function biaoEtaYiChang(sessionId: string, xingWei: XingWei, liYou: string): boo
  * 挂一个「继续 / 重试」按钮：点了先分析原因、规避/修复，再接着做；
  * 用户若直接发了新对话且 AI 已收到，按钮会变灰失效（渲染层负责）。
  */
-function biaoRenWuZhongDuan(sessionId: string, why: string, error?: string, jieDuan?: string): void {
+function biaoRenWuZhongDuan(sessionId: string, why: string, error?: string, jieDuan?: string, jingSheng?: boolean): void {
   try {
     // 记进临时账本：续传时能说清「从哪一步断的」，不是只说"被打断了"
     try {
@@ -15646,6 +16109,7 @@ function biaoRenWuZhongDuan(sessionId: string, why: string, error?: string, jieD
       why: String(why || '').slice(0, 300),
       error: String(error || '').slice(0, 300),
       jieDuan: String(jieDuan || '').slice(0, 200),
+      jingSheng: jingSheng === true,
     });
     audit?.log('plan.task-interrupted', { sessionId, why: String(why || '').slice(0, 160), error: String(error || '').slice(0, 160), jieDuan: String(jieDuan || '').slice(0, 120) });
     /**
@@ -16241,7 +16705,6 @@ function renWuYaoQiuZiShu(sessionId: string, xiaoXi?: { content?: string }): num
  */
 type XuPaiZhang = { ci: number; kuaiZhao: string; kongZhuan: number; heDui: number; heDuiWeiWan: number; zhiShuo: number; heDuiEr: number };
 const xuPaiJinZhan = new Map<string, XuPaiZhang>();
-const XUPAI_ZONG_SHANGXIAN = 10;
 function xuPaiKuaiZhao(sessionId: string): string {
   const sid = String(sessionId || '');
   const g = [...(benCiRenWuGongJu.get(sid) || [])].sort().join(',');
@@ -16415,7 +16878,7 @@ function ziShuJinDuHang(sid: string, abs: string, zhuiJia: boolean): string {
  *  · 自然停下但计划还有没做的步骤 ⇒ 完成核对（核对后未完成数在下降才允许再核对）；
  *  · 模型自述 done、宿主认得这类步骤却看不到证据 / 被截断 ⇒ 一次完成核对；
  *  · 一个工具都没成功却声称做完、或只宣告下一步 ⇒ 一次。
- * 进展只认宿主看到的事实（`xuPaiKuaiZhao`）：连续两次续派没有任何新事实 ⇒ 停；总续派硬顶 10 次。
+ * 进展只认宿主看到的事实（`xuPaiKuaiZhao`）：连续两次续派没有任何新事实 ⇒ 停；次数/时间不再简单硬顶 —— 到 eta 预警点由模型判断并预估，9 次预估不准才判异常。
  */
 function yingGaiZiDongJiXu(
   sessionId: string,
@@ -16452,10 +16915,9 @@ function yingGaiZiDongJiXu(
   /** 核对轮回了 NO_REPLY = 模型确认没有要补的了：到此为止（还开着的步骤由出口如实列给用户） */
   if (shangLun?.noReply) return { jiXu: false, liYou: jiHuaWeiWanCheng(sid).length ? 'open-left' : 'done' };
   if (z.kongZhuan >= 2) return { jiXu: false, liYou: 'no-progress' };
-  if (z.ci >= XUPAI_ZONG_SHANGXIAN) {
-    try { audit?.log('plan.auto-continue-capped', { sessionId: sid, n: z.ci }); } catch { /* noop */ }
-    return { jiXu: false, liYou: 'xupai-capped' };
-  }
+  /** 续派**不再有简单次数硬顶**（用户裁决）：超限后的停/不停由 eta 预警点机制决定 ——
+   *  40 次/20 分钟到点 → 模型判断是否还在进行 + 预估还需几轮（写入 eta.json 方法库、
+   *  eta-live.json 本轮状态），同一轮 3 次超出预测或跨轮 9 次预估不准才判异常停下。 */
   const beiJieDuan = tingZhi === 'max-rounds' || tingZhi === 'max-rounds-extended' || tingZhi === 'budget' || tingZhi === 'call-budget';
   /**
    * **目标长度没达到 ⇒ 接着写**。排在重复判定之前：长文分段追加时同一段常被去重挡下、
@@ -16967,20 +17429,13 @@ async function yanXuJiHuaRenWu(
             .replace('{n}', String(kai.length)).replace('{list}', lie),
           ts: Date.now(),
         });
-        try { biaoRenWuZhongDuan(sessionId, `计划还有 ${kai.length} 步没有标记完成`, 'open-left', '完成核对'); } catch { /* noop */ }
+        /**
+         * 这是「正常收工但留有未标完成的步骤」：模型已停下、核对也做过，说明消息已经如实列给用户。
+         * 不是卡死/超限类异常 ⇒ 静音（jingSheng），不响警告音；「继续/重试」按钮与感叹号照旧。
+         */
+        try { biaoRenWuZhongDuan(sessionId, `计划还有 ${kai.length} 步没有标记完成`, 'open-left', '完成核对', true); } catch { /* noop */ }
       }
-      /** 单个任务续派总数到顶：如实说一次，交还给用户（不发决策卡，「继续 / 重试」按钮就够） */
-      if (pan.liYou === 'xupai-capped') {
-        const kai = jiHuaWeiWanCheng(sessionId);
-        zhuiJiaLiaoTianRiZhi(sessionId, {
-          seq: xiaYiLiaoTianXuLie(), role: 'assistant',
-          content: tMain('chat.xuPaiCapped', '（已停下：这次任务已经自动续派了 {n} 次，到了单个任务的上限，为避免无休止地重复不再自动继续。{left}点下面的「继续 / 重试」可以接着做。）')
-            .replace('{n}', String(XUPAI_ZONG_SHANGXIAN))
-            .replace('{left}', kai.length ? kai.slice(0, 6).map((b) => `${b.id}「${String(b.title || '').slice(0, 30)}」`).join('、') + ' ' : ''),
-          ts: Date.now(),
-        });
-        try { biaoRenWuZhongDuan(sessionId, `本次任务已自动续派 ${XUPAI_ZONG_SHANGXIAN} 次（单个任务的总上限）`, 'xupai-capped', '自动续派'); } catch { /* noop */ }
-      }
+      /** xupai-capped 停机已废止（用户裁决：续派不以简单次数为限，改走 eta 预警点 + 模型预估机制） */
       /**
        * **空转停机**：连续两次续派，宿主都没看到任何新事实（没有新的成功工具、没有新文件，
        * 字数和计划状态也没变）⇒ 再派下去只会原地打转。如实说一次为什么停，让人能接手。
@@ -17281,14 +17736,18 @@ chuliIpc('warmy:peiZhiXinFeng', (_e, p0?: { text?: string; path?: string }) => {
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-/** 导入数据：先完整验证、加密快照当前数据，再整包写入；失败回滚，随后重启。 */
-chuliIpc('warmy:peiZhiDaoRu', async (_e, p0?: { path?: string; password?: string; mnemonic?: string; include?: string[] }) => {
+/** 导入数据：先完整验证、加密快照当前数据，再整包写入；失败回滚，随后重启。
+ *  mode：`fresh`=整包替换（默认，兼容旧调用）；`merge`=并入现有不覆盖（本地已有文件优先，逻辑载荷仍按 id 合并）。 */
+chuliIpc('warmy:peiZhiDaoRu', async (_e, p0?: { path?: string; password?: string; mnemonic?: string; include?: string[]; mode?: 'fresh' | 'merge' }) => {
   let kroot: Buffer | null = null;
   let nmToken: string | null = null;
   let dvRef: DataVault | null = null;
   try {
     const p = String(p0?.path || '');
     const pw = String(p0?.password || '');
+    const mo = (p0?.mode === 'fresh' || p0?.mode === 'merge') ? p0.mode : 'fresh';
+    /** R128：口令下限 —— 弱口令等于没有口令；给了口令就必须 ≥4 位（error 码 weak-password） */
+    if (pw && pw.trim().length < 4) return { ok: false, error: 'weak-password（口令至少 4 位）' };
     const mnemonic = String(p0?.mnemonic || '').trim();
     const include = Array.isArray(p0?.include) && p0!.include!.length ? p0!.include!.map(String) : undefined;
     if (!p) return { ok: false, error: 'need-path' };
@@ -17322,10 +17781,10 @@ chuliIpc('warmy:peiZhiDaoRu', async (_e, p0?: { path?: string; password?: string
       if (!chk.ok) { dv.disposeNm(nmToken); nmToken = null; return { ok: false, error: chk.error || 'import-verify-failed' }; }
       try { await memory?.stop(); } catch { /* noop */ }
       try { await p1?.instances.stopAll(); } catch { /* noop */ }
-      const r = await dv.commitNm(nmToken, { include });
+      const r = await dv.commitNm(nmToken, { include, mode: mo });
       nmToken = null;
       if (!r.ok) return { ok: false, error: r.error || 'import-failed' };
-      audit?.log('data.import', { path: p, mode: x.mode, files: r.files || 0, bytes: r.bytes || 0, categories: include || 'all', source: mnemonic ? 'mnemonic' : 'current' });
+      audit?.log('data.import', { path: p, mode: x.mode, files: r.files || 0, bytes: r.bytes || 0, categories: include || 'all', source: mnemonic ? 'mnemonic' : 'current', jiaoHu: mo });
       chongQiYingYong(420);
       return { ok: true, restart: true, files: r.files || 0, bytes: r.bytes || 0 };
     }
@@ -17337,9 +17796,9 @@ chuliIpc('warmy:peiZhiDaoRu', async (_e, p0?: { path?: string; password?: string
     if (!pre.ok) return { ok: false, error: pre.error || 'import-verify-failed' };
     try { await memory?.stop(); } catch { /* noop */ }
     try { await p1?.instances.stopAll(); } catch { /* noop */ }
-    const r = await dv.importVault(p, pw, { include });
+    const r = await dv.importVault(p, pw, { include, mode: mo });
     if (!r.ok) return { ok: false, error: r.error || 'import-failed' };
-    audit?.log('vault.import', { path: p, mode: xin.mode, files: r.files || 0, bytes: r.bytes || 0, categories: include || 'all' });
+    audit?.log('vault.import', { path: p, mode: xin.mode, files: r.files || 0, bytes: r.bytes || 0, categories: include || 'all', jiaoHu: mo });
     chongQiYingYong(420);
     return { ok: true, restart: true, files: r.files || 0, bytes: r.bytes || 0 };
   } catch (e) {
@@ -18010,12 +18469,13 @@ function chouGanDaiZhengLi(sessionId: string): void {
   } catch { /* 归档失败不影响归档本身 */ }
 }
 
-chuliIpc('warmy:zhiShiQuery', (_e, p0?: string | { q?: string; ceng?: ZhishiCeng; sessionId?: string }) => {
+chuliIpc('warmy:zhiShiQuery', (_e, p0?: string | { q?: string; ceng?: ZhishiCeng; layers?: string[]; sessionId?: string }) => {
   try {
     /**
-     * 三种调用形态（第 51 轮）：
+     * 调用形态（第 51 轮 + 第 98 轮补 `layers`）：
      *  · 字符串 q            ⇒ 查全部三层（用户本机界面用）
-     *  · { q, ceng }         ⇒ 只查指定层（第四列「会话库 / 内部库」卡片）
+     *  · { q, ceng }         ⇒ 只查指定层
+     *  · { q, layers }       ⇒ 只查列出的这几层（知识库卡片「选别人」= 对方开放的那几层）
      *  · { q, sessionId }    ⇒ 按该会话作用域查（群聊只会话；项目会话+内部；我的牛马三层）
      */
     if (typeof p0 === 'string' || p0 === undefined) {
@@ -18023,7 +18483,9 @@ chuliIpc('warmy:zhiShiQuery', (_e, p0?: string | { q?: string; ceng?: ZhishiCeng
       return { ok: true, layers: ZHISHI_CENG, ...(knowledge ? knowledge.queryLayers(ZHISHI_CENG as readonly ZhishiCeng[], q) : { entities: [], events: [] }) };
     }
     const q = String(p0.q || '');
-    const layers = p0.ceng ? [p0.ceng] as ZhishiCeng[] : kbLayersFor(String(p0.sessionId || ''));
+    const layers = Array.isArray(p0.layers)
+      ? kbJiao(p0.layers) as ZhishiCeng[]
+      : (p0.ceng ? [p0.ceng] as ZhishiCeng[] : kbLayersFor(String(p0.sessionId || '')));
     return { ok: true, layers, ...(knowledge ? knowledge.queryLayers(layers, q) : { entities: [], events: [] }) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
@@ -18075,18 +18537,58 @@ chuliIpc('warmy:kbPermShe', (_e, p0?: { sessionId?: string; read?: string[]; wri
     return { ok: true, read: kbLayersFor(sid), write: kbWriteLayers(sid), archive: kbArchiveLayers(sid), hardRead: hardR, hardWrite: hardW };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+/**
+ * **对外开放**（第 98 轮用户口径）：项目/群聊/联系人的知识库卡片上的「对外开放」勾选，
+ * 决定**其他用户**在这个会话里能看我的哪些层（选自己 = 三层全看；选别人 = 只看对方开放的那几层）。
+ *  · 项目默认勾「会话 + 项目」；群聊/联系人默认勾「会话」；
+ *  · 配置按会话存 `settings.kbOpenToOthers`；缺省回落到类型默认值。
+ */
+function kbDuiWaiKaiFang(sessionId: string): { session: boolean; internal: boolean; private: boolean } {
+  const def = huiHuaLeiXing(sessionId) === 'project'
+    ? { session: true, internal: true, private: false }
+    : { session: true, internal: false, private: false };
+  try {
+    const all = (settingsStore?.load() as { kbOpenToOthers?: Record<string, Partial<Record<'session' | 'internal' | 'private', boolean>>> } | undefined)?.kbOpenToOthers;
+    const x = (all && all[String(sessionId || '')]) || {};
+    // 没存过（undefined）按类型默认值回落；显式存过 false 才关掉
+    return {
+      session: x.session !== false,
+      internal: x.internal === undefined ? def.internal : !!x.internal,
+      private: x.private === undefined ? def.private : !!x.private,
+    };
+  } catch { /* 拿不到设置按类型默认值 */ return def; }
+}
+chuliIpc('warmy:kbDuiWaiKaiFangDu', (_e, p0?: { sessionId?: string }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    return { ok: true, kind: huiHuaLeiXing(sid), config: kbDuiWaiKaiFang(sid) };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:kbDuiWaiKaiFangShe', (_e, p0?: { sessionId?: string; session?: boolean; internal?: boolean; private?: boolean }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    if (!sid) return { ok: false, error: 'bad-session' };
+    const next = { session: !!p0?.session, internal: !!p0?.internal, private: !!p0?.private };
+    const all = { ...((settingsStore?.load() as { kbOpenToOthers?: Record<string, unknown> } | undefined)?.kbOpenToOthers || {}) };
+    all[sid] = next;
+    settingsStore?.save({ kbOpenToOthers: all } as never);
+    audit?.log('kb.open-to-others', { sessionId: sid, ...next });
+    return { ok: true, config: kbDuiWaiKaiFang(sid) };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 
 chuliIpc(
   'warmy:zhiShiTianJiaShiJian',
-  (_e, Shi: { id: string; biaoTi: string; entityIds?: string[]; result?: string }) => {
-    knowledge?.internal.upsertEntity({
+  (_e, Shi: { id: string; biaoTi: string; entityIds?: string[]; result?: string; ceng?: ZhishiCeng }) => {
+    const ceng = Shi.ceng && (ZHISHI_CENG as readonly string[]).includes(Shi.ceng) ? Shi.ceng : 'internal';
+    knowledge?.allow(ceng).upsertEntity({
       id: 'default',
       kind: 'project',
       ming: 'default',
       attrs: {},
       anchors: [],
     });
-    knowledge?.internal.addEvent({
+    knowledge?.allow(ceng).addEvent({
       id: Shi.id,
       biaoTi: Shi.biaoTi,
       result: Shi.result,
@@ -18094,7 +18596,7 @@ chuliIpc(
       anchors: [],
       ts: Date.now(),
     });
-    return { ok: true };
+    return { ok: true, ceng };
   }
 );
 
@@ -19926,6 +20428,24 @@ function xiePianHaoDaoYinXiang(pianHao: Array<{ key?: string; value?: string; so
   try {
     return zhengLiYinXiang({ moXingHang: hang, suCaiZhengWen: hang.join('\n'), yuanHua: [], sid }).jia;
   } catch { return 0; }
+}
+
+/**
+ * **把归档提炼的用户偏好并进会话摘要**（第 54 轮 planD）。
+ * 摘要不能只有"决策/待办/风险/要点"——用户偏好（"回复要简短""不要用 emoji"）也要随摘要
+ * 进 `archives.jsonl` 和下一轮注入的上下文段落，否则模型只记得"发生过什么"、读不到"用户希望怎样"。
+ * 与「印象」同一道闸：只在素材里摘录、已在摘要文本里的不重复写、最多 8 条、每条 ≤60 字。
+ */
+function heBingYongHuPianHao(
+  zhaiYao: string,
+  pianHao: Array<{ key?: string; value?: string; source?: string }>,
+): string {
+  const xin = (pianHao || [])
+    .map((p) => String(p?.value || '').trim())
+    .filter((v) => v.length >= 4 && v.length <= 60 && !zhaiYao.includes(v))
+    .slice(0, 8);
+  if (!xin.length) return zhaiYao;
+  return (zhaiYao + '\n\n## 偏好\n' + xin.map((v) => '- ' + v).join('\n')).slice(0, 4000);
 }
 
 async function moXingGuiNaYinXiang(
@@ -22083,7 +22603,7 @@ chuliIpc('warmy:rongQiKongZhiTai', async (_e, payload?: { runtimeId?: string; ac
   }
   return {
     ok: true, code: 'ok', reasonKey: 'ok', executed: true, runtimeId, containerRef: ming,
-    shuChu: xieru.shuChu || '', autoSolidify,
+    shuChu: xieru.output || '', autoSolidify,
     security: CONTAINER_SHELL_SECURITY, execSecurity: CONTAINER_EXEC_SECURITY,
   };
 });
@@ -22835,6 +23355,13 @@ chuliIpc('warmy:shouDongMoXingYanZheng', async (_e, p0?: {
       }
       return { ok: false, error: msg.slice(0, 160) };
     }
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 复制文本到系统剪贴板（链接/文本右键「复制」；渲染层 async clipboard 依赖焦点，统一走主进程） */
+chuliIpc('warmy:copyText', async (_e, wen?: string) => {
+  try {
+    await clipboard.writeText(String(wen ?? ''));
+    return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 /** 复制文件到系统剪贴板（右键菜单「复制」）；失败时由渲染层回退为复制路径 */
@@ -26098,8 +26625,7 @@ chuliIpc('warmy:smtpGengXin', (_e, id: string, patch: Partial<{ label: string; h
 // `PeerRegistry` 仍然保留，但它只当**地址簿**用（没有任何鉴权语义）：能不能通信由握手 + 名册决定。
 
 /** PeerRegistry（地址簿）→ 组网层要的对端列表 */
-function duiduanYinyong(): WangzhuangDuiduanYinyong[] {
-  return (peerReg?.LieBiao() ?? [])
+function duiduanYinyong(): WangzhuangDuiduanYinyong[] {  return (peerReg?.LieBiao() ?? [])
     .filter((p) => !!p && typeof p.host === 'string' && Number(p.port) > 0)
     .map((p) => ({
       nodeId: p.nodeId,
@@ -26112,11 +26638,114 @@ function duiduanYinyong(): WangzhuangDuiduanYinyong[] {
     }));
 }
 
+// ── R125 任务15：同步域数据导出/应用（chat 会话 + settings 白名单） ──
+// 导出 = 触发设备视角的当前条目；应用 = 接收方写回生产文件（原子写 + 备份）。
+const SYNC_SETTINGS_KEYS = [
+  'yuYan', 'privacyConsent', 'kaiQiZiDongGengXin', 'kuaJieMian', 'yingYongZhuTi',
+  'diffStyle', 'uiFontSize', 'codeFontSize', 'zhuiZongSheBei', 'dongHua',
+];
+function syncSettingsPath(userDataDir: string): string {
+  return path.join(userDataDir, 'settings.json');
+}
+function syncSettingsExport(userDataDir: string): Array<{ id: string; ts: number; data?: string }> | null {
+  try {
+    const raw = JSON.parse(fs.readFileSync(syncSettingsPath(userDataDir), 'utf8'));
+    const sub: Record<string, unknown> = {};
+    for (const k of SYNC_SETTINGS_KEYS) if (k in raw) sub[k] = raw[k];
+    if (!Object.keys(sub).length) return null;
+    const st = fs.statSync(syncSettingsPath(userDataDir));
+    return [{ id: 'settings', ts: st.mtimeMs, data: JSON.stringify(sub) }];
+  } catch { return null; }
+}
+function syncSettingsApply(userDataDir: string, data: unknown): boolean {
+  try {
+    const incoming = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+    const p = syncSettingsPath(userDataDir);
+    const cur: Record<string, unknown> = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : {};
+    let changed = false;
+    for (const k of SYNC_SETTINGS_KEYS) {
+      if (k in incoming && JSON.stringify(incoming[k]) !== JSON.stringify(cur[k])) {
+        cur[k] = incoming[k];
+        changed = true;
+      }
+    }
+    if (!changed) return false;
+    fs.copyFileSync(p, `${p}.sync-bak`);
+    fs.writeFileSync(p, JSON.stringify(cur, null, 2), 'utf8');
+    return true;
+  } catch { return false; }
+}
+
+function syncChatExport(userDataDir: string, sessions: Record<string, { sid: string; name: string; sync: boolean }>): Array<{ id: string; ts: number; data?: string }> | null {
+  try {
+    const metaPath = path.join(userDataDir, 'chat-meta.json');
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')) as { sessions?: Record<string, { msgs?: Array<Record<string, unknown>> }> };
+    const out: Array<{ id: string; ts: number; data?: string }> = [];
+    for (const sid of Object.keys(sessions)) {
+      const s = meta.sessions?.[sid];
+      if (!s) continue;
+      let lastTs = 0;
+      for (const m of Array.isArray(s.msgs) ? s.msgs : []) lastTs = Math.max(lastTs, Number(m?.ts) || 0);
+      out.push({ id: sid, ts: lastTs || Date.now(), data: JSON.stringify(s.msgs || []) });
+    }
+    return out.length ? out : null;
+  } catch { return null; }
+}
+function syncChatApply(userDataDir: string, entries: Array<{ id: string; data?: string; ts: number }>): number {
+  let applied = 0;
+  try {
+    const metaPath = path.join(userDataDir, 'chat-meta.json');
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')) as { sessions?: Record<string, { msgs?: Array<Record<string, unknown>>; name?: string }> };
+    meta.sessions = meta.sessions || {};
+    for (const e of entries) {
+      const sid = String(e.id || '').slice(0, 120);
+      if (!sid) continue;
+      const incoming = Array.isArray(e.data) ? e.data : (() => { try { const j = JSON.parse(String(e.data || '[]')); return Array.isArray(j) ? j : []; } catch { return []; } })();
+      const cur = Array.isArray(meta.sessions[sid]?.msgs) ? meta.sessions[sid].msgs : [];
+      const curTs = cur.reduce((a, m) => Math.max(a, Number(m?.ts) || 0), 0);
+      const incTs = incoming.reduce((a, m) => Math.max(a, Number(m?.ts) || 0), 0);
+      if (incTs <= curTs) continue; // LWW
+      meta.sessions[sid] = { ...(meta.sessions[sid] || {}), msgs: incoming };
+      applied += 1;
+    }
+    if (applied) {
+      fs.copyFileSync(metaPath, `${metaPath}.sync-bak`);
+      fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf8');
+    }
+  } catch { /* 应用失败不影响其它条目 */ }
+  return applied;
+}
+function syncDomainExport(domain: SyncDomain, sessions: Record<string, { sid: string; name: string; sync: boolean }>, userDataDir: string): Array<{ id: string; ts: number; data?: string }> | null {
+  if (domain === 'chat') return syncChatExport(userDataDir, sessions);
+  if (domain === 'settings') return syncSettingsExport(userDataDir);
+  // 其余域（道/术/印象/kb1-3/models）数据源映射下一阶段接入；勾选保留
+  return null;
+}
+/** 接收方应用入口（applyPushPayload 调不到宿主写回，这里由 onInbound 显式调用） */
+function syncDomainApply(domain: SyncDomain, entries: Array<{ id: string; data?: string; ts: number }>): number {
+  const userDataDir = app.getPath('userData');
+  if (domain === 'chat') return syncChatApply(userDataDir, entries);
+  if (domain === 'settings') {
+    let n = 0;
+    for (const e of entries) {
+      if (e.id !== 'settings') continue;
+      try { if (syncSettingsApply(userDataDir, e.data ? JSON.parse(String(e.data)) : null)) n += 1; } catch { /* 跳过坏条目 */ }
+    }
+    return n;
+  }
+  return 0;
+}
+
 /** 本机节点 id 刷新（nodeReg 里的 isLocal 那条） */
 function refreshLocalNodeId(): string {
   const local = nodeReg?.LieBiao().find((n) => n.isLocal);
   localNodeId = local?.nodeId || 'node-local';
   return localNodeId;
+}
+
+/** 用户称呼（同步设备显示名用；取不到就用节点 id） */
+function shiYongHuMing(): string {
+  try { return String(accountStore?.loadProfile()?.username || '本机').slice(0, 40); } catch { return '本机'; }
 }
 
 /** 身份指纹（写操作租约的持有者 id；没有身份时退回本机节点 id） */
@@ -26175,6 +26804,11 @@ async function qiDongAnQuanWangZhuang(port: number, opts: { discovery?: boolean;
   return r;
 }
 
+/** 默认锚点（稳定引导节点，供新节点入网）；域名待定——定后填入 host:port 列表，用户可在设置里修改 */
+const MO_REN_MAO_DIAN: string[] = [
+  // 'anchor.warmy.net:7800',  // TODO(anchor): 域名待定
+];
+
 /** 公开可发现：当前配置（只读，绝不回显密钥/凭证） */
 function gongKaiFaXianPeiZhiKuai() {
   const net = (settingsStore?.load()?.net || {}) as {
@@ -26186,8 +26820,8 @@ function gongKaiFaXianPeiZhiKuai() {
     hosts?: string[];
   };
   return {
-    enabled: net.publicDiscoverable === true,
-    bootstrap: Array.isArray(net.discoveryBootstrap) ? net.discoveryBootstrap.map(String).slice(0, 10) : [],
+    enabled: net.publicDiscoverable !== false,
+    bootstrap: [...(Array.isArray(net.discoveryBootstrap) ? net.discoveryBootstrap.map(String).slice(0, 10) : []), ...MO_REN_MAO_DIAN].slice(0, 10),
     port: Number.isInteger(net.discoveryPort) && Number(net.discoveryPort) >= 0 && Number(net.discoveryPort) <= 65535
       ? Number(net.discoveryPort)
       : GONG_KAI_FA_XIAN_DEFAULT_PORT,
@@ -27508,6 +28142,29 @@ async function guiDangYiGeHuiHua(
     try {
       audit?.log('chat.archive-done', { sessionId: sid, tiaoShu: xin.length, jiangJi, hasMoXing: !!mo, guiDangHeXin: heXinOk, chuFa: opts?.auto ? 'auto' : 'manual' });
     } catch { /* noop */ }
+    /** 第 123 轮：归档（复盘）时才更新派遣经验 / 话题反馈参考文件（不影响运行中的对话） */
+    try {
+      const now = new Date().toISOString();
+      const pai = ziLiPaiQianJiLu.get(sid) || [];
+      if (pai.length) {
+                const lu1 = ziLiJingYanLu();
+        if (!fs.existsSync(lu1)) {
+          fs.writeFileSync(lu1, '# 子代理派遣经验（归档/复盘时更新；派遣前先读本文件）\n\n> 判定式：拆分价值 = 隔离目的（噪音/时间/权限/并行） × 边界清晰度 ÷ 通信开销。能不分就不分。\n\n| 时间 | 隔离目的 | 任务 | 结果/影响 |\n| --- | --- | --- | --- |\n', 'utf8');
+        }
+        fs.appendFileSync(lu1, pai.map((x) => '| ' + now + ' | ' + x.muDi.replace(/[|\n]/g, ' ') + ' | ' + x.renWu.replace(/[|\n]/g, ' ').slice(0, 120) + ' | ' + String(x.jieGuo || '完成').replace(/[|\n]/g, ' ').slice(0, 80) + ' |').join('\n') + '\n', 'utf8');
+        ziLiPaiQianJiLu.delete(sid);
+      }
+      const tp = huaTiFanKuiJiLu.get(sid) || [];
+      if (tp.length) {
+        const lu2 = huaTiFanKuiLu();
+        if (!fs.existsSync(lu2)) {
+          fs.writeFileSync(lu2, '# 话题判定反馈（归档/复盘时更新；判定前对照，成功/失败都记录）\n\n> 补充词表（会被读回生效）：\n> +换题词: 示例\n> +回题词: 示例\n\n| 时间 | 判定 | 用户纠正/备注 |\n| --- | --- | --- |\n', 'utf8');
+        }
+        fs.appendFileSync(lu2, tp.map((x) => '| ' + now + ' | ' + x.panDuan.replace(/[|\n]/g, ' ') + ' | ' + String(x.jiaoZheng || '（未见纠正，判为成功）').replace(/[|\n]/g, ' ') + ' |').join('\n') + '\n', 'utf8');
+        huaTiFanKuiJiLu.delete(sid);
+        try { duHuaTiFanKuiCi(); } catch { /* noop */ }
+      }
+    } catch { /* 复盘写文件失败不影响归档 */ }
     return { ok: true, tiaoShu: xin.length, zhiShiJian: evId, jiangJi, guiDangHeXin: heXinOk };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
@@ -27548,24 +28205,7 @@ chuliIpc('warmy:guiDangYouBiaoQing', (_e, p0?: { sessionId?: string }) => {
 
 
 
-// ── 3 权限审批弹窗 / 永久授权账本（第 121 轮） ──
-chuliIpc('warmy:mingLingShouQuanLieBiao', () => {
-  try {
-    const s = settingsStore?.load() as { commandGrants?: Array<{ key: string; cmd: string; cwd: string; createdAt: number }> } | undefined;
-    return { ok: true, items: Array.isArray(s?.commandGrants) ? s!.commandGrants!.slice().sort((a, b) => b.createdAt - a.createdAt) : [] };
-  } catch (e) { return { ok: false, error: xiJingCuoWu(e), items: [] }; }
-});
-chuliIpc('warmy:mingLingShouQuanCheXiao', (_e, key?: string) => {
-  try {
-    const k = String(key || '');
-    if (!k) return { ok: false, error: 'bad-key' };
-    const s = (settingsStore?.load() || {}) as { commandGrants?: Array<{ key: string; cmd: string; cwd: string; createdAt: number }> };
-    const arr = Array.isArray(s.commandGrants) ? s.commandGrants.filter((g) => g.key !== k) : [];
-    settingsStore?.save({ commandGrants: arr } as never);
-    try { audit?.log('run_shell.permanent-grant-revoked', { key: k }); } catch { /* noop */ }
-    return { ok: true };
-  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
+// ── 3 权限审批弹窗（用户裁决：没有跨会话永久授权，账本机制废止） ──
 chuliIpc('warmy:qingQiuPiZhun', (_e, Qiu: { action: string; suggested?: string }) => {
   try {
     const id = 'ap' + ++pizhunXulie;
@@ -27684,7 +28324,9 @@ chuliIpc('warmy:qunXieTiao', async (_e, xiaoXi: { groupId: string; content: stri
       history: chatHistories,
       // 值班者输入与 chat-send 共享同一份日志 + 同一个渲染器（不变量 #2）
       logOf: (key: string) => chatLogs.get(key) || [],
-      contextBudgetChars: (mo?: string, yangBen?: string) => contextBudgetChars(mo || providerCfg.model, yangBen, gongYingDai(providerCfg.baseURL, providerCfg.protocol)),
+      contextBudgetChars: (mo?: string) => mo
+        ? contextBudgetChars(mo, undefined, gongYingDai(providerCfg.baseURL, providerCfg.protocol))
+        : contextBudgetChars(providerCfg.model, undefined, gongYingDai(providerCfg.baseURL, providerCfg.protocol)),
       // ADR 002 §9.4 待办 2：值班者路径共用同一套工具与限额（memory-client 是唯一实现）
       toolSpecs: () => (memory?.isReady && toolLimits().zuiDaLunShu > 0 ? memoryToolSpecs(toolLabels()) : undefined),
       toolLimits,
@@ -28038,7 +28680,7 @@ chuliIpc('warmy:taiBaoCun', (_e, state: { chaJianJi?: unknown[]; instances?: unk
         }
         return x;
       });
-      if (qie) { try { audit?.log('prompt.persona-over-cap', { n: qie, shangXian: xian, liYou: '认知层每轮都注入；超限部分未发送，也不留在磁盘上' }); } catch { /* noop */ } }
+      if (qie) { try { audit?.log('prompt.persona-over-cap', { n: qie, shangXian: xian, liYou: '认知层每轮都附带；超限部分未发送，也不留在磁盘上' }); } catch { /* noop */ } }
       const r = jiaMiSheJiao(qing, anQuanCunChu());
       xie = { ...xie, instances: baoLiuSheJiaoZiDuan(r.instances as unknown[], (cur.instances || []) as unknown[]) };
       if (r.tong.jiaMi || r.tong.mingWen) {
@@ -28499,6 +29141,11 @@ function yuAuth<T>(fn: (service: AuthService) => T): T | { ok: false; error: str
   if (!authService) return { ok: false, error: 'auth-unavailable' };
   try { return fn(authService); } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 }
+/** R125：认证服务方法已 async 化（Argon2id WASM），IPC 侧用这个包装 */
+async function yuAuthAsync<T>(fn: (service: AuthService) => Promise<T>): Promise<T | { ok: false; error: string }> {
+  if (!authService) return { ok: false, error: 'auth-unavailable' };
+  try { return await fn(authService); } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+}
 /**
  * 首启窗口尺寸（用户定稿）：
  *  · 屏幕足够大 ⇒ 固定 1280×800 居中，不可缩放；
@@ -28585,9 +29232,9 @@ chuliIpc('warmy:authScreenProtect', (_e, on: boolean) => {
     return { ok: true, on: applied, supported: applied || !on };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:authRegisterBegin', (_e, payload?: { force?: boolean }) => yuAuth((s) => s.registerBegin(payload?.force === true)));
+chuliIpc('warmy:authRegisterBegin', async (_e, payload?: { force?: boolean }) => yuAuthAsync((s) => s.registerBegin(payload?.force === true)));
 chuliIpc('warmy:authRegisterCommit', async (_e, payload: { mnemonicConfirmed?: boolean; pinyin?: boolean; autoLogin?: boolean; pin?: string; confirmPin?: string } = {}) => {
-  const r = yuAuth((s) => s.registerCommit(payload));
+  const r = await yuAuthAsync((s) => s.registerCommit(payload));
   if (!r || !r.ok || !authService) return r;
   const v = await shuJuVaultAfterLogin(authService);
   if (!v.ok) {
@@ -28600,7 +29247,7 @@ chuliIpc('warmy:authRegisterCommit', async (_e, payload: { mnemonicConfirmed?: b
 });
 chuliIpc('warmy:authRegisterCancel', () => yuAuth((s) => s.registerCancel()));
 chuliIpc('warmy:authLoginPin', async (_e, pin: string) => {
-  const r = yuAuth((s) => s.loginPin(pin));
+  const r = await yuAuthAsync((s) => s.loginPin(pin));
   if (!r || !r.ok || !authService) return r;
   const v = await shuJuVaultAfterLogin(authService);
   if (!v.ok) {
@@ -28611,7 +29258,7 @@ chuliIpc('warmy:authLoginPin', async (_e, pin: string) => {
   return r;
 });
 chuliIpc('warmy:authLoginAuto', async () => {
-  const r = yuAuth((s) => s.loginAuto());
+  const r = await yuAuthAsync((s) => s.loginAuto());
   if (!r || !r.ok || !authService) return r;
   const v = await shuJuVaultAfterLogin(authService);
   if (!v.ok) {
@@ -28621,9 +29268,9 @@ chuliIpc('warmy:authLoginAuto', async () => {
   if (v.restart) chongQiYingYong();
   return r;
 });
-chuliIpc('warmy:authRecoverBegin', (_e, mnemonic: string) => yuAuth((s) => s.recoverBegin(mnemonic)));
+chuliIpc('warmy:authRecoverBegin', async (_e, mnemonic: string) => yuAuthAsync((s) => s.recoverBegin(mnemonic)));
 chuliIpc('warmy:authRecoverCommit', async (_e, payload: { pinyin?: boolean; autoLogin?: boolean; pin?: string; confirmPin?: string } = {}) => {
-  const r = yuAuth((s) => s.recoverCommit(payload));
+  const r = await yuAuthAsync((s) => s.recoverCommit(payload));
   if (!r || !r.ok || !authService) return r;
   const v = await shuJuVaultAfterLogin(authService);
   if (!v.ok) {
@@ -28634,7 +29281,7 @@ chuliIpc('warmy:authRecoverCommit', async (_e, payload: { pinyin?: boolean; auto
   return r;
 });
 chuliIpc('warmy:authChangePin', async (_e, payload: { pin?: string; confirmPin?: string; disableAutoLogin?: boolean } = {}) => {
-  const r = yuAuth((s) => s.changePin(payload));
+  const r = await yuAuthAsync((s) => s.changePin(payload));
   /**
    * 改 PIN 会让 AuthService 锁会话；数据仓库也必须跟着封存，
    * 否则登录页盖住了界面、明文还躺在工作目录。
@@ -28664,6 +29311,61 @@ chuliIpc('warmy:authSetAutoLogin', (_e, enabled: boolean | { enabled?: boolean }
   yuAuth((s) => s.setAutoLogin(enabled)));
 chuliIpc('warmy:authSetUsername', (_e, payload?: { username?: string } | string) =>
   yuAuth((s) => s.setUsername(payload)));
+
+// ── R125 任务15：终端同步 IPC（状态/配对/选项/触发/强制解锁） ──
+chuliIpc('warmy:syncStateGet', () => syncService ? syncService.state() : { ok: false, error: 'sync-unavailable' });
+chuliIpc('warmy:syncNow', async () => {
+  if (!syncService) return { ok: false, error: 'sync-unavailable' };
+  return { ok: true, state: await syncService.syncNow() };
+});
+chuliIpc('warmy:syncCreatePairCode', () => {
+  if (!syncService) return { ok: false, error: 'sync-unavailable' };
+  return { ok: true, ...syncService.createPairCode() };
+});
+chuliIpc('warmy:syncAcceptPairCode', (_e, input: unknown) => {
+  if (!syncService) return { ok: false, error: 'sync-unavailable' };
+  const r = syncService.acceptPairCode(input);
+  if (!r.ok) return { ok: false, error: r.error };
+  // 配对成功后向对方发 hello（带配对 token）：对方校验通过后登记本机指纹并回 ack（双向配对闭环）
+  try {
+    const targetId = String((r as { deviceId?: string }).deviceId || '');
+    const token = String((r as { token?: string }).token || '');
+    const peer = duiduanYinyong().find((p) => p.nodeId === targetId);
+    if (peer && secureMesh) {
+      void secureMesh.sendToHost(peer.host, peer.port, {
+        to: '*', channel: 'control',
+        payload: { type: 'device-sync-hello', deviceSync: { from: localNodeId, fromMing: shiYongHuMing(), token } },
+      }, { keepOpen: true });
+    }
+  } catch { /* hello 发不出去不影响本地登记；对方侧由同步拒绝兜底解绑 */ }
+  return { ok: true, state: syncService.state() };
+});
+chuliIpc('warmy:syncSetEnabled', (_e, on: boolean) => {
+  if (!syncService) return { ok: false, error: 'sync-unavailable' };
+  return { ok: true, state: syncService.setEnabled(on === true) };
+});
+chuliIpc('warmy:syncSetNetwork', (_e, net: string) => {
+  if (!syncService) return { ok: false, error: 'sync-unavailable' };
+  return { ok: true, state: syncService.setNetwork(String(net || '')) };
+});
+chuliIpc('warmy:syncSetDomain', (_e, p0: { domain?: string; on?: boolean } = {}) => {
+  if (!syncService) return { ok: false, error: 'sync-unavailable' };
+  const d = String(p0.domain || '') as SyncDomain;
+  if (!SYNC_DOMAINS.includes(d)) return { ok: false, error: 'bad-domain' };
+  return { ok: true, state: syncService.setDomainOption(d, p0.on === true) };
+});
+chuliIpc('warmy:syncSetSessionSync', (_e, p0: { sid?: string; name?: string; on?: boolean } = {}) => {
+  if (!syncService) return { ok: false, error: 'sync-unavailable' };
+  return { ok: true, state: syncService.setSessionSync(String(p0.sid || ''), String(p0.name || ''), p0.on === true) };
+});
+chuliIpc('warmy:syncForceUnlock', (_e, deviceId: string) => {
+  if (!syncService) return { ok: false, error: 'sync-unavailable' };
+  return { ok: syncService.forceUnlock(String(deviceId || '')), state: syncService.state() };
+});
+chuliIpc('warmy:syncRemoveDevice', (_e, deviceId: string) => {
+  if (!syncService) return { ok: false, error: 'sync-unavailable' };
+  return { ok: true, state: syncService.removeDevice(String(deviceId || '')) };
+});
 chuliIpc('warmy:authLogout', async () => {
   /**
    * 第 104 轮：注销 = 先封存全量数据、再真的退出登录。封存失败就**不注销**，
@@ -28690,41 +29392,139 @@ chuliIpc('warmy:authLogout', async () => {
   return r;
 });
 
-chuliIpc('warmy:nmShiTuKai', (_e, p0?: { path?: string; luJing?: string; huiHuaId?: string }) => {
+/** R128 N7：顶部网络开关（settings.wangLuoMoShi）—— 工具层网络门禁 */
+function wangLuoMoShiQu(): 'all' | 'lan' | 'off' {
+  try {
+    const v = String((settingsStore?.load() as { wangLuoMoShi?: string } | undefined)?.wangLuoMoShi || '');
+    return v === 'lan' ? 'lan' : v === 'off' ? 'off' : 'all';
+  } catch { return 'all'; }
+}
+/** 局域网/本机地址判定（'lan' 模式下只放行这些主机） */
+function shiJuYuWangZhuji(u: string): boolean {
+  try {
+    const h = new URL(u).hostname.toLowerCase();
+    if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.lan')) return true;
+    if (/^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h)) return true;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+    if (h === '::1' || /^[fF][eE89aAbB]/.test(h)) return true;
+    return false;
+  } catch { return false; }
+}
+const WANG_LUO_TI_SHI = '[网络受限] 该联网功能已在窗口顶部被网络开关限制，请用户到窗口顶部打开网络开关（网络图标）后再试';
+
+chuliIpc('warmy:nmZhuRuJs', (_e, p0?: { id?: number; js?: string }) => { try { return nmZhuRuJiaoBen(p0 || {}); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; } });
+chuliIpc('warmy:nmDevTools', (_e, p0?: { id?: number; tabKey?: string; kuang?: { x: number; y: number; width: number; height: number } }) => { try { return nmDevToolsKai(p0 || {}); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; } });
+chuliIpc('warmy:nmDevToolsKuang', (_e, p0?: { id?: number; kuang?: { x: number; y: number; width: number; height: number }; kai?: boolean }) => { try { return nmDevToolsKuang(p0 || {}); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; } });
+chuliIpc('warmy:nmShiTuKai', (_e, p0?: { path?: string; luJing?: string; huiHuaId?: string; kaiWangYe?: string }) => {
   try {
     const p = String(p0?.path || p0?.luJing || '').trim();
-    if (!p) return { ok: false, cuo: '没有文件路径' };
-    return nmShiTuKai({ luJing: p, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi(), huiHuaId: String(p0?.huiHuaId || '') });
+    const kw = String(p0?.kaiWangYe || '').trim();
+    if (!p && !kw) return { ok: false, cuo: '没有文件路径' };
+    return nmShiTuKai({ luJing: p, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi(), huiHuaId: String(p0?.huiHuaId || ''), kaiWangYe: kw });
   } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
 });
-/** 第 104 轮 项 12：远程网页 = WebContentsView（本地网页仍走渲染层 sandbox iframe） */
-chuliIpc('warmy:nmWangYeKai', (_e, p0?: { id?: number; url?: string; kuang?: { x: number; y: number; width: number; height: number } }) => {
+/** 第 104 轮 项 12：远程网页 = WebContentsView（本地网页仍走渲染层 sandbox iframe）。
+ *  第 98 轮：tabKey 决定用哪个视图 —— 每个标签页一个视图，切换标签不重开网页。 */
+chuliIpc('warmy:nmWangYeKai', (_e, p0?: { id?: number; tabKey?: string; url?: string; kuang?: { x: number; y: number; width: number; height: number } }) => {
   try { return nmWangYeKai(p0 || {}); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:nmWangYeKuang', (_e, p0?: { id?: number; kuang?: { x: number; y: number; width: number; height: number } }) => {
-  try { return nmWangYeKuang(Number(p0?.id) || 0, p0?.kuang || { x: 0, y: 0, width: 0, height: 0 }); } catch { return { ok: false }; }
+/** R128：**新开**一个 nm 窗口并直接进入网页模式加载远程 URL（赞助页 PayPal 左键等） */
+chuliIpc('warmy:nmWangYeXinKai', (_e, p0?: { url?: string }) => {
+  try {
+    const url = String(p0?.url || '').trim();
+    if (!/^https?:\/\//i.test(url)) return { ok: false, cuo: '只支持 http/https 网页' };
+    const place = path.join(app.getPath('temp'), 'warmy-nm-web-start.txt');
+    try {
+      if (!fs.existsSync(place)) fs.writeFileSync(place, '', { encoding: 'utf8', mode: 0o600 });
+    } catch { return { ok: false, cuo: '占位文件创建失败' }; }
+    return nmShiTuKai({ luJing: place, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi(), kaiWangYe: url });
+  } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:nmWangYeGuan', (_e, id?: number) => {
-  try { return nmWangYeGuan(Number(id) || 0); } catch { return { ok: false }; }
+chuliIpc('warmy:nmWangYeKuang', (_e, p0?: { id?: number; tabKey?: string; kuang?: { x: number; y: number; width: number; height: number } }) => {
+  try { return nmWangYeKuang(Number(p0?.id) || 0, p0?.kuang || { x: 0, y: 0, width: 0, height: 0 }, p0?.tabKey); } catch { return { ok: false }; }
 });
-chuliIpc('warmy:nmWangYeDaoHang', (_e, p0?: { id?: number; dong?: string; url?: string }) => {
+chuliIpc('warmy:nmWangYeGuan', (_e, p0?: { id?: number; tabKey?: string }) => {
+  try { return nmWangYeGuan(Number(p0?.id) || 0, p0?.tabKey); } catch { return { ok: false }; }
+});
+chuliIpc('warmy:nmWangYeGuanTing', (_e, p0?: { id?: number; tabKey?: string }) => {
+  try { return nmWangYeGuanTing(Number(p0?.id) || 0, p0?.tabKey); } catch { return { ok: false }; }
+});
+chuliIpc('warmy:nmWangYeDaoHang', (_e, p0?: { id?: number; tabKey?: string; dong?: string; url?: string }) => {
   try {
     const dong = String(p0?.dong || 'load') as 'back' | 'forward' | 'reload' | 'stop' | 'load';
-    return nmWangYeDaoHang(Number(p0?.id) || 0, dong, p0?.url);
+    return nmWangYeDaoHang(Number(p0?.id) || 0, dong, p0?.url, p0?.tabKey);
   } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:nmWangYeXinKai', (_e, p0?: { id?: number; kai?: boolean }) => {
   try { return nmWangYeXinKai(Number(p0?.id) || 0, !!p0?.kai); } catch { return { ok: false }; }
 });
-chuliIpc('warmy:nmWangYeYuan', async (_e, p0?: { id?: number }) => {
-  try { return await nmWangYeYuan(Number(p0?.id) || 0); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+/** 第 98 轮：链接在新标签页打开的开关（原通道名被 R128 的「新开窗口」占用，这里用独立通道） */
+chuliIpc('warmy:nmWangYeXinBiaoQian', (_e, p0?: { id?: number; kai?: boolean }) => {
+  try { return nmWangYeXinKai(Number(p0?.id) || 0, !!p0?.kai); } catch { return { ok: false }; }
 });
-chuliIpc('warmy:nmWangYeChaZhao', (_e, p0?: { id?: number; wen?: string; xiangQian?: boolean }) => {
-  try { return nmWangYeChaZhao(Number(p0?.id) || 0, String(p0?.wen || ''), p0?.xiangQian !== false); }
+chuliIpc('warmy:nmWangYeYuan', async (_e, p0?: { id?: number; tabKey?: string }) => {
+  try { return await nmWangYeYuan(Number(p0?.id) || 0, p0?.tabKey); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:nmWangYeChaZhao', (_e, p0?: { id?: number; tabKey?: string; wen?: string; xiangQian?: boolean }) => {
+  try { return nmWangYeChaZhao(Number(p0?.id) || 0, String(p0?.wen || ''), p0?.xiangQian !== false, p0?.tabKey); }
   catch { return { ok: false }; }
 });
-chuliIpc('warmy:nmWangYeDaYin', (_e, id?: number) => {
-  try { return nmWangYeDaYin(Number(id) || 0); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+chuliIpc('warmy:nmWangYeDaYin', (_e, p0?: { id?: number; tabKey?: string }) => {
+  try { return nmWangYeDaYin(Number(p0?.id) || 0, p0?.tabKey); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+/** 第 98 轮：打印选中 / 截图 / 双向高亮 / 右键菜单快照 / 网页选中轮询 */
+chuliIpc('warmy:nmWangYeDaYinXuanZhong', async (_e, p0?: { id?: number; tabKey?: string }) => {
+  try { return await nmWangYeDaYinXuanZhong(Number(p0?.id) || 0, p0?.tabKey); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:nmWangYeJieTu', async (_e, p0?: { id?: number; tabKey?: string }) => {
+  try { return await nmWangYeJieTu(Number(p0?.id) || 0, p0?.tabKey); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:nmWangYeXuanZhongGaoLiang', async (_e, p0?: { id?: number; tabKey?: string; text?: string }) => {
+  try { return await nmWangYeXuanZhongGaoLiang(Number(p0?.id) || 0, String(p0?.tabKey || ''), String(p0?.text || '')); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:nmWangYeXuanZeQu', async (_e, p0?: { id?: number; tabKey?: string }) => {
+  try { return await nmWangYeXuanZeQu(Number(p0?.id) || 0, p0?.tabKey); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:nmWangYeCaiDanList', (_e, id?: number) => {
+  try { return nmWangYeCaiDanList(Number(id) || 0); } catch { return { ok: false }; }
+});
+/** 第 98 轮：nm 浏览器配置文件（用户设置：链接是否在新标签页打开等；cookie 走会话分区自动持久化） */
+chuliIpc('warmy:nmWangYePeiZhiDu', () => {
+  try {
+    const s = settingsStore?.load() as { nmWangYePeiZhi?: { xinKai?: boolean; qiDongMoShi?: string; qiDongYe?: string; privacy?: boolean } } | undefined;
+    const p = s?.nmWangYePeiZhi || {};
+    return { ok: true, config: { xinKai: p.xinKai === true, qiDongMoShi: String(p.qiDongMoShi || 'ziDingYi'), qiDongYe: String(p.qiDongYe || ''), privacy: p.privacy === true } };
+  } catch { return { ok: true, config: { xinKai: false, qiDongMoShi: 'ziDingYi', qiDongYe: '', privacy: false } }; }
+});
+chuliIpc('warmy:nmWangYePeiZhiShe', (_e, p0?: { xinKai?: boolean; qiDongMoShi?: string; qiDongYe?: string; privacy?: boolean }) => {
+  try {
+    const cur = (settingsStore?.load() as { nmWangYePeiZhi?: { xinKai?: boolean; qiDongMoShi?: string; qiDongYe?: string; privacy?: boolean } } | undefined)?.nmWangYePeiZhi || {};
+    /** 只覆盖传入字段（部分保存不清掉其它配置） */
+    const xin = {
+      ...cur,
+      ...(typeof p0?.xinKai === 'boolean' ? { xinKai: !!p0.xinKai } : {}),
+      ...(typeof p0?.qiDongMoShi === 'string' ? { qiDongMoShi: p0.qiDongMoShi } : {}),
+      ...(typeof p0?.qiDongYe === 'string' ? { qiDongYe: p0.qiDongYe } : {}),
+      ...(typeof p0?.privacy === 'boolean' ? { privacy: !!p0.privacy } : {}),
+    };
+    settingsStore?.save({ nmWangYePeiZhi: xin } as never);
+    /** R128 N6：隐私模式变化 → 网页视图全部销毁，按新分区重建 */
+    if (typeof p0?.privacy === 'boolean') {
+      try { nmWangYeYinSiShe(!!p0.privacy); } catch { /* noop */ }
+    }
+    return { ok: true };
+  } catch { return { ok: false }; }
+});
+/** R128 N6：浏览器数据清单 / 清理（按内容/网站/时间；设置清理在本层执行） */
+chuliIpc('warmy:nmWangYeShuJuGaiLan', (_e, p0?: { liuLan?: string[] }) => nmWangYeShuJuGaiLan(Array.isArray(p0?.liuLan) ? p0.liuLan : []));
+chuliIpc('warmy:nmWangYeShuJuQing', (_e, p0?: { mo?: string; id?: string; liuLan?: string[] }) => {
+  return nmWangYeShuJuQing(String(p0?.mo || ''), String(p0?.id || ''), Array.isArray(p0?.liuLan) ? p0.liuLan : []).then((r) => {
+    /** 'sheZhi' 清理：本层才有 settingsStore（nm-viewer-win 纪律上不读设置） */
+    if (r && (r as { qingSheZhi?: boolean }).qingSheZhi) {
+      try { settingsStore?.save({ nmWangYePeiZhi: { xinKai: false, qiDongMoShi: 'ziDingYi', qiDongYe: '', privacy: false } } as never); } catch { /* noop */ }
+    }
+    return r;
+  });
 });
 /** 第 120 轮（W10）：nm 下载列表/清空/打开/定位 —— 只有网页模式会产出下载 */
 chuliIpc('warmy:nmXiaZaiLieBiao', () => ({ ok: true, items: nmXiaZaiLieBiao() }));
@@ -29056,7 +29856,10 @@ chuliIpc('warmy:qunChengYuanJi', (_e, groupId: string) =>
       const chuangJianZheZhiWen = String(groupStore.getGroup(qunId)?.creatorFingerprint || '');
       const benJiZhiWen = String(identityStore?.info()?.zhiWen || '');
       const localIsCreator = !!chuangJianZheZhiWen && !!benJiZhiWen && zhiwenPipei(chuangJianZheZhiWen, benJiZhiWen);
-      return { ok: true, groupId: qunId, members, localIsCreator };
+      /** 第 101 轮：管理者（含创建者）才能删除成员/审批 —— 渲染层用这个控制按钮显隐 */
+      const localIsAdmin = benJiShiGuanLiZhe(qunId);
+      /** 满员判定用同一份上限（渲染层不硬编码人数） */
+      return { ok: true, groupId: qunId, members, localIsCreator, localIsAdmin, shangXian: QUN_CHENGYUAN_SHANGXIAN };
     },
     { ok: false, members: [], error: 'group store unavailable' }
   )
@@ -29119,7 +29922,8 @@ chuliIpc('warmy:qunTi', async (_e, payload: { groupId: string; memberId: string 
   try {
     if (!groupStore) return { ok: false, error: 'group store unavailable' };
     const qunId = String(payload?.groupId || '');
-    if (!benJiChuangJianZhe(qunId)) return { ok: false, error: 'not-creator' };
+    /** 第 101 轮：管理者也能删除成员（创建者之外的管理者；踢人仍吊销证书并广播） */
+    if (!benJiShiGuanLiZhe(qunId)) return { ok: false, error: 'not-creator-or-admin' };
     const zhongJian = String(payload?.memberId || '');
     const before = groupStore.listMembers(qunId).find((m) => m.id === zhongJian);
     const r = groupStore.removeMember(qunId, zhongJian);
@@ -29375,45 +30179,309 @@ chuliIpc('warmy:zuiHouCuoWu', () => anQuanChuLi(() => ({ ok: true, error: lastEr
 chuliIpc('warmy:qingChuCuoWu', () => { lastError = null; return { ok: true }; });
 
 /**
- * **联网搜索供应商配置**（设置 → 功能 → 网络搜索）。
+ * **联网搜索供应商配置**（设置 → 功能 → 网络搜索，第 98 轮改造）。
  * 密钥只进 SecureKeyStore；查状态时只说有没有，绝不回显。
- * 默认全部关闭；Jina Reader 只参与抓取，不参与搜索。
+ * 供应商先到「待测区」，测试通过才进「搜索调用链」；链内异常 → 暂停 24h，
+ * 连续 3 次不可用 → 移出链回待测区。默认预置 Firecrawl Keyless / Jina Reader（免 key，默认在链内）
+ * + DeepSeek Search（待测区）；首启空闲时对免 key 的链内成员自动测一次。
  */
 function souSuoMiYaoId(provider: unknown): string {
   const p = String(provider || 'firecrawl').trim();
   if (p === 'firecrawl') return 'search:firecrawl';
   if (p === 'tavily') return 'search:tavily';
   if (p === 'deepseek') return 'search:deepseek';
+  if (p === 'exa') return 'search:exa';
+  if (p === 'serper') return 'search:serper';
+  if (p === 'brave') return 'search:brave';
+  if (p === 'bocha') return 'search:bocha';
   if (p.startsWith('custom:')) return 'search:custom:' + p.slice('custom:'.length).replace(/[^\w.-]/g, '_').slice(0, 60);
   return '';
 }
 
+/** 供应商预设（第 98 轮调研补充 Exa / Serper / Brave / 博查；最后一个 = 自定义） */
+const SOU_SUO_YU_SHE: Array<{ id: string; name: string; kind: SousuoGongYingLeiXing; needsKey: boolean; zhaQu: boolean; hint: string; url: string }> = [
+  { id: 'firecrawl', name: 'Firecrawl Keyless', kind: 'firecrawl', needsKey: false, zhaQu: true, hint: '搜索 + 抓取；不填 Key 也能用免注册额度。', url: 'https://www.firecrawl.dev' },
+  { id: 'jina-reader', name: 'Jina Reader', kind: 'jina-reader', needsKey: false, zhaQu: true, hint: '只抓取网页正文，不参与搜索；无需 Key。', url: 'https://jina.ai/reader' },
+  { id: 'tavily', name: 'Tavily', kind: 'tavily', needsKey: true, zhaQu: true, hint: '搜索 + 抓取；需要 API Key。', url: 'https://tavily.com' },
+  { id: 'deepseek', name: 'DeepSeek Search', kind: 'deepseek', needsKey: true, zhaQu: false, hint: 'DeepSeek 官方 /v1/tools/search；需要 API Key。', url: 'https://platform.deepseek.com' },
+  { id: 'exa', name: 'Exa', kind: 'exa', needsKey: true, zhaQu: false, hint: '语义搜索引擎（exa.ai）；需要 API Key，新号送免费额度。', url: 'https://exa.ai' },
+  { id: 'serper', name: 'Serper（Google SERP）', kind: 'serper', needsKey: true, zhaQu: false, hint: 'Google 搜索结果 API（serper.dev）；需要 API Key，注册送 2500 次免费查询。', url: 'https://serper.dev' },
+  { id: 'brave', name: 'Brave Search', kind: 'brave', needsKey: true, zhaQu: false, hint: 'Brave 官方搜索 API；需要 API Key（订阅制）。', url: 'https://brave.com/search/api' },
+  { id: 'bocha', name: '博查 Bocha', kind: 'bocha', needsKey: true, zhaQu: false, hint: '中文搜索为主（bochaai.com）；需要 API Key。', url: 'https://bochaai.com' },
+];
+
+interface SouSuoPeiZhiXiang {
+  id: string;
+  name: string;
+  kind: SousuoGongYingLeiXing;
+  url?: string;
+  inChain: boolean;
+  state: 'daice' | 'tongguo' | 'zanting';
+  pausedUntil?: number;
+  failCount?: number;
+  addedAt?: number;
+}
+
+/** 首启默认：Firecrawl + Jina 免 key 默认在链内（待测），DeepSeek 进待测区 */
+function souSuoMoRenPeiZhi(): SouSuoPeiZhiXiang[] {
+  const now = Date.now();
+  return [
+    { id: 'firecrawl', name: 'Firecrawl Keyless', kind: 'firecrawl', inChain: true, state: 'daice', addedAt: now },
+    { id: 'jina-reader', name: 'Jina Reader', kind: 'jina-reader', inChain: true, state: 'daice', addedAt: now },
+    { id: 'deepseek', name: 'DeepSeek Search', kind: 'deepseek', inChain: false, state: 'daice', addedAt: now },
+  ];
+}
+
+/** 读 v2 列表；旧形状（firecrawl/jinaReader/...）就地迁移；从没有配置 → 默认值 */
+function souSuoPeiZhiLie(): SouSuoPeiZhiXiang[] {
+  try {
+    const s = settingsStore?.load() as { searchProviders?: unknown; searchAutoTestDone?: boolean } | undefined;
+    const sp = s?.searchProviders as
+      | { list?: SouSuoPeiZhiXiang[]; firecrawl?: { enabled?: boolean }; jinaReader?: { enabled?: boolean }; tavily?: { enabled?: boolean }; deepseek?: { enabled?: boolean }; custom?: Array<{ id?: string; name?: string; url?: string; enabled?: boolean }> }
+      | undefined;
+    if (!sp || typeof sp !== 'object') return souSuoMoRenPeiZhi();
+    if (Array.isArray(sp.list) && sp.list.length) {
+      const jie = (x: unknown, i: number): SouSuoPeiZhiXiang | null => {
+        const o = (x || {}) as Partial<SouSuoPeiZhiXiang>;
+        const id = String(o.id || '').trim();
+        if (!id) return null;
+        const kind = SOU_SUO_YU_SHE.find((p) => p.id === id)?.kind || (id.startsWith('custom:') ? 'custom' as const : 'custom' as const);
+        const name = String(o.name || '').trim() || id;
+        const state: SouSuoPeiZhiXiang['state'] = o.state === 'tongguo' || o.state === 'zanting' ? o.state : 'daice';
+        const xiang: SouSuoPeiZhiXiang = {
+          id, name, kind,
+          inChain: o.inChain !== false,
+          state,
+          url: String(o.url || ''),
+          ...(typeof o.pausedUntil === 'number' ? { pausedUntil: o.pausedUntil } : {}),
+          ...(typeof o.failCount === 'number' ? { failCount: o.failCount } : {}),
+          ...(typeof o.addedAt === 'number' ? { addedAt: o.addedAt } : { addedAt: Date.now() - i }),
+        };
+        return xiang;
+      };
+      const lie = (sp.list || []).map(jie).filter(Boolean) as SouSuoPeiZhiXiang[];
+      if (!lie.length) return souSuoMoRenPeiZhi();
+      // 过期暂停自动恢复（惰性落盘：下次任何保存会带上）
+      let gai = false;
+      const now = Date.now();
+      for (const x of lie) {
+        if (x.state === 'zanting' && typeof x.pausedUntil === 'number' && x.pausedUntil <= now) {
+          x.state = 'tongguo'; x.pausedUntil = undefined; x.failCount = 0; gai = true;
+        }
+      }
+      if (gai) souSuoPeiZhiCun(lie);
+      return lie;
+    }
+    // 旧形状迁移：enabled → 链内；没启用过的项不出现
+    const now = Date.now();
+    const jiu: SouSuoPeiZhiXiang[] = [];
+    const jia = (id: string, kind: SousuoGongYingLeiXing, name: string, enabled: boolean | undefined) => {
+      if (enabled !== true) return;
+      jiu.push({ id, name, kind, inChain: true, state: 'tongguo', addedAt: now });
+    };
+    jia('firecrawl', 'firecrawl', 'Firecrawl Keyless', sp.firecrawl?.enabled);
+    jia('jina-reader', 'jina-reader', 'Jina Reader', sp.jinaReader?.enabled);
+    jia('tavily', 'tavily', 'Tavily', sp.tavily?.enabled);
+    jia('deepseek', 'deepseek', 'DeepSeek Search', sp.deepseek?.enabled);
+    for (const c of (Array.isArray(sp.custom) ? sp.custom : [])) {
+      const id = String(c?.id || '').trim();
+      const url = String(c?.url || '').trim();
+      if (id && url && c?.enabled === true) jiu.push({ id: 'custom:' + id, name: String(c?.name || id), kind: 'custom', url, inChain: true, state: 'tongguo', addedAt: now });
+    }
+    if (jiu.length) { souSuoPeiZhiCun(jiu); return jiu; }
+    return souSuoMoRenPeiZhi();
+  } catch { return souSuoMoRenPeiZhi(); }
+}
+
+function souSuoPeiZhiCun(lie: SouSuoPeiZhiXiang[]): void {
+  try {
+    const cur = (settingsStore?.load() as { searchProviders?: Record<string, unknown> } | undefined)?.searchProviders || {};
+    settingsStore?.save({ searchProviders: { ...cur, list: lie.slice(0, 40) } } as never);
+  } catch { /* 存不下不影响运行 */ }
+}
+
+/** 查某个供应商有没有 key（firecrawl 兼容旧 key 槽位） */
+async function souSuoPeiZhiHasKey(x: SouSuoPeiZhiXiang): Promise<boolean> {
+  try {
+    const id = souSuoMiYaoId(x.id);
+    if (!id) return false;
+    if (id === 'search:firecrawl') return !!(String((await secureKeys?.load(id)) || '') || String((await secureKeys?.load('search')) || '')).trim();
+    return !!String((await secureKeys?.load(id)) || '').trim();
+  } catch { return false; }
+}
+
+async function souSuoPeiZhiXiangCfg(x: SouSuoPeiZhiXiang): Promise<SousuoGongYingPeiZhi> {
+  const key = await souSuoPeiZhiHasKey(x) ? (souSuoMiYaoId(x.id) === 'search:firecrawl'
+    ? (String((await secureKeys?.load('search:firecrawl')) || '') || String((await secureKeys?.load('search')) || '')).trim()
+    : String((await secureKeys?.load(souSuoMiYaoId(x.id))) || '').trim()) : '';
+  return { id: x.id, name: x.name, kind: x.kind, enabled: true, ...(x.url ? { url: x.url } : {}), ...(key ? { key } : {}) };
+}
+
+/** 工具用的有效调用链：链内 + 未在暂停（过期自动恢复） */
+async function souSuoPeiZhiDangQian(): Promise<SousuoGongYingPeiZhi[]> {
+  const lie = souSuoPeiZhiLie();
+  const out: SousuoGongYingPeiZhi[] = [];
+  for (const x of lie) {
+    if (!x.inChain) continue;
+    if (x.state === 'zanting' && typeof x.pausedUntil === 'number' && x.pausedUntil > Date.now()) continue;
+    out.push(await souSuoPeiZhiXiangCfg(x));
+  }
+  return out;
+}
+
+/** 使用结果记账：成功清零；失败暂停 24h；连续 3 次 → 移出链回待测区 */
+function souSuoJiLuJieGuo(providerMing: string, ok: boolean): void {
+  try {
+    const lie = souSuoPeiZhiLie();
+    const x = lie.find((e) => e.name === providerMing);
+    if (!x || !x.inChain) return;
+    const now = Date.now();
+    if (ok) {
+      x.state = 'tongguo'; x.failCount = 0; x.pausedUntil = undefined;
+    } else {
+      x.failCount = (Number(x.failCount) || 0) + 1;
+      if (x.failCount >= 3) {
+        x.inChain = false; x.state = 'daice'; x.failCount = 0; x.pausedUntil = undefined;
+        try { audit?.log('research.provider-evicted', { provider: x.id, fails: 3 }); } catch { /* noop */ }
+      } else {
+        x.state = 'zanting'; x.pausedUntil = now + 24 * 3600 * 1000;
+        try { audit?.log('research.provider-paused', { provider: x.id, failCount: x.failCount }); } catch { /* noop */ }
+      }
+    }
+    souSuoPeiZhiCun(lie);
+  } catch { /* 记账失败不影响搜索 */ }
+}
+
+/** 免 key 的链内待测成员：首启空闲自动测一次（通过 → 通过；失败 → 移出链回待测区） */
+async function souSuoShouCiZiDongCeShi(): Promise<void> {
+  try {
+    const s = settingsStore?.load() as { searchAutoTestDone?: boolean } | undefined;
+    if (s?.searchAutoTestDone === true) return;
+    const lie = souSuoPeiZhiLie();
+    let gai = false;
+    for (const x of lie) {
+      if (!x.inChain || x.state !== 'daice') continue;
+      const yushe = SOU_SUO_YU_SHE.find((p) => p.id === x.id);
+      if (!yushe || yushe.needsKey) continue;
+      const r = await souSuoCeShiXiang(x);
+      x.state = r.ok ? 'tongguo' : 'daice';
+      if (!r.ok) { x.inChain = false; x.failCount = 0; x.pausedUntil = undefined; }
+      gai = true;
+      try { audit?.log('research.first-auto-test', { provider: x.id, ok: r.ok, error: r.error }); } catch { /* noop */ }
+    }
+    if (gai) souSuoPeiZhiCun(lie);
+    settingsStore?.save({ searchAutoTestDone: true } as never);
+  } catch { /* 首启自测失败不阻塞 */ }
+}
+
+/** 单项测试：搜索类发一次真实查询；Jina 抓一个稳定页面 */
+async function souSuoCeShiXiang(x: SouSuoPeiZhiXiang): Promise<{ ok: boolean; error?: string; hint?: string; ms: number }> {
+  const t0 = Date.now();
+  try {
+    const cfg = await souSuoPeiZhiXiangCfg(x);
+    let r: YanJiuJieGuo;
+    if (x.kind === 'jina-reader') {
+      const z = await zhuaQuJina('https://example.com', fetch);
+      r = { ok: z.ok, items: [], provider: x.name, error: z.ok ? undefined : 'extract-http-' + z.status, hint: z.ok ? undefined : 'Jina Reader 抓取失败（HTTP ' + z.status + '）' };
+    } else if (x.kind === 'firecrawl') {
+      r = await souSuo(cfg.key || '', '测试', { count: 2 }, fetch);
+      // 诊断实录：keyless 免费额度是全局共享池，打满后 429（"You've hit Firecrawl's keyless free tier rate limit"）——
+      // 不是代码/网络问题；给用户可行动的提示（去 firecrawl.dev 免费注册 Key）。
+      if (!r.ok && r.error === 'search-quota-exceeded' && !String(cfg.key || '').trim()) {
+        r = { ...r, hint: 'Firecrawl Keyless 免费额度已用尽/限流（429）。这不是程序故障：keyless 额度是全局共享的，打满后只能等待恢复，或去 firecrawl.dev 免费注册一个 API Key 填进「Key」即可继续。' };
+      }
+    }
+    else if (x.kind === 'tavily') r = await souSuoTavily(cfg, '测试', { count: 2 }, fetch);
+    else if (x.kind === 'deepseek') r = await souSuoDeepSeek(cfg, '测试', { count: 2 }, fetch);
+    else if (x.kind === 'exa') r = await souSuoExa(cfg, '测试', { count: 2 }, fetch);
+    else if (x.kind === 'serper') r = await souSuoSerper(cfg, '测试', { count: 2 }, fetch);
+    else if (x.kind === 'brave') r = await souSuoBrave(cfg, '测试', { count: 2 }, fetch);
+    else if (x.kind === 'bocha') r = await souSuoBocha(cfg, '测试', { count: 2 }, fetch);
+    else if (x.kind === 'custom') r = await souSuoCustom(cfg, '测试', { count: 2 }, fetch);
+    else return { ok: false, error: 'unknown-kind', ms: Date.now() - t0 };
+    return { ok: !!r.ok, error: r.error, hint: r.hint, ms: Date.now() - t0 };
+  } catch (e) {
+    return { ok: false, error: String((e as Error)?.message || e), ms: Date.now() - t0 };
+  }
+}
+
 chuliIpc('warmy:souSuoPeiZhiQu', async () => {
   try {
-    const s = settingsStore?.load() as { searchProviders?: Record<string, unknown>; fullDiskIndex?: boolean } | undefined;
-    const sp = (s?.searchProviders || {}) as {
-      firecrawl?: { enabled?: boolean }; jinaReader?: { enabled?: boolean };
-      tavily?: { enabled?: boolean }; deepseek?: { enabled?: boolean };
-      custom?: Array<{ id?: string; name?: string; url?: string; enabled?: boolean }>;
-    };
-    const has = async (id: string): Promise<boolean> => {
-      try { return !!String((await secureKeys?.load(id)) || '').trim(); } catch { return false; }
-    };
-    const custom = (Array.isArray(sp.custom) ? sp.custom : []).slice(0, 20).map((x) => ({
-      id: String(x?.id || ''), name: String(x?.name || ''), url: String(x?.url || ''), enabled: x?.enabled === true,
-    })).filter((x) => x.id && x.url);
-    const customKeys: Record<string, boolean> = {};
-    for (const x of custom) customKeys[x.id] = await has('search:custom:' + x.id);
+    const s = settingsStore?.load() as { fullDiskIndex?: boolean } | undefined;
+    const lie = souSuoPeiZhiLie();
+    const list = [];
+    for (const x of lie) {
+      list.push({ ...x, hasKey: await souSuoPeiZhiHasKey(x) });
+    }
     return {
       ok: true,
-      firecrawl: { enabled: sp.firecrawl?.enabled === true, hasKey: await has('search:firecrawl') || await has('search') },
-      jinaReader: { enabled: sp.jinaReader?.enabled === true },
-      tavily: { enabled: sp.tavily?.enabled === true, hasKey: await has('search:tavily') },
-      deepseek: { enabled: sp.deepseek?.enabled === true, hasKey: await has('search:deepseek') },
-      custom: custom.map((x) => ({ ...x, hasKey: customKeys[x.id] === true })),
+      list,
       fullDiskIndex: s?.fullDiskIndex !== false,
       uncovered: !!secureKeys && secureKeys.isUnprotected?.('search:firecrawl') === true,
     };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+/** 链操作：add（按预设 id）/ addCustom / delete（链内=移回待测，待测=真删）/ up / down / top / test */
+chuliIpc('warmy:souSuoChainCaoZuo', async (_e, p0?: { action?: string; id?: string; name?: string; url?: string }) => {
+  try {
+    const action = String(p0?.action || '');
+    const id = String(p0?.id || '').trim();
+    const lie = souSuoPeiZhiLie();
+    const now = Date.now();
+    if (action === 'add') {
+      const yushe = SOU_SUO_YU_SHE.find((p) => p.id === id);
+      if (!yushe) return { ok: false, error: 'bad-preset' };
+      if (lie.some((x) => x.id === yushe.id)) return { ok: false, error: 'exists', id: yushe.id };
+      lie.push({ id: yushe.id, name: yushe.name, kind: yushe.kind, url: yushe.url, inChain: false, state: 'daice', addedAt: now });
+    } else if (action === 'addCustom') {
+      const name = String(p0?.name || '').trim().slice(0, 80);
+      const url = String(p0?.url || '').trim().slice(0, 500);
+      if (!name || !/^https?:\/\//i.test(url)) return { ok: false, error: 'bad-custom' };
+      const cid = 'custom:' + name.replace(/[^\w.-]/g, '_').slice(0, 40) + '-' + Date.now().toString(36);
+      lie.push({ id: cid, name, kind: 'custom', url, inChain: false, state: 'daice', addedAt: now });
+      souSuoPeiZhiCun(lie);
+      return { ok: true, id: cid, list: lie };
+    } else if (action === 'editCustom') {
+      const i = lie.findIndex((x) => x.id === id);
+      if (i < 0 || lie[i]!.kind !== 'custom') return { ok: false, error: 'not-found' };
+      const name = String(p0?.name || '').trim().slice(0, 80);
+      const url = String(p0?.url || '').trim().slice(0, 500);
+      if (!name || !/^https?:\/\//i.test(url)) return { ok: false, error: 'bad-custom' };
+      lie[i] = { ...lie[i]!, name, url };
+    } else if (action === 'delete') {
+      const i = lie.findIndex((x) => x.id === id);
+      if (i < 0) return { ok: false, error: 'not-found' };
+      if (lie[i]!.inChain) {
+        lie[i] = { ...lie[i]!, inChain: false, state: 'daice', failCount: 0, pausedUntil: undefined };
+      } else {
+        lie.splice(i, 1);
+      }
+    } else if (action === 'up' || action === 'down' || action === 'top') {
+      const i = lie.findIndex((x) => x.id === id);
+      if (i < 0) return { ok: false, error: 'not-found' };
+      if (action === 'top') { lie.unshift(lie.splice(i, 1)[0]!); }
+      else if (action === 'up') { if (i > 0) { const t = lie[i - 1]!; lie[i - 1] = lie[i]!; lie[i] = t; } }
+      else { if (i < lie.length - 1) { const t = lie[i + 1]!; lie[i + 1] = lie[i]!; lie[i] = t; } }
+    } else if (action === 'test') {
+      const x = lie.find((e) => e.id === id);
+      if (!x) return { ok: false, error: 'not-found' };
+      const r = await souSuoCeShiXiang(x);
+      if (r.ok) {
+        x.state = 'tongguo'; x.failCount = 0; x.pausedUntil = undefined; x.inChain = true;
+      } else if (x.inChain) {
+        x.failCount = (Number(x.failCount) || 0) + 1;
+        if (x.failCount >= 3) { x.inChain = false; x.state = 'daice'; x.failCount = 0; x.pausedUntil = undefined; }
+        else { x.state = 'zanting'; x.pausedUntil = now + 24 * 3600 * 1000; }
+      }
+      souSuoPeiZhiCun(lie);
+      try { audit?.log('research.provider-test', { provider: id, ok: r.ok, error: r.error }); } catch { /* noop */ }
+      return { ok: true, result: r, list: lie };
+    } else {
+      return { ok: false, error: 'bad-action' };
+    }
+    souSuoPeiZhiCun(lie);
+    return { ok: true, list: lie };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
@@ -29424,32 +30492,50 @@ chuliIpc('warmy:souSuoPeiZhiSheZhi', async (_e, payload?: Record<string, unknown
       tavily?: { enabled?: boolean }; deepseek?: { enabled?: boolean };
       custom?: Array<{ id?: string; name?: string; url?: string; enabled?: boolean }>;
       fullDiskIndex?: boolean;
+      list?: SouSuoPeiZhiXiang[];
     };
-    const cur = (settingsStore?.load() as { searchProviders?: Record<string, unknown> } | undefined)?.searchProviders || {};
-    const old = cur as {
-      firecrawl?: { enabled?: boolean }; jinaReader?: { enabled?: boolean };
-      tavily?: { enabled?: boolean }; deepseek?: { enabled?: boolean };
-      custom?: Array<{ id?: string; name?: string; url?: string; enabled?: boolean }>;
-    };
-    const next = {
-      firecrawl: { enabled: p.firecrawl ? p.firecrawl.enabled === true : old.firecrawl?.enabled === true },
-      jinaReader: { enabled: p.jinaReader ? p.jinaReader.enabled === true : old.jinaReader?.enabled === true },
-      tavily: { enabled: p.tavily ? p.tavily.enabled === true : old.tavily?.enabled === true },
-      deepseek: { enabled: p.deepseek ? p.deepseek.enabled === true : old.deepseek?.enabled === true },
-      custom: (Array.isArray(p.custom) ? p.custom : (old.custom || [])).slice(0, 20).map((x) => ({
-        id: String(x?.id || '').replace(/[^\w.-]/g, '_').slice(0, 60),
+    // 第 98 轮：链操作走 warmy:souSuoChainCaoZuo；这里兼容旧形状（enabled 布尔）与全量 list 两种写法
+    let next: unknown;
+    if (Array.isArray(p.list)) {
+      next = { list: (p.list as SouSuoPeiZhiXiang[]).slice(0, 40).map((x) => ({
+        id: String(x?.id || '').slice(0, 80),
         name: String(x?.name || '').slice(0, 80),
-        url: String(x?.url || '').slice(0, 500),
-        enabled: x?.enabled === true,
-      })).filter((x) => x.id && x.url),
-    };
+        kind: String(x?.kind || 'custom'),
+        ...(String(x?.url || '') ? { url: String(x?.url).slice(0, 500) } : {}),
+        inChain: x?.inChain !== false,
+        state: x?.state === 'tongguo' || x?.state === 'zanting' ? x?.state : 'daice',
+        ...(typeof x?.pausedUntil === 'number' ? { pausedUntil: x.pausedUntil } : {}),
+        ...(typeof x?.failCount === 'number' ? { failCount: x.failCount } : {}),
+        ...(typeof x?.addedAt === 'number' ? { addedAt: x.addedAt } : {}),
+      })) };
+    } else {
+      const cur = souSuoPeiZhiLie();
+      const old = cur as (SouSuoPeiZhiXiang & { enabled?: boolean })[] | (typeof cur);
+      const setEn = (id: string, en: boolean | undefined) => {
+        if (en === undefined) return;
+        const x = cur.find((e) => e.id === id);
+        if (x) { x.inChain = !!en; if (en) x.state = 'tongguo'; }
+      };
+      setEn('firecrawl', p.firecrawl?.enabled);
+      setEn('jina-reader', p.jinaReader?.enabled);
+      setEn('tavily', p.tavily?.enabled);
+      setEn('deepseek', p.deepseek?.enabled);
+      for (const c of (Array.isArray(p.custom) ? p.custom : [])) {
+        const id = String(c?.id || '').replace(/[^\w.-]/g, '_').slice(0, 60);
+        const url = String(c?.url || '').slice(0, 500);
+        if (!id || !url) continue;
+        const x = cur.find((e) => e.id === 'custom:' + id);
+        if (x) { x.url = url; x.inChain = !!c?.enabled; if (c?.enabled) x.state = 'tongguo'; }
+      }
+      next = { list: cur };
+    }
     const patch: Record<string, unknown> = { searchProviders: next };
     if (payload && typeof payload.fullDiskIndex === 'boolean') patch.fullDiskIndex = payload.fullDiskIndex;
     settingsStore?.save(patch as never);
     if (payload && typeof payload.fullDiskIndex === 'boolean') {
       try { naQuanPanSuoYin()?.setEnabled(payload.fullDiskIndex); } catch { /* noop */ }
     }
-    try { audit?.log('research.providers-set', { firecrawl: next.firecrawl.enabled, jinaReader: next.jinaReader.enabled, tavily: next.tavily.enabled, deepseek: next.deepseek.enabled, custom: next.custom.length, fullDiskIndex: patch.fullDiskIndex }); } catch { /* noop */ }
+    try { audit?.log('research.providers-set', { list: (next as { list?: unknown[] }).list?.length, fullDiskIndex: patch.fullDiskIndex }); } catch { /* noop */ }
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
@@ -29770,6 +30856,10 @@ async function paoXiaoDiRenWu(zhi: {
   provider: MoxingGongYing;
   moXing: string;
   zuiDaJieGuoZiShu: number;
+  /** 小弟的工具面（默认文件工具 workToolSpecs）；派发点显式传进来，便于审计与门禁核对 */
+  gongJuBiao?: GongJuGuiGe[];
+  /** 小弟的工具轮数上限（默认 4） */
+  zuiDaLunShu?: number;
 }): Promise<string> {
   const lu = zhi.lu;
   const sid = String(lu.sessionId || '');
@@ -29838,7 +30928,7 @@ async function paoXiaoDiRenWu(zhi: {
         model: String(zhi.moXing || ''),
         xiaoXiJi: [{ role: 'user', content: ziRenWu }],
         maxTokens: 2048,  // 思考模型需要 ≥2048，否则 thinking 吃光 token（Qwen3.6 真事故）
-        tools: workToolSpecs() as unknown as GongJuGuiGe[],
+        tools: (zhi.gongJuBiao || workToolSpecs()) as unknown as GongJuGuiGe[],
       },
       async (subCall) => {
         if (kong.signal.aborted) throw new Error('aborted-by-user');
@@ -29879,7 +30969,7 @@ async function paoXiaoDiRenWu(zhi: {
         return String(subOut.content).slice(0, 2000);
       },
       {
-        zuiDaLunShu: 4,
+        zuiDaLunShu: zhi.zuiDaLunShu ?? 4,
         zuiDaJieGuoZiShu: zhi.zuiDaJieGuoZiShu,
         maxToolResultChars: 8000,
         // 牛马管理局的预算滑杆 + 32K 下限，真正作用到分身的每次请求窗口
@@ -29977,6 +31067,10 @@ chuliIpc('warmy:huiHuaShanChu', async (_e, p0?: { id?: string; kind?: string; mo
     const id = String(p0?.id || '');
     if (!id) return { ok: false, error: 'bad-id' };
     const kind = String(p0?.kind || '');
+    // R125 任务15.9：勾选了「同步」的会话被删除 → 记录 2 年 tombstone（随同步传播到其它设备）
+    try {
+      if (syncService && syncService.isSessionSynced(id)) syncService.recordTombstone('chat', id);
+    } catch { /* tombstone 记录失败不阻断删除 */ }
     /**
      * **删除前先给回收站留一份快照**（第 41 轮，用户口径：右击删除不再二次确认，
      * 误删靠"最近删除"在 48 小时内恢复）。这里必须在清聊天日志/知识库/工作区**之前**取，
@@ -30796,6 +31890,27 @@ chuliIpc('warmy:ttsLangDu', async (_e, p0?: { text?: string }) => {
     return { ok: false, error: 'tts-chain-failed: ' + errors.join(' | '), voices, attempts: candidates.length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e), source: localEnabled ? 'bendi-yuyin' : 'tts-chain' }; }
 });
+/** 翻译目标语言缺省：跟随界面显示语言（用户要求：默认不是中文，跟随上面的显示语言） */
+function fanYiMuBiaoMoRen(): string {
+  const yu = String((settingsStore?.load() as { yuYan?: string } | undefined)?.yuYan || 'zh-CN');
+  const MING: Record<string, string> = {
+    'zh-CN': '简体中文',
+    'zh-TW': '繁體中文',
+    'en-US': 'English',
+    ja: '日本語',
+    ko: '한국어',
+    ru: 'Русский',
+    es: 'Español',
+    fr: 'Français',
+    pt: 'Português',
+    eo: 'Esperanto',
+  };
+  if (MING[yu]) return MING[yu];
+  const tou = String(yu).toLowerCase().split(/[-_]/)[0] || '';
+  for (const k of Object.keys(MING)) if (String(k).toLowerCase().startsWith(tou)) return MING[k] || '简体中文';
+  return '简体中文';
+}
+
 /**
  * **翻译**（专业模型优先，缺失回退）：有翻译模型就用它；没有就交给当前生效的对话模型。
  * 用户无感 —— 界面上只多一个「翻译」动作，用谁由这里决定。
@@ -30804,7 +31919,7 @@ chuliIpc('warmy:fanYi', async (_e, p0?: { text?: string; target?: string }) => {
   try {
     const s = String(p0?.text || '').trim();
     if (!s) return { ok: false, error: 'empty-text' };
-    const muBiao = String(p0?.target || '中文');
+    const muBiao = String(p0?.target || '').trim() || fanYiMuBiaoMoRen();
     const zhuan = await fanYiWenBen(s, muBiao);
     if (zhuan !== null) return { ok: true, text: zhuan || s, by: 'translate-model' };
     // 回退：用当前生效的对话模型
@@ -31095,34 +32210,7 @@ chuliIpc('warmy:jinengJiSheZhiEnabled', (_e, payload: { id?: string; enabled?: b
 });
 // patch skills-list to include enabled flag
 // ── S. 统一本地搜索（用户主动搜索） ──
-/** 当前启用的联网搜索供应商（密钥从 SecureKeyStore 取；默认全关） */
-async function souSuoPeiZhiDangQian(): Promise<SousuoGongYingPeiZhi[]> {
-  const out: SousuoGongYingPeiZhi[] = [];
-  try {
-    const s = settingsStore?.load() as { searchProviders?: Record<string, unknown> } | undefined;
-    const sp = (s?.searchProviders || {}) as {
-      firecrawl?: { enabled?: boolean }; jinaReader?: { enabled?: boolean };
-      tavily?: { enabled?: boolean }; deepseek?: { enabled?: boolean };
-      custom?: Array<{ id?: string; name?: string; url?: string; enabled?: boolean }>;
-    };
-    const keyOf = async (id: string): Promise<string> => {
-      try { return String((await secureKeys?.load(id)) || '').trim(); } catch { return ''; }
-    };
-    if (sp.firecrawl?.enabled === true) {
-      out.push({ id: 'firecrawl', name: 'Firecrawl Keyless', kind: 'firecrawl', enabled: true, key: (await keyOf('search:firecrawl')) || (await keyOf('search')) });
-    }
-    if (sp.tavily?.enabled === true) out.push({ id: 'tavily', name: 'Tavily', kind: 'tavily', enabled: true, key: await keyOf('search:tavily') });
-    if (sp.deepseek?.enabled === true) out.push({ id: 'deepseek', name: 'DeepSeek Search', kind: 'deepseek', enabled: true, key: await keyOf('search:deepseek') });
-    if (sp.jinaReader?.enabled === true) out.push({ id: 'jina-reader', name: 'Jina Reader', kind: 'jina-reader', enabled: true });
-    for (const c of (Array.isArray(sp.custom) ? sp.custom : [])) {
-      const id = String(c?.id || '').trim();
-      const url = String(c?.url || '').trim();
-      if (!id || !url || c?.enabled !== true) continue;
-      out.push({ id: 'custom:' + id, name: String(c?.name || id), kind: 'custom', enabled: true, url, key: await keyOf('search:custom:' + id) });
-    }
-  } catch { /* 设置读不到 = 全关 */ }
-  return out;
-}
+/** 当前启用的联网搜索供应商：第 98 轮起由调用链驱动（实现见 souSuoPeiZhiLie 上方），这里无旧版残留 */
 
 function fullDiskIndexEnabled(): boolean {
   try {
@@ -31534,6 +32622,17 @@ chuliIpc('warmy:anQuanMiYaoBaoCun', async (_e, payload: { providerId: string; ap
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+/**
+ * R128：安全密钥**加载**（会话就绪后把条目加载进主进程内存 / 供 UI 查存在状态）。
+ * 安全原则不变：**不回明文**（读回桥已删）——只回 hasKey。
+ */
+chuliIpc('warmy:anQuanMiYaoJiaZai', async (_e, id?: string) => {
+  try {
+    const k = await secureKeys?.load(String(id || ''));
+    audit?.log('key.load', { providerId: String(id || ''), has: !!k });
+    return { ok: true, hasKey: !!k };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 // 明文密钥读回桥已删除：渲染层只能写/查存在状态，不能把 key 读回 DOM。主进程内按需解密使用。
 
 // ── KnowledgeArchiver ──
@@ -31617,7 +32716,7 @@ async function shengChengHuiHuaZhaiYao(
     if (!recent.trim()) return { ok: false, error: 'no-history' };
     const biaoTi = `${qunId} 会话摘要 ${yongHuShiJian(Date.now())}`;
     const structured = tiQuJieGouHuaZhaiYao({ groupId: qunId, biaoTi, ti: recent });
-    const summary =
+    const summaryBase =
       [
         `# ${biaoTi}`,
         structured.decisions.length ? `## 决策\n${structured.decisions.map((d) => '- ' + d).join('\n')}` : '',
@@ -31625,6 +32724,12 @@ async function shengChengHuiHuaZhaiYao(
         structured.risks.length ? `## 风险\n${structured.risks.map((d) => '- ' + d).join('\n')}` : '',
         `## 要点\n${structured.bullets.map((d) => '- ' + d).join('\n')}`,
       ].filter(Boolean).join('\n\n').slice(0, 4000);
+    /**
+     * **摘要也带上用户偏好**（第 54 轮 planD）：偏好不只进「印象」，还要随摘要进
+     * `archives.jsonl` 与下一轮注入的上下文段落 —— 否则模型只记得"发生了什么决策"，
+     * 读不到"用户希望回复简短"这类跨会话偏好。与「印象」同一道闸：只在素材里摘录、最多 8 条。
+     */
+    const summary = heBingYongHuPianHao(summaryBase, (congGuiDangTiQuZhiShi({ groupId: qunId, biaoTi, summary: summaryBase }).preferences || []));
     // 尽量带上锚点：用日志里**真实的 recordId + seq**（便于右栏「跳到原文」，也让模型能 retrieve）
     /**
      * ⚠️ 以前这里写的是 `recordId: 'seq:' + l.seq` —— **一个不存在的 id**。
@@ -32013,6 +33118,21 @@ function benJiChuangJianZhe(groupId: string): boolean {
   const benJi = String(identityStore?.info()?.zhiWen || '');
   return !!chuang && !!benJi && zhiwenPipei(chuang, benJi);
 }
+/**
+ * 本机是否是某群/项目的**管理者**（创建者或 role=admin 的成员）。
+ * 第 101 轮（用户要求）：管理者可以删除成员、审批加入申请 —— 权限判断只在主进程，
+ * 渲染层不自己推"谁是管理者"。
+ */
+function benJiShiGuanLiZhe(groupId: string): boolean {
+  if (benJiChuangJianZhe(groupId)) return true;
+  try {
+    const benJi = String(identityStore?.info()?.zhiWen || '');
+    if (!benJi) return false;
+    return (groupStore?.listMembers(groupId) || []).some(
+      (m) => m.role === 'admin' && String(m.zhiWen || '') && zhiwenPipei(String(m.zhiWen), benJi)
+    );
+  } catch { return false; }
+}
 function qianMingYaoQingDuiXi(groupId: string, subjectFp: string, role = 'member'): { ok: true; token: string; publicKey: string; issuerFp: string } | { ok: false; error: string } {
   try {
     const signer = identityStore ? chuangjianShenfenQianmingzhe(identityStore) : null;
@@ -32264,7 +33384,13 @@ chuliIpc('warmy:jiaRuHuiYing', async (_e, payload: { id: string; action: 'agree'
         source: 'invite',
         ...(Qiu.zhiWen || Qiu.subjectFp ? { zhiWen: String(Qiu.zhiWen || Qiu.subjectFp) } : {}),
       });
-      if (!r || r.ok === false) return { ok: false, error: (r && r.error) || 'join-add-failed', shengYu: youXiaoJiaRu().length };
+      if (!r || r.ok === false) {
+        /** 满员：申请**保持 pending 不被吃掉**（创建者/管理者界面仍看得到、仍可拒绝）；
+         *  如实告知「群已满，需删除成员腾出位置后才能批准」。 */
+        const man = String(r?.error || '');
+        if (man.startsWith('max ')) return { ok: false, error: 'group-full', max: Number(man.slice(4)) || 0, shengYu: youXiaoJiaRu().length };
+        return { ok: false, error: (r && r.error) || 'join-add-failed', shengYu: youXiaoJiaRu().length };
+      }
       try { syncRouterFromGroupStore(Qiu.target); } catch { /* noop */ }
       // 回执：把"批准"本身也签成绑定申请人的 token，申请人可离线验签。
       if (Qiu.subjectFp) {

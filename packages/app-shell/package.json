@@ -1,6 +1,6 @@
 {
   "name": "@warmy/app-shell",
-  "version": "0.2.33",
+  "version": "0.3.0",
   "private": true,
   "description": "Electron main/renderer shell (no native modules)",
   "main": "./dist/electron-main.js",
@@ -29,7 +29,8 @@
     "@warmy/knowledge-base": "workspace:*",
     "@warmy/memory-os": "workspace:*",
     "@warmy/providers": "workspace:*",
-    "@warmy/sync-protocol": "workspace:*"
+    "@warmy/sync-protocol": "workspace:*",
+    "hash-wasm": "4.12.0"
   },
   "optionalDependencies": {
     "sherpa-onnx-node": "1.13.8"

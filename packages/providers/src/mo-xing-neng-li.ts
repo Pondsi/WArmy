@@ -34,7 +34,7 @@ export interface MoXingNengLi {
    *  · videoGen   = 做视频模型（视频生成）
    *  · translate  = 翻译模型
    *  · safety     = 安全审核（内容过滤/合规）
-   *  · decision   = **决策模型**（RLCD 类：Reinforcement Learning for Calibrated Decisions ——
+   *  · decision   = **分类模型**（RLCD 类：Reinforcement Learning for Calibrated Decisions ——
    *                 输出带置信度的决策，约束解码，小而快；用于意图分类、路由、裁判/审批）
    *  · unknown    = 认不出（不放进任何调用链，免得用时出错）
    */
@@ -162,8 +162,8 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
   // GLM-4V 多模态
   { shi: /glm-4v|glm-4\.5v/i, neng: { vision: true, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
   { shi: /^glm-4/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
-  // 嵌入模型
-  { shi: /text-embedding|bge-|bge_|m3e|gte-|e5-|contriever|jina-embed|nomic-embed/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'embedding' } },
+  // 嵌入模型（`bge-reranker` 排除：它是重排，不是嵌入 —— 重排规则在下面单独一条）
+  { shi: /text-embedding|bge-(?!r?erank)|bge_|m3e|gte-|e5-|contriever|jina-embed|nomic-embed|\bembed\b/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'embedding' } },
   // 语音识别
   { shi: /whisper|sense-?voice|paraformer|moonshine|speech-?to-?text|\bstt\b|asr-|vosk|sherpa/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'asr' } },
   /**
@@ -172,18 +172,16 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
    */
   { shi: /cosyvoice|melo-?tts|melo\b|vits|bark-|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'tts' } },
   /**
-   * **决策模型**（RLCD = Reinforcement Learning for Calibrated Decisions）：
+   * **分类模型**（RLCD = Reinforcement Learning for Calibrated Decisions）：
    * 输出**带置信度的决策**而不是长文本，用并行约束解码（JSON schema 100% 准确、比自回归快 5~7 倍）。
    * 代表：Jev（jev-1.13.0）、Qwen-2.5-1B-RLCD、各类 router / classifier / judge / arbiter。
-   * 产品叫法：决策模型（不是经典 ML「分类器」；TypeSafe 称 System One / decision model）。
+   * 产品叫法：分类模型（内部标识仍为 decision；TypeSafe 称 System One / decision model）。
    */
-  // 注意：不能用裸 `router` —— `orcarouter/...` 会被误判成决策模型（真机）
+  // 注意：不能用裸 `router` —— `orcarouter/...` 会被误判成分类模型（真机）
   // `clef` / `clef-flash` 是用户实测的分类模型（Ollama 能力字段为 decision,vision）；
   // 名字表也要兜住没有 capabilities 的旧版 Ollama。
   { shi: /rlcd|\bjev\b|(^|[^a-z])router(?!outer)|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-|(^|[-_/])clef([-_/.:]|$)/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'decision' } },
-  // 通用 Qwen / 开源对话模型：必须在 qwen-vl / qwen-image / qwen-embedding 之后命中，
-  // 否则 `orcarouter/Qwen3.8-27B-Uncensored:*` 会落到 unknown，被 UI 误当“未探测”。
-  { shi: /qwen|orcarouter|uncensored|llama|mistral|phi-|gemma|deepseek-v[23]/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
+  // 分类模型（RLCD 类）……（见下）
   // 嵌入重排（检索二次排序）
   { shi: /rerank|re-?rank|bge-?reranker|cohere-?rerank|rank-?t5|ms-?marco-?minilm/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'rerank' } },
   // 画图（图像生成）
@@ -196,14 +194,17 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
   { shi: /nllb|marian|opus-?mt|translate|translation|deepl|madlad|m2m-100/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'translate' } },
   // 安全审核
   { shi: /llama-?guard|guardian|safety|moderation|content-?filter|shield|protect-?ai/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'safety' } },
-  // 纯文本开源（明确不看图）
-  { shi: /llama|mistral|phi-|gemma|deepseek-v[23]/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
+  // 纯文本开源对话模型（最后兜底）：通用 Qwen / orcarouter / uncensored / llama 系都归这里，
+  // 必须排在所有专用规则（vl/embedding/rerank/translate/safety 等）之后 ——
+  // 否则 `pdurugyan/qwen3-reranker-*`（qwen 抢跑）、`translategemma`（gemma 抢跑）、
+  // `shieldgemma`（gemma 抢跑）会被先标成对话模型，专用能力链就永远选不到它们（真机验收发现）。
+  { shi: /qwen|orcarouter|uncensored|llama|mistral|phi-|gemma|deepseek-v[23]/i, neng: { vision: false, thinking: false, tools: true, thinkLevels: [], kind: 'chat' } },
 ];
 
 /** 从型号名猜种类（端点没给类别字段时用） */
 export function caiZhongLei(ming: string): MoXingNengLi['kind'] {
   const s = String(ming || '').toLowerCase();
-  if (/text-embedding|bge-|bge_|m3e|gte-|e5-|contriever|jina-embed|nomic-embed/.test(s)) return 'embedding';
+  if (/text-embedding|bge-(?!r?erank)|bge_|m3e|gte-|e5-|contriever|jina-embed|nomic-embed|\bembed\b/.test(s)) return 'embedding';
   if (/rerank|re-?rank|bge-?reranker/.test(s)) return 'rerank';
   if (/cosyvoice|melo-?tts|melo\b|vits|bark-|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts|(^|[-_/])tts([-_/]|$)/.test(s)) return 'tts';
   if (/whisper|sense-?voice|paraformer|moonshine|speech-?to-?text|\bstt\b|asr-|vosk|sherpa|(^|[-_/])asr([-_/]|$)/.test(s)) return 'asr';
@@ -214,15 +215,15 @@ export function caiZhongLei(ming: string): MoXingNengLi['kind'] {
   if (/video-?vl|video-?llm|videochat|qwen.*video/.test(s)) return 'videoUnd';
   if (/nllb|marian|opus-?mt|translate|translation|deepl|madlad|m2m-100/.test(s)) return 'translate';
   if (/llama-?guard|guardian|moderation|content-?filter|shield/.test(s)) return 'safety';
-  // 决策模型（RLCD 类）。**不能用裸 `router`**：`orcarouter/...` 是供应商前缀，
-  // 用户实测那 5 个 Qwen3.8-27B-Uncensored 都是对话模型；只有独立单词 router 才算决策。
+  // 分类模型（RLCD 类）。**不能用裸 `router`**：`orcarouter/...` 是供应商前缀，
+  // 用户实测那 5 个 Qwen3.8-27B-Uncensored 都是对话模型；只有独立单词 router 才算分类。
   if (/rlcd|\bjev\b|(^|[^a-z])router(?!outer)|routing|route-|auto-?route|classifier|classification|decision|judge|critic|arbiter|gate-?keeper|selector|intent-|(^|[-_/])clef([-_/.:]|$)/.test(s)) return 'decision';
   // 明确的通用对话模型（含供应商前缀 orcarouter）；排在所有专用类型之后，不会误伤 vl/image/embedding。
   if (/qwen|orcarouter|uncensored|llama|mistral|phi-|gemma|deepseek-v[23]/.test(s)) return 'chat';
   return 'unknown';
 }
 
-/** 种类 → 中文（产品定稿叫法：听话=ASR、说话=TTS、对话=LLM、决策=RLCD/路由；其余仅简体中文用产品叫法） */
+/** 种类 → 中文（产品定稿叫法：听话=ASR、说话=TTS、对话=LLM、分类=RLCD/路由；其余仅简体中文用产品叫法） */
 export function kindZhongWen(k: MoXingNengLi['kind']): string {
   switch (k) {
     case 'embedding': return '嵌入模型';
@@ -235,7 +236,7 @@ export function kindZhongWen(k: MoXingNengLi['kind']): string {
     case 'videoGen': return '做视频模型';
     case 'translate': return '翻译模型';
     case 'safety': return '安全审核';
-    case 'decision': return '决策模型';
+    case 'decision': return '分类模型';
     case 'ocr': return '文字识别';
     case 'reasoning': return '推理模型';
     case 'code': return '代码模型';

@@ -11,10 +11,16 @@
  *  1. 鉴权、风控、越界 —— 这几类的报错文本里常常**顺带**出现 "token"（"invalid token"）这种词，
  *     必须排在"上下文超限"之前，否则会被当成超限去收缩重试，白烧几轮；
  *  2. IPC 断开（记忆子进程挂了）—— 必须排在通用"超时"之前（"memory ipc timeout"）；
- *  3. 上下文超限 —— 与旧的 `isContextLengthError` 是**同一条正则**（收缩重试依赖它，不许改宽改窄），
+ *  3. 超时 / 中断（含 Go 网关文本）—— 必须排在"上下文超限"之前：Ollama / MiMo 这类 Go 网关
+ *     内部超时或连接被取消时，错误体是 `context deadline exceeded` / `context canceled`，
+ *     文本里带 "context" 一词；排在超限之后就会被当成"窗口太小"去收缩重试四次，
+ *     再误报「该模型上下文太小」（真机：1M 窗口的 mimo 模型也报过，根因就是这类误判）；
+ *  4. 限流 / 额度 —— 同样必须先于超限：`Insufficient token balance`、`token quota exceeded`
+ *     这类文本带 "token"/"quota"，排在超限之后会被当成上下文超限（MiMo 免费额度场景真机踩过）；
+ *  5. 上下文超限 —— 与旧的 `isContextLengthError` 是**同一条正则**（收缩重试依赖它，不许改宽改窄），
  *     只是先把报错里的 URL 去掉：MiMo 的端点域名带 `token-plan`，网络失败的报错里会出现这个域名，
  *     旧判据因此把"连不上"当成"上下文太长"去收缩重试；
- *  4. 超时 / 服务不可用 / 未知。
+ *  6. 服务不可用 / 未知。
  */
 import type { CuowuLeibie, GuileiCuowu } from '@warmy/contracts';
 
@@ -44,10 +50,17 @@ const GUI_ZE: GuiZe[] = [
   { lei: 'MODERATION_BLOCKED', re: /considered high risk|content[_ ]policy|content[_ ]filter|moderation|风控|内容安全/i, keHuiFu: true, code: 'moderation' },
   { lei: 'BOUNDARY_VIOLATION', re: /workspace-escape|absolute-path-not-allowed|outside (the )?workspace|越权/i, keHuiFu: false, code: 'boundary' },
   { lei: 'IPC_DEAD', re: /ERR_IPC_CHANNEL_CLOSED|channel closed|memory service not started|memory ipc timeout|memory child exit/i, keHuiFu: true, code: 'ipc' },
-  { lei: 'CONTEXT_OVERFLOW', re: SHANG_XIA_WEN_CHAO_XIAN, keHuiFu: true, code: 'context' },
-  { lei: 'PROTO_TIMEOUT', re: /ETIMEDOUT|timed? ?out|timeout|AbortError|aborted|超时/i, keHuiFu: true, code: 'timeout' },
+  /**
+   * 超时 / 中断：排在上下文超限**之前**（否则 Go 网关的 `context deadline exceeded` /
+   * `context canceled` 会被超限正则里的裸 `context` 抢走，误判成窗口太小去收缩重试）。
+   * 与旧的超时正则合并成一条，行为不变，只多了 Go 网关的几种写法。
+   */
+  { lei: 'PROTO_TIMEOUT', re: /ETIMEDOUT|timed? ?out|timeout|AbortError|aborted|超时|context (?:deadline (?:exceeded|expired)|cancel(?:l)?ed)|request (?:was )?cancel(?:l)?ed|upstream (?:request )?(?:timed? ?out|cancel(?:l)?ed)|operation (?:was )?aborted/i, keHuiFu: true, code: 'timeout' },
   // 429 单独给 code=rate-limit：界面/日志能把它和普通 5xx 区分开，提示用户等待/换模型/停止。
-  { lei: 'MODEL_UNAVAILABLE', re: new RegExp(`${ZHUANG_TAI('429')}|rate.?limit|too many requests|overloaded|quota (?:exceeded|exhausted)`, 'i'), keHuiFu: true, code: 'rate-limit' },
+  // 也排在超限之前：`Insufficient token balance` / `token quota exceeded` 带 token/quota 字样，
+  // 排在超限之后会被当成"上下文太长"去收缩重试（MiMo 免费额度场景真机踩过）。
+  { lei: 'MODEL_UNAVAILABLE', re: new RegExp(`${ZHUANG_TAI('429')}|rate.?limit|too many requests|overloaded|quota (?:exceeded|exhausted)|token (?:quota|balance|allowance|credit)|insufficient (?:token|balance|quota|credit)|余额不足|额度不足|额度已(?:用尽|用完)|token 余额|账户余额|余额为(?:零|0)`, 'i'), keHuiFu: true, code: 'rate-limit' },
+  { lei: 'CONTEXT_OVERFLOW', re: SHANG_XIA_WEN_CHAO_XIAN, keHuiFu: true, code: 'context' },
   { lei: 'MODEL_UNAVAILABLE', re: new RegExp(`ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET|fetch failed|socket hang up|${ZHUANG_TAI('500|502|503|504')}|\\bmodel\\b[^\\n]{0,40}\\bnot found\\b|no such model|service unavailable|模型不可用`, 'i'), keHuiFu: true, code: 'unavailable' },
 ];
 

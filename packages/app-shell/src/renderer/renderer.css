@@ -397,7 +397,7 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 .liaoTianYuanShuju { font-size: var(--fs-sm); color: var(--muted); }
 .liaoTianDongZuoJi { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .xiaoXiJi { flex: 1; overflow: auto; padding: var(--sp-4); }
-.xiaoXi { display: flex; margin-bottom: 14px; gap: 10px; animation: fade-in 0.15s ease; }
+.xiaoXi { display: flex; margin-bottom: 4px; gap: 10px; animation: fade-in 0.15s ease; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .xiaoXi.wo { flex-direction: row-reverse; }
 .xiaoXi .av {
@@ -2983,6 +2983,58 @@ html { font-weight: var(--fw-ui, 400); }
 .kbPermCk input { margin: 0; }
 .kbPermCk.off { color: var(--muted); cursor: not-allowed; opacity: .55; }
 #kbViewUser { font: inherit; font-size: 11px; max-width: 180px; }
+
+/* 第 98 轮知识库卡（唯一一张）：搜索行 / 层标签（主题色凸显规则）/ 对外开放 */
+.kbCardQRow { display: flex; gap: 4px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+.kbCardQRow input { flex: 1; min-width: 90px; font: inherit; font-size: 11px; }
+.kbCengBiao {
+  display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 8px;
+  font-size: 10px; line-height: 15px; vertical-align: 1px;
+  background: color-mix(in srgb, var(--line) 45%, transparent); color: var(--muted);
+  white-space: nowrap;
+}
+.kbCengBiao.zhuTi {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent); font-weight: 600;
+}
+.kbKaiFangBiao {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  margin: 4px 0 6px; padding: 5px 8px;
+  border: 1px dashed var(--line); border-radius: 8px;
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+}
+.kbKaiFangTou { display: flex; flex-direction: column; gap: 1px; font-size: 11px; font-weight: 600; color: var(--ink); }
+
+/* 第 98 轮网络搜索：预设 → 待测区 → 搜索调用链 */
+.ssYuSheRow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.ssYuSheRow select { font: inherit; font-size: 12px; max-width: 220px; }
+.ssQuYu { margin-top: 8px; }
+.ssQuYuMing { font-size: 11px; font-weight: 600; color: var(--ink); margin: 4px 0 6px; display: flex; align-items: center; gap: 6px; }
+.ssQuYuMing::before { content: ''; width: 3px; height: 12px; border-radius: 2px; background: var(--accent); }
+.ssKong { font-size: 11px; padding: 4px 0 8px; }
+.ssHang {
+  position: relative;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 6px 8px; margin-bottom: 6px;
+  border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--card) 82%, transparent);
+}
+.ssLianHang { border-left: 3px solid var(--accent); }
+.ssXuHao {
+  position: absolute; margin-left: -14px; font-size: 10px; color: var(--muted);
+}
+.ssMing { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 12px; }
+.ssCaoZuo { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ssCaoZuo .anNiuXiao { padding: 2px 8px; font-size: 11px; }
+.ssKey { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ssKey input { font: inherit; font-size: 11px; }
+.ssTag {
+  display: inline-block; padding: 0 6px; border-radius: 8px; font-size: 10px; line-height: 15px;
+  vertical-align: 1px; white-space: nowrap;
+}
+.ssLeiBie { background: color-mix(in srgb, var(--line) 50%, transparent); color: var(--muted); }
+.ssDaiCe { background: color-mix(in srgb, var(--line) 60%, transparent); color: var(--muted); }
+.ssTongGuo { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
+.ssZanTing { background: color-mix(in srgb, #c96a2b 16%, transparent); color: #c96a2b; font-weight: 600; }
 
 /* #109 提示词备份 diff / 回滚 */
 .tiShiBakHang { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 2px 0; }

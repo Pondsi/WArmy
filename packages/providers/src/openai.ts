@@ -223,6 +223,40 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
    * 端点给字段就解析（`input_modalities` / `capabilities` / `supported_parameters`）；
    * 没给就留空，由宿主用**已知模型能力表**兑底（见 mo-xing-neng-li.ts）。
    */
+  /**
+   * **图片生成（OpenAI 兼容 `images/generations`）** —— 画图链的调用路径：
+   *  · 在线 API（SiliconFlow / 智谱 / OpenAI 等）同一协议；
+   *  · 本地 ComfyUI 装了 OpenAI 兼容插件（提供 /v1/images/generations）也走这里；
+   *  · 兼容口径：不强制 `response_format`（部分端点不接受），先认 `b64_json`、再认 `url`。
+   */
+  async shengChengTu(p: {
+    prompt: string;
+    model?: string;
+    size?: string;
+    n?: number;
+    signal?: AbortSignal;
+  }): Promise<{ ok: boolean; b64?: string; url?: string; error?: string }> {
+    try {
+      const body: Record<string, unknown> = {
+        model: String(p.model || ''),
+        prompt: String(p.prompt || ''),
+        n: Math.max(1, Math.min(4, Number(p.n) || 1)),
+        ...(String(p.size || '').trim() ? { size: String(p.size).trim() } : {}),
+      };
+      const json = await qingQiuJson<{ data?: Array<{ b64_json?: string; url?: string }>; error?: { message?: string } }>(
+        pinJieUrl(this.baseURL, 'images/generations'),
+        { method: 'POST', body: JSON.stringify(body), signal: p.signal, headers: this.headers(), timeoutMs: this.auth.timeoutMs ?? 300_000 },
+        this.auth
+      );
+      const d = json.data?.[0];
+      if (d?.b64_json) return { ok: true, b64: d.b64_json };
+      if (d?.url) return { ok: true, url: d.url };
+      return { ok: false, error: 'no-image-in-response:' + JSON.stringify(json).slice(0, 160) };
+    } catch (e) {
+      return { ok: false, error: String((e as Error)?.message || e) };
+    }
+  }
+
   async listModelsDetailed(signal?: AbortSignal): Promise<Array<{ id: string; thinkLevels: string[]; supportsThinking: boolean; vision: boolean | 'unknown'; tools: boolean | 'unknown'; kind: string; contextLen: number }>> {
     try {
       const json = await qingQiuJson<{ data?: Array<Record<string, unknown>> }>(

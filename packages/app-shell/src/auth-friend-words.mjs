@@ -2038,7 +2038,7 @@ export const FRIEND_WORDS = [
   { w: "团子", p: "tuanzi" },
   { w: "感激", p: "ganji" },
   { w: "援助", p: "yuanzhu" },
-  { w: "注入", p: "zhuru" },
+  { w: "祝福", p: "zhufu" },
   { w: "技巧", p: "jiqiao" },
   { w: "品质", p: "pinzhi" },
   { w: "诗歌", p: "shige" },

@@ -49,6 +49,16 @@ function ftsQuery(q: string): string {
   return '"' + String(q || '').replace(/"/g, '""') + '"';
 }
 
+/**
+ * 跳过不递归的目录（对搜索无价值，却是全盘扫描的体积大头：
+ * node_modules/.git 等动辄数十万文件，逐个 statSync 会把主进程事件循环卡住）。
+ */
+const TIAO_GUO_MU_LU = new Set([
+  'node_modules', '.git', '.svn', '.hg', '.bzr', '__pycache__',
+  'code cache', 'gpucache', 'grshadercache', 'graphitedawncache', 'shadercache',
+  'crashpad', 'dawnwebgpucache', 'dawngraphitecache',
+]);
+
 export class QuanPanSuoYin {
   private db: DatabaseSync | null = null;
   private running = false;
@@ -56,6 +66,7 @@ export class QuanPanSuoYin {
   private enabled = true;
   private timer: NodeJS.Timeout | null = null;
   private queue: Array<{ p: string; prio: number; depth: number }> = [];
+  private pendingFiles: Array<{ p: string; prio: number }> = [];
   private contentQueue: Array<{ id: number; p: string }> = [];
   private roots: string[] = [];
   private lastPath = '';
@@ -145,6 +156,16 @@ export class QuanPanSuoYin {
   }
 
   private async step(): Promise<boolean> {
+    if (this.pendingFiles.length) {
+      const f = this.pendingFiles.shift()!;
+      await this.insertName(f.p, f.prio);
+      // 文件入队与正文索引交错：名称扫得快，正文按批补（与目录扫描同节奏）
+      if (this.contentQueue.length && this.fileCount % 5 === 0) {
+        const c = this.contentQueue.shift()!;
+        await this.indexContent(c.id, c.p);
+      }
+      return true;
+    }
     if (this.queue.length) {
       const it = this.queue.shift()!;
       await this.walk(it);
@@ -175,22 +196,34 @@ export class QuanPanSuoYin {
       const p = path.join(it.p, e.name);
       if (e.isSymbolicLink()) {
         // 链接文件也索引名称；链接目录不递归（防 junction 环），但目标文件本身仍可被其真实路径覆盖
-        try { if (fs.statSync(p).isFile()) this.insertName(p, Math.max(it.prio, youXian(p))); } catch { /* 断链跳过 */ }
+        try {
+          const st = await fsp.stat(p);
+          if (st.isFile()) this.insertName(p, Math.max(it.prio, youXian(p)));
+        } catch { /* 断链跳过 */ }
         continue;
       }
       if (e.isDirectory()) {
-        if (it.depth < 40) this.queue.push({ p, prio: Math.max(it.prio, youXian(p)), depth: it.depth + 1 });
+        if (it.depth >= 40) continue;
+        const base = String(e.name).toLowerCase();
+        if (TIAO_GUO_MU_LU.has(base)) continue;
+        this.queue.push({ p, prio: Math.max(it.prio, youXian(p)), depth: it.depth + 1 });
       } else if (e.isFile()) {
-        this.insertName(p, Math.max(it.prio, youXian(p)));
+        this.pendingFiles.push({ p, prio: Math.max(it.prio, youXian(p)) });
       }
     }
     this.lastPath = it.p;
   }
 
-  private insertName(p: string, prio: number): void {
+  /**
+   * 单个文件入索引（**异步 stat**）：旧实现在这里 `fs.statSync`，
+   * 全盘扫描时每文件一次同步系统调用 ⇒ 主进程事件循环被间歇性卡死
+   * （表现：点按钮无反应、拖窗口卡顿）。SQLite 写入仍是同步的，但每次
+   * 都是内存级毫秒操作；40ms/400ms 的低占空比循环保证不阻塞聊天。
+   */
+  private async insertName(p: string, prio: number): Promise<void> {
     if (!this.db) return;
     let st: fs.Stats;
-    try { st = fs.statSync(p); } catch { this.errors++; return; }
+    try { st = await fsp.stat(p); } catch { this.errors++; return; }
     if (!st.isFile()) return;
     try {
       const r = this.db.prepare(`INSERT OR IGNORE INTO files(path,name,dir,drive,ext,size,mtime,prio,content_done)

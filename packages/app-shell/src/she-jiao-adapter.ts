@@ -92,6 +92,7 @@ export abstract class LunXunAdapter implements SheJiaoAdapter {
  * 接收需要企业微信后台配置回调 URL 并做 AES 验签；本适配器只做"发送 + 凭据验证"，
  * 没配置回调时 UI 不会假装能收消息（见 zhuangTai().receiveMode）。
  */
+/** TODO(T21) 真实适配器预留：企微 corpid / agentid / secret 走这里 */
 export class WeiXinAdapter implements SheJiaoAdapter {
   readonly pingTai = 'wecom';
   private cb: ((msg: SheJiaoXiaoXi) => void | Promise<void>) | null = null;
@@ -218,6 +219,7 @@ export class TelegramAdapter extends LunXunAdapter {
  *    （需要应用开通 im:message:readonly 与目标会话的可见权限；没有权限会如实报错）
  * baseURL 可覆盖，门禁用回环 HTTP 验证真实请求形状。
  */
+/** TODO(T21) 真实适配器预留：飞书/Lark app_id / app_secret 走这里 */
 export class FeiShuAdapter extends LunXunAdapter {
   readonly pingTai = 'feishu';
   private appId: string;
@@ -617,6 +619,7 @@ export class ILinkAdapter extends LunXunAdapter {
  * 桌面端零依赖即可跑；要更低延迟可后续换 Socket Mode）。
  * 凭据：botToken（xoxb-）+ channelId。
  */
+/** TODO(T21) 真实适配器预留：Slack bot token 走这里 */
 export class SlackAdapter extends LunXunAdapter {
   readonly pingTai = 'slack';
   private token: string;
@@ -871,6 +874,46 @@ export class MatrixAdapter extends LunXunAdapter {
   }
 }
 
+/**
+ * T21 方案 B：模拟适配器（扫码绑定后注入测试入站消息用）。
+ * 真实适配器预留 TODO：
+ *  · 企微  corpid / agentid / secret（走 WeiXinAdapter）
+ *  · 飞书 / Lark  app_id / app_secret（走 FeiShuAdapter）
+ *  · Slack  bot token（走 SlackAdapter）
+ */
+export class MockSheJiaoAdapter implements SheJiaoAdapter {
+  readonly pingTai: string;
+  private cb: ((msg: SheJiaoXiaoXi) => void | Promise<void>) | null = null;
+  private online = false;
+
+  constructor(pingTai: string) {
+    this.pingTai = String(pingTai || 'mock');
+  }
+
+  async lianJie(): Promise<void> { this.online = true; }
+
+  shouXiaoXi(cb: (msg: SheJiaoXiaoXi) => void | Promise<void>): void { this.cb = cb; }
+
+  async faSong(): Promise<boolean> { return true; }
+
+  duanKai(): void { this.online = false; }
+
+  zaiXian(): boolean { return this.online; }
+
+  /** 注入一条测试入站消息（方案 B 模拟适配器专用） */
+  zhuRuCeShi(wenBen: string, faSongZheMing?: string): void {
+    const msg: SheJiaoXiaoXi = {
+      pingTai: this.pingTai,
+      huiHuaId: 'mock-' + this.pingTai + '-' + Date.now(),
+      faSongZheId: 'mock-user',
+      faSongZheMing: faSongZheMing || '测试用户',
+      wenBen: String(wenBen || ''),
+      ts: Date.now(),
+    };
+    this.cb?.(msg);
+  }
+}
+
 export function chuangJianSheJiao(pingTai: string, zheng: SheJiaoPingZheng): SheJiaoAdapter {
   switch (String(pingTai || '').toLowerCase()) {
     case 'wecom': case 'weixin': case 'work-weixin': return new WeiXinAdapter(zheng);
@@ -889,6 +932,7 @@ export const SHE_JIAO_PING_TAI = [
   { id: 'wecom', ming: '企业微信智能机器人', moShi: '长连接', fengXian: '低', jianYi: true },
   { id: 'telegram', ming: 'Telegram Bot', moShi: '长轮询', fengXian: '低', jianYi: true },
   { id: 'feishu', ming: '飞书', moShi: '长连接', fengXian: '低', jianYi: true },
+  { id: 'lark', ming: 'Lark', moShi: '长连接', fengXian: '低', jianYi: true },
   { id: 'ilink', ming: '微信（个人）', moShi: '扫码 / 长轮询', fengXian: '中', jianYi: true },
   { id: 'slack', ming: 'Slack', moShi: '轮询 / Socket', fengXian: '低', jianYi: false },
   { id: 'discord', ming: 'Discord', moShi: '轮询 / Gateway', fengXian: '低', jianYi: false },

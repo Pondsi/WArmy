@@ -12,7 +12,7 @@
 
 import { souSuo, zhuaQuFirecrawl, zhuaQuJina, type YanJiuJieGuo } from './research-tools.js';
 
-export type SousuoGongYingLeiXing = 'firecrawl' | 'jina-reader' | 'tavily' | 'deepseek' | 'custom';
+export type SousuoGongYingLeiXing = 'firecrawl' | 'jina-reader' | 'tavily' | 'deepseek' | 'exa' | 'serper' | 'brave' | 'bocha' | 'custom';
 
 export interface SousuoGongYingPeiZhi {
   id: string;
@@ -160,6 +160,106 @@ export async function souSuoCustom(cfg: SousuoGongYingPeiZhi, query: string, opt
   }
 }
 
+/** Exa 搜索（POST /search，x-api-key；响应 results[].title/url/highlights） */
+export async function souSuoExa(cfg: SousuoGongYingPeiZhi, query: string, opts: { count?: number } = {}, fetchImpl: FetchImpl = fetch): Promise<YanJiuJieGuo> {
+  const q = String(query || '').trim();
+  if (!q) return { ok: false, items: [], error: 'empty-query' };
+  if (!String(cfg.key || '').trim()) return { ok: false, items: [], provider: cfg.name, error: 'missing-key', hint: 'Exa 需要 API Key：设置 → 功能 → 网络搜索。' };
+  try {
+    const r = await fetchImpl('https://api.exa.ai/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': String(cfg.key) },
+      body: JSON.stringify({ query: q, numResults: clampCount(opts.count), type: 'auto', contents: { highlights: true } }),
+    });
+    const j = await duJson(r);
+    if (!r.ok) return shiBai(cfg.name, Number(r.status), r, String(j?.error || ''));
+    const arr: any[] = Array.isArray(j?.results) ? j.results : [];
+    const items = arr.map((x) => ({
+      title: String(x?.title || '').trim(),
+      url: httpUrl(x?.url),
+      snippet: String((Array.isArray(x?.highlights) ? x.highlights : []).join(' ') || x?.text || '').replace(/\s+/g, ' ').slice(0, 900),
+    })).filter((x) => x.url);
+    return { ok: items.length > 0, items, provider: cfg.name };
+  } catch (e) {
+    return { ok: false, items: [], provider: cfg.name, error: 'search-failed: ' + String((e as Error)?.message || e) };
+  }
+}
+
+/** Serper（Google SERP：POST google.serper.dev/search，X-API-KEY；响应 organic[].title/link/snippet） */
+export async function souSuoSerper(cfg: SousuoGongYingPeiZhi, query: string, opts: { count?: number } = {}, fetchImpl: FetchImpl = fetch): Promise<YanJiuJieGuo> {
+  const q = String(query || '').trim();
+  if (!q) return { ok: false, items: [], error: 'empty-query' };
+  if (!String(cfg.key || '').trim()) return { ok: false, items: [], provider: cfg.name, error: 'missing-key', hint: 'Serper 需要 API Key：设置 → 功能 → 网络搜索。' };
+  try {
+    const r = await fetchImpl('https://google.serper.dev/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-KEY': String(cfg.key) },
+      body: JSON.stringify({ q, num: clampCount(opts.count) }),
+    });
+    const j = await duJson(r);
+    if (!r.ok) return shiBai(cfg.name, Number(r.status), r, String(j?.error || ''));
+    const arr: any[] = Array.isArray(j?.organic) ? j.organic : [];
+    const items = arr.map((x) => ({
+      title: String(x?.title || '').trim(),
+      url: httpUrl(x?.link || x?.url),
+      snippet: String(x?.snippet || '').replace(/\s+/g, ' ').slice(0, 900),
+    })).filter((x) => x.url);
+    return { ok: items.length > 0, items, provider: cfg.name, answer: j?.answerBox?.answer ? String(j.answerBox.answer) : undefined };
+  } catch (e) {
+    return { ok: false, items: [], provider: cfg.name, error: 'search-failed: ' + String((e as Error)?.message || e) };
+  }
+}
+
+/** Brave Search（GET api.search.brave.com/res/v1/web/search，X-Subscription-Token；响应 web.results[].title/url/description） */
+export async function souSuoBrave(cfg: SousuoGongYingPeiZhi, query: string, opts: { count?: number } = {}, fetchImpl: FetchImpl = fetch): Promise<YanJiuJieGuo> {
+  const q = String(query || '').trim();
+  if (!q) return { ok: false, items: [], error: 'empty-query' };
+  if (!String(cfg.key || '').trim()) return { ok: false, items: [], provider: cfg.name, error: 'missing-key', hint: 'Brave Search 需要 API Key：设置 → 功能 → 网络搜索。' };
+  try {
+    const r = await fetchImpl('https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(q) + '&count=' + clampCount(opts.count), {
+      method: 'GET',
+      headers: { Accept: 'application/json', 'X-Subscription-Token': String(cfg.key) },
+    });
+    const j = await duJson(r);
+    if (!r.ok) return shiBai(cfg.name, Number(r.status), r, String(j?.error?.message || j?.error || ''));
+    const arr: any[] = Array.isArray(j?.web?.results) ? j.web.results : [];
+    const items = arr.map((x) => ({
+      title: String(x?.title || '').trim(),
+      url: httpUrl(x?.url),
+      snippet: String(x?.description || '').replace(/\s+/g, ' ').slice(0, 900),
+    })).filter((x) => x.url);
+    return { ok: items.length > 0, items, provider: cfg.name };
+  } catch (e) {
+    return { ok: false, items: [], provider: cfg.name, error: 'search-failed: ' + String((e as Error)?.message || e) };
+  }
+}
+
+/** 博查 Bocha（POST api.bochaai.com/v1/web-search，Bearer；响应 data.webPages.value[].name/url/snippet） */
+export async function souSuoBocha(cfg: SousuoGongYingPeiZhi, query: string, opts: { count?: number } = {}, fetchImpl: FetchImpl = fetch): Promise<YanJiuJieGuo> {
+  const q = String(query || '').trim();
+  if (!q) return { ok: false, items: [], error: 'empty-query' };
+  if (!String(cfg.key || '').trim()) return { ok: false, items: [], provider: cfg.name, error: 'missing-key', hint: '博查需要 API Key：设置 → 功能 → 网络搜索。' };
+  try {
+    const r = await fetchImpl('https://api.bochaai.com/v1/web-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + String(cfg.key) },
+      body: JSON.stringify({ query: q, freshness: 'noLimit', count: clampCount(opts.count) }),
+    });
+    const j = await duJson(r);
+    if (!r.ok) return shiBai(cfg.name, Number(r.status), r, String(j?.message || j?.error || ''));
+    const arr: any[] = Array.isArray(j?.data?.webPages?.value) ? j.data.webPages.value
+      : Array.isArray(j?.data?.webPages) ? j.data.webPages : [];
+    const items = arr.map((x) => ({
+      title: String(x?.name || '').trim(),
+      url: httpUrl(x?.url),
+      snippet: String(x?.snippet || x?.summary || '').replace(/\s+/g, ' ').slice(0, 900),
+    })).filter((x) => x.url);
+    return { ok: items.length > 0, items, provider: cfg.name };
+  } catch (e) {
+    return { ok: false, items: [], provider: cfg.name, error: 'search-failed: ' + String((e as Error)?.message || e) };
+  }
+}
+
 /**
  * 按设置里的顺序尝试所有**已启用**的搜索供应商。
  * Jina Reader 不是搜索供应商：只记录一条说明，不参与搜索。
@@ -192,6 +292,10 @@ export async function souSuoProviders(
     if (cfg.kind === 'firecrawl') r = await souSuo(cfg.key || '', q, opts, fetchImpl);
     else if (cfg.kind === 'tavily') r = await souSuoTavily(cfg, q, opts, fetchImpl);
     else if (cfg.kind === 'deepseek') r = await souSuoDeepSeek(cfg, q, opts, fetchImpl);
+    else if (cfg.kind === 'exa') r = await souSuoExa(cfg, q, opts, fetchImpl);
+    else if (cfg.kind === 'serper') r = await souSuoSerper(cfg, q, opts, fetchImpl);
+    else if (cfg.kind === 'brave') r = await souSuoBrave(cfg, q, opts, fetchImpl);
+    else if (cfg.kind === 'bocha') r = await souSuoBocha(cfg, q, opts, fetchImpl);
     else if (cfg.kind === 'custom') r = await souSuoCustom(cfg, q, opts, fetchImpl);
     else continue;
     if (r.ok) {

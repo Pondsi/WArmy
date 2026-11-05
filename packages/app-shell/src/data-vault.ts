@@ -1282,7 +1282,7 @@ export class DataVault {
   }
   disposeNm(token: string): void { this.qingLiNmZanCun(token); }
   /** 提交已解包的暂存区；失败回滚，绝不半解。 */
-  async commitNm(token: string, opts: { include?: string[] } = {}): Promise<VaultResult> {
+  async commitNm(token: string, opts: { include?: string[]; mode?: 'fresh' | 'merge' } = {}): Promise<VaultResult> {
     const st = this.nmStages.get(token);
     if (!st) return { ok: false, error: 'preview-token-invalid-or-expired' };
     const chk = await this.validateNmStage(token);
@@ -1306,7 +1306,7 @@ export class DataVault {
       const beforeSet = new Set(before.map((f) => f.rel));
       await jiaMiGuiDang(this.userData, before, backupFile, backupKey, MODE_MASTER, Buffer.alloc(16));
       try {
-        this.huiFuMuLu(st.dir, this.userData, include);
+        this.huiFuMuLu(st.dir, this.userData, include, opts.mode === 'merge');
       } catch (copyErr) {
         try {
           fs.mkdirSync(restoreRoot, { recursive: true });
@@ -1406,7 +1406,7 @@ export class DataVault {
   }
 
   /** 导入：先完整解到临时目录（口令错/损坏不会碰现有数据），确认后覆盖 userData。 */
-  async importVault(inFile: string, password: string, opts: { include?: string[] } = {}): Promise<VaultResult> {
+  async importVault(inFile: string, password: string, opts: { include?: string[]; mode?: 'fresh' | 'merge' } = {}): Promise<VaultResult> {
     const include = Array.isArray(opts.include) && opts.include.length ? opts.include.map(String) : null;
     const stamp = `${process.pid}-${Date.now()}`;
     const tempRoot = path.join(os.tmpdir(), `warmy-import-${stamp}`);
@@ -1435,7 +1435,7 @@ export class DataVault {
       const beforeSet = new Set(before.map((f) => f.rel));
       await jiaMiGuiDang(this.userData, before, backupFile, backupKey, MODE_MASTER, Buffer.alloc(16));
       try {
-        this.huiFuMuLu(decoded.root, this.userData, include);
+        this.huiFuMuLu(decoded.root, this.userData, include, opts.mode === 'merge');
       } catch (copyErr) {
         try {
           fs.mkdirSync(restoreRoot, { recursive: true });
@@ -1543,8 +1543,9 @@ export class DataVault {
     } catch { /* noop */ }
   }
 
-  /** 把一个临时目录里的文件递归覆盖到目标根目录（保留相对路径）；`include` 按类别过滤导入。 */
-  private huiFuMuLu(src: string, dest: string, include?: string[] | null): void {
+  /** 把一个临时目录里的文件递归覆盖到目标根目录（保留相对路径）；`include` 按类别过滤导入；
+   *  `zhiBuQueShi`（merge 模式）= 目标已存在的文件跳过，只补缺失 —— 本地配置优先，不回退、不覆盖。 */
+  private huiFuMuLu(src: string, dest: string, include?: string[] | null, zhiBuQueShi = false): void {
     const inc = Array.isArray(include) && include.length ? new Set(include.map(String)) : null;
     const leiOf = (rel: string): string[] => {
       const out: string[] = [];
@@ -1569,6 +1570,7 @@ export class DataVault {
         if (ent.isDirectory()) { fs.mkdirSync(t, { recursive: true }); walk(p); continue; }
         if (!ent.isFile()) continue;
         if (!fangXing(rel)) continue;
+        if (zhiBuQueShi && fs.existsSync(t)) continue;
         fs.mkdirSync(path.dirname(t), { recursive: true });
         fs.copyFileSync(p, t);
       }

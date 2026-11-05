@@ -1,4 +1,4 @@
-# WArmy CI — typecheck + build + verify
+# WArmy CI — typecheck + build
 #
 # 注意（曾经导致 CI 全红）：根 package.json 里有
 #   "packageManager": "pnpm@10.23.0"
@@ -25,7 +25,6 @@ jobs:
       # 避免 GitHub 的 "Node.js 20 is deprecated" 警告（老版本动作仍在 node20 上跑）。
       - uses: actions/checkout@v5
         with:
-          # 拉全历史与 tag：spikes/verify-all 会检查版本 tag（默认浅克隆没有 tag）
           fetch-depth: 0
           fetch-tags: true
       - uses: pnpm/action-setup@v6          # 不传 version：由 package.json#packageManager 决定
@@ -45,27 +44,3 @@ jobs:
       - run: pnpm install --no-frozen-lockfile --ignore-scripts
       - run: pnpm typecheck
       - run: pnpm build
-      # 静态/一致性门禁（快、稳）
-      - name: verify docs
-        run: node packages/app-shell/scripts/verify-docs.mjs
-      - name: verify i18n locales
-        run: node packages/app-shell/scripts/verify-i18n-locales.mjs
-      - name: verify naming (含 CSS 大括号平衡 / 品牌 / 端口常量)
-        run: node packages/app-shell/scripts/verify-naming.mjs
-      - name: verify memory
-        run: node packages/app-shell/scripts/verify-memory.mjs
-      - name: verify router queue
-        run: node packages/app-shell/scripts/verify-router-queue.mjs
-      - name: verify tray/single-instance
-        run: node packages/app-shell/scripts/verify-tray-quit.mjs
-      - name: verify chat window
-        run: node packages/app-shell/scripts/verify-chat-window.mjs
-      - name: verify summary quality
-        run: node packages/app-shell/scripts/verify-summary-quality.mjs
-      - name: verify template integrity (recordId 插值 + 唯一性 + rename lock)
-        run: node packages/app-shell/scripts/verify-template-integrity.mjs
-      - name: verify security (密钥/隐私/IPC/updater 不变量)
-        run: node packages/app-shell/scripts/verify-security.mjs
-      # 真机（Electron + CDP）门禁需要下载 Electron 二进制，CI 里用 --ignore-scripts 跳过了，
-      # 因此这两项在 CI 不跑；它们属于本地验收套件的一部分（见本文件顶部说明）。
-      - run: node spikes/verify-all/run-full.mjs

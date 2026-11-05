@@ -584,22 +584,27 @@ export class OllamaGongYing extends JichuGongYing {
             /**
              * **名字优先**（真事故：`dimavz/whisper-tiny:latest` 的 capabilities 只有 `completion`，
              * 于是被判成「对话 + 工具」——它其实是**语音识别**模型，被选进对话链必然出错）。
-             * 名字里明确是 ASR / TTS / 嵌入 / 重排 / 图像生成的，一律按名字归类。
+             * 名字里明确是 ASR / TTS / 嵌入 / 重排 / 翻译 / 安全审核的，一律按名字归类。
+             * 顺序有讲究：`bge-reranker-*` 必须**先于** `bge-`（否则被嵌入规则抢走，标成嵌入模型）；
+             * 翻译 / 安全审核也是名字特征（translategemma / shieldgemma 的 capabilities 只有 completion，
+             * 不看名字就会被标成对话模型）。
              */
             const quanMing = String(id || '').toLowerCase();
             if (/whisper|\basr\b|speech-to-text|\bstt\b|paraformer|sensevoice/.test(quanMing)) { kind = 'asr'; tools = false; }
             else if (/\btts\b|text-to-speech|cosyvoice|vits|bark|sovits/.test(quanMing)) { kind = 'tts'; tools = false; }
-            else if (/bge-|embed|gte-|nomic-embed|text-embedding/.test(quanMing)) { kind = 'embedding'; tools = false; }
-            else if (/rerank/.test(quanMing)) { kind = 'rerank'; tools = false; }
+            else if (/rerank|re-?rank|bge-?reranker/.test(quanMing)) { kind = 'rerank'; tools = false; }
+            else if (/bge-(?!r?erank)|embed|gte-|nomic-embed|text-embedding/.test(quanMing)) { kind = 'embedding'; tools = false; }
+            else if (/translate|translation|nllb|opus-?mt|marian|madlad|m2m/.test(quanMing)) { kind = 'translate'; tools = false; }
+            else if (/shield|llama-?guard|guardian|moderation|content-?filter|safety/.test(quanMing)) { kind = 'safety'; tools = false; }
             else if (/stable-diffusion|sdxl|flux|text-to-image/.test(quanMing)) { kind = 'imageUnd'; tools = false; }
             // **按 capabilities 判类型**（真事故：bge-m3 是 embedding 模型，被当成可用聊天模型）
             else if (caps.some((c) => /embedding/.test(c))) kind = 'embedding';
             /**
-             * 第 35 轮 项 7：**先认 `decision`（分类/决策模型）**。
+             * 第 35 轮 项 7：**先认 `decision`（分类模型）**。
              * 实测 `clef:latest` / `clef-flash:latest` 的能力是 `decision,vision` ——
              * 没有 completion，但**会看图**做分类。旧代码只看到"有 vision 没 completion"
-             * 就判成 `image`（画图），界面上于是给一个决策模型打上「画图」标签。
-             * 用户也明确说：这两个是分类（决策）模型。
+             * 就判成 `image`（画图），界面上于是给一个分类模型打上「画图」标签。
+             * 用户也明确说：这两个是分类模型。
              */
             else if (caps.some((c) => /decision|classif/.test(c))) kind = 'decision';
             /**

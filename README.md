@@ -19,7 +19,7 @@ Use it as a private assistant, as a private team of experts, or as a shared proj
 [![Node](https://img.shields.io/badge/Node-%3E%3D24-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Locales](https://img.shields.io/badge/UI%20locales-10-success)](#small-details)
 
-![First launch: choose a language, then the workhorse army gets to work](docs/screenshots/readme-first-run.png)
+![First launch: choose a language, then the workhorse army gets to work](screenshots/readme-first-run.png)
 
 *First launch. Ten UI languages, one workspace.*
 

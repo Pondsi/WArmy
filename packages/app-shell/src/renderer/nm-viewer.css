@@ -1353,6 +1353,12 @@ body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
 }
 #wangYeYuanWen[readonly] { color: var(--muted); }
 #wangYeYuanWen:focus { outline: none; }
+/* 第 98 轮：网页选中 → 源码高亮反馈（短暂闪烁，textarea 无选区着色层） */
+#wangYeYuanWen.gaoLiangShan { animation: gaoLiangShanShan 0.9s ease-out; }
+@keyframes gaoLiangShanShan {
+  0% { background: color-mix(in srgb, var(--accent, #2f81f7) 22%, transparent); }
+  100% { background: transparent; }
+}
 
 /* 加密压缩包密码框 */
 #mimaZheZhao {
@@ -1456,3 +1462,137 @@ body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
 @media (prefers-reduced-motion: reduce) {
   .xiaZaiTiao span { transition: none; }
 }
+
+/* 聊天编辑器模式：添加文件附件条（样式与主窗口聊天框的 attachChip 一致）。
+   R128：改为**内容区底部悬浮**——absolute 定位不占布局空间（文本不再被挤缩），
+   不随文本滚动条变化；高度超限时条内自己滚动。 */
+.chatEditorAttachTiao {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 6px 12px;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  max-height: 90px; overflow-y: auto;
+  box-shadow: 0 -2px 6px rgba(0,0,0,.06);
+}
+.chatEditorAttachTiao.yinCang { display: none; }
+.chatEditorAttachTiao.chatEditorAttachDropping {
+  outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.chatEditorAttachChip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 99px; padding: 4px 10px; font-size: 12px;
+  color: var(--ink); max-width: 100%;
+}
+.chatEditorAttachChip button {
+  border: none; background: transparent; cursor: pointer;
+  color: var(--muted); font-size: 13px; line-height: 1; padding: 0;
+}
+.chatEditorAttachChip button:hover { color: var(--accent); }
+
+/* ── 无痕标签页标识（标题前缀「无痕 ·」+ 边框/文字主题色区分） ── */
+.wangYeTab.yinSi { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); }
+.wangYeTab.yinSi .tabMing { color: color-mix(in srgb, var(--accent) 72%, var(--ink)); }
+
+/* ── nm 查看器统一的弹窗按钮 ──
+   清理数据 / 启动页设置 / 账号密码 / 收藏夹弹窗此前只引用了主界面类名，
+   nm-viewer.css 从未定义 ⇒ 一直渲染浏览器默认样式，与整体风格不搭。
+   在这里按 nm 按钮体系（描边圆角 26px）补齐；分类按钮选中态 = 主题色实心。 */
+.anNiuXiao {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  height: 26px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .12s, filter .12s;
+}
+.anNiuXiao:hover { background: var(--hover); }
+.anNiuZhuYao {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink, #fff);
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  height: 26px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: filter .12s;
+}
+.anNiuZhuYao:hover { filter: brightness(1.06); }
+.anNiuXiao:disabled, .anNiuZhuYao:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── 收藏夹：添加弹窗 + 悬停面板 ── */
+.scZheZhao {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(0,0,0,.42);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.scKuang {
+  width: min(380px, 100%);
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px;
+}
+.scKuang h3 { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+.scHang { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.scHang span { flex: 0 0 64px; color: var(--muted); font-size: 12px; }
+.scHang input, .scHang select {
+  flex: 1; min-width: 0;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--ink);
+  padding: 5px 8px; font: inherit; font-size: 12px;
+}
+.scHang input:focus, .scHang select:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 0; }
+.scCuo { color: var(--danger, #d9534f); font-size: 12px; margin: 2px 0 6px; }
+.scAnNiuHang { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.scMianBan {
+  position: fixed; z-index: 90; width: 240px; max-height: 60vh; overflow-y: auto;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.18); padding: 6px; font-size: 12px;
+}
+.scXinJian {
+  display: block; width: 100%; text-align: left;
+  border: 0; background: transparent; color: var(--accent);
+  padding: 7px 9px; border-radius: 7px; cursor: pointer; font: inherit; font-size: 12px;
+}
+.scXinJian:hover { background: var(--hover); }
+.scFenGe { height: 1px; background: var(--line); margin: 4px 0; }
+.scJia { border-radius: 7px; }
+.scJiaMing { display: block; padding: 7px 9px; color: var(--ink); font-weight: 600; }
+.scJiaMing::after { content: ' ▾'; opacity: .5; }
+.scJiaNei { padding: 0 0 4px; }
+.scLianJie {
+  display: block; padding: 6px 9px 6px 20px;
+  color: var(--ink); text-decoration: none; border-radius: 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scLianJie:hover { background: var(--hover); color: var(--accent); }
+.scKong { color: var(--muted); padding: 10px 9px; }
+
+/* 第 123 轮：收藏夹星标已收藏 = 主题色实心；「在新标签页打开」开关高亮 */
+#anNiuWangYeShouCang.yiShouCang svg path { fill: var(--accent); stroke: var(--accent); }
+#anNiuWangYeXinKai.kai { color: var(--accent); }
+#anNiuWangYeXinKai.kai svg path { stroke: var(--accent); }
+
+/* 第 123 轮：源码/开发者工具双栏（中间可拖） */
+#yuanDevFenGe { width: 7px; cursor: col-resize; background: var(--line, #ddd); flex: 0 0 auto; user-select: none; }
+#yuanDevLan { width: 32%; min-width: 140px; display: flex; flex-direction: column; border-left: 1px solid var(--line, #ddd); }
+#yuanDevTou { display: flex; align-items: center; gap: 6px; padding: 2px 6px; font-size: 11px; font-weight: 600; border-bottom: 1px solid var(--line, #ddd); }
+#yuanDevRiZhi { flex: 1; overflow: auto; padding: 6px; font-size: 11px; line-height: 1.5; font-family: var(--font-mono, monospace); white-space: pre-wrap; }
+
+#wangYeYuan { display: flex; flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+#wangYeYuan > .yuanGongJuHang, #wangYeYuan > div:first-child { width: 100%; }
+#wangYeYuanWen { order: 1; flex: 1 1 300px; min-width: 180px; }
+#yuanDevFenGe { order: 2; }
+#yuanDevLan { order: 3; flex: 0 0 32%; }

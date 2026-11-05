@@ -103,8 +103,8 @@ export function xingWeiGui(x: XingWei): XingWeiGui {
 export const YU_JING_JIA_YI_DANG_MS = 20 * 60 * 1000;
 export const YU_JING_JIA_YI_DANG_LUN = 40;
 
-/** 连续超时几次算异常（产品定稿：9 次预测都错才当异常，给模型自我修正的机会） */
-export const CHAO_SHI_LIAN_XU_XIAN = 9;
+/** 预估几次都不准算异常（用户裁决：3 次即判异常；原「9 次」限制废止，不再有跨轮/累计 9 次的门槛） */
+export const CHAO_SHI_LIAN_XU_XIAN = 3;
 /** 判断最多换几个模型（全都没反应 = 异常） */
 export const PAN_MO_XING_SHANG_XIAN = 5;
 /** 持久文件里保留最近 N 次真实样本（产品要求：9 次，供下次预测参考校准） */
@@ -617,7 +617,7 @@ export class EtaLinShi {
    *   · `kuiShi`  —— 没有上次预测（第一次，谈不上超）
    *   · `chaoShi` —— 超了没有
    *   · `ciShu`   —— 本轮累计超了几次
-   *   · `yiChang` —— 到 9 次了（**直接判异常，不再问模型**）
+   *   · `yiChang` —— 预估不准到 3 次了（**直接判异常，不再问模型**；用户裁决阈值）
    *   · `shiZong` —— "应存在却查不到上次预测"（临时文件丢了；如实报告）
    */
   panChaoShi(sessionId: string, x: XingWei, now = Date.now()): {

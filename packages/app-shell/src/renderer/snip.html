@@ -61,7 +61,14 @@
     const kuang = document.getElementById('kuang');
     const bar = document.getElementById('bar');
     const ti = document.getElementById('ti');
-    window.__setCap = (u) => { di.src = u || ''; };
+    // 抓屏图注入前先给明确反馈（真机反馈：黑屏等图 = 以为卡住）
+    ti.textContent = '正在准备截图…';
+    window.__setCap = (u) => {
+      di.src = u || '';
+      if (di.complete && di.naturalWidth > 0) { ti.textContent = '拖动框选 → 可拉伸/移动 → 双击/确定＝截取选区 · 全屏请点「全屏」 · 右键/Esc＝取消'; }
+    };
+    di.onload = () => { ti.textContent = '拖动框选 → 可拉伸/移动 → 双击/确定＝截取选区 · 全屏请点「全屏」 · 右键/Esc＝取消'; };
+    di.onerror = () => { ti.textContent = '截图画面加载失败，请右键/Esc 取消后重试'; };
 
     let x0 = 0, y0 = 0, x1 = 0, y1 = 0, tuo = false;
     let qu = null;               // 当前选区（null = 未选）

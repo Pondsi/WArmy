@@ -7,14 +7,14 @@
  *   { version: 1, groups: [...], members: { [groupId]: [...] } }
  *
  * - 写入用 atomic-json 的原子替换，读失败 / 文件损坏都有兜底（损坏文件会被隔离）
- * - 单群成员上限与旧实现一致：50
+ * - 单群成员上限：2000（用户要求扩容；满员后申请仍可见但不可批准，只能拒绝）
  * - 只做本地存储，不引入任何 electron 依赖，便于脱离主进程直接跑验证脚本
  */
 import { duJsonWenJianGeLi, anQuanYuanZiXieJson } from './atomic-json.js';
 import type { QunLei as QiYueQunLei, QunJuese } from '@warmy/contracts';
 
-/** 与旧实现保持一致的成员上限 */
-export const QUN_CHENGYUAN_SHANGXIAN = 50;
+/** 单群成员上限（用户要求：50 → 2000） */
+export const QUN_CHENGYUAN_SHANGXIAN = 2000;
 
 /**
  * 群类型 / 成员角色**只有一份定义**（契约 v1.1 `QunLei` / `QunJuese`）。
@@ -48,6 +48,11 @@ export interface qunJilu {
    * 也不要编一个出来。
    */
   creatorFingerprint?: string;
+  /**
+   * 群聊/项目被停用的时间戳；`null` = 已启用。由主进程 `qunTingYong` 写入
+   * （渲染层据此灰头像 + 显示圆形灰色停用图标）。
+   */
+  stoppedAt?: number | null;
   /**
    * ADR 004（本轮定稿）：**项目级属性** —— 这一层才是"项目是什么"的载体。
    *
@@ -267,6 +272,8 @@ function normalize(raw: unknown): QunCangZhuangtai {
     const chuangJianZheZhiWen = asString(jiLu.creatorFingerprint);
     if (chuangJianZheZhiWen) hang.creatorFingerprint = chuangJianZheZhiWen;
     if (asString(jiLu.rebuiltTo)) hang.rebuiltTo = asString(jiLu.rebuiltTo);
+    // 停用时间戳：null = 启用；旧记录没有该字段 → 保持缺失
+    if (jiLu.stoppedAt !== undefined) hang.stoppedAt = jiLu.stoppedAt === null ? null : asNumber(jiLu.stoppedAt) || null;
     // 旧记录没有项目属性 → 保持缺失（上层回退到本机设置的兼容路径，见 projectOf）
     const xiangMu = guiFanHuaXiangMu(jiLu.project);
     if (xiangMu) hang.project = xiangMu;
@@ -555,6 +562,8 @@ export class QunCang {
     origin?: 'ipc' | 'migrated';
     /** 建群者（本机身份）指纹；不确定就**不要传**（留空 = 未知） */
     creatorFingerprint?: string;
+    /** 停用时间戳；null = 启用；不传 = 保持原样 */
+    stoppedAt?: number | null;
   }): { ok: boolean; group?: qunJilu; error?: string } {
     const groupId = asString(shuRu.groupId);
     if (!groupId) return { ok: false, error: 'groupId required' };
@@ -569,6 +578,7 @@ export class QunCang {
       // 只在"本来不知道"时补写，绝不覆盖已知的创建者
       const chuangJianZheZhiWen = asString(shuRu.creatorFingerprint);
       if (chuangJianZheZhiWen && !cunzai.creatorFingerprint) cunzai.creatorFingerprint = chuangJianZheZhiWen;
+      if (shuRu.stoppedAt !== undefined) cunzai.stoppedAt = shuRu.stoppedAt;
       cunzai.updatedAt = now;
       group = cunzai;
     } else {
@@ -581,6 +591,7 @@ export class QunCang {
         createdAt: now,
         updatedAt: now,
         origin: shuRu.origin === 'migrated' ? 'migrated' : 'ipc',
+        stoppedAt: shuRu.stoppedAt !== undefined ? shuRu.stoppedAt : null,
       };
       const chuangJianZheZhiWen = asString(shuRu.creatorFingerprint);
       if (chuangJianZheZhiWen) group.creatorFingerprint = chuangJianZheZhiWen;
@@ -610,7 +621,7 @@ export class QunCang {
 
   /**
    * 加成员。幂等：同 instanceId（或同名）已存在则原样返回，不重复写盘。
-   * 上限 50，与旧实现一致。
+   * 上限 2000（用户要求扩容；满员后由上层把「批准」挡下并如实告知）。
    * `fingerprint` 可选：**给了就写，没给就留空**（绝不猜）。
    */
   addMember(

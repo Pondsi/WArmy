@@ -13,7 +13,7 @@ release/
 Thumbs.db
 *.tsbuildinfo
 
-spikes/node_modules/
+/spikes/node_modules/
 spikes/package-lock.json
 spikes/*/node_modules/
 spikes/*/models/
@@ -73,5 +73,29 @@ scripts/fixtures/r34-replay/*.png
 packages/app-shell/.eb-run.mjs
 
 # 含硬编码凭据，勿入库（MiMo 卡顿修复任务追加）
-dev/gates/verify-r111-data.mjs
+/dev/gates/verify-r111-data.mjs
 packages/app-shell/scripts/verify-local-search.mjs
+
+
+# 发布仓库口径（用户要求）：只发布程序必须文件 + 说明.md/LICENSE/SPONSORS.md，
+# 开发/验收/交接类文件一律不入库（本地保留）
+/docs/
+/dev/
+/references/
+/spikes/
+/preview/
+/preview.css
+/preview.html
+/preview.js
+/index.html
+/CHANGELOG.md
+/checksums.txt
+/CONTRIBUTING.md
+/.mimocode/
+/.qoder/
+/scripts/
+packages/app-shell/scripts/*
+!packages/app-shell/scripts/check-syntax.mjs
+!packages/app-shell/scripts/copy-assets.mjs
+packages/sync-protocol/scripts/
+

@@ -16,7 +16,7 @@
  * 纪律：这个模块**不读设置**（主题/强调色/插件开关由 electron-main 传进来），
  * 这样它不依赖 settings-store，也不会和主进程形成环形依赖。
  */
-import { app, BrowserWindow, dialog, screen, shell, WebContentsView, type Rectangle } from 'electron';
+import { app, BrowserWindow, dialog, Menu, screen, session, shell, WebContentsView, type Rectangle } from 'electron';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -1200,12 +1200,27 @@ interface NmZhuangTai {
   /** 上次记录的矩形（算位移量用） */
   shangCi: Rectangle;
   yiDongDingShi: NodeJS.Timeout | null;
-  /** 第 104 轮 项 12：远程网页用 WebContentsView（本地网页仍走 sandbox iframe/srcdoc） */
+  /** 第 104 轮 项 12：远程网页用 WebContentsView（本地网页仍走 sandbox iframe/srcdoc）。
+   *  第 98 轮：改为**每个标签页一个视图** —— 切换标签不再重开网页（原来单视图切回来要重新 loadURL）。 */
   wangYeView?: WebContentsView;
+  /** tabKey → 视图（tabKey 由渲染层为每个标签页生成，主进程只认这个键） */
+  wangYeViews?: Map<string, WebContentsView>;
+  /** 最近一次右键菜单条目（门禁/诊断用：只读快照，不参与行为） */
+  wangYeCaiDan?: Array<{ id: string; label: string; disabled?: boolean }>;
   /** 第 116 轮：远程页查找条是否打开（只用于把 Esc 转发给宿主收起） */
   wangYeChaZhaoKai?: boolean;
   /** 第 122 轮：链接在新标签页打开（渲染层开关；主进程据此拦 will-navigate） */
   wangYeXinKai?: boolean;
+  /** 第 124 轮：内嵌开发者工具视图（用户要求：DevTools 嵌进右栏，随分栏拖动同步边界）
+   *  实测限制：devtoolsWebContents 不能移入 WebContentsView（Electron 报 already attached），
+   *  改为**贴靠式内嵌**：detach 窗 setParentWindow 跟随主窗 + 无任务栏条目 + 边界随分栏同步。 */
+  devToolsView?: WebContentsView;
+  /** 贴靠式内嵌的 devtools 独立窗（第 128 轮定稿方案） */
+  devToolsWin?: BrowserWindow;
+  /** 最近一次同步的右栏边界（窗口内容坐标；窗口移动/resize 时用来重新贴靠） */
+  devToolsKuang?: NmWangYeKuang;
+  /** move/resize 贴靠监听已挂过（避免重复挂） */
+  devToolsBound?: boolean;
 }
 
 /** 主窗口在窗口池里的固定 id（nm 窗口 id 都是正数，不会撞） */
@@ -1222,6 +1237,8 @@ export interface NmKaiXuanXiang {
   zhuTi?: { mode: 'light' | 'dark'; accent: string; ink?: string };
   /** 第 121 轮：从哪个会话打开（下载默认落在该会话工作区/downloads；窗口绝不张冠李戴） */
   huiHuaId?: string;
+  /** R128：打开后立即进入网页模式并加载该 URL（占位文件 + web 参数驱动，见渲染层） */
+  kaiWangYe?: string;
 }
 
 function kongBian(): Record<NmBian, number | null> {
@@ -1628,11 +1645,13 @@ function wangYeZhuangTai(Z: NmZhuangTai, extra: Record<string, unknown> = {}): v
   } catch { /* noop */ }
 }
 /** 第 116 轮：把 WebContents 自己的前进/后退/载入状态同步给工具栏（不再让渲染层猜） */
-function wangYeDaoHangZhuangTai(Z: NmZhuangTai): void {
+function wangYeDaoHangZhuangTai(Z: NmZhuangTai, tabKey?: string): void {
   try {
-    const wc = Z.wangYeView?.webContents;
+    const v = tabKey ? (Z.wangYeViews?.get(nmWangYeTabKey(tabKey)) || null) : (Z.wangYeView || null);
+    const wc = v?.webContents;
     if (!wc || wc.isDestroyed()) return;
     wangYeZhuangTai(Z, {
+      tabKey,
       nav: {
         canGoBack: wc.navigationHistory.canGoBack(),
         canGoForward: wc.navigationHistory.canGoForward(),
@@ -1656,6 +1675,9 @@ export function nmWangYeJianPanDongZuo(input: {
   if (ctrl && !input.alt && (key === 'l' || key === 'L')) return 'address';
   if (ctrl && !input.alt && (key === 'r' || key === 'R')) return 'reload';
   if (ctrl && !input.alt && (key === 'p' || key === 'P')) return 'print';
+  if (ctrl && !input.alt && (key === '=' || key === '+' || key === 'Add')) return 'zoom-in';
+  if (ctrl && !input.alt && (key === '-' || key === 'Subtract')) return 'zoom-out';
+  if (ctrl && !input.alt && key === '0') return 'zoom-reset';
   if (!ctrl && !input.alt && key === 'F5') return 'reload';
   if (input.alt && key === 'ArrowLeft') return 'back';
   if (input.alt && key === 'ArrowRight') return 'forward';
@@ -1673,16 +1695,56 @@ function wangYeJianPan(Z: NmZhuangTai, e: { preventDefault(): void }, input: {
   const shortcut = nmWangYeJianPanDongZuo(input, !!Z.wangYeChaZhaoKai);
   if (!shortcut) return;
   e.preventDefault();
+  /** 第 98 轮：缩放直接改视图 zoom level，不绕渲染层 */
+  if (shortcut === 'zoom-in' || shortcut === 'zoom-out' || shortcut === 'zoom-reset') {
+    try {
+      const v = Z.wangYeView;
+      if (v && !v.webContents.isDestroyed()) {
+        const wc = v.webContents;
+        const lv = shortcut === 'zoom-reset' ? 0 : (wc.getZoomLevel() || 0) + (shortcut === 'zoom-in' ? 0.5 : -0.5);
+        wc.setZoomLevel(lv);
+      }
+    } catch { /* noop */ }
+    return;
+  }
   if (shortcut === 'find' || shortcut === 'address') {
     try { Z.win.focus(); Z.win.webContents.focus(); } catch { /* noop */ }
   }
   wangYeZhuangTai(Z, { shortcut });
 }
-function quWangYeView(Z: NmZhuangTai): WebContentsView {
-  if (Z.wangYeView && !Z.wangYeView.webContents.isDestroyed()) return Z.wangYeView;
+/** 视图的默认分区（第 98 轮起按标签页建独立视图；cookie 同会话持续，登录态不丢） */
+function nmWangYeTabKey(x: unknown): string {
+  const s = String(x || '').trim();
+  return s && s.length <= 64 ? s : '0';
+}
+function nmWangYeViewOf(Z: NmZhuangTai, tabKey: string, yinSi = false): WebContentsView | null {
+  try {
+    if (!Z.wangYeViews) Z.wangYeViews = new Map();
+    let v = Z.wangYeViews.get(tabKey);
+    if (v && v.webContents.isDestroyed()) { Z.wangYeViews.delete(tabKey); v = undefined; }
+    if (!v) {
+      v = jianWangYeView(Z, tabKey, yinSi);
+      Z.wangYeViews.set(tabKey, v);
+      Z.wangYeView = v;
+    }
+    return v;
+  } catch { return null; }
+}
+/** 隐藏该窗口其它标签页的视图，只留当前标签 */
+function nmWangYeXianShi(Z: NmZhuangTai, tabKey: string): void {
+  try {
+    if (!Z.wangYeViews) return;
+    for (const [k, v] of Z.wangYeViews) {
+      if (k === tabKey) continue;
+      try { v.setVisible(false); } catch { /* noop */ }
+    }
+  } catch { /* noop */ }
+}
+function jianWangYeView(Z: NmZhuangTai, tabKey: string, yinSi = false): WebContentsView {
   const v = new WebContentsView({
     webPreferences: {
-      partition: 'nm-web',
+      /** R128 N6：隐私模式 = 内存分区（关程序即清空）；正常 = 持久分区（登录态/缓存可留，清理数据管） */
+      partition: yinSi ? 'nm-web-incognito' : 'persist:nm-web',
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
@@ -1699,76 +1761,256 @@ function quWangYeView(Z: NmZhuangTai): WebContentsView {
    */
   wc.setWindowOpenHandler(({ url }) => {
     const u = String(url || '');
-    if (/^https?:\/\//i.test(u)) wangYeZhuangTai(Z, { openInNewTab: u });
-    else wangYeZhuangTai(Z, { blocked: u });
+    if (/^https?:\/\//i.test(u)) wangYeZhuangTai(Z, { tabKey, openInNewTab: u });
+    else wangYeZhuangTai(Z, { tabKey, blocked: u });
     return { action: 'deny' };
   });
   wc.on('will-navigate', (e, u) => {
     const url = String(u || '');
-    if (!/^https?:\/\//i.test(url)) { e.preventDefault(); wangYeZhuangTai(Z, { blocked: url }); return; }
+    if (!/^https?:\/\//i.test(url)) { e.preventDefault(); wangYeZhuangTai(Z, { tabKey, blocked: url }); return; }
     /**
      * 开关开启：网页内的链接点击不覆盖当前页，而是在新标签页打开。
      * will-navigate 只在用户/页面发起导航时触发，不拦 loadURL（我们自己的地址栏/新建标签）。
      */
     if (Z.wangYeXinKai) {
       e.preventDefault();
-      wangYeZhuangTai(Z, { openInNewTab: url });
+      wangYeZhuangTai(Z, { tabKey, openInNewTab: url });
     }
   });
-  try { wc.session.setPermissionRequestHandler((_wc, _p, cb) => cb(false)); } catch { /* noop */ }
-  try { wc.session.setPermissionCheckHandler(() => false); } catch { /* noop */ }
-  wc.on('page-title-updated', (_e, title) => wangYeZhuangTai(Z, { title }));
+  // 权限统一走主进程启动时的全局策略（media 只放行主窗口）；nm 网页一律拒绝
+  wc.on('page-title-updated', (_e, title) => wangYeZhuangTai(Z, { tabKey, title }));
   wc.on('did-navigate', (_e, url) => {
     Z.wangYeChaZhaoKai = false;
-    wangYeZhuangTai(Z, { url, loading: false, found: { matches: 0, active: 0, query: '' } });
-    wangYeDaoHangZhuangTai(Z);
+    wangYeZhuangTai(Z, { tabKey, url, loading: false, found: { matches: 0, active: 0, query: '' } });
+    wangYeDaoHangZhuangTai(Z, tabKey);
   });
-  wc.on('did-navigate-in-page', (_e, url, isMain) => { if (isMain) { wangYeZhuangTai(Z, { url }); wangYeDaoHangZhuangTai(Z); } });
-  wc.on('did-start-loading', () => { wangYeZhuangTai(Z, { loading: true }); wangYeDaoHangZhuangTai(Z); });
-  wc.on('did-stop-loading', () => { wangYeZhuangTai(Z, { loading: false }); wangYeDaoHangZhuangTai(Z); });
-  wc.on('render-process-gone', (_e, d) => wangYeZhuangTai(Z, { crashed: true, reason: d?.reason || '' }));
-  wc.on('found-in-page', (_e, r) => wangYeZhuangTai(Z, { found: { matches: r.matches, active: r.activeMatchOrdinal } }));
+  wc.on('did-navigate-in-page', (_e, url, isMain) => { if (isMain) { wangYeZhuangTai(Z, { tabKey, url }); wangYeDaoHangZhuangTai(Z, tabKey); } });
+  wc.on('did-start-loading', () => { wangYeZhuangTai(Z, { tabKey, loading: true }); wangYeDaoHangZhuangTai(Z, tabKey); });
+  wc.on('did-stop-loading', () => { wangYeZhuangTai(Z, { tabKey, loading: false }); wangYeDaoHangZhuangTai(Z, tabKey); });
+  wc.on('render-process-gone', (_e, d) => wangYeZhuangTai(Z, { tabKey, crashed: true, reason: d?.reason || '' }));
+  wc.on('found-in-page', (_e, r) => wangYeZhuangTai(Z, { tabKey, found: { matches: r.matches, active: r.activeMatchOrdinal } }));
   wc.on('before-input-event', (e, input) => wangYeJianPan(Z, e, input));
+  /** 第 98 轮：网页右键菜单（复制/全选/粘贴/打印/截图/搜索/系统浏览器/缩放） */
+  wc.on('context-menu', (_e, params) => {
+    try {
+      const url = wc.getURL();
+      const can = params.editFlags || ({} as typeof params.editFlags);
+      const xiang: Electron.MenuItemConstructorOptions[] = [
+        { id: 'copy', label: '复制', enabled: !!(can.canCopy || params.selectionText), click: () => { try { wc.copy(); } catch { /* noop */ } } },
+        { id: 'selectAll', label: '全选', enabled: can.canSelectAll !== false, click: () => { try { wc.selectAll(); } catch { /* noop */ } } },
+        { id: 'paste', label: '粘贴', enabled: !!can.canPaste, click: () => { try { wc.paste(); } catch { /* noop */ } } },
+        { type: 'separator' },
+        { id: 'print', label: '打印网页…', enabled: /^https?:\/\//i.test(url), click: () => { void nmWangYeDaYin(Z.id, tabKey); } },
+        { id: 'printSel', label: '打印选中内容…', enabled: !!String(params.selectionText || '').trim(), click: () => { void nmWangYeDaYinXuanZhong(Z.id, tabKey); } },
+        { id: 'shot', label: '截图', click: () => { void nmWangYeJieTu(Z.id, tabKey); } },
+        { id: 'find', label: '在页面中查找…', click: () => wangYeZhuangTai(Z, { tabKey, shortcut: 'find' }) },
+        {
+          id: 'fanYiXuan',
+          label: '翻译选中内容',
+          enabled: !!String(params.selectionText || '').trim(),
+          click: () => {
+            wangYeZhuangTai(Z, { tabKey, fanYiQingQiu: { mode: 'xuan', text: String(params.selectionText || '').slice(0, 2400) } });
+          },
+        },
+        {
+          id: 'fanYiYe',
+          label: '翻译网页',
+          enabled: /^https?:\/\//i.test(url),
+          click: () => {
+            void (async () => {
+              try {
+                const txt = String(await wc.executeJavaScript('document.body.innerText') || '').slice(0, 2400);
+                if (txt.trim()) wangYeZhuangTai(Z, { tabKey, fanYiQingQiu: { mode: 'ye', text: txt } });
+              } catch { /* 取不到页面文本就如实放弃 */ }
+            })();
+          },
+        },
+        { id: 'openExternal', label: '在系统默认浏览器打开', enabled: /^https?:\/\//i.test(url), click: () => { try { void shell.openExternal(url); } catch { /* noop */ } } },
+        { type: 'separator' },
+        { id: 'zoomIn', label: '放大', click: () => { try { wc.setZoomLevel((wc.getZoomLevel() || 0) + 0.5); } catch { /* noop */ } } },
+        { id: 'zoomOut', label: '缩小', click: () => { try { wc.setZoomLevel((wc.getZoomLevel() || 0) - 0.5); } catch { /* noop */ } } },
+        { id: 'zoomReset', label: '重置缩放', click: () => { try { wc.setZoomLevel(0); } catch { /* noop */ } } },
+        { type: 'separator' },
+        { id: 'exitWeb', label: '退出网站模式', click: () => wangYeZhuangTai(Z, { tabKey, shortcut: 'exit-web' }) },
+      ];
+      Z.wangYeCaiDan = xiang.map((x) => ({ id: String(x.id || ''), label: String(x.label || ''), disabled: x.enabled === false }));
+      const menu = Menu.buildFromTemplate(xiang);
+      menu.popup({ window: Z.win });
+    } catch { /* 右键菜单失败不影响浏览 */ }
+  });
   Z.win.contentView.addChildView(v);
   v.setVisible(false);
-  Z.wangYeView = v;
   return v;
 }
 
-/** 打开/切换远程网页（本地网页由渲染层 iframe 负责，不调用这里） */
-export function nmWangYeKai(p0: { id?: number; url?: string; kuang?: NmWangYeKuang }): { ok: boolean; cuo?: string } {
+/** 打开/切换远程网页（本地网页由渲染层 iframe 负责，不调用这里）。tabKey 决定用哪个视图 —— 切标签不重开网页。 */
+/** 第 123 轮：向网页内注入脚本（译文浮层用：原生视图盖住 DOM，浮层必须画在网页里） */
+export function nmZhuRuJiaoBen(p0: { id?: number; tabKey?: string; js?: string }): { ok: boolean; cuo?: string } {
+  try {
+    const Z = CHUANG_KOU.get(Number(p0?.id) || 0);
+    if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '窗口不存在' };
+    const tabKey = nmWangYeTabKey(String(p0?.tabKey || ''));
+    const v = nmWangYeViewOf(Z, tabKey);
+    const wc = v && v.webContents;
+    if (!wc || wc.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+    void wc.executeJavaScript(String(p0?.js || ''));
+    return { ok: true };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 120) }; }
+}
+/** 把 devtools 窗贴靠到 nm 窗口右栏（内容坐标 kuang → 屏幕坐标） */
+function tieKaoDevTools(Z: NmZhuangTai): void {
+  const dt = Z.devToolsWin;
+  const kuang = Z.devToolsKuang;
+  if (!dt || dt.isDestroyed() || !kuang) return;
+  try {
+    const cb = Z.win.getContentBounds();
+    const x = Math.round(cb.x + kuang.x);
+    const y = Math.round(cb.y + kuang.y);
+    const width = Math.max(60, Math.round(kuang.width));
+    const height = Math.max(60, Math.round(kuang.height));
+    if (dt.getBounds().x !== x || dt.getBounds().y !== y || dt.getBounds().width !== width || dt.getBounds().height !== height) {
+      dt.setBounds({ x, y, width, height });
+    }
+  } catch { /* 贴靠失败不阻断 */ }
+}
+
+/** 第 124 轮（用户要求）：开发者工具**内嵌右栏**（不再独立窗口）——
+ *  Electron 平台限制：devtoolsWebContents 无法移入 WebContentsView（already attached），
+ *  定稿方案 = detach 窗贴靠式内嵌：跟随主窗移动/最小化、任务栏隐藏、边界随分栏拖动同步。
+ */
+export async function nmDevToolsKai(p0: { id?: number; tabKey?: string; kuang?: NmWangYeKuang }): Promise<{ ok: boolean; cuo?: string }> {
+  try {
+    const Z = CHUANG_KOU.get(Number(p0?.id) || 0);
+    if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '窗口不存在' };
+    const tabKey = nmWangYeTabKey(String(p0?.tabKey || ''));
+    const v = nmWangYeViewOf(Z, tabKey);
+    const wc = v && v.webContents;
+    if (!wc || wc.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+    if (p0?.kuang) Z.devToolsKuang = p0.kuang;
+    let dt = Z.devToolsWin;
+    if (!dt || dt.isDestroyed()) {
+      if (!wc.devToolsWebContents || wc.devToolsWebContents.isDestroyed()) {
+        wc.openDevTools({ mode: 'detach' });
+      }
+      /** openDevTools 后 devtools 前端异步加载：devToolsWebContents 可能延迟就绪，轮询等待 */
+      let dtc = wc.devToolsWebContents;
+      if (!dtc) {
+        const t0 = Date.now();
+        while (!dtc && Date.now() - t0 < 8000) {
+          await new Promise((res) => setTimeout(res, 250));
+          dtc = wc.devToolsWebContents;
+        }
+      }
+      if (!dtc || dtc.isDestroyed()) return { ok: false, cuo: '开发者工具未就绪，请再点一次' };
+      dt = BrowserWindow.fromWebContents(dtc) || undefined;
+      if (!dt || dt.isDestroyed()) return { ok: false, cuo: '开发者工具窗口不可用' };
+      /** 贴靠式内嵌：随主窗移动/最小化，不占任务栏 */
+      try { dt.setParentWindow(Z.win); } catch { /* 平台不支持也不挡 */ }
+      try { dt.setSkipTaskbar(true); } catch { /* noop */ }
+      try { dt.setMenuBarVisibility(false); } catch { /* noop */ }
+      Z.devToolsWin = dt;
+      if (!Z.devToolsBound) {
+        Z.devToolsBound = true;
+        Z.win.on('move', () => tieKaoDevTools(Z));
+        Z.win.on('resize', () => tieKaoDevTools(Z));
+      }
+    }
+    tieKaoDevTools(Z);
+    try { dt.show(); dt.focus(); } catch { /* noop */ }
+    return { ok: true };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 120) }; }
+}
+
+/** 分栏拖动 / 窗口尺寸变化时同步内嵌 DevTools 边界；kai=false 收起 */
+export function nmDevToolsKuang(p0: { id?: number; kuang?: NmWangYeKuang; kai?: boolean }): { ok: boolean; cuo?: string } {
+  try {
+    const Z = CHUANG_KOU.get(Number(p0?.id) || 0);
+    if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '窗口不存在' };
+    const dt = Z.devToolsWin;
+    if (!dt || dt.isDestroyed()) return { ok: false, cuo: '开发者工具未打开' };
+    if (p0?.kai === false) { try { dt.hide(); } catch { /* noop */ } return { ok: true }; }
+    if (p0?.kuang) {
+      Z.devToolsKuang = p0.kuang;
+      tieKaoDevTools(Z);
+      try { dt.show(); } catch { /* noop */ }
+    }
+    return { ok: true };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 120) }; }
+}
+export function nmWangYeKai(p0: { id?: number; tabKey?: string; url?: string; kuang?: NmWangYeKuang; yinSi?: boolean }): { ok: boolean; cuo?: string; deferred?: boolean } {
   try {
     const Z = CHUANG_KOU.get(Number(p0?.id) || 0);
     if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '窗口不存在' };
     const url = String(p0?.url || '').trim();
     if (!/^https?:\/\//i.test(url)) return { ok: false, cuo: '只支持 http/https 网页' };
-    const v = quWangYeView(Z);
-    if (p0?.kuang) v.setBounds(anQuanWangYeKuang(p0.kuang));
+    const tabKey = nmWangYeTabKey(p0?.tabKey);
+    const v = nmWangYeViewOf(Z, tabKey, !!p0?.yinSi);
+    if (!v) return { ok: false, cuo: '网页视图创建失败' };
+    /**
+     * 显示顺序（真机：刚进网站模式时地址栏按钮点不到，布局稳定后自愈）：
+     * 原生视图在 DOM 之上，若边界异常（渲染层布局未就绪量成全 0/极小）就先**不显示**，
+     * 等渲染层 ResizeObserver 下一轮带正确边界再来；设置边界前先隐藏，避免中间态盖住工具栏。
+     */
+    if (p0?.kuang) {
+      const b = anQuanWangYeKuang(p0.kuang);
+      v.setVisible(false);
+      v.setBounds(b);
+      if (b.width < 30 || b.height < 30) return { ok: true, deferred: true };
+    }
     v.setVisible(true);
+    nmWangYeXianShi(Z, tabKey);
     const cur = v.webContents.getURL();
+    /** 视图已在这个 url 上就不重载（切换标签回来 = 直接显示原页面） */
     if (cur !== url) void v.webContents.loadURL(url).catch(() => { /* 错误由 did-fail-load / 状态事件如实回报 */ });
-    wangYeDaoHangZhuangTai(Z);
+    wangYeDaoHangZhuangTai(Z, tabKey);
     return { ok: true };
   } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 200) }; }
 }
 
-export function nmWangYeKuang(id: number, kuang: NmWangYeKuang): { ok: boolean } {
+export function nmWangYeKuang(id: number, kuang: NmWangYeKuang, tabKey?: string): { ok: boolean } {
   const Z = CHUANG_KOU.get(Number(id) || 0);
-  if (!Z || !Z.wangYeView || Z.wangYeView.webContents.isDestroyed()) return { ok: false };
-  try { Z.wangYeView.setBounds(anQuanWangYeKuang(kuang)); return { ok: true }; } catch { return { ok: false }; }
+  const v = Z && nmWangYeViewOf(Z, nmWangYeTabKey(tabKey));
+  if (!Z || !v || v.webContents.isDestroyed()) return { ok: false };
+  try { v.setBounds(anQuanWangYeKuang(kuang)); return { ok: true }; } catch { return { ok: false }; }
 }
 
-export function nmWangYeGuan(id: number): { ok: boolean } {
+export function nmWangYeGuan(id: number, tabKey?: string): { ok: boolean } {
   const Z = CHUANG_KOU.get(Number(id) || 0);
-  if (!Z || !Z.wangYeView) return { ok: true };
-  try { Z.wangYeView.setVisible(false); } catch { /* noop */ }
+  if (!Z) return { ok: true };
+  try {
+    if (tabKey) {
+      const v = Z.wangYeViews?.get(nmWangYeTabKey(tabKey));
+      if (v) v.setVisible(false);
+    } else {
+      Z.wangYeView?.setVisible(false);
+      if (Z.wangYeViews) for (const v of Z.wangYeViews.values()) { try { v.setVisible(false); } catch { /* noop */ } }
+    }
+  } catch { /* noop */ }
   return { ok: true };
 }
 
-export function nmWangYeDaoHang(id: number, dong: 'back' | 'forward' | 'reload' | 'stop' | 'load', url?: string): { ok: boolean; cuo?: string } {
+/** 关闭标签页 = 销毁该标签的视图（页面状态随之释放） */
+export function nmWangYeGuanTing(id: number, tabKey?: string): { ok: boolean } {
   const Z = CHUANG_KOU.get(Number(id) || 0);
-  if (!Z || !Z.wangYeView || Z.wangYeView.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
-  const wc = Z.wangYeView.webContents;
+  if (!Z) return { ok: true };
+  try {
+    const k = nmWangYeTabKey(tabKey);
+    const v = Z.wangYeViews?.get(k);
+    if (v && !v.webContents.isDestroyed()) {
+      try { Z.win.contentView.removeChildView(v); } catch { /* noop */ }
+      v.webContents.close();
+    }
+    Z.wangYeViews?.delete(k);
+    if (Z.wangYeView === v) Z.wangYeView = undefined;
+  } catch { /* noop */ }
+  return { ok: true };
+}
+
+export function nmWangYeDaoHang(id: number, dong: 'back' | 'forward' | 'reload' | 'stop' | 'load', url?: string, tabKey?: string): { ok: boolean; cuo?: string } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  const v = Z && nmWangYeViewOf(Z, nmWangYeTabKey(tabKey));
+  if (!Z || !v || v.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+  const wc = v.webContents;
   try {
     if (dong === 'back') { if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); }
     else if (dong === 'forward') { if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward(); }
@@ -1779,7 +2021,7 @@ export function nmWangYeDaoHang(id: number, dong: 'back' | 'forward' | 'reload' 
       if (!/^https?:\/\//i.test(u)) return { ok: false, cuo: '只支持 http/https 网页' };
       void wc.loadURL(u).catch(() => { /* noop */ });
     }
-    wangYeDaoHangZhuangTai(Z);
+    wangYeDaoHangZhuangTai(Z, tabKey);
     return { ok: true };
   } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e) }; }
 }
@@ -1797,10 +2039,11 @@ export function nmWangYeXinKai(id: number, kai: boolean): { ok: boolean } {
  * `executeJavaScript` 在它的主 frame 里读 `document.documentElement.outerHTML`——
  * 跨域也拿得到（不是网页脚本的 fetch）；返回的是**渲染后的 HTML**（脚本改过 DOM 也是当前看到的这一份）。
  */
-export async function nmWangYeYuan(id: number): Promise<{ ok: boolean; html?: string; url?: string; title?: string; truncated?: boolean; cuo?: string }> {
+export async function nmWangYeYuan(id: number, tabKey?: string): Promise<{ ok: boolean; html?: string; url?: string; title?: string; truncated?: boolean; cuo?: string }> {
   const Z = CHUANG_KOU.get(Number(id) || 0);
-  if (!Z || !Z.wangYeView || Z.wangYeView.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
-  const wc = Z.wangYeView.webContents;
+  const v = Z && nmWangYeViewOf(Z, nmWangYeTabKey(tabKey));
+  if (!Z || !v || v.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+  const wc = v.webContents;
   try {
     const url = wc.getURL();
     if (!/^https?:\/\//i.test(url)) return { ok: false, cuo: '当前不是远程网页' };
@@ -1821,31 +2064,496 @@ export async function nmWangYeYuan(id: number): Promise<{ ok: boolean; html?: st
 }
 
 /** 远程页内查找（DOM 查找只能查 nm 自己的页面，查不到 WebContentsView） */
-export function nmWangYeChaZhao(id: number, wen: string, xiangQian = true): { ok: boolean; requestId?: number } {
+export function nmWangYeChaZhao(id: number, wen: string, xiangQian = true, tabKey?: string): { ok: boolean; requestId?: number } {
   const Z = CHUANG_KOU.get(Number(id) || 0);
-  if (!Z || !Z.wangYeView || Z.wangYeView.webContents.isDestroyed()) return { ok: false };
-  const wc = Z.wangYeView.webContents;
+  const v = Z && nmWangYeViewOf(Z, nmWangYeTabKey(tabKey));
+  if (!Z || !v || v.webContents.isDestroyed()) return { ok: false };
+  const wc = v.webContents;
   const s = String(wen || '');
   if (!s) {
     Z.wangYeChaZhaoKai = false;
     try { wc.stopFindInPage('clearSelection'); } catch { /* noop */ }
-    wangYeZhuangTai(Z, { found: { matches: 0, active: 0, query: '' } });
+    wangYeZhuangTai(Z, { tabKey, found: { matches: 0, active: 0, query: '' } });
     return { ok: true };
   }
   Z.wangYeChaZhaoKai = true;
   try {
     const requestId = wc.findInPage(s, { forward: !!xiangQian, findNext: true });
-    wangYeZhuangTai(Z, { found: { matches: 0, active: 0, query: s, pending: true } });
+    wangYeZhuangTai(Z, { tabKey, found: { matches: 0, active: 0, query: s, pending: true } });
     return { ok: true, requestId };
   } catch { return { ok: false }; }
 }
 
 /** 打印远程页（window.print() 不会带 WebContentsView 的内容） */
-export function nmWangYeDaYin(id: number): { ok: boolean; cuo?: string } {
+export function nmWangYeDaYin(id: number, tabKey?: string): { ok: boolean; cuo?: string } {
   const Z = CHUANG_KOU.get(Number(id) || 0);
-  if (!Z || !Z.wangYeView || Z.wangYeView.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
-  try { Z.wangYeView.webContents.print({}, (ok, why) => { if (!ok && why) wangYeZhuangTai(Z, { printError: why }); }); return { ok: true }; }
+  const v = Z && nmWangYeViewOf(Z, nmWangYeTabKey(tabKey));
+  if (!Z || !v || v.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+  try { v.webContents.print({}, (ok, why) => { if (!ok && why) wangYeZhuangTai(Z, { tabKey, printError: why }); }); return { ok: true }; }
   catch (e) { return { ok: false, cuo: String((e as Error)?.message || e) }; }
+}
+
+/** 打印选中内容：把选中的文字连同标题/网址排成一页再打印（选中的排版与网页不同，但内容一字不差） */
+export async function nmWangYeDaYinXuanZhong(id: number, tabKey?: string): Promise<{ ok: boolean; cuo?: string }> {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  const v = Z && nmWangYeViewOf(Z, nmWangYeTabKey(tabKey));
+  if (!Z || !v || v.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+  const wc = v.webContents;
+  try {
+    const jie = await wc.executeJavaScript('(() => { const s = getSelection(); const t = s ? String(s.toString() || "").trim() : ""; return { t, url: location.href, title: document.title }; })()', false);
+    const t = String((jie as { t?: string })?.t || '').trim();
+    if (!t) return { ok: false, cuo: '页面上没有选中的内容' };
+    const biao = String((jie as { title?: string })?.title || '');
+    const u = String((jie as { url?: string })?.url || '');
+    const html = '<!doctype html><html><head><meta charset="utf-8"><title>打印选中内容</title>'
+      + '<style>body{font-family:system-ui,"Microsoft YaHei",sans-serif;margin:2.4cm;color:#111;line-height:1.7}'
+      + 'h1{font-size:18px}cite{display:block;color:#666;font-size:12px;margin-bottom:1.2em;word-break:break-all}'
+      + 'blockquote{white-space:pre-wrap;font-size:14px;border-left:3px solid #ccc;padding-left:12px}</style></head><body>'
+      + '<h1>' + String(biao).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string)) + '</h1>'
+      + '<cite>' + u.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string)) + '</cite>'
+      + '<blockquote>' + t.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string)) + '</blockquote>'
+      + '</body></html>';
+    const w = new BrowserWindow({ show: false, width: 800, height: 900, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+    try {
+      await w.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+      w.webContents.print({}, (ok, why) => { if (!ok && why) wangYeZhuangTai(Z, { tabKey, printError: why }); try { w.close(); } catch { /* noop */ } });
+      return { ok: true };
+    } catch (e) { try { w.close(); } catch { /* noop */ } return { ok: false, cuo: String((e as Error)?.message || e) }; }
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 300) }; }
+}
+
+/** 截图：capturePage → userData/nm-shots/<ts>.png，路径经状态事件回渲染层 */
+export async function nmWangYeJieTu(id: number, tabKey?: string): Promise<{ ok: boolean; path?: string; cuo?: string }> {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  const v = Z && nmWangYeViewOf(Z, nmWangYeTabKey(tabKey));
+  if (!Z || !v || v.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+  try {
+    const img = await v.webContents.capturePage();
+    if (img.isEmpty()) return { ok: false, cuo: '页面没有可截取的内容' };
+    const dir = path.join(app.getPath('userData'), 'nm-shots');
+    fs.mkdirSync(dir, { recursive: true });
+    const p = path.join(dir, 'nm-shot-' + Date.now() + '.png');
+    fs.writeFileSync(p, img.toPNG());
+    wangYeZhuangTai(Z, { tabKey, shotPath: p });
+    return { ok: true, path: p };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 300) }; }
+}
+
+/** 读页面正文（智能体 nm_browser 工具用；取渲染后的文本，最多 8000 字） */
+export async function nmWangYeRead(id: number, tabKey?: string, max = 8000): Promise<{ ok: boolean; text?: string; url?: string; title?: string; cuo?: string }> {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  const v = Z && nmWangYeViewOf(Z, nmWangYeTabKey(tabKey));
+  if (!Z || !v || v.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+  try {
+    const jie = await v.webContents.executeJavaScript(
+      '(document.body ? document.body.innerText.slice(0, ' + Math.max(500, Math.min(20000, Number(max) || 8000)) + ') : "")',
+      false,
+    );
+    return { ok: true, text: String(jie ?? ''), url: v.webContents.getURL(), title: v.webContents.getTitle() };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 300) }; }
+}
+
+/** 源码里选中文本 → 网页里定位并高亮（第 98 轮：源码 ⇄ 网页双向高亮的一半） */
+export async function nmWangYeXuanZhongGaoLiang(id: number, tabKey: string, text: string): Promise<{ ok: boolean; found?: boolean; cuo?: string }> {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  const v = Z && nmWangYeViewOf(Z, nmWangYeTabKey(tabKey));
+  if (!Z || !v || v.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+  const t = String(text || '').trim().slice(0, 2000);
+  if (!t) return { ok: false, cuo: '没有选中内容' };
+  try {
+    const jie = await v.webContents.executeJavaScript(
+      `(() => { const t = ${JSON.stringify(t)}; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const n = w.currentNode; const i = n.nodeValue.indexOf(t); if (i >= 0) { const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + t.length); const s = getSelection(); s.removeAllRanges(); s.addRange(r); try { r.startContainer.parentElement.scrollIntoView({ block: 'center' }); } catch {} return true; } } return false; })()`,
+      false,
+    );
+    return { ok: true, found: jie === true };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 300) }; }
+}
+
+/** 网页选中 → 源码定位（渲染层轮询用；返回当前选中的文字） */
+export async function nmWangYeXuanZeQu(id: number, tabKey?: string): Promise<{ ok: boolean; text?: string; cuo?: string }> {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  const v = Z && nmWangYeViewOf(Z, nmWangYeTabKey(tabKey));
+  if (!Z || !v || v.webContents.isDestroyed()) return { ok: false, cuo: '网页视图不存在' };
+  try {
+    const jie = await v.webContents.executeJavaScript('(() => { const s = getSelection(); const t = s ? String(s.toString() || "").trim().slice(0, 2000) : ""; return t; })()', false);
+    return { ok: true, text: String(jie ?? '') };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 300) }; }
+}
+
+/** 右键菜单条目快照（门禁/诊断用，只读） */
+export function nmWangYeCaiDanList(id: number): { ok: boolean; items?: Array<{ id: string; label: string; disabled?: boolean }> } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  if (!Z) return { ok: false };
+  return { ok: true, items: Z.wangYeCaiDan || [] };
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   R128 N6：隐私模式 + 清理数据 + 账号密码（浏览器数据）。
+   隐私模式 = 网页视图走内存分区（关程序即清空）；正常模式 = 持久分区（登录态可留）。
+   ══════════════════════════════════════════════════════════════════════ */
+let nmWangYeYinSi = false;
+export function nmWangYeYinSiShe(v: boolean): boolean {
+  const xin = !!v;
+  const bian = xin !== nmWangYeYinSi;
+  nmWangYeYinSi = xin;
+  if (bian) nmWangYeQuanBuShiTuQing();
+  return bian;
+}
+export function nmWangYeYinSiZhuangTai(): boolean { return nmWangYeYinSi; }
+/** 销毁全部网页视图（切换隐私模式后重建，换到对应分区） */
+export function nmWangYeQuanBuShiTuQing(): void {
+  for (const Z of CHUANG_KOU.values()) {
+    try {
+      if (Z.wangYeViews) {
+        for (const v of Z.wangYeViews.values()) { try { if (!v.webContents.isDestroyed()) v.webContents.close(); } catch { /* noop */ } }
+        Z.wangYeViews.clear();
+      }
+      Z.wangYeView = undefined;
+    } catch { /* noop */ }
+  }
+}
+function nmWangYeFenQu(): Electron.Session {
+  return session.fromPartition(nmWangYeYinSi ? 'nm-web-incognito' : 'persist:nm-web');
+}
+function duiLiMing(ziJie: number): string {
+  const v = Number(ziJie) || 0;
+  if (v < 1024) return v + ' B';
+  if (v < 1024 * 1024) return (v / 1024).toFixed(1) + ' KB';
+  if (v < 1024 * 1024 * 1024) return (v / 1048576).toFixed(1) + ' MB';
+  return (v / 1073741824).toFixed(2) + ' GB';
+}
+/** 数据清单：按内容 8 类 / 按网站 / 按时间 8 档（单位字节，渲染层负责显示） */
+export async function nmWangYeShuJuGaiLan(liuLan: string[] = []): Promise<{
+  ok: boolean; yinSi?: boolean;
+  lei: Record<string, { ming: string; ziJie: number; shuLiang: number }>;
+  zhan: Array<{ host: string; ming: string; ziJie: number; shuLiang: number }>;
+  shi: Array<{ key: string; ming: string; ziJie: number; shuLiang: number }>;
+  cuo?: string;
+}> {
+  try {
+    const ses = nmWangYeFenQu();
+    const kong = (ming: string) => ({ ming, ziJie: 0, shuLiang: 0 });
+    const lei: Record<string, { ming: string; ziJie: number; shuLiang: number }> = {
+      liulan: kong('浏览历史'), xiazai: kong('下载历史'), cookie: kong('Cookie'),
+      huancun: kong('缓存'), biaoDan: kong('表单'), quanXian: kong('权限'),
+      zhangHao: kong('账号密码'), sheZhi: kong('设置'),
+    };
+    const liuLanList = Array.isArray(liuLan) ? liuLan.filter((u) => typeof u === 'string' && u).slice(0, 5000) : [];
+    lei.liulan!.ziJie = liuLanList.reduce((n, u) => n + u.length * 2, 0);
+    lei.liulan!.shuLiang = liuLanList.length;
+    const xia = nmXiaZaiLieBiao();
+    lei.xiazai!.ziJie = xia.reduce((n, x) => n + (x.total || x.received || 0), 0);
+    lei.xiazai!.shuLiang = xia.length;
+    let ck: Electron.Cookie[] = [];
+    try { ck = await ses.cookies.get({}); } catch { ck = []; }
+    const ckZiJie = (c: Electron.Cookie) => (String(c.name || '').length + String(c.value || '').length + String(c.domain || '').length) * 2 + 64;
+    lei.cookie!.ziJie = ck.reduce((n, c) => n + ckZiJie(c), 0);
+    lei.cookie!.shuLiang = ck.length;
+    let cacheSize = 0;
+    try { cacheSize = Number((await (ses as unknown as { getCacheSize(): Promise<number> }).getCacheSize?.()) || 0); } catch { /* 旧内核没有就 0 */ }
+    lei.huancun!.ziJie = cacheSize;
+    try {
+      const sheZhiZi = JSON.stringify({ nmWangYePeiZhi: true }).length;
+      lei.sheZhi!.ziJie = sheZhiZi * 8;
+    } catch { /* noop */ }
+    /** 按网站：cookie + 浏览历史 + 下载（按 URL host） */
+    const zhanMap = new Map<string, { host: string; ming: string; ziJie: number; shuLiang: number }>();
+    const addZhan = (host: string, zi: number) => {
+      const h = String(host || '').replace(/^\./, '') || '(其它)';
+      const it = zhanMap.get(h) || { host: h, ming: h, ziJie: 0, shuLiang: 0 };
+      it.ziJie += zi; it.shuLiang += 1;
+      zhanMap.set(h, it);
+    };
+    for (const c of ck) addZhan(String(c.domain || ''), ckZiJie(c));
+    for (const u of liuLanList) { try { addZhan(new URL(u).host, u.length * 2); } catch { /* noop */ } }
+    /** 按时间：cookie（lastAccess/creation）+ 下载（startedAt）+ 历史（无时间戳只进全部） */
+    const shiAn = (ms: number) => Date.now() - ms;
+    const shiDang: Array<{ key: string; ming: string; ms: number }> = [
+      { key: '1h', ming: '最近 1 小时', ms: 3600e3 }, { key: '2h', ming: '最近 2 小时', ms: 2 * 3600e3 },
+      { key: '6h', ming: '最近 6 小时', ms: 6 * 3600e3 }, { key: 'today', ming: '今天', ms: Date.now() - new Date().setHours(0, 0, 0, 0) },
+      { key: '3d', ming: '最近 3 天', ms: 3 * 86400e3 }, { key: '1w', ming: '最近 1 周', ms: 7 * 86400e3 },
+      { key: '1y', ming: '最近 1 年', ms: 365 * 86400e3 }, { key: 'all', ming: '全部', ms: Infinity },
+    ];
+    const shi = shiDang.map((d) => {
+      const xian = d.ms === Infinity ? 0 : shiAn(d.ms);
+      let ziJie = 0; let shuLiang = 0;
+      for (const c of ck) {
+        const t = Number((c as unknown as { creationDate?: number; lastAccessDate?: number }).lastAccessDate || (c as unknown as { creationDate?: number }).creationDate || 0) * (Number((c as unknown as { creationDate?: number }).creationDate || 0) > 2e10 ? 1 : 1000);
+        if (d.key === 'all' || (t && t >= xian)) { ziJie += ckZiJie(c); shuLiang += 1; }
+      }
+      for (const x of xia) {
+        const t = Number(x.startedAt || 0);
+        if (d.key === 'all' || (t && t >= xian)) { ziJie += (x.total || x.received || 0); shuLiang += 1; }
+      }
+      if (d.key === 'all') { ziJie += lei.liulan!.ziJie; shuLiang += liuLanList.length; }
+      return { key: d.key, ming: d.ming, ziJie, shuLiang };
+    });
+    return { ok: true, yinSi: nmWangYeYinSi, lei, zhan: [...zhanMap.values()].sort((a, b) => b.ziJie - a.ziJie).slice(0, 200), shi };
+  } catch (e) {
+    return { ok: false, lei: {}, zhan: [], shi: [], cuo: String((e as Error)?.message || e).slice(0, 200) };
+  }
+}
+/** 清理：mo='neiRong'|'wangZhan'|'shiJian'，id=类键/网站 host/时间档键。返回估算释放字节 */
+export async function nmWangYeShuJuQing(mo: string, id: string, liuLan: string[] = []): Promise<{ ok: boolean; yiQing?: number; cuo?: string }> {
+  try {
+    const ses = nmWangYeFenQu();
+    const gai = await nmWangYeShuJuGaiLan(liuLan);
+    const lei = gai.lei || {};
+    let yiQing = 0;
+    const ckQuan = async (guoLv?: (c: Electron.Cookie) => boolean) => {
+      try {
+        const ck = await ses.cookies.get({});
+        for (const c of ck) {
+          if (guoLv && !guoLv(c)) continue;
+          try {
+            const u = (c.secure ? 'https://' : 'http://') + String(c.domain || '').replace(/^\./, '') + String(c.path || '/');
+            await ses.cookies.remove(u, String(c.name || ''));
+            yiQing += (String(c.name || '').length + String(c.value || '').length) * 2 + 64;
+          } catch { /* 单条失败不挡其余 */ }
+        }
+      } catch { /* noop */ }
+    };
+    if (mo === 'neiRong') {
+      if (id === 'cookie' || id === 'zhangHao') { await ckQuan(); }
+      if (id === 'huancun') {
+        try { await ses.clearCache(); yiQing += Number(lei.huuncun?.ziJie || lei.huancun?.ziJie || 0); } catch { /* noop */ }
+        try { await ses.clearStorageData({ storages: ['indexdb', 'localstorage', 'serviceworkers', 'cachestorage'] }); } catch { /* noop */ }
+      }
+      if (id === 'biaoDan' || id === 'quanXian') {
+        try { await ses.clearStorageData({ storages: ['localstorage'] }); yiQing += 0; } catch { /* noop */ }
+      }
+      if (id === 'xiazai') { const r = nmXiaZaiQingKong(); yiQing += Number(lei.xiazai?.ziJie || 0); void r; }
+      if (id === 'liulan') { yiQing += Number(lei.liulan?.ziJie || 0); }
+      if (id === 'sheZhi') {
+        /** 本模块纪律上不读 settings —— 设置清理由调用方（electron-main 的 IPC）执行 */
+        yiQing += Number(lei.sheZhi?.ziJie || 0);
+        return { ok: true, yiQing, qingSheZhi: true } as { ok: boolean; yiQing?: number; cuo?: string; qingSheZhi?: boolean };
+      }
+      return { ok: true, yiQing };
+    }
+    if (mo === 'wangZhan') {
+      const host = String(id || '').replace(/^\./, '');
+      await ckQuan((c) => String(c.domain || '').replace(/^\./, '').endsWith(host));
+      try { await ses.clearStorageData({ origin: 'https://' + host }); } catch { /* noop */ }
+      const z = (gai.zhan || []).find((x) => x.host === host);
+      yiQing += Number(z?.ziJie || 0);
+      return { ok: true, yiQing };
+    }
+    if (mo === 'shiJian') {
+      const d = { '1h': 3600e3, '2h': 2 * 3600e3, '6h': 6 * 3600e3, 'today': Date.now() - new Date().setHours(0, 0, 0, 0), '3d': 3 * 86400e3, '1w': 7 * 86400e3, '1y': 365 * 86400e3, 'all': Infinity }[String(id)] ?? Infinity;
+      const xian = d === Infinity ? 0 : Date.now() - d;
+      if (id === 'all') {
+        await ckQuan();
+        try { await ses.clearCache(); } catch { /* noop */ }
+        try { await ses.clearStorageData({}); } catch { /* noop */ }
+        nmXiaZaiQingKong();
+      } else {
+        await ckQuan((c) => {
+          const t = Number((c as unknown as { lastAccessDate?: number; creationDate?: number }).lastAccessDate || (c as unknown as { creationDate?: number }).creationDate || 0);
+          return !t || t * (t > 2e10 ? 1 : 1000) >= xian;
+        });
+        for (const x of nmXiaZaiLieBiao()) {
+          if (Number(x.startedAt || 0) >= xian) { try { nmXiaZaiQingKong(); } catch { /* noop */ } break; }
+        }
+      }
+      const s = (gai.shi || []).find((x) => x.key === String(id));
+      yiQing += Number(s?.ziJie || 0);
+      return { ok: true, yiQing };
+    }
+    return { ok: false, cuo: '未知清理方式：' + mo };
+  } catch (e) {
+    return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 200) };
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   R128：nm_browser 智能体工具 —— 智能体像人一样操控内置浏览器。
+   每个会话（huiHuaId）一个专属浏览器窗口；网页视图用专属 tabKey（agent:N），
+   渲染层不认识这些 tabKey、状态事件会被忽略，不和用户自己的标签打架。
+   ══════════════════════════════════════════════════════════════════════ */
+const NM_BROWSER_CHUANG = new Map<string, number>();
+const NM_BROWSER_DANG = new Map<number, string>();
+let nmBrowserTabXu = 0;
+const NM_BROWSER_TAB_QIAN = 'agent:';
+
+function nmBrowserZhuangTaiOf(huiHuaId: string): NmZhuangTai | null {
+  const id = NM_BROWSER_CHUANG.get(String(huiHuaId || ''));
+  const Z = id != null ? CHUANG_KOU.get(id) : undefined;
+  return Z && !Z.win.isDestroyed() ? Z : null;
+}
+
+/** 占位文件：nmShiTuKai 只收真实文件，智能体浏览器借一个最小 html 当宿主页 */
+function nmBrowserZhanWei(): string {
+  const p = path.join(os.tmpdir(), 'nm-agent-browser.html');
+  try {
+    if (!fs.existsSync(p)) {
+      fs.writeFileSync(p, '<!doctype html><html><head><meta charset="utf-8"><title>nm 浏览器</title></head><body>nm 智能体浏览器</body></html>', 'utf8');
+    }
+  } catch { /* 写不了就在打开时报错 */ }
+  return p;
+}
+
+/** 视图铺满窗口内容区（智能体浏览器整窗都是网页，不与渲染层 UI 抢位置） */
+function nmBrowserKuang(Z: NmZhuangTai): NmWangYeKuang {
+  const b = Z.win.getContentBounds();
+  return { x: 0, y: 0, width: Math.max(1, b.width), height: Math.max(1, b.height) };
+}
+
+function nmBrowserView(Z: NmZhuangTai, tabKey: string): WebContentsView | null {
+  const v = nmWangYeViewOf(Z, tabKey);
+  if (v) {
+    try { v.setBounds(anQuanWangYeKuang(nmBrowserKuang(Z))); v.setVisible(true); nmWangYeXianShi(Z, tabKey); } catch { /* noop */ }
+  }
+  return v;
+}
+
+/** 等页面载入稳定（did-stop-loading 或超时），让 open/nav 后的 read 拿到完整内容 */
+function nmBrowserDengDai(wc: Electron.WebContents, ms = 15000): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      if (!wc || wc.isDestroyed() || !wc.isLoading()) { resolve(); return; }
+      let ding: NodeJS.Timeout | null = setTimeout(() => {
+        ding = null;
+        try { wc.off('did-stop-loading', done); } catch { /* noop */ }
+        resolve();
+      }, ms);
+      const done = (): void => {
+        if (ding) { clearTimeout(ding); ding = null; }
+        resolve();
+      };
+      wc.once('did-stop-loading', done);
+    } catch { resolve(); }
+  });
+}
+
+export type NmBrowserJieGuo = { ok: boolean; cuo?: string } & Record<string, unknown>;
+
+export async function nmBrowserTool(act: string, args: Record<string, unknown> = {}, huiHuaId = ''): Promise<NmBrowserJieGuo> {
+  try {
+    const a = String(act || '').trim().toLowerCase();
+    const url = String(args.url || '').trim();
+    const text = String(args.text || '');
+    const hid = String(huiHuaId || '');
+    /** 取（或按需建）本会话的智能体浏览器窗口 */
+    const qiuChuang = (): { Z: NmZhuangTai | null; cuo?: string } => {
+      const you = nmBrowserZhuangTaiOf(hid);
+      if (you) return { Z: you };
+      if (a !== 'open' && a !== 'new-tab') return { Z: null, cuo: '浏览器还没打开（先用 action=open）' };
+      const p = nmBrowserZhanWei();
+      if (!fs.existsSync(p)) return { Z: null, cuo: '创建浏览器占位文件失败' };
+      const r = nmShiTuKai({ luJing: p, huiHuaId: hid });
+      if (!r.ok || r.id == null) return { Z: null, cuo: r.cuo || '浏览器窗口创建失败' };
+      const Z = CHUANG_KOU.get(r.id) || null;
+      if (Z) {
+        NM_BROWSER_CHUANG.set(hid, Z.id);
+        if (!NM_BROWSER_DANG.has(Z.id)) NM_BROWSER_DANG.set(Z.id, NM_BROWSER_TAB_QIAN + String((nmBrowserTabXu += 1)));
+      }
+      return { Z, cuo: Z ? undefined : '浏览器窗口创建失败' };
+    };
+    const { Z, cuo } = qiuChuang();
+    if (!Z) return { ok: false, cuo: cuo || '浏览器窗口不存在' };
+    const tabKey = String(args.tab || '').trim() || NM_BROWSER_DANG.get(Z.id) || NM_BROWSER_TAB_QIAN + String((nmBrowserTabXu += 1));
+    NM_BROWSER_DANG.set(Z.id, tabKey);
+    switch (a) {
+      case 'open':
+      case 'nav':
+      case 'new-tab': {
+        if (!/^https?:\/\//i.test(url)) return { ok: false, cuo: '只支持 http/https 网址' };
+        let tk = tabKey;
+        if (a === 'new-tab') {
+          tk = NM_BROWSER_TAB_QIAN + String((nmBrowserTabXu += 1));
+          NM_BROWSER_DANG.set(Z.id, tk);
+        }
+        const v0 = nmBrowserView(Z, tk);
+        if (!v0) return { ok: false, cuo: '网页视图创建失败' };
+        const r = nmWangYeKai({ id: Z.id, tabKey: tk, url, kuang: nmBrowserKuang(Z) });
+        if (!r.ok) return { ok: false, cuo: r.cuo || '打开网页失败' };
+        await nmBrowserDengDai(v0.webContents);
+        try { Z.win.setTitle((v0.webContents.getTitle() || url) + ' · nm 浏览器'); } catch { /* noop */ }
+        return { ok: true, action: a, tab: tk, url: v0.webContents.getURL() || url, title: v0.webContents.getTitle() || '' };
+      }
+      case 'back':
+      case 'forward':
+      case 'reload':
+      case 'stop': {
+        const v = nmBrowserView(Z, tabKey);
+        if (!v) return { ok: false, cuo: '网页视图不存在' };
+        const dong = a === 'back' ? 'back' : a === 'forward' ? 'forward' : a === 'stop' ? 'stop' : 'reload';
+        const r = nmWangYeDaoHang(Z.id, dong as 'back' | 'forward' | 'reload' | 'stop', undefined, tabKey);
+        if (!r.ok) return { ok: false, cuo: r.cuo || '导航失败' };
+        await nmBrowserDengDai(v.webContents);
+        return { ok: true, action: a, url: v.webContents.getURL(), title: v.webContents.getTitle() };
+      }
+      case 'read': {
+        const v = nmBrowserView(Z, tabKey);
+        if (!v) return { ok: false, cuo: '网页视图不存在' };
+        const r = await nmWangYeRead(Z.id, tabKey, Math.max(200, Math.min(100000, Number(args.max) || 8000)));
+        return r.ok
+          ? { ok: true, action: 'read', text: r.text || '', url: r.url || '', title: r.title || '' }
+          : { ok: false, cuo: r.cuo || '读取页面失败' };
+      }
+      case 'click': {
+        const v = nmBrowserView(Z, tabKey);
+        if (!v) return { ok: false, cuo: '网页视图不存在' };
+        const x = Math.max(0, Math.round(Number(args.x) || 0));
+        const y = Math.max(0, Math.round(Number(args.y) || 0));
+        const btn = String(args.button || 'left') === 'right' ? 'right' : String(args.button || 'left') === 'middle' ? 'middle' : 'left';
+        const n = Math.max(1, Math.min(3, Math.round(Number(args.count) || 1)));
+        const wc = v.webContents;
+        try {
+          wc.sendInputEvent({ type: 'mouseDown', x, y, button: btn, clickCount: n });
+          wc.sendInputEvent({ type: 'mouseUp', x, y, button: btn, clickCount: n });
+        } catch (e) { return { ok: false, cuo: '点击失败：' + String((e as Error)?.message || e) }; }
+        await nmBrowserDengDai(wc, 8000);
+        return { ok: true, action: 'click', x, y, button: btn, count: n, url: wc.getURL() };
+      }
+      case 'type': {
+        const v = nmBrowserView(Z, tabKey);
+        if (!v) return { ok: false, cuo: '网页视图不存在' };
+        const wc = v.webContents;
+        for (const ch of text) {
+          try {
+            if (ch === '\n' || ch === '\r') { wc.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); wc.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' }); }
+            else if (ch === '\t') { wc.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' }); wc.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' }); }
+            else wc.sendInputEvent({ type: 'char', keyCode: ch });
+          } catch { /* 单字符失败不挡后续 */ }
+        }
+        return { ok: true, action: 'type', zhishu: text.length };
+      }
+      case 'find': {
+        const v = nmBrowserView(Z, tabKey);
+        if (!v) return { ok: false, cuo: '网页视图不存在' };
+        if (!text.trim()) return { ok: false, cuo: 'find 需要 text 参数' };
+        const r = await nmWangYeXuanZhongGaoLiang(Z.id, tabKey, text);
+        return { ok: !!r.ok, action: 'find', found: !!r.found, text: text.slice(0, 100) };
+      }
+      case 'shot': {
+        const v = nmBrowserView(Z, tabKey);
+        if (!v) return { ok: false, cuo: '网页视图不存在' };
+        const r = await nmWangYeJieTu(Z.id, tabKey);
+        return r.ok ? { ok: true, action: 'shot', path: r.path || '' } : { ok: false, cuo: r.cuo || '截图失败' };
+      }
+      case 'status': {
+        const v = nmBrowserView(Z, tabKey);
+        if (!v) return { ok: false, cuo: '网页视图不存在' };
+        const wc = v.webContents;
+        return {
+          ok: true,
+          action: 'status',
+          tab: tabKey,
+          url: wc.getURL(),
+          title: wc.getTitle(),
+          loading: wc.isLoading(),
+          canGoBack: wc.navigationHistory.canGoBack(),
+          canGoForward: wc.navigationHistory.canGoForward(),
+        };
+      }
+      default:
+        return { ok: false, cuo: '未知 action：' + a + '（可用 open/nav/new-tab/back/forward/reload/stop/read/click/type/find/shot/status）' };
+    }
+  } catch (e) {
+    return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 300) };
+  }
 }
 
 /** 打开（或聚焦）一个 nm 查看器窗口 */
@@ -1931,6 +2639,9 @@ export function nmShiTuKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yi
       duanKai(Z);
       try { if (Z.wangYeView && !Z.wangYeView.webContents.isDestroyed()) Z.wangYeView.webContents.close(); } catch { /* noop */ }
       Z.wangYeView = undefined;
+      /** 贴靠式内嵌的 devtools 窗随主窗一起关（parent 已销毁时它自己也该走） */
+      try { if (Z.devToolsWin && !Z.devToolsWin.isDestroyed()) Z.devToolsWin.destroy(); } catch { /* noop */ }
+      Z.devToolsWin = undefined;
       CHUANG_KOU.delete(Z.id);
     });
     void w.loadFile(path.join(__dirname, 'renderer', 'nm-viewer.html'), {
@@ -1940,7 +2651,23 @@ export function nmShiTuKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yi
         theme: zhuTi.mode,
         accent: zhuTi.accent,
         ink: zhuTi.ink || '',
+        ...(String(xuan?.kaiWangYe || '').trim() ? { web: String(xuan.kaiWangYe).trim() } : {}),
       },
+    });
+    /** 拖文件到普通 nm 窗口：不导航替换当前页，而是**新开一个 nm 窗口**打开该文件 */
+    w.webContents.on('will-navigate', (e, u) => {
+      if (!/^file:\/\//i.test(String(u))) { e.preventDefault(); return; }
+      let p = '';
+      try {
+        p = fileURLToPath(String(u));
+        if (p === path.join(__dirname, 'renderer', 'nm-viewer.html')) return;
+      } catch { e.preventDefault(); return; }
+      e.preventDefault();
+      try {
+        if (fs.existsSync(p) && !fs.statSync(p).isDirectory()) {
+          nmShiTuKai({ luJing: p, huiHuaId: Z.huiHuaId });
+        }
+      } catch { /* 打不开就不动 */ }
     });
     return { ok: true, id: Z.id };
   } catch (e) {

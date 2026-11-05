@@ -47,6 +47,7 @@ const EXEMPT_DIRS = new Set([
   'auth', 'identity', 'secure', 'workspace', 'external-edits', 'memory-runtime',
   'updates', 'logs', 'dsh-packages', 'dsh-home', 'mimic', 'node_modules', '.git', 'Cache', 'Code Cache',
   'GPUCache', 'DawnGraphiteCache', 'DawnWebGPUCache', 'Session Storage', 'Local Storage',
+  'GrShaderCache', 'ShaderCache', 'GraphiteDawnCache', 'search-index', 'Crashpad',
   'Shared Dictionary', 'blob_storage', 'Network', 'DIPS', 'fonts', 'screenshots',
   'node', 'pnpm-store', 'release', 'dist',
 ]);

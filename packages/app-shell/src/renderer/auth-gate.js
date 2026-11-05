@@ -130,7 +130,8 @@
       recoverHint: '助记词只在本机校验，不会上传。',
       verify: '验证助记词',
       badPin: 'PIN 不正确',
-      locked: '尝试次数过多，已临时锁定。',
+      locked: '已锁定，建议过段时间再回来查看。',
+      lockHint: '再失败 {n} 次就会被锁定一段时间',
       pinRule: 'PIN 必须是 4–20 位字母或数字，且两次输入一致。',
       pinMismatch: '两次输入的 PIN 不一致。',
       badMnemonic: '助记词无效（单词、顺序或校验位不正确）。',
@@ -228,7 +229,8 @@
       recoverHint: '助記詞只在本機驗證，不會上傳。',
       verify: '驗證助記詞',
       badPin: 'PIN 不正確',
-      locked: '嘗試次數過多，已暫時鎖定。',
+      locked: '已鎖定，建議過段時間再回來查看。',
+      lockHint: '再失敗 {n} 次就會被鎖定一段時間',
       pinRule: 'PIN 必須是 4–20 位字母或數字，且兩次輸入一致。',
       pinMismatch: '兩次輸入的 PIN 不一致。',
       badMnemonic: '助記詞無效（單詞、順序或校驗位不正確）。',
@@ -326,7 +328,8 @@
       recoverHint: 'The mnemonic is verified locally and never uploaded.',
       verify: 'Verify mnemonic',
       badPin: 'Incorrect PIN',
-      locked: 'Too many attempts. Temporarily locked.',
+      locked: 'Locked. Please try again later.',
+      lockHint: 'After {n} more failed attempt(s), you will be locked for a while',
       pinRule: 'PIN must be 4–20 letters/digits and both entries must match.',
       pinMismatch: 'The two PINs do not match.',
       badMnemonic: 'Invalid mnemonic (words, order or checksum).',
@@ -424,7 +427,8 @@
       recoverHint: '助記詞はこの端末内だけで検証され、アップロードされません。',
       verify: '助記詞を検証',
       badPin: 'PIN が正しくありません',
-      locked: '試行回数が多すぎます。一時的にロックされています。',
+      locked: 'ロックされました。しばらくしてからもう一度お試しください。',
+      lockHint: 'あと {n} 回失敗すると、しばらくロックされます',
       pinRule: 'PIN は 4〜20 文字の英数字で、2 回の入力が一致している必要があります。',
       pinMismatch: '2 回の PIN が一致しません。',
       badMnemonic: '助記詞が無効です（単語、順序、チェックサム）。',
@@ -522,7 +526,8 @@
       recoverHint: '니모닉은 이 기기에서만 검증되며 업로드되지 않습니다.',
       verify: '니모닉 확인',
       badPin: 'PIN이 올바르지 않습니다',
-      locked: '시도 횟수가 너무 많습니다. 일시적으로 잠겼습니다.',
+      locked: '잠겼습니다. 잠시 후 다시 시도해 주세요.',
+      lockHint: '실패를 {n}회 더 하면 잠시 잠깁니다',
       pinRule: 'PIN은 4–20자 영문/숫자여야 하며 두 입력이 일치해야 합니다.',
       pinMismatch: '두 PIN이 일치하지 않습니다.',
       badMnemonic: '잘못된 니모닉입니다(단어, 순서 또는 체크섬).',
@@ -620,7 +625,8 @@
       recoverHint: 'La phrase est vérifiée localement et n’est jamais envoyée.',
       verify: 'Vérifier la phrase',
       badPin: 'PIN incorrect',
-      locked: 'Trop de tentatives. Verrouillage temporaire.',
+      locked: 'Verrouillé. Veuillez réessayer plus tard.',
+      lockHint: 'Encore {n} échec(s), puis verrouillage temporaire',
       pinRule: 'Le PIN doit comporter 4 à 20 lettres/chiffres et les deux saisies doivent correspondre.',
       pinMismatch: 'Les deux PIN ne correspondent pas.',
       badMnemonic: 'Phrase mnémonique invalide (mots, ordre ou somme de contrôle).',
@@ -718,7 +724,8 @@
       recoverHint: 'La frase se verifica solo en este equipo y nunca se sube.',
       verify: 'Verificar frase',
       badPin: 'PIN incorrecto',
-      locked: 'Demasiados intentos. Bloqueado temporalmente.',
+      locked: 'Bloqueado. Inténtelo de nuevo más tarde.',
+      lockHint: 'Tras {n} intento(s) fallido(s) más, se bloqueará por un tiempo',
       pinRule: 'El PIN debe tener 4–20 letras/dígitos y ambas entradas deben coincidir.',
       pinMismatch: 'Los dos PIN no coinciden.',
       badMnemonic: 'Frase mnemónica inválida (palabras, orden o checksum).',
@@ -816,7 +823,8 @@
       recoverHint: 'A frase é verificada apenas neste dispositivo e nunca é enviada.',
       verify: 'Verificar frase',
       badPin: 'PIN incorreto',
-      locked: 'Muitas tentativas. Bloqueado temporariamente.',
+      locked: 'Bloqueado. Tente novamente mais tarde.',
+      lockHint: 'Após mais {n} tentativa(s) falha(s), bloqueio temporário',
       pinRule: 'O PIN deve ter 4–20 letras/números e as duas entradas devem coincidir.',
       pinMismatch: 'Os dois PINs não coincidem.',
       badMnemonic: 'Frase mnemônica inválida (palavras, ordem ou checksum).',
@@ -914,7 +922,8 @@
       recoverHint: 'Фраза проверяется только на этом устройстве и никуда не отправляется.',
       verify: 'Проверить фразу',
       badPin: 'Неверный PIN',
-      locked: 'Слишком много попыток. Временная блокировка.',
+      locked: 'Заблокировано. Попробуйте позже.',
+      lockHint: 'Ещё {n} неудачных попыток — временная блокировка',
       pinRule: 'PIN должен состоять из 4–20 букв/цифр, и оба ввода должны совпадать.',
       pinMismatch: 'PIN-коды не совпадают.',
       badMnemonic: 'Неверная мнемоническая фраза (слова, порядок или контрольная сумма).',
@@ -1012,7 +1021,8 @@
       recoverHint: 'La frazo estas kontrolata nur loke kaj neniam suprengluiĝas.',
       verify: 'Kontroli frazon',
       badPin: 'Malĝusta PIN',
-      locked: 'Tro da provoj. Provizore ŝlosita.',
+      locked: 'Ŝlosita. Bonvolu reprovi poste.',
+      lockHint: 'Post {n} pliaj malsukcesoj vi estos ŝlosita dum iom da tempo',
       pinRule: 'PIN devas esti 4–20 literoj/ciferoj kaj ambaŭ enigoj devas kongrui.',
       pinMismatch: 'La du PIN-oj ne kongruas.',
       badMnemonic: 'Nevalida mnemonika frazo (vortoj, ordo aŭ kontrolsumo).',
@@ -1125,7 +1135,7 @@
   function errorText(code, extra) {
     const map = {
       'bad-pin': t('badPin'),
-      locked: t('locked') + (extra ? ` (${extra})` : ''),
+      locked: t('locked'),
       'binding-invalid': t('autoLoginInvalid'),
       'bad-mnemonic': t('badMnemonic'),
       'pin-too-short': t('pinRule'),
@@ -1882,7 +1892,6 @@
   function renderLogin() {
     const a = state.auth || {};
     const locked = Number(a.lockUntil || 0) > Date.now();
-    const lockSeconds = locked ? Math.ceil((Number(a.lockUntil) - Date.now()) / 1000) : 0;
     if (state.lockTimer) { clearTimeout(state.lockTimer); state.lockTimer = null; }
     if (locked) {
       state.lockTimer = setTimeout(async () => {
@@ -1903,8 +1912,8 @@
         <button class="warmyAuthBtn warmyAuthBtnPrimary warmyAuthPinGo" data-auth-action="login-pin" ${!pinEnabled || locked || state.busy ? 'disabled' : ''}>${escapeHtml(t('login'))}</button>
       </div>
       ${!pinEnabled ? `<div class="warmyAuthHint">${escapeHtml(t('noAccount'))}</div>` : ''}
-      ${locked ? `<div class="warmyAuthWarn">${escapeHtml(t('locked'))} ${lockSeconds}${escapeHtml(t('seconds'))}</div>` : ''}
-      ${pinEnabled && a.remainingAttempts != null && !locked ? `<div class="warmyAuthHint">${escapeHtml(String(a.remainingAttempts))} / 5</div>` : ''}
+      ${locked ? `<div class="warmyAuthWarn">${escapeHtml(t('locked'))}</div>` : ''}
+      ${pinEnabled && a.remainingAttempts != null && !locked && a.remainingAttempts < 5 ? `<div class="warmyAuthLockHint">${escapeHtml(t('lockHint').replace('{n}', String(a.remainingAttempts)))}</div>` : ''}
       ${errorBox()}
       <div class="warmyAuthActions warmyAuthActionsBetween">
         <button class="warmyAuthBtn" data-auth-action="recover-open">${escapeHtml(t('recover'))}</button>
@@ -2024,6 +2033,8 @@
   }
 
   function renderRecover() {
+    const a = state.auth || {};
+    const mnemonicLocked = !!a.mnemonicLocked;
     const cells = Array.isArray(state.recoveryCells) && state.recoveryCells.length === 24
       ? state.recoveryCells
       : Array(24).fill('');
@@ -2048,10 +2059,12 @@
       </div>
       <div class="warmyAuthMnemonic warmyAuthRecoveryGrid${idiom ? ' is-idiom-12' : ''}">${grid}</div>
       <div class="warmyAuthHint">${escapeHtml(t('recoverHint'))}</div>
-      ${errorBox()}
+      ${mnemonicLocked ? `<div class="warmyAuthWarn">${escapeHtml(t('locked'))}</div>` : ''}
+      ${!mnemonicLocked && a.mnemonicRemainingAttempts != null && a.mnemonicRemainingAttempts < 5 ? `<div class="warmyAuthLockHint">${escapeHtml(t('lockHint').replace('{n}', String(a.mnemonicRemainingAttempts)))}</div>` : ''}
+      ${mnemonicLocked ? '' : errorBox()}
       <div class="warmyAuthActions">
         <button class="warmyAuthBtn" data-auth-action="recover-back">${escapeHtml(t('back'))}</button>
-        <button class="warmyAuthBtn warmyAuthBtnPrimary" data-auth-action="recover-verify" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('verify'))}</button>
+        <button class="warmyAuthBtn warmyAuthBtnPrimary" data-auth-action="recover-verify" ${state.busy || mnemonicLocked ? 'disabled' : ''}>${escapeHtml(t('verify'))}</button>
       </div>`;
   }
 
@@ -2414,7 +2427,7 @@
       state.busy = false;
       if (!r.ok) {
         if (r.state) state.auth = r.state;
-        state.error = errorText(r.error, r.retryAfterMs ? `${Math.ceil(Number(r.retryAfterMs) / 1000)}${t('seconds')}` : '');
+        state.error = errorText(r.error);
         render();
         return;
       }
@@ -2461,6 +2474,7 @@
       const r = await call('authRecoverBegin', phrase);
       state.busy = false;
       if (!r.ok) {
+        if (r.state) state.auth = r.state;
         state.error = errorText(r.error);
         render();
         return;

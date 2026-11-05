@@ -4,8 +4,13 @@ export const PIN_MIN: number;
 export const PIN_MAX: number;
 export const PIN_MAX_FAILURES: number;
 export const PIN_LOCK_MS: number;
+export const MNEMONIC_LOCK_MS: number;
+export const MAX_LOCK_MS: number;
 export const MASTER_KDF_ITERATIONS: number;
 export const PIN_KDF_ITERATIONS: number;
+export const ARGON2_M: number;
+export const ARGON2_T: number;
+export const ARGON2_P: number;
 export const CREDENTIAL_ALPHABET: string;
 export const CREDENTIAL_LENGTH: number;
 
@@ -38,6 +43,7 @@ export interface LockoutSnapshot {
   failedAttempts: number;
   remainingAttempts: number;
   lockUntil: number;
+  lockLevel: number;
   retryAfterMs: number;
 }
 
@@ -56,6 +62,8 @@ export function deriveKroot(mnemonic: string): Buffer;
 export function krootFingerprint(kroot: Buffer): string;
 export function deriveMasterKey(mnemonic: string, saltB64: string, iterations?: number): Buffer;
 export function derivePinKey(pin: string, saltB64: string, iterations?: number): Buffer;
+export function deriveMasterKeyArgon2(mnemonic: string, saltB64: string, opts?: { m?: number; t?: number; p?: number }): Promise<Buffer>;
+export function derivePinKeyArgon2(pin: string, saltB64: string, opts?: { m?: number; t?: number; p?: number }): Promise<Buffer>;
 export function pinVerifier(key: Buffer): string;
 export function encryptBlob(key: Buffer, plaintext: Buffer | string): AuthBlob;
 export function decryptBlob(key: Buffer, blob: AuthBlob): Buffer;
@@ -67,9 +75,11 @@ export function makeBindingRecord(fields: BindingFields): BindingRecord;
 export function bindingMatches(record: BindingRecord | null | undefined, fields: BindingFields): boolean;
 export function randomMachineId(): string;
 export class PinLockout {
-  constructor(state?: { failedAttempts?: number; lockUntil?: number }, options?: { max?: number; lockMs?: number });
+  constructor(state?: { failedAttempts?: number; lockUntil?: number; lockLevel?: number }, options?: { max?: number; lockMs?: number; maxLockMs?: number });
   max: number;
   lockMs: number;
+  maxLockMs: number;
+  level: number;
   failedAttempts: number;
   lockUntil: number;
   check(now?: number): LockoutSnapshot;

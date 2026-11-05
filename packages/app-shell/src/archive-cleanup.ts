@@ -215,7 +215,7 @@ export function congGuiDangTiQuZhiShi(shuRu: {
  * - status: active | skipped（暂时跳过） | retired（归档复盘后删除）
  * - 归档时检查 skipped：分析 skipHistory，改 message/match 或 retired。
  */
-/** 第 38 轮 项 5：`user-preferences.json` 已废弃并删除（只写不读的死路径；用户偏好统一进「印象」yinxiang.md）。 */
+/** 第 38 轮 项 5：旧版 user-preferences 文件（只写不读的死路径）已废弃并删除；用户偏好统一进「印象」yinxiang.md。 */
 
 
 /**

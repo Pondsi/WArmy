@@ -56,7 +56,7 @@ const GAO_WEI_XIAN: Array<[RegExp, string]> = [
   [/Remove-Item\s+.*-Recurse\s+.*-[Ff]orce/i, 'PowerShell 强制递归删除'],
   [/Format-Volume|diskpart|mkfs/i, '格式化磁盘'],
   [/:\(\)\s*\{.*\|.*&.*\};\s*:/, 'fork 炸弹'],
-  [/Invoke-Expression|iex\s*\(/i, '动态执行字符串（易被注入）'],
+  [/Invoke-Expression|iex\s*\(/i, '动态执行字符串（易被滥用）'],
   [/\bchmod\s+777\b/i, '全开权限（chmod 777）'],
   [/>\s*\/dev\/sd[a-z]/i, '直接写块设备'],
 ];

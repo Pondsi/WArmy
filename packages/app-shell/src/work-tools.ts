@@ -22,7 +22,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { shengChengDocx, shengChengPptx, keYongPptx, shengChengXlsx } from './office-tools.js';
 import { shengChengPdf } from './pdf-tools.js';
-import { lieYaSuoBaoTiaoMu, duYaSuoBaoTiaoMu, tiaoMuMingAnQuan } from './zip-look.js';
+import { lieYaSuoBaoTiaoMu, duYaSuoBaoTiaoMu, tiaoMuMingAnQuan, jieYaYaSuoBaoDao, ZIP_JIEYA_TIAO_SHANGXIAN, ZIP_JIEYA_ZONG_SHANGXIAN } from './zip-look.js';
 import { shiJianChuoWen } from './time-utils.js';
 import { protectedPathReason, consumeProtectedOnce } from './protected-paths.js';
 
@@ -30,7 +30,7 @@ import { protectedPathReason, consumeProtectedOnce } from './protected-paths.js'
 export const WORK_TOOL_NAMES = [
   'list_dir', 'find_files', 'search_files', 'read_file', 'write_file', 'edit_file',
   'copy_file', 'move_file', 'make_dir', 'make_docx', 'make_pptx', 'make_xlsx', 'make_pdf',
-  'list_archive', 'read_archive_entry',
+  'list_archive', 'read_archive_entry', 'extract_archive',
 ] as const;
 export type WorkToolName = (typeof WORK_TOOL_NAMES)[number];
 
@@ -106,6 +106,12 @@ export interface WorkToolResult {
     ziShu?: number;
     /** make_pptx：页数 */
     pian?: number;
+    /** extract_archive：解压目标目录（相对工作区） */
+    jieYaDao?: string;
+    /** extract_archive：成功写入几个文件 */
+    xieRu?: number;
+    /** extract_archive：跳过的条目及原因（最多前 20 条） */
+    tiaoGuo?: Array<{ ming: string; yuanYin: string }>;
   };
 }
 
@@ -854,6 +860,47 @@ export function workReadArchiveEntry(baseDir: string, args: { path?: string; ent
   } catch (e) { return fail(tool, e, String(args.path || '')); }
 }
 
+/**
+ * **整包解压到磁盘**（用户要求：牛马也能整包解压）。
+ * 默认解到压缩包同名的目录（同名已存在自动加 -1/-2 序号，**绝不覆盖任何已有文件**）；
+ * 显式给 destDir 时解到指定目录（必须在工作区内，否则走授权卡）。
+ * 加密 / 符号链接 / 超限 / 不支持压缩法的条目跳过并如实列出（见 zip-look 的 `jieYaYaSuoBaoDao`）。
+ */
+export function workExtractArchive(baseDir: string, args: { path?: string; destDir?: string }, kuaiQuan = false): WorkToolResult {
+  const tool = 'extract_archive';
+  try {
+    let p = resolveInside(baseDir, args.path, kuaiQuan, 'read');
+    if (!fs.existsSync(p)) {
+      const hit = zhaoWenJianMing(baseDir, path.basename(String(args.path || '')));
+      if (hit) p = hit;
+    }
+    if (!fs.existsSync(p)) return fail(tool, new Error(`not-found（工作区里没有「${String(args.path || '')}」；请先用 list_archive/list_dir 确认位置）`), relOf(baseDir, p));
+    if (!fs.statSync(p).isFile()) return fail(tool, new Error('not-a-file'), relOf(baseDir, p));
+    let target: string;
+    const zhiDing = String(args.destDir || '').trim();
+    if (zhiDing) {
+      target = resolveInside(baseDir, zhiDing, kuaiQuan, 'write');
+    } else {
+      // 默认：压缩包同名的目录；同名已存在就加序号（不覆盖任何已有内容）
+      const base = path.basename(p, path.extname(p));
+      const dir = path.dirname(p);
+      target = path.join(dir, base);
+      let xu = 0;
+      while (fs.existsSync(target)) { xu += 1; target = path.join(dir, `${base}-${xu}`); }
+    }
+    const r = jieYaYaSuoBaoDao(fs.readFileSync(p), target);
+    if (!r.ok) return fail(tool, new Error(r.error || '解压失败'), relOf(baseDir, p));
+    const lu = relOf(baseDir, target);
+    const tiaoGuoShu = r.tiaoGuo.length;
+    const guo = tiaoGuoShu ? `；跳过 ${tiaoGuoShu} 项：` + r.tiaoGuo.slice(0, 8).map((x) => `${x.ming}（${x.yuanYin}）`).join('、') + (tiaoGuoShu > 8 ? `…（其余 ${tiaoGuoShu - 8} 项见下次）` : '') : '';
+    return {
+      ok: true,
+      content: `[extract_archive] 已解压 ${r.xieRu} 个文件到 ${lu}（共 ${r.zong} 字节）${guo}`,
+      meta: { tool, ok: true, bytes: r.zong, path: relOf(baseDir, p), jieYaDao: lu, abs: target, xieRu: r.xieRu, tiaoGuo: r.tiaoGuo.slice(0, 20) },
+    };
+  } catch (e) { return fail(tool, e, String(args.path || '')); }
+}
+
 export function workMakeDir(baseDir: string, args: { path?: string }, kuaiQuan = false): WorkToolResult {
   const tool = 'make_dir';
   try {
@@ -1124,6 +1171,8 @@ export function runWorkTool(baseDir: string, call: { function?: { name?: string;
     extract_file: 'read_archive_entry', read_zip_entry: 'read_archive_entry', archive_read: 'read_archive_entry',
     list_zip: 'list_archive', view_archive: 'list_archive', unzip_list: 'list_archive',
     show_archive: 'list_archive', archive_list: 'list_archive', zip_list: 'list_archive',
+    unzip: 'extract_archive', extract_zip: 'extract_archive', extract_all: 'extract_archive',
+    unzip_to: 'extract_archive', unzip_all: 'extract_archive', decompress: 'extract_archive',
     create_file: 'write_file', save_file: 'write_file', write_text: 'write_file',
     open_folder: 'open_path', reveal: 'open_path', show_in_folder: 'open_path',
     list_files: 'list_dir', ls: 'list_dir', read_text: 'read_file',
@@ -1177,6 +1226,7 @@ export function runWorkTool(baseDir: string, call: { function?: { name?: string;
     case 'make_pdf': return workMakePdf(baseDir, args as { path?: string; paragraphs?: string[]; content?: string; title?: string; pageSize?: 'A4' | 'Letter' }, kuaiQuan);
     case 'list_archive': return workListArchive(baseDir, args as { path?: string }, kuaiQuan);
     case 'read_archive_entry': return workReadArchiveEntry(baseDir, args as { path?: string; entry?: string; maxChars?: number }, kuaiQuan);
+    case 'extract_archive': return workExtractArchive(baseDir, args as { path?: string; destDir?: string }, kuaiQuan);
     default: return fail(name || 'work', new Error('unknown-tool'));
   }
 }
@@ -1310,6 +1360,21 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
     {
       type: 'function',
       function: {
+        name: 'extract_archive',
+        description: '**整包解压到磁盘**（.zip）：把压缩包里的所有文件解压出来。默认解到压缩包同名的目录（同名已存在自动加 -1/-2 序号，**绝不覆盖任何已有文件**）；也可用 destDir 指定目录（工作区内）。加密/符号链接/超限条目会跳过并在返回里列出原因。解压完把目标目录的绝对路径写进最终回复。',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: '压缩包路径（工作区相对路径，如 data.zip）' },
+            destDir: { type: 'string', description: '可选：解压到指定目录（工作区相对路径）；省略 = 解到压缩包同名的目录' },
+          },
+          required: ['path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
         name: 'make_dir',
         description: '在工作区里创建目录（含多级）。',
         parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
@@ -1425,7 +1490,7 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
  */
 export const HOST_TOOL_NAMES = [
   'open_path', 'open_file', 'open_url', 'schedule_task', 'monitor_process', 'lsp_diagnostics', 'ask_user', 'plan_update', 'plan_verify', 'write_skill',
-  'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'local_search', 'download_file',
+  'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'local_search', 'download_file', 'nm_browser',
   'get_time', 'wait_seconds', 'read_profile', 'image_generate', 'video_generate',
 ] as const;
 export function isHostTool(name: unknown): boolean {
@@ -1462,7 +1527,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       function: {
         name: 'read_profile',
         description: '按需读取本牛马的**社交档案**（邮箱/网站账号/手机号/昵称/钱包地址等）。'
-          + '档案不会自动注入上下文；用户问到联系方式、账号、名片，或你需要给外部服务填资料时再调用。'
+          + '档案不会自动进入上下文；用户问到联系方式、账号、名片，或你需要给外部服务填资料时再调用。'
           + '**密码/口令不会返回**（安全保管）；没有该项就如实说没有。',
         parameters: {
           type: 'object',
@@ -1801,7 +1866,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'web_search',
-        description: '**联网搜索**：返回排名 + 标题 + 摘要 + **URL**（先看再决定打开哪几条）。要查"现在的事实/新闻/文档"用它，**不要凭记忆编造**。默认走 Firecrawl 免注册额度，不需要用户配置密钥；额度用尽会如实失败并说明。写结论时必须带上出处 URL。',
+        description: '**联网搜索**：走用户在设置里配置的**搜索调用链**（Firecrawl/Jina/DeepSeek/Exa/Serper/Brave/博查/自定义，自动降级、免配置可用），返回排名 + 标题 + 摘要 + **URL**。要查"现在的事实/新闻/价格/版本/文档"用它，**不要凭记忆编造**。**结果必须校验**：与问题不切题或质量不高时换关键词（换说法/加限定词）或改 topic/days 重搜（最多 3 次），必要时用 web_extract 抓原文核对；仍不足就如实说查到什么、缺什么。写结论时必须带上出处 URL。',
         parameters: {
           type: 'object',
           properties: {
@@ -1818,7 +1883,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'web_extract',
-        description: '**抓正文**：把网页抽成干净文本，并按查询词**摘录**命中段落（每条都带 URL）。搜索结果里挑 1~5 条用它看细节；比 fetch_url 更适合"有据可查"的调研。默认 Firecrawl 免注册额度，失败自动回退 Jina Reader，同样不需要密钥。',
+        description: '**抓正文**：把网页抽成干净文本，并按查询词**摘录**命中段落（每条都带 URL）。搜索结果里挑 1~5 条用它看细节，**或用它核对搜索结果是不是真的**；比 fetch_url 更适合"有据可查"的调研。失败自动换抓取源，不需要密钥。',
         parameters: {
           type: 'object',
           properties: {
@@ -1858,6 +1923,28 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             maxBytes: { type: 'number', description: '最多返回多少字节（默认 200000）' },
           },
           required: ['url'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'nm_browser',
+        description: '**内置浏览器操控**：在 nm 浏览器窗口里像真人一样浏览网页——打开/导航、读页面文本、点坐标、打字、页面内查找高亮、截图、多标签。适合**需要交互**的网页任务（登录后的页面、点按钮、填表单、看动态渲染结果）；纯查资料优先 web_search / web_extract / fetch_url。坐标 (x,y) 以**网页可视区左上角**为原点（CSS 像素，可先 find/read 定位元素再点）。'
+          + 'action 取值：open=打开网址（没有窗口就新建）；nav=导航到新网址（需已 open）；new-tab=在新标签页打开；back/forward/reload/stop=浏览控制；read=读当前页文本（返回 text/url/title）；click=点击（x,y,button=left|right|middle,count=1|2|3）；type=在当前焦点输入文本（\\n=回车，先 click 输入框再 type）；find=页面内查找并滚动高亮（text）；shot=截图返回图片绝对路径；status=当前页状态（url/title/loading/可前进后退）。',
+        parameters: {
+          type: 'object',
+          properties: {
+            action: { type: 'string', description: 'open|nav|new-tab|back|forward|reload|stop|read|click|type|find|shot|status' },
+            url: { type: 'string', description: 'open/nav/new-tab 的 http/https 网址' },
+            x: { type: 'number', description: 'click 横坐标（网页可视区，CSS 像素）' },
+            y: { type: 'number', description: 'click 纵坐标' },
+            button: { type: 'string', description: 'click 按键：left（默认）/right/middle' },
+            count: { type: 'number', description: 'click 点击次数 1/2/3，默认 1' },
+            text: { type: 'string', description: 'type 要输入的文本；或 find 要查找的词' },
+            max: { type: 'number', description: 'read 最多返回字符数（默认 8000）' },
+          },
+          required: ['action'],
         },
       },
     },

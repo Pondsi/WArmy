@@ -174,6 +174,16 @@ export interface YingYongPeizhi {
   /** One of SETTINGS_SUPPORTED_LOCALES. Stored as free string for backward compat; resolveLocale maps unknown tags. */
   yuYan: string;
   /**
+   * **翻译目标语言**（T10）：右键翻译 / 整页翻译都译成这里选的语言。
+   * 空串/缺省 = 自动（跟随界面语言 yuYan）；其余值 = SETTINGS_SUPPORTED_LOCALES 之一。
+   */
+  fanYiMuBiaoYuYan?: string;
+  /**
+   * **顶部网络开关**（R128 N7）：三态 —— 'all'（本地+局域网+互联网，默认）/
+   * 'lan'（仅本地+局域网，互联网禁用）/ 'off'（全部断开，仅本机）。
+   */
+  wangLuoMoShi?: 'all' | 'lan' | 'off';
+  /**
    * **界面显示时区**（第 91 轮用户口径）：IANA 名，例如 `Asia/Shanghai`。
    * 记录本身一律存 epoch 毫秒；这里只决定界面上怎么换算。
    * 空/缺省 = 还没落盘过 —— 登录后首次读取时写入当时的系统时区作为基线，
@@ -282,7 +292,7 @@ export interface YingYongPeizhi {
   nmKaiWenJian?: boolean;
   /** 第 121 轮：每个会话第一次网页下载选过的目录（之后同目录；默认 <会话工作区>/downloads） */
   nmDownloadDirs?: Record<string, string>;
-  /** 第 121 轮：run_shell 永久授权账本（相同规范化命令 + 相同工作目录；可见、可撤销、可审计） */
+  /** 已废止（用户裁决：没有跨会话永久生效的授权）：旧 run_shell 永久授权账本，仅保留字段避免旧 settings.json 被改写；不再读取生效 */
   commandGrants?: Array<{ key: string; cmd: string; cwd: string; createdAt: number }>;
   /**
    * **用户主动卸载过 nm 查看器插件**（默认 false）：为 true 时更新/重启都不许自动装回，
@@ -312,6 +322,8 @@ export interface YingYongPeizhi {
   authGrants?: Record<string, unknown>;
   /** 社交接入配置（微信 iLink / 飞书…；凭据本身在 cred-vault，这里只放非密配置） */
   sheJiao?: Array<Record<string, unknown>>;
+  /** T21 社交扫码绑定记录（方案 B 本地扫码框架；key = 平台 id，如 wecom/feishu/lark/slack） */
+  sheJiaoPeiZhi?: Record<string, { token: string; bangDingShiJian: number }>;
   /** 拉取模型时问到的能力（`contextLen`/`kind`/`tools`/`vision`；Ollama 读的是 `num_ctx`） */
   modelCaps?: Record<string, { contextLen?: number; kind?: string; tools?: boolean | 'unknown'; vision?: boolean | 'unknown'; buKeYong?: string }>;
   /** `modelCaps` 的口径版本：不匹配就整份作废重拉（不许拿旧口径的能力位当事实） */

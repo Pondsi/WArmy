@@ -2476,7 +2476,8 @@ export function containerExecPlan(runtimeId: string, op: string, params: RongQiZ
   }
   switch (caoZuoMing) {
     case 'ps': {
-      return { ok: true, plan: { file: bin, args: ['ps', '-a', '--filter', `ming=^${ming}$`, '--format', '{{.ID}}|{{.Names}}|{{.Status}}|{{.Image}}'], timeoutMs: 30000 } };
+      // 过滤键必须是引擎认识的 `name`（`ming` 只是我们代码里的变量名；传成过滤键会被引擎拒绝 ⇒ 输出恒空）
+      return { ok: true, plan: { file: bin, args: ['ps', '-a', '--filter', `name=^${ming}$`, '--format', '{{.ID}}|{{.Names}}|{{.Status}}|{{.Image}}'], timeoutMs: 30000 } };
     }
     case 'run-rm': {
       const image = String(params.image || '');
@@ -2717,7 +2718,7 @@ export interface KongZhiTaiXieRuJieGuo {
   code?: string;
   error?: string;
   /** 这一条命令跑完之后取到的输出（**来自容器**） */
-  shuChu?: string;
+  output?: string;
   sessionId?: string;
 }
 
@@ -2759,7 +2760,7 @@ export async function xieRuKongZhiTaiHuiHua(
   }
   const shuChu = s.buffer;
   s.buffer = '';
-  return { ok: true, executed: true, shuChu, sessionId: s.id };
+  return { ok: true, executed: true, output: shuChu, sessionId: s.id };
 }
 
 export function guanBiKongZhiTaiHuiHua(sessionId: string): { ok: boolean; closed: boolean; code?: string } {
