@@ -365,7 +365,9 @@
     caiDan.style.zIndex = '500';
     const mw = caiDan.offsetWidth || 170;
     const mh = caiDan.offsetHeight || 150;
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - mw - 8));
+    /** RTL（ar/fa）：菜单锚点镜像到触发器右缘，其余视口夹紧逻辑不变 */
+    const rtlMao = document.documentElement.dir === 'rtl';
+    const left = Math.max(8, Math.min(rtlMao ? (r.right - mw) : r.left, window.innerWidth - mw - 8));
     const below = r.bottom + 4;
     const top = below + mh > window.innerHeight - 8 ? Math.max(8, r.top - 4 - mh) : below;
     caiDan.style.left = left + 'px';
@@ -431,7 +433,26 @@
     ['fr', 'Français'],
     ['pt', 'Português'],
     ['eo', 'Esperanto'],
+    ['de', 'Deutsch'],
+    ['it', 'Italiano'],
+    ['nl', 'Nederlands'],
+    ['pl', 'Polski'],
+    ['sv', 'Svenska'],
+    ['cs', 'Čeština'],
+    ['hu', 'Magyar'],
+    ['da', 'Dansk'],
+    ['nb', 'Norsk bokmål'],
+    ['tr', 'Türkçe'],
+    ['uk', 'Українська'],
+    ['id', 'Bahasa Indonesia'],
+    ['vi', 'Tiếng Việt'],
+    ['th', 'ไทย'],
+    ['hi', 'हिन्दी'],
+    ['ar', 'العربية'],
+    ['fa', 'فارسی'],
   ];
+  /** 从右往左书写的语言（阿拉伯语、波斯语）：html dir=rtl，布局整体镜像（W3C 口径） */
+  const RTL_LOCALES = new Set(['ar', 'fa']);
   function resolveLocalePack(yuYan) {
     if (!yuYan) return 'zh-CN';
     const raw = String(yuYan).trim();
@@ -446,6 +467,23 @@
     if (l.startsWith('fr')) return 'fr';
     if (l.startsWith('pt')) return 'pt';
     if (l.startsWith('eo')) return 'eo';
+    if (l.startsWith('de')) return 'de';
+    if (l.startsWith('it')) return 'it';
+    if (l.startsWith('nl')) return 'nl';
+    if (l.startsWith('pl')) return 'pl';
+    if (l.startsWith('sv')) return 'sv';
+    if (l.startsWith('cs') || l.startsWith('cz')) return 'cs';
+    if (l.startsWith('hu')) return 'hu';
+    if (l.startsWith('da')) return 'da';
+    if (l.startsWith('nb') || l.startsWith('no') || l.startsWith('nn')) return 'nb';
+    if (l.startsWith('tr')) return 'tr';
+    if (l.startsWith('uk')) return 'uk';
+    if (l.startsWith('id') || l.startsWith('in')) return 'id';
+    if (l.startsWith('vi')) return 'vi';
+    if (l.startsWith('th')) return 'th';
+    if (l.startsWith('hi')) return 'hi';
+    if (l.startsWith('ar')) return 'ar';
+    if (l.startsWith('fa') || l.startsWith('per')) return 'fa';
     if (l.startsWith('en')) return 'en-US';
     return 'zh-CN';
   }
@@ -805,6 +843,22 @@
     });
   }
 
+  /**
+   * R138 修（真机：牛马设置里删调用链模型后**整个设置页消失**）：
+   * uiConfirm 与牛马设置页共用 `duiHuaKuangTi` 容器 —— 确认框一弹就把设置内容覆盖掉，
+   * 关闭后只剩空壳。修法：确认框收尾时若牛马设置原先是开着的，自动重开（重渲染一遍）。
+   */
+  function huiFuNiuMaSheZhi() {
+    // 延迟到下一轮宏任务：让确认框调用方先完成它的删改/保存，再重开设置页（避免旧闭包把脏 DOM 渲染回来）
+    setTimeout(() => {
+      try {
+        if (instanceDetailTarget && state.selectedInstance) {
+          openNiuMaSettings(state.selectedInstance);
+        }
+      } catch { /* 重开失败不影响确认结果 */ }
+    }, 0);
+  }
+
   function uiConfirm(message, biaoTi) {
     return new Promise((resolve) => {
       const root = $('duiHuaKuangGen');
@@ -818,6 +872,7 @@
       cancel.onclick = () => {
         root.classList.add('yinCang');
         resolve(false);
+        huiFuNiuMaSheZhi();
       };
       const ok = document.createElement('button');
       ok.className = 'anNiuZhuYao';
@@ -830,6 +885,7 @@
         // 若调用方紧接着还要弹下一个框（uiAlert 会自己 remove('yinCang')），不受影响。
         root.classList.add('yinCang');
         resolve(true);
+        huiFuNiuMaSheZhi();
       };
       dongZuoJi.append(cancel, ok);
       root.classList.remove('yinCang');
@@ -1398,6 +1454,8 @@
     }, 700);
   }
   async function chuanBoYinXiao(kind, laiYuan) {
+    /** R138：顶部扬声器权限开关 —— 禁止时提示音一律不放 */
+    try { if (window.__quanXianYunXu && !window.__quanXianYunXu('speaker')) return false; } catch { /* noop */ }
     const k = kind === 'request' ? 'request' : kind === 'error' ? 'error' : 'complete';
     const jiao = { kind: k, laiYuan: String(laiYuan || '') };
     try {
@@ -1559,6 +1617,13 @@
    * 峰值用 RMS（`getFloatTimeDomainData`），录音用 MediaRecorder（与电平采集并行，互不影响）。
    */
   async function yinPinCeShiMaiKe() {
+    /** R138：顶部麦克风权限开关 —— 禁止时麦克风测试被拦截 */
+    try {
+      if (window.__quanXianYunXu && !window.__quanXianYunXu('mic')) {
+        showToast(tOr('perm.micBlocked', '麦克风已被禁止（点窗口顶部麦克风图标恢复）'));
+        return;
+      }
+    } catch { /* noop */ }
     const micBtn = $('anNiuMaiKeFengCeShi');
     const micTiao = $('maiKeFengJiBieTiao');
     const micXiaoXi = $('maiKeFengXiaoXi');
@@ -1753,7 +1818,8 @@
       '<div style="max-width:92vw;max-height:88vh;background:var(--card,#fff);border:1px solid var(--line);border-radius:10px;padding:14px;box-sizing:border-box;display:flex;flex-direction:column;gap:8px">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px">'
       + '<span class="sheXiangTouYuLanZhuangTai jingYin">' + escapeHtml(tOr('audioTest.camPreviewing', '正在预览 {name}').replace('{name}', ming || tOr('audio.camera', '摄像头'))) + '</span>'
-      + '<button type="button" class="anNiuXiao sheXiangTouYuLanGuan">' + escapeHtml(tOr('audioTest.camClose', '关闭')) + '</button>'
+      // R138（用户要求）：关闭按钮用主界面右上角同款叉图标
+      + '<button type="button" class="sheXiangTouYuLanGuan" title="' + escapeHtml(tOr('common.close', '关闭')) + '" aria-label="close" style="background:none;border:0;cursor:pointer;padding:4px;line-height:0;color:var(--ink)"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" stroke="currentColor" stroke-width="1.4" fill="none"/></svg></button>'
       + '</div>'
       + '<video autoplay playsinline muted style="max-width:100%;max-height:70vh;border-radius:6px;background:#000;display:block"></video>'
       + '</div>';
@@ -1764,6 +1830,13 @@
     video.srcObject = stream;
   }
   async function sheXiangTouCeShi() {
+    /** R138：顶部摄像头权限开关 —— 禁止时摄像头测试被拦截 */
+    try {
+      if (window.__quanXianYunXu && !window.__quanXianYunXu('camera')) {
+        showToast(tOr('perm.cameraBlocked', '摄像头已被禁止（点窗口顶部摄像头图标恢复）'));
+        return;
+      }
+    } catch { /* noop */ }
     const btn = $('anNiuSheXiangTouCeShi');
     const xiaoXi = $('sheXiangTouXiaoXi');
     if (document.getElementById('sheXiangTouYuLanZheZhao')) {
@@ -1793,19 +1866,10 @@
   }
   function bindYinPinCeShi() {    if (window.__yinPinCeShiBound) return;
     window.__yinPinCeShiBound = true;
-    /** R128：摄像头下拉（videoinput 枚举；没权限时只有默认项，测试成功后 label 才全） */
-    (async () => {
-      try {
-        const sel = $('sheXiangTouSheBei');
-        if (!sel || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-        const list = await navigator.mediaDevices.enumerateDevices();
-        const cams = list.filter((d) => d.kind === 'videoinput');
-        if (!cams.length) { sel.innerHTML = '<option value="">' + escapeHtml(tOr('audio.camNone', '未找到摄像头')) + '</option>'; return; }
-        const cur = sel.value;
-        sel.innerHTML = cams.map((d, i) => '<option value="' + escapeHtml(d.deviceId) + '">' + escapeHtml(d.label || tOr('audio.camUnnamed', '摄像头') + ' ' + (i + 1)) + '</option>').join('');
-        if (cur && cams.some((d) => d.deviceId === cur)) sel.value = cur;
-      } catch { /* 枚举失败就用默认项 */ }
-    })();
+    /** R128：摄像头下拉（videoinput 枚举；没权限时只有默认项，测试成功后 label 才全）。
+     *  R129：与麦克风/播放器一致——首项「系统默认设备」，选择落盘 audioCameraDevice。
+     *  R130：填充挪到设置页渲染时（tianChongSheXiangTou，与麦克风/播放器同处）——
+     *  以前在这里启动即填，设置页还没渲染、元素不存在就早退，下拉永远只剩静态「摄像头」项。 */
     document.addEventListener('click', (e) => {
       // ⚠️ 不能叫 `t`：会遮蔽 i18n 的 `t()`（门禁会报「renderer: 有局部 t = ...」）
       const muBiao = e.target;
@@ -1981,6 +2045,66 @@
       }).catch(() => { /* noop */ });
     } catch { /* noop */ }
   })();
+  /**
+   * R138（找回 R126 丢失的功能）：顶部三权限开关 —— 麦克风 / 摄像头 / 扬声器。
+   * 默认允许；点击禁止（主题色 + 斜杠）；再点恢复；settings 持久化；
+   * 语音输入 / 朗读 / 提示音 / 摄像头测试按 `window.__quanXianYunXu(perm)` 拦截。
+   */
+  (function bindTopPermissions() {
+    const KE = ['mic', 'camera', 'speaker'];
+    const btns = {
+      mic: document.getElementById('anNiuMaiKeFeng'),
+      camera: document.getElementById('anNiuSheXiangTou'),
+      speaker: document.getElementById('anNiuYangShengQi'),
+    };
+    if (!btns.mic || !btns.camera || !btns.speaker) return;
+    if (btns.mic.dataset.bound) return;
+    KE.forEach((k) => { btns[k].dataset.bound = '1'; });
+    const shiJie = { mic: true, camera: true, speaker: true };
+    const ming = {
+      mic: tOr('perm.mic', '麦克风'), camera: tOr('perm.camera', '摄像头'), speaker: tOr('perm.speaker', '扬声器'),
+    };
+    const ying = () => {
+      for (const k of KE) {
+        const on = shiJie[k] !== false;
+        btns[k].classList.toggle('jinZhi', !on);
+        btns[k].setAttribute('aria-pressed', on ? 'true' : 'false');
+        btns[k].title = on
+          ? tOr('perm.allowTitle', '允许使用{name}（点击禁止）').replace('{name}', ming[k])
+          : tOr('perm.denyTitle', '已禁止使用{name}（点击恢复）').replace('{name}', ming[k]);
+      }
+    };
+    for (const k of KE) {
+      btns[k].addEventListener('click', () => {
+        shiJie[k] = shiJie[k] === false;
+        ying();
+        try {
+          void window.warmy.settingsSave?.({
+            topPerms: { mic: shiJie.mic !== false, camera: shiJie.camera !== false, speaker: shiJie.speaker !== false },
+          });
+        } catch { /* noop */ }
+        if (shiJie[k] === false) {
+          const houGuo = k === 'mic' ? tOr('perm.micDeny', '语音输入将被拦截')
+            : k === 'camera' ? tOr('perm.cameraDeny', '摄像头将被拦截')
+              : tOr('perm.speakerDeny', '朗读与提示音将被拦截');
+          showToast(tOr('perm.denied', '已禁止使用{name}：{hint}（点顶部图标可恢复）')
+            .replace('{name}', ming[k]).replace('{hint}', houGuo));
+        }
+      });
+    }
+    /** 拦截查询钩子（语音输入/朗读/摄像头测试等入口先问它） */
+    window.__quanXianYunXu = (p) => shiJie[p] !== false;
+    try {
+      void window.warmy.settingsGet?.().then((r) => {
+        const v = r && r.settings && r.settings.topPerms;
+        if (v && typeof v === 'object') {
+          for (const k of KE) if (typeof v[k] === 'boolean') shiJie[k] = v[k];
+          ying();
+        }
+      }).catch(() => { /* noop */ });
+    } catch { /* noop */ }
+    ying();
+  })();
   // N2/R128：顶部权限图标区水平中心对齐聊天框输入区中心（JS 量算；resize/布局变化重算）。
   // 门禁会显式调用 window.__duiQiDingBuQuanXian() 复核，偏差必须 ≤2px。
   (function duiQiDingBuQuanXian() {
@@ -2009,6 +2133,13 @@
 async function langDuWenBen(text, btnEl) {
     const s = String(text || '').trim();
     if (!s) return false;
+    /** R138：顶部扬声器权限开关 —— 禁止时朗读被拦截 */
+    try {
+      if (window.__quanXianYunXu && !window.__quanXianYunXu('speaker')) {
+        showToast(tOr('perm.speakerBlocked', '扬声器已被禁止（点窗口顶部喇叭图标恢复）'));
+        return false;
+      }
+    } catch { /* noop */ }
     /**
      * **朗读播放器**（产品要求）：
      *  - 点喇叭开播；再点同一喇叭 = 取消（含"正在连接"）
@@ -2134,6 +2265,11 @@ async function langDuWenBen(text, btnEl) {
           if (st.abort) return;
           if (!r || !r.ok || !r.dataUrl) {
             showToast(String((r && r.error) || tOr('tts.noModel', '没有可用的说话模型（请在「设置 → 模型」里配置）')));
+            return;
+          }
+          /** R138 护栏：超大音频不进 Audio 元素（大 dataUrl 撑爆渲染层 ⇒ 闪退） */
+          if (String(r.dataUrl).length > 24000000) {
+            showToast(tOr('tts.tooLarge', '合成音频过大，无法播放（请缩短朗读文本）'));
             return;
           }
           await new Promise((resolve) => {
@@ -2971,6 +3107,11 @@ async function langDuWenBen(text, btnEl) {
     const pack = await window.warmy.i18n(yuYan);
     state.yuYan = pack.yuYan;
     state.t = pack.strings;
+    /** 界面书写方向随语言走：阿拉伯语/波斯语等 RTL 语言整体从右往左（dir 挂在 html 上，不用 CSS 设方向） */
+    try {
+      document.documentElement.lang = pack.yuYan || 'zh-CN';
+      document.documentElement.dir = RTL_LOCALES.has(resolveLocalePack(pack.yuYan)) ? 'rtl' : 'ltr';
+    } catch { /* noop */ }
     // #26：语言变了，提示词上限表必须按新语言重新取（中文 2600 / 英文 9750）
     window.__tiShiShangXianBiao = null;
     if (pack.displayName) state.t['yingYong.displayName'] = pack.displayName;
@@ -2989,7 +3130,7 @@ async function langDuWenBen(text, btnEl) {
     // 开始使用清单上的文案也要跟着语言走
     try { window.__startGuideRefresh?.(); } catch { /* noop */ }
   }
-  /** 语言可达性：设置页/预览桥/巡检脚本统一走这一条（10 语言包，禁止塌缩） */
+  /** 语言可达性：设置页/预览桥/巡检脚本统一走这一条（SUPPORTED_LOCALES 全量语言包，禁止塌缩） */
   window.__warmyLoadI18n = loadI18n;
 
 
@@ -3535,7 +3676,7 @@ async function langDuWenBen(text, btnEl) {
       const av = hangYuanSu.querySelector('.av,.touXiangTuPian,.avTuPian');
       if (av) {
         av.classList.toggle('mimicKuang', shiYuanXing);
-        if (shiYuanXing) av.setAttribute('title', tOr('mimic.frame', '拟态中'));
+        if (shiYuanXing) av.setAttribute('title', tOr('mimic.frame', '拟态中（桌宠原型）——这只牛马是桌面宠物的原形'));
         else av.removeAttribute('title');
       }
     } catch { /* noop */ }
@@ -4093,7 +4234,9 @@ async function langDuWenBen(text, btnEl) {
   const guoChengBi = new Map();
   /**
    * 把用户的显式展开/折叠状态应用到当前 DOM。
-   * 没有显式状态时：中间回复与思考块（siKaoKuai）默认展开；其余执行过程段按 `data-auto-open`。
+   * 没有显式状态时：中间回复默认展开；思考块（siKaoKuai）默认折叠
+   * （第 121 轮：最终回复后自动折叠；流式过程中经 data-auto-open 展开）；
+   * 其余执行过程段按 `data-auto-open`。
    */
   function yingYongGuoChengZhuangTai(heZi) {
     if (!heZi) return;
@@ -4103,7 +4246,7 @@ async function langDuWenBen(text, btnEl) {
     for (const el of heZi.querySelectorAll('details.guoChengDuan[data-key], details.zhongJianKa[data-key]')) {
       const key = String(el.dataset.key || '');
       const isMid = el.classList.contains('zhongJianKa');
-      let open = isMid || el.classList.contains('siKaoKuai') || el.dataset.autoOpen === '1';
+      let open = isMid || el.dataset.autoOpen === '1';
       if (kai && kai.has(key)) open = true;
       else if (bi && bi.has(key)) open = false;
       try { el.open = open; } catch { /* noop */ }
@@ -4133,8 +4276,8 @@ async function langDuWenBen(text, btnEl) {
     const sid = String(sid0 || '');
     let st = chatGun.get(sid);
     if (!st) {
-      /** following=null 表示“还没量过”，首次打开按跟随底部处理 */
-      st = { following: null, anchorTurn: '', anchorTop: 0, anchorEl: null, followBottomTurn: '', forceBottom: false };
+      /** following=null 表示“还没量过”，首次打开按跟随底部处理；pause=R130 生成中手动滚动的暂停档 */
+      st = { following: null, anchorTurn: '', anchorTop: 0, anchorEl: null, followBottomTurn: '', forceBottom: false, pause: '' };
       chatGun.set(sid, st);
     }
     return st;
@@ -4186,7 +4329,7 @@ async function langDuWenBen(text, btnEl) {
     const sid = String(state.selectedChat?.id || '');
     const heZi = $('xiaoXiJi');
     if (!sid || !heZi) { chatZiGunTop = null; return; }
-    if (autoScrollChat) { sheZhiGenDi(sid, true); chatZiGunTop = null; return; }
+    /** R129：无论是否勾选「滚动记录」，用户滚离底部 = 停（直到新回复重新触发）；滚回底部 = 恢复跟随 */
     const zaiDi = isAtBottom(heZi);
     sheZhiGenDi(sid, zaiDi);
     const st = chatGunOf(sid);
@@ -4227,11 +4370,32 @@ async function langDuWenBen(text, btnEl) {
   function yingDingBuDuiQi(suppressed, key, lastKey, atBottom) {
     return !suppressed && key !== lastKey && !atBottom;
   }
-  /** 本会话是否处于“程序主动滚动”（勾选自动滚动 / 用户在底部跟随） */
+  /** 本会话是否处于“程序主动滚动”（R129：跟随 = 用户在底部/未滚走；勾选与否只决定滚动目标） */
   function chatZhuiDi(sid0) {
     const sid = String(sid0 || '');
-    if (autoScrollChat) return true;
     return chatGenDi(sid);
+  }
+  /**
+   * R130（用户口径）：一次「回复」= 用户新回复 或 牛马新回复（思考与执行/中间回复/最终回复都算它内部的内容）。
+   * 生成中 = 流式还在出字 / 任务还在跑。生成中用户手动滚动 ⇒ 暂停自动滚动：
+   * 勾选「滚动记录」暂停到本次回复完成；未勾选暂停到新回复（全程都要停）。
+   */
+  function shiHuiFuZhong(sid0) {
+    const sid = String(sid0 || '');
+    if (!sid) return false;
+    try {
+      const run = state.sessionRuns && state.sessionRuns[sid];
+      if (run && run.running) return true;
+      return !!(state.streamBuf && state.streamBuf[sid] && !_liuShiShouWei.has(sid));
+    } catch { return false; }
+  }
+  /** 本次回复第一条内容（未勾选模式限制1的锚点）：流式气泡优先，否则用给定消息的第一个内容块 */
+  function huiFuShouGeEl(heZi, xiaoXiEl) {
+    if (!heZi) return null;
+    const liu = heZi.querySelector('[data-streaming="1"]');
+    const root = liu || xiaoXiEl;
+    if (!root) return null;
+    return root.querySelector('.siKaoKuai, .zhongJianKa, .bubble') || root;
   }
   /** 记下当前第一个可见消息 + 偏移，供重画后还原（用户不在底部时） */
   function chatQuMaoDian(heZi) {
@@ -4649,6 +4813,8 @@ async function langDuWenBen(text, btnEl) {
     if (sid) {
       sheZhiGenDi(sid, true);
       const st = chatGunOf(sid);
+      /** R130：下箭头是用户明确的「恢复跟随」动作 ⇒ 同时解除生成中暂停 */
+      st.pause = '';
       st.anchorTurn = '';
       st.anchorTop = 0;
       st.anchorEl = null;
@@ -4864,8 +5030,8 @@ async function langDuWenBen(text, btnEl) {
         + cur.map((x) => (x.kind === 'act'
           ? xingDongHangNode(x).outerHTML
           : '<pre class="siKaoDuanKuai" data-ts="' + x.ts + '">' + escapeHtml(x.text) + '</pre>')).join('')
-        + cao
-        + '</details>';
+        + '</details>'
+        + cao;
       cur = [];
     };
     for (const e of ev) {
@@ -4878,8 +5044,8 @@ async function langDuWenBen(text, btnEl) {
           + ' data-key="' + escapeHtml(guoChengDuanKey('mid', e.ts, guoChengHash(e.text))) + '" open>'
           + '<summary><span class="zhongJianZhaiYao">' + escapeHtml(zhongJianZhaiYao(e.text)) + '</span></summary>'
           + '<div class="zhongJianHuiFu md">' + mdHtml(e.text) + '</div>'
-          + cao
-          + '</details>';
+          + '</details>'
+          + cao;
         fen += 1;
       } else {
         cur.push(e);
@@ -4897,6 +5063,19 @@ async function langDuWenBen(text, btnEl) {
     const s = String(wen == null ? '' : wen);
     if (pre.textContent !== s) pre.textContent = s;
     return true;
+  }
+
+  /** R133：流式行的对方头像（与 renderChat 同源逻辑）——生成中牛马行也要显示头像，不能等最终回复 */
+  function liuShiThemAvatarSrc() {
+    try {
+      const cur = state.selectedChat || {};
+      const curInst = (state.instances || []).find((x) => x && (x.id === cur.id || x.ming === cur.ming || x.name === cur.name));
+      return curInst
+        ? instanceAvatarSrc(curInst)
+        : (cur.kind === 'internal' || cur.kind === 'extgroup'
+          ? (cur.avatarDataUrl || groupAvatarSrc(cur))
+          : PERSON_DEFAULT);
+    } catch { return PERSON_DEFAULT; }
   }
 
   function xuanRanLiuShiKuai(sid, b) {
@@ -4919,19 +5098,27 @@ async function langDuWenBen(text, btnEl) {
     const sidLiu = String(state.selectedChat?.id || '');
     /** 第一次量到位置：以“当前是否在底部”作为跟随事实；之后只由用户滚动改变 */
     if (chatGunOf(sidLiu).following == null) sheZhiGenDi(sidLiu, zaiDiBu);
-    /** 未勾选「滚动记录」= 不贴底（用户要求：新内容开头对齐聊天框顶部）；勾选=一直滚到最底 */
+    /** 未勾选「滚动记录」= 不贴底（限制1：本次回复第一条内容顶部对齐）；勾选=一直滚到最底 */
     const genDiLiu = autoScrollChat;
-    /** 不跟随时，记录原 scrollTop；局部更新后原样放回 */
-    let baoHuTop = genDiLiu ? null : heZi.scrollTop;
+    /** 任何模式下都记原 scrollTop：暂停（生成中用户滚走）时要用它保住用户位置 */
+    let baoHuTop = heZi.scrollTop;
     if (!kuai) {
       kuai = document.createElement('div');
       kuai.className = 'xiaoXi liuShiKuai';
       kuai.setAttribute('data-streaming', '1');
+      /** R133：流式行创建即带牛马头像（原来只有 bubbleWrap ⇒ 生成中一直没头像，最终回复后 renderChat 才补上） */
+      kuai.innerHTML = `<img class="touXiangTuPian" src="${liuShiThemAvatarSrc()}" alt=""/>` + '<div class="bubbleWrap"></div>';
       heZi.appendChild(kuai);
-      /** 新流式消息首帧：未勾选且用户没滚走 ⇒ 新内容开头对齐视口顶部 */
-      if (!genDiLiu && !topAlignSuppress.has(sidLiu)) {
-        const stL = chatGunOf(sidLiu);
-        stL.anchorEl = kuai;
+      /**
+       * R129/R130：牛马新回复的流式首帧 = 新回复触发自动滚动。
+       * **整块重画重建气泡不算新回复**（chatRebuilding 期间）——
+       * 否则生成中用户滚走后随便一次重画就把跟随恢复，正是“滚动老被抢走”的根因之一。
+       */
+      const stL = chatGunOf(sidLiu);
+      if (!chatRebuilding) { stL.pause = ''; sheZhiGenDi(sidLiu, true); }
+      /** 未勾选：限制1 —— 本次回复第一条内容顶部对齐聊天框顶部（首帧设锚点，后续流式更新保持） */
+      if (!genDiLiu && !stL.pause) {
+        stL.anchorEl = kuai.querySelector('.siKaoKuai, .zhongJianKa, .bubble') || kuai;
         sheZhiChatGunDong(heZi, chatAnchorTop(heZi, stL), false);
         baoHuTop = null;
       }
@@ -4957,7 +5144,8 @@ async function langDuWenBen(text, btnEl) {
      *   · 正文气泡只保留工具之后新产生的最终回复。
      */
     const wrap = kuai.querySelector('.bubbleWrap') || (() => {
-      kuai.innerHTML = '<div class="bubbleWrap"></div>';
+      /** R133：重建 wrap 时把头像一并补回（保持与创建时同构） */
+      kuai.innerHTML = `<img class="touXiangTuPian" src="${liuShiThemAvatarSrc()}" alt=""/>` + '<div class="bubbleWrap"></div>';
       return kuai.querySelector('.bubbleWrap');
     })();
     const zhongJian = (state.streamInterim && state.streamInterim[kLiu]) || [];
@@ -5014,14 +5202,24 @@ async function langDuWenBen(text, btnEl) {
     // 正文缓冲在工具开始那一刻被移到时间线；这里必须把旧气泡撤掉，否则会重复显示中间回复。
     if (zh && !b.content) { zh.remove(); zh = null; }
     if (zh && b.content) zh.textContent = b.content;
+    /** R129：本次回复锚点（不勾选时把「第一条内容」钉在聊天框顶部；首帧已设 anchorEl=流式块） */
+    const stL2 = chatGunOf(sidLiu);
     /**
      * **跟随底部 = 只由用户滚动决定**：
      *   · 跟随 ⇒ 每次流式更新后继续贴底；
      *   · 不跟随 ⇒ 用“第一个可见消息 + 偏移”还位，绝不把新回复钉到顶部，也不跳回顶部。
      */
     try {
-      if (genDiLiu) {
+      /** R130：暂停中（生成中用户手动滚动）= 滚动完全交给用户，一个像素都不碰；
+       *  未暂停：勾选贴底；未勾选把「本次回复第一条内容」顶部钉在聊天框顶部（限制1）。 */
+      if (stL2.pause) {
+        if (baoHuTop != null) sheZhiChatGunDong(heZi, baoHuTop, false);
+      } else if (genDiLiu) {
         sheZhiChatGunDong(heZi, heZi.scrollHeight, false);
+        baoHuTop = null;
+      } else if (stL2.anchorEl) {
+        sheZhiChatGunDong(heZi, chatAnchorTop(heZi, stL2), false);
+        baoHuTop = null;
       } else if (baoHuTop != null) {
         sheZhiChatGunDong(heZi, baoHuTop, false);
       }
@@ -5036,8 +5234,12 @@ async function langDuWenBen(text, btnEl) {
     } catch { /* noop */ }
     /** 第 66 轮 项 6：流式期间就按最终「执行过程」的规则归组，顺序与完成后一致 */
     try { guiNaXingDong(heZi, true); } catch { /* noop */ }
-    if (genDiLiu) {
+    if (stL2.pause) {
+      if (baoHuTop != null) sheZhiChatGunDong(heZi, Math.min(baoHuTop, Math.max(0, heZi.scrollHeight - heZi.clientHeight)), false);
+    } else if (genDiLiu) {
       sheZhiChatGunDong(heZi, heZi.scrollHeight, false);
+    } else if (stL2.anchorEl) {
+      sheZhiChatGunDong(heZi, chatAnchorTop(heZi, stL2), false);
     } else if (baoHuTop != null) {
       sheZhiChatGunDong(heZi, Math.min(baoHuTop, Math.max(0, heZi.scrollHeight - heZi.clientHeight)), false);
     }
@@ -6377,6 +6579,28 @@ async function langDuWenBen(text, btnEl) {
         shangCiZhuDong = ts;
       }
       shangYiTiaoShiJian = ts;
+      /** R129：整条消息的悬停气泡统一为一份（时间/模型/能力转交/输入/输出/耗时/轮次），
+       *  模型行与时间行共用，不再各挂各的。耗时 = 本条回复完成时刻 - 上一条用户消息时刻。 */
+      const haoMs = m.role !== 'wo' && shangYiYongHuTs > 0 ? Math.max(0, ts - shangYiYongHuTs) : 0;
+      /** R138（用户口径）：耗时不再显示小数分钟（8.7 分钟），换成「8分42秒」这类自然单位 */
+      const haoWen = (() => {
+        if (haoMs <= 0) return '';
+        const s = Math.max(0, Math.round(haoMs / 1000));
+        const h = Math.floor(s / 3600), mi = Math.floor((s % 3600) / 60), se = Math.floor(s % 60);
+        return (h ? h + tOr('chat.hourShort', '小时') : '') + (mi ? mi + tOr('chat.minShort', '分') : '') + se + tOr('chat.secShort', '秒');
+      })();
+      const xiaoXiTip = (function () {
+        const ru = Number(m.promptTokens || 0), chu = Number(m.completionTokens || 0);
+        const ci = Number(m.turnCount || 0);
+        const tiao = [];
+        tiao.push(tOr('chat.tipTime', '时间') + '：' + wanZhengShiJian(ts));
+        if (m.moXing) tiao.push(tOr('chat.tipModel', '模型') + '：' + String(m.moXing).replace(/^本轮模型[：:]\s*/, ''));
+        if (m.moXingJiangJi) tiao.push(tOr('chat.tipTransfer', '能力转交') + '：' + jiangJiWenBen(m.moXingJiangJi));
+        if (ru || chu) tiao.push(tOr('chat.tokensFmt', '输入{ru}，输出{chu}').replace('{ru}', String(ru)).replace('{chu}', String(chu)));
+        if (haoWen) tiao.push(tOr('chat.tipElapsed', '耗时：{t}').replace('{t}', haoWen));
+        if (ci > 0) tiao.push(tOr('chat.tipTurns', '对话轮次：{n} 轮').replace('{n}', String(Math.max(1, ci))));
+        return tiao.filter(Boolean).join('\n');
+      })();
       // 系统小字（如"本轮模型：xxx"）：不画气泡，居中一行浅色小字
       if (m.system) {
         const xi = document.createElement('div');
@@ -6431,8 +6655,9 @@ async function langDuWenBen(text, btnEl) {
             + ' aria-label="' + escapeHtml(fmtKey('chat.processSegment', '思考与执行第 {i} 段 · {n} 个操作', { i: '1', n: '0' })) + '">'
             + '<summary>' + escapeHtml(tOr('chat.actionLog', '思考与执行')) + '</summary>'
             + `<pre class="siKaoDuanKuai" data-ts="0">${escapeHtml(String(m.reasoning))}</pre>`
+            + '</details>'
             + (maoYao(m) ? guoChengCaoZuoHtml({ model: m.moXing, ts, text: String(m.reasoning), key: maoYao(m) + ':seg:0:' + guoChengHash(String(m.reasoning)) }) : '')
-            + '</details></div>'
+            + '</div>'
           : '');
       const zuYaoHuiFuFu = (i === dingWeiThem) && (beiDaDuan || yiGuanBi) && m.role !== 'wo';
       /**
@@ -6486,11 +6711,7 @@ async function langDuWenBen(text, btnEl) {
           // 牛马回复：第一行 = 模型名称（只显示名称，不带「本轮模型」前缀；人说的会话不显示）
           // 悬停显示**降级信息**（模型调用失败后改用了谁）
           /** 第 66 轮 项 34：模型这一行也必须有完整悬停内容（以前只有降级时才挂 title） */
-          + '<div class="xiaoXiMoXing" title="' + escapeHtml([
-            String(m.moXing || '').replace(/^本轮模型[：:]\s*/, ''),
-            m.moXingJiangJi ? jiangJiWenBen(m.moXingJiangJi) : '',
-            wanZhengShiJian(ts),
-          ].filter(Boolean).join('\n')) + '">' +
+          + '<div class="xiaoXiMoXing" title="' + escapeHtml(xiaoXiTip) + '">' +
             escapeHtml(String(m.moXing || '').replace(/^本轮模型[：:]\s*/, '')) +
             (m.moXingJiangJi ? ' <span class="moXingJiangJiKuo">(' + escapeHtml(jiangJiDuan(m.moXingJiangJi)) + ')</span>' : '') +
             '<span class="zanCaiJi" style="margin-left:24px">' +
@@ -6523,14 +6744,16 @@ async function langDuWenBen(text, btnEl) {
           const tiao = [];
           tiao.push(tOr('chat.tipTime', '时间') + '：' + wanZhengShiJian(ts));
           if (m.moXing) tiao.push(tOr('chat.tipModel', '模型') + '：' + String(m.moXing).replace(/^本轮模型[：:]\s*/, ''));
+          if (m.moXingJiangJi) tiao.push(tOr('chat.tipTransfer', '能力转交') + '：' + jiangJiWenBen(m.moXingJiangJi));
           if (ru || chu) {
             tiao.push(tOr('chat.tokensFmt', '输入{ru}，输出{chu}').replace('{ru}', String(ru)).replace('{chu}', String(chu)));
             tiao.push(tOr('chat.tipTurns', '对话轮次：{n} 轮').replace('{n}', String(Math.max(1, ci))));
           }
-          if (m.moXingJiangJi) tiao.push(jiangJiWenBen(m.moXingJiangJi));
-          const tip = tiao.filter(Boolean).join('\n');
+          const tip = (xiaoXiTip || tiao.filter(Boolean).join('\n'));
           const T = ' title="' + escapeHtml(tip) + '"';
-          const ji = tOr('chat.tokensFmt', '输入{ru}，输出{chu}').replace('{ru}', String(ru)).replace('{chu}', String(chu));
+          /** R130：可见行在输出后面加耗时（与悬停气泡同口径） */
+          const ji = tOr('chat.tokensFmt', '输入{ru}，输出{chu}').replace('{ru}', String(ru)).replace('{chu}', String(chu))
+            + (haoWen ? '，' + tOr('chat.tipElapsed', '耗时：{t}').replace('{t}', haoWen) : '');
           const duan = ci > 1 ? ' · ' + tOr('chat.tokensTurns', '{n}次').replace('{n}', String(ci)) : '';
           return '<div class="xiaoXiJiao"><div class="xiaoXiJiaoHang">'
             + '<span class="xiaoXiShiJian"' + T + '>' + escapeHtml(wanZhengShiJian(ts)) + '</span>'
@@ -6766,6 +6989,11 @@ async function langDuWenBen(text, btnEl) {
           /** 用户滚动：**只按当前位置**决定是否跟随底部；不点“接管”，不设时间窗 */
           const zaiDi = isAtBottom(heZi);
           sheZhiGenDi(String(state.selectedChat?.id || ''), zaiDi);
+          /** R130：生成中用户手动滚动 ⇒ 立即暂停自动滚动（勾选暂停到本次回复完成；未勾选到新回复） */
+          try {
+            const sidGun = String(state.selectedChat?.id || '');
+            if (sidGun && shiHuiFuZhong(sidGun)) chatGunOf(sidGun).pause = autoScrollChat ? 'complete' : 'newReply';
+          } catch { /* noop */ }
           /** 用户往上翻**不产生**「新回复」摘要（第 102 轮）；摘要只由真正到来的回复写入 */
         }
         if (scrollRaf) return;
@@ -6803,34 +7031,49 @@ async function langDuWenBen(text, btnEl) {
     /** 是否跟随底部：**只由用户滚动/下箭头/自动滚动决定**，新内容不改变它 */
     if (diYiCiKai) sheZhiGenDi(sid, true);
     const genDi = chatZhuiDi(sid);
-    /** 勾选「自动滚动」= 永远贴底；未勾选走下面的“新内容就滚”逻辑 */
+    /** 勾选「滚动记录」= 滚到最新（底部）；未勾选 = 限制1/限制2 的顶部对齐 */
     const zhuiDi = autoScrollChat;
-    /** 新内容（最后一条回复）的首行节点：未勾选时按它做顶部对齐 */
-    const anchorNode = (youXinNeiRong && zuiTs)
-      ? heZi.querySelector('.xiaoXi[data-ts="' + String(zuiTs).replace(/"/g, '\\"') + '"]')
-      : null;
+    /**
+     * R130 滚动规则（用户口径，取代 R129 的"新内容对齐新内容顶部"）：
+     *  · 新内容（用户/牛马新回复、思考与执行、中间回复、最终回复、系统提示）触发自动滚动；
+     *  · 生成中用户手动滚动 ⇒ 立即暂停（勾选暂停到本次回复完成，未勾选暂停到新回复）；
+     *  · 勾选：滚到最新；未勾选：回复过程中钉「本次回复第一条内容」顶部（限制1），
+     *    回复完成后钉「最终回复」顶部（限制2）。
+     */
+    const zuiXiaoXiObj = xiaoXi[xiaoXi.length - 1] || null;
+    const wanCheng = youXinNeiRong && _liuShiShouWei.has(sid)
+      && !!zuiXiaoXiObj && zuiXiaoXiObj.role === 'them' && !zuiXiaoXiObj.system;
+    /** 'complete' 档暂停到期 = 本次回复完成；'newReply' 档全程都要停，只有新回复才解除（在 tuisongXiaoxi/流式首帧处） */
+    let zanTingZhong = !!st.pause;
+    if (zanTingZhong && st.pause === 'complete' && (!shiHuiFuZhong(sid) || wanCheng)) { st.pause = ''; zanTingZhong = false; }
+    /** 记录本次渲染采用的滚动目标，供「归组/布局稳定后」的补滚复用同一目标 */
+    let gunMuBiao = null;
+    const gunDaoZuiXin = () => { gunMuBiao = { type: 'bottom' }; sheZhiChatGunDong(heZi, maxScrollNow(), false); };
+    const gunDaoMaoDing = (el) => { if (!el) return; st.anchorEl = el; gunMuBiao = { type: 'anchor', el }; sheZhiChatGunDong(heZi, chatAnchorTop(heZi, st), false); };
     if (o.keepScroll) {
       // 加载历史/夹具重画：跟随则到底；不跟随则原样保留位置
       if (genDi) sheZhiChatGunDong(heZi, maxScrollNow(), false);
       else if (prevScrollTop != null) sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
-    } else if (zhuiDi) {
-      /** 勾选 = 滚到底 */
-      sheZhiChatGunDong(heZi, maxScrollNow(), false);
-    } else if (youXinNeiRong && anchorNode) {
-      /**
-       * 未勾选：有新内容就滚 —— 新内容首行顶部对齐（anchorEl + chatAnchorTop）：
-       * 新消息比视口高 ⇒ 把它的顶部对齐到视口顶部（从头展示）；否则 clamp 到底部 = 跟随贴底。
-       * 用户接管逻辑保留：topAlignSuppress.has(sid)（已滚离底部）时视口保持不动。
-       */
-      if (!topAlignSuppress.has(sid)) {
-        st.anchorEl = anchorNode;
-        sheZhiChatGunDong(heZi, chatAnchorTop(heZi, st), false);
-      } else if (prevScrollTop != null) {
-        sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
+    } else if (youXinNeiRong && zanTingZhong) {
+      /** 生成中用户手动滚动 ⇒ 滚动完全交给用户（视口原样） */
+      if (prevScrollTop != null) sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
+    } else if (youXinNeiRong) {
+      const zuiEl = zuiTs
+        ? heZi.querySelector('.xiaoXi[data-ts="' + String(zuiTs).replace(/"/g, '\\"') + '"]')
+        : null;
+      if (zhuiDi) {
+        /** 勾选 = 滚到最新内容（底部） */
+        gunDaoZuiXin();
+      } else if (wanCheng) {
+        /** 限制2：最终回复的开头第一行对齐聊天框顶部 */
+        gunDaoMaoDing(huiFuShouGeEl(heZi, zuiEl) || zuiEl);
+      } else {
+        /** 限制1：本次回复第一条内容的开头第一行对齐聊天框顶部（流式气泡优先） */
+        gunDaoMaoDing(huiFuShouGeEl(heZi, zuiEl) || zuiEl);
       }
     } else {
       /**
-       * **用户不在底部**：新回复只往下追加，视口保持不动。
+       * **无新内容的重画**：视口保持不动。
        * 直接还原原 scrollTop（不是把最后一条回复钉到顶部，也不是按“第一个可见消息”重算 ——
        * 后者在窗口滑动时会差出一条消息的高度）。
        */
@@ -7002,19 +7245,25 @@ async function langDuWenBen(text, btnEl) {
      * 自动滚动也会因为新插入的操作行留下空隙。
      */
     try {
-      /** 未勾选「滚动记录」= 新内容开头对齐顶部（用户要求）——
-       *  补滚到底只在**勾选自动滚动**时做；之前用 chatZhuiDi（含「用户在底部」）会把顶部对齐又拉回底部。 */
-      if (autoScrollChat) {
+      /** R130：归组/布局改完高度后，按**本次渲染同一目标**补滚（勾选=最新；未勾选=限制1/2 锚点）；暂停中不动 */
+      if (gunMuBiao && !st.pause && gunMuBiao.type === 'bottom' && autoScrollChat) {
         sheZhiChatGunDong(heZi, maxScrollNow(), false);
-      } else if (prevScrollTop != null) {
+      } else if (gunMuBiao && !st.pause && gunMuBiao.type === 'anchor' && gunMuBiao.el && !autoScrollChat) {
+        st.anchorEl = gunMuBiao.el;
+        sheZhiChatGunDong(heZi, chatAnchorTop(heZi, st), false);
+      } else if (!gunMuBiao && prevScrollTop != null) {
         sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
       }
     } catch { /* noop */ }
-    /** 字体/长文换行可能在本帧之后才最终布局：跟随时补一次贴底；不跟随则不动用户位置 */
+    /** 字体/长文换行可能在本帧之后才最终布局：按同一目标补一次；暂停/无目标则不动用户位置 */
     const buZuiZhongGunDong = () => {
       try {
         if (String(state.selectedChat?.id || '') !== sid) return;
-        if (autoScrollChat) sheZhiChatGunDong(heZi, maxScrollNow(), false);
+        if (gunMuBiao && !st.pause && gunMuBiao.type === 'bottom' && autoScrollChat) sheZhiChatGunDong(heZi, maxScrollNow(), false);
+        else if (gunMuBiao && !st.pause && gunMuBiao.type === 'anchor' && gunMuBiao.el && !autoScrollChat) {
+          st.anchorEl = gunMuBiao.el;
+          sheZhiChatGunDong(heZi, chatAnchorTop(heZi, st), false);
+        }
       } catch { /* noop */ }
     };
     requestAnimationFrame(buZuiZhongGunDong);
@@ -7099,6 +7348,8 @@ async function langDuWenBen(text, btnEl) {
     const yuanYou = window.__msgs[chatId];
     if (role === 'wo' && !(opts && opts.system)) {
       try { state.planInterruptedPending && state.planInterruptedPending.delete(String(chatId || '')); } catch { /* noop */ }
+      /** R130：用户新回复 = 新回复触发自动滚动（解除生成中暂停；第 97 轮"发消息不解除接管"的口径已被本轮用户规格取代） */
+      try { chatGunOf(String(chatId || '')).pause = ''; } catch { /* noop */ }
     }
     const shangYiTiao = yuanYou[yuanYou.length - 1];
     /**
@@ -7330,6 +7581,8 @@ async function langDuWenBen(text, btnEl) {
   function panCardsFor(kind) {
     const ext = kind === 'extgroup' || kind === 'external' || kind === 'extdm';
     const key = kind === 'single' ? 'single' : 'internal';
+    /** R132：联系人（extdm）没有知识库卡 —— 默认不给、已存布局里也滤掉、添加列表里也不出现 */
+    const quLianXiRen = (arr) => (kind === 'extdm' ? arr.filter((x) => x !== 'mianBanZhiShiKuKuai' && x !== 'mianBanZhiShiKuQunKuai') : arr);
     try {
       const saved = state.panCards && state.panCards[key];
       if (Array.isArray(saved) && saved.length) {
@@ -7344,13 +7597,13 @@ async function langDuWenBen(text, btnEl) {
           state.panCards = state.panCards || {};
           state.panCards[key] = next;
           try { window.warmy.settingsSave?.({ panCards: state.panCards }); } catch { /* noop */ }
-          return ext ? next.filter((x) => !PAN_QUN_YIN.includes(x)) : next;
+          return quLianXiRen(ext ? next.filter((x) => !PAN_QUN_YIN.includes(x)) : next);
         }
-        return ext ? saved.filter((x) => !PAN_QUN_YIN.includes(x)) : saved;
+        return quLianXiRen(ext ? saved.filter((x) => !PAN_QUN_YIN.includes(x)) : saved);
       }
     } catch { /* noop */ }
     const base = (PAN_DEFAULT[key] || []).slice();
-    return ext ? base.filter((x) => !PAN_QUN_YIN.includes(x)) : base;
+    return quLianXiRen(ext ? base.filter((x) => !PAN_QUN_YIN.includes(x)) : base);
   }
   /**
    * 第 34 轮 项 10：**每张卡片的收起状态要记住**（含自定义卡片）。
@@ -8614,7 +8867,7 @@ async function langDuWenBen(text, btnEl) {
     set('mianBanShouQuanKuai', vis.mianBanShouQuanKuai);
     // 自定义卡片容器
     try { renderPanCustomCards(kind); } catch { /* noop */ }
-    // T16：群聊的「添加卡片」下拉隐藏项目四件套选项
+    // T16：群聊的「添加卡片」下拉隐藏项目四件套选项；R132：联系人不给添加知识库卡
     try {
       const sel = $('panKaXuanZe');
       if (sel) {
@@ -8622,6 +8875,12 @@ async function langDuWenBen(text, btnEl) {
         for (const v of PAN_QUN_YIN) {
           const op = sel.querySelector('option[value="' + v + '"]');
           if (op) op.hidden = ext;
+        }
+        if (kind === 'extdm') {
+          for (const v of ['mianBanZhiShiKuKuai', 'mianBanZhiShiKuQunKuai']) {
+            const op = sel.querySelector('option[value="' + v + '"]');
+            if (op) op.hidden = true;
+          }
         }
       }
     } catch { /* noop */ }
@@ -8684,7 +8943,7 @@ async function langDuWenBen(text, btnEl) {
     const qunId = state.selectedChat && state.selectedChat.id;
     if (!qunId) { host.textContent = '—'; return; }
     const cengMing = (c) => (c === 'session' ? tOr('kb.ceng.session', '会话知识库')
-      : c === 'internal' ? tOr('kb.ceng.internal', '内部知识库')
+      : c === 'internal' ? tOr('kb.ceng.internal', '项目知识库')
         : tOr('kb.ceng.private', '私密知识库'));
     /**
      * **知识库条目的多选与操作**（第 55 轮项 1）：
@@ -8697,21 +8956,27 @@ async function langDuWenBen(text, btnEl) {
      * 实体名友好化（真机：卡片上出现「inst-1793804960495-6ln3s 内部知识库」这类内容）：
      * inst-xxx = 牛马实例的会话 id；session-xxx / sess-xxx = 会话库实体 id 前缀。
      * 直接显示内部 id 用户看不懂 —— 映射回实例/群/联系人的显示名，找不到才显示原名。
+     * R130：复合名（「inst-xxx 会话摘要 2026/11/05 20:48:01」）里的 id 段也要逐段替换，
+     * 以前只处理"整条名就是 id"的情况 ⇒ 复合名原样漏出。
      */
+    const zhaoShiTi = (id0) => {
+      const inst = state.instances && state.instances.find((x) => String(x.id) === String(id0));
+      if (inst) return xianShiMing(inst);
+      const g = state.groups && state.groups.find((x) => String(x.id) === String(id0));
+      if (g) return xianShiMing(g);
+      const c = state.chats && state.chats.find((x) => String(x.id) === String(id0));
+      if (c) return xianShiMing(c);
+      return '';
+    };
     const youHaoShiTiMing = (e) => {
-      const m = String((e && (e.name || e.ming || e.id)) || '');
+      let m = String((e && (e.name || e.ming || e.id)) || '');
+      m = m.replace(/\b(inst|session|sess)-[A-Za-z0-9_-]{3,}\b/g, (lu) => {
+        const jian = lu.replace(/^session-/, '').replace(/^sess-/, '');
+        return zhaoShiTi(jian) || zhaoShiTi(lu) || lu;
+      });
       const jian = m.replace(/^session-/, '').replace(/^sess-/, '');
-      const zhao = (id0) => {
-        const inst = state.instances && state.instances.find((x) => String(x.id) === String(id0));
-        if (inst) return xianShiMing(inst);
-        const g = state.groups && state.groups.find((x) => String(x.id) === String(id0));
-        if (g) return xianShiMing(g);
-        const c = state.chats && state.chats.find((x) => String(x.id) === String(id0));
-        if (c) return xianShiMing(c);
-        return '';
-      };
-      if (jian !== m) { const h = zhao(jian); if (h) return h; return jian; }
-      const h2 = zhao(m);
+      if (jian !== m) { const h = zhaoShiTi(jian); if (h) return h; return jian; }
+      const h2 = zhaoShiTi(m);
       return h2 || m;
     };
     const lieBiao = (r, keXuan) => {
@@ -8733,6 +8998,7 @@ async function langDuWenBen(text, btnEl) {
       // kind 实际取值：'single'（我的牛马）| 'project'（项目）| 'group'（群聊/联系人）
       const kKind = (keJian && keJian.kind) || 'single';
       const layers = (keJian && keJian.layers) || ['session'];
+      /** R132：勾选「可被其他人读」= 本会话的牛马与成员可见层（私密勾了就能看）；我的牛马总是全层 */
       const viewUser = String(state.__kbViewUser || '');
       const searchQ = String(state.__kbSearch || '').trim();
       /** 对外开放（第 98 轮 + T17）：项目/群聊的「查看身份」里，别人能看我的哪些层；
@@ -8747,30 +9013,25 @@ async function langDuWenBen(text, btnEl) {
       const openLayers = ['session', 'internal', 'private'].filter((c) => !!openCfg[c]);
       /** 层标签主题色：项目 → 仅「私密」；群聊 → 「私密」+「内部」；我的牛马/看别人 → 无 */
       const zhuTiS = !viewUser ? (kKind === 'project' ? ['private'] : kKind === 'group' ? ['private', 'internal'] : []) : [];
-      const quanAll = viewUser
-        ? await window.warmy.knowledgeQuery?.({ q: '', layers: openLayers }).catch(() => null)
-        : await window.warmy.knowledgeQuery?.({ q: '', sessionId: qunId }).catch(() => null);
-      const huiHua = await window.warmy.knowledgeQuery?.({ q: '', ceng: 'session' }).catch(() => null);
-      const dai = await window.warmy.kbPendingLieBiao?.().catch(() => null);
-      const daiItems = (dai && dai.items) || [];
       const jiaoSe = viewUser
         ? tOr('kb.viewAsPublic', '查看该用户的公开层')
         : (keJian && keJian.isCreator ? tOr('kb.role.creator', '创建者') : tOr('kb.role.member', '成员'));
-      /** 在线用户切换：只展示对方按「对外开放」勾选开放的层，不展示内部/私密，也不给写入口 */
+      /** 用户选择下拉（T158 mesh 查询入口）：默认我自己；选成员 = 远程查对方设备开放的知识库 */
       let userSel = '';
-      if (!viewUser && kKind !== 'single') {
+      if (kKind !== 'single') {
         try {
           const gm = await window.warmy.groupMembers?.(qunId);
           const members = (gm && (gm.members || gm.items)) || [];
+          state.__kbMembers = members;
           if (members.length) {
-            userSel = `<label class="jingYin" style="font-size:11px;display:flex;gap:6px;align-items:center;margin:4px 0">${escapeHtml(tOr('kb.viewAs', '查看身份'))}<select id="kbViewUser"><option value="">${escapeHtml(tOr('kb.viewSelf', '我自己（完整权限）'))}</option>${members.map((m) => `<option value="${escapeHtml(String(m.id || m.fingerprint || ''))}">${escapeHtml(String(m.name || m.ming || m.id || ''))}</option>`).join('')}</select></label>`;
+            userSel = `<label class="jingYin" style="font-size:11px;display:flex;gap:6px;align-items:center;margin:4px 0">${escapeHtml(tOr('kb.viewAs', '查看身份'))}<select id="kbViewUser"><option value="">${escapeHtml(tOr('kb.viewSelf', '我自己（完整权限）'))}</option>${members.map((m) => `<option value="${escapeHtml(String(m.id || m.fingerprint || ''))}" ${viewUser === String(m.id || m.fingerprint || '') ? 'selected' : ''}>${escapeHtml(String(m.name || m.ming || m.id || ''))}</option>`).join('')}</select></label>`;
           }
         } catch { /* 成员列表拿不到就不显示切换 */ }
       }
       /** 可被其他人读的层（原「对外开放」，第 99 轮改版）：写/归档由系统规则定死，卡片不再展示。
        *  只留「别人能在『查看身份』里看到我的哪些层」这一份勾选。 */
       const openArea = (!viewUser && kKind !== 'single')
-        ? `<div class="kbKaiFangBiao"><span class="kbOpenMing">${escapeHtml(tOr('kb.readByOthers', '可被其他人读'))}</span>${['session', 'internal', 'private'].map((c) => `<label class="kbOpenCk"><input type="checkbox" data-kb-open="${c}" ${openCfg[c] ? 'checked' : ''}>${escapeHtml(cengMing(c))}</label>`).join('')}<span class="jingYin" style="font-size:10px">${escapeHtml(tOr('kb.openHint', '勾选的层，别人在「查看身份」里能看；只影响别人看我，不影响我自己。'))}</span></div>`
+        ? `<div class="kbKaiFangBiao"><span class="kbOpenMing">${escapeHtml(tOr('kb.readByOthers', '可被其他人读'))}</span>${['session', 'internal', 'private'].map((c) => `<label class="kbOpenCk"><input type="checkbox" data-kb-open="${c}" ${openCfg[c] ? 'checked' : ''}>${escapeHtml(cengMing(c))}</label>`).join('')}<span class="jingYin" style="font-size:10px">${escapeHtml(tOr('kb.openHint', '勾选的层，本会话的牛马与其他成员都能看、能调取来回答问题或执行任务；不勾的只有你自己能看。'))}</span></div>`
         : '';
       /** 搜索框 + 搜索按钮（T17：关键词搜三层，每条目行内带层标签） */
       const searchRow = `<div style="display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap"><input id="kbCardQ" value="${escapeHtml(String(state.__kbSearch || ''))}" placeholder="${escapeHtml(tOr('kb.searchPlaceholder', '搜索知识库（三层）'))}" style="flex:1;min-width:120px"><button class="anNiuXiao" id="kbCardGo">${escapeHtml(tOr('kb.searchGo', '搜索'))}</button></div>`;
@@ -8778,20 +9039,49 @@ async function langDuWenBen(text, btnEl) {
       const toolRow = searchQ
         ? `<div style="display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap"><button class="anNiuXiao" data-kb-rebuild>${escapeHtml(tOr('kb.rebuild', '重构'))}</button><button class="anNiuXiao" data-kb-merge>${escapeHtml(tOr('kb.merge', '合并'))}</button><span class="jingYin" style="font-size:11px">${escapeHtml(tOr('kb.selectHint', '勾选 1 条可重构，≥2 条可合并（都会二次确认）'))}</span></div>`
         : '';
+      /** 待整理内容区（R55 门禁钉住）：重构/合并排队的条目，下次归档写回 */
+      const dai = await window.warmy.kbPendingLieBiao?.().catch(() => null);
+      const daiItems = (dai && dai.items) || [];
       /** 正文：有搜索词 → 三层结果（每层一段、带 .kbCengBiao 标签）；无搜索词 → 默认视图 */
       const visCeng = viewUser ? openLayers : ['session', 'internal', 'private'];
       let zhengWen = '';
       if (searchQ) {
         const duan = [];
-        for (const c of visCeng) {
-          const r = await window.warmy.knowledgeQuery?.({ q: searchQ, ceng: c }).catch(() => null);
-          duan.push(`<div class="kbCengDuan"><span class="kbCengBiao${zhuTiS.includes(c) ? ' zhuTi' : ''}">${escapeHtml(cengMing(c))}</span>${lieBiao(r, !viewUser)}</div>`);
+        if (viewUser) {
+          /** T158：选成员 = mesh 远程查对方设备（对方按自己「可被其他人读」勾选放行，含私密）；
+           *  成员没有设备指纹（本机成员）时回落本地开放层；结果按来源层分段带标签。 */
+          const cheng = (Array.isArray(state.__kbMembers) ? state.__kbMembers : []).find((m) => String(m.id || m.fingerprint || '') === viewUser);
+          const fp = String((cheng && (cheng.fingerprint || cheng.zhiWen)) || '');
+          if (fp && window.warmy.kbYuanChengSouSuo) {
+            const yuan = await window.warmy.kbYuanChengSouSuo({ zhiWen: fp, q: searchQ, sessionId: qunId, limit: 20 }).catch(() => null);
+            if (yuan && yuan.ok) {
+              for (const c of ['private', 'internal', 'session']) {
+                const ee = (yuan.entities || []).filter((x) => String(x && x._ceng) === c);
+                const vv = (yuan.events || []).filter((x) => String(x && x._ceng) === c);
+                if (!ee.length && !vv.length) continue;
+                duan.push(`<div class="kbCengDuan"><span class="kbCengBiao">${escapeHtml(cengMing(c))}</span>${lieBiao({ entities: ee, events: vv }, false)}</div>`);
+              }
+              if (!duan.length) duan.push(`<div class="jingYin">${escapeHtml(t('knowledge.empty') || '—')}</div>`);
+            } else {
+              duan.push(`<div class="jingYin">${escapeHtml(tOr('kb.remoteFail', '远程查询未返回（对方未配对或未响应）'))}</div>`);
+            }
+          } else {
+            for (const c of openLayers) {
+              const r = await window.warmy.knowledgeQuery?.({ q: searchQ, ceng: c }).catch(() => null);
+              duan.push(`<div class="kbCengDuan"><span class="kbCengBiao">${escapeHtml(cengMing(c))}</span>${lieBiao(r, false)}</div>`);
+            }
+          }
+        } else {
+          for (const c of visCeng) {
+            const r = await window.warmy.knowledgeQuery?.({ q: searchQ, ceng: c }).catch(() => null);
+            duan.push(`<div class="kbCengDuan"><span class="kbCengBiao${zhuTiS.includes(c) ? ' zhuTi' : ''}">${escapeHtml(cengMing(c))}</span>${lieBiao(r, !viewUser)}</div>`);
+          }
         }
         zhengWen = `<div class="jingYin" style="font-size:11px;margin:4px 0">${escapeHtml(tOr('kb.searchResult', '搜索结果'))}：${escapeHtml(searchQ)}</div>` + duan.join('');
       } else {
-        zhengWen = lieBiao(quanAll, false)
-          + `<div class="jingYin" style="font-size:11px;margin:8px 0 4px">${escapeHtml(cengMing('session'))}</div>`
-          + lieBiao(huiHua, false)
+        /** R130（用户口径）：不搜索不显示任何知识库内容 —— 输入内容并点「搜索」后才出结果。
+         *  「待整理内容区」是队列状态不是知识内容，照常显示（R55）。 */
+        zhengWen = `<div class="jingYin" style="font-size:11px;margin:8px 0">${escapeHtml(tOr('kb.searchFirst', '输入内容后点「搜索」，才会显示知识库内容'))}</div>`
           + (daiItems.length
             ? `<div class="jingYin" style="font-size:11px;margin:8px 0 4px">${escapeHtml(tOr('kb.pendingTitle', '待整理内容区'))}（${daiItems.length}）· ${escapeHtml(tOr('kb.pendingHint', '下次归档时重新写回'))}</div>`
               + daiItems.slice(0, 8).map((x) => `<div class="pkHang jingYin">${escapeHtml(String(x.text || '').slice(0, 80))}<button class="anNiuXiao" data-kb-pending-del="${escapeHtml(String(x.id || ''))}" title="${escapeHtml(tOr('kb.pendingDel', '删除'))}">×</button></div>`).join('')
@@ -11297,9 +11587,11 @@ window.__keYiLiaoTian = keYiLiaoTian;
     }
     const id = state.selectedChat.id;
     /**
-     * 发消息**不改变**“是否跟随底部”：用户翻着旧记录发一句，新回复也不许把视口拽走；
-     * 只有用户自己滚到底/点下箭头才恢复跟随。
+     * R129：**用户发新消息 = 新的回复 ⇒ 重新触发自动滚动**（用户要求：
+     * “新的回复（用户或者牛马的新回复）就会重新触发自动滚动”）。之前的产品口径是
+     * “发消息不改变跟随”，本轮用户明确改为重新触发。
      */
+    sheZhiGenDi(String(id), true);
     /**
      * **被中断任务的「继续/重试」按钮失效**（产品要求）：
      * 用户没点按钮、直接发了新内容 ⇒ 旧任务不再被自动续上，按钮变灰不可点。
@@ -12759,12 +13051,15 @@ async function renderDashboard(host) {
             it.onmouseenter = () => { it.style.background = 'var(--hover,#eee)'; };
             it.onmouseleave = () => { it.style.background = ''; };
             it.onmousedown = (ev) => { ev.preventDefault(); ev.stopPropagation(); }; // 防 textarea 失焦
-            it.onclick = (ev) => {
+            it.onclick = async (ev) => {
               ev.preventDefault();
               ev.stopPropagation();
               const id = it.getAttribute('data-tid');
               const tpl = all.find((x) => x.id === id);
-              if (tpl) chaRuMoBan(String(tpl.content || ''));
+              if (tpl) {
+                /** 预设提示词统一中文（用户口径：不再按界面语言单独翻译正文） */
+                chaRuMoBan(String(tpl.content || ''));
+              }
               guanZi();
               menu.classList.add('yinCang');
             };
@@ -14336,33 +14631,6 @@ async function renderDashboard(host) {
         </div>
         <div class="sheZhiSection" data-sec="func"><h2 style="color:var(--accent)">${escapeHtml(t('settings.section.func'))}</h2></div>
 
-        <!-- 网络搜索：默认全部关闭。用户显式启用至少一个搜索供应商后，模型才能联网。 -->
-        <div class="sheZhiSection sheZhiKa" id="souSuoPeiZhiKa" data-sec="func">
-          <h2>${escapeHtml(tOr('souSuo.title', '网络搜索'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('souSuo.hint', '默认全部关闭。启用至少一个搜索供应商后，模型才能使用「联网搜索 / 抓正文」；Jina Reader 只负责抓取，不能搜索。'))}</p>
-          <!-- T5（R127）：预设下拉 + 待测区/搜索调用链两分区；供应商先测试通过才进链 -->
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-            <label for="souSuoYuSheXuan">${escapeHtml(tOr('souSuo.preset', '预设'))}</label>
-            <select id="souSuoYuSheXuan" title="${escapeHtml(tOr('souSuo.preset', '预设'))}">
-              <option value="firecrawl">Firecrawl Keyless</option>
-              <option value="jina-reader">Jina Reader</option>
-              <option value="tavily">Tavily</option>
-              <option value="deepseek">DeepSeek Search</option>
-              <option value="exa">Exa</option>
-              <option value="serper">Serper（Google SERP）</option>
-              <option value="brave">Brave Search</option>
-              <option value="bocha">博查 Bocha</option>
-              <option value="custom">${escapeHtml(tOr('souSuo.custom', '自定义'))}</option>
-            </select>
-            <span class="jingYin" id="souSuoYuSheTiShi"></span>
-          </div>
-          <div id="souSuoPeiZhiLie"></div>
-          <label style="display:flex;align-items:center;gap:6px;margin-top:12px">
-            <input type="checkbox" id="quanPanSuoYinKaiGuan"/>
-            <span>${escapeHtml(tOr('souSuo.fullDiskIndex', '全盘搜索后台索引（默认开；空闲时建立，更快更完整）'))}</span>
-          </label>
-          <div class="jingYin" id="quanPanSuoYinZhuangTai" style="margin-top:4px"></div>
-        </div>
         <!-- 音频设备：**全局**设置（产品要求：放在「功能」分区**最上面**，在记忆系统之前）。
              拟态桌宠、聊天输入框的麦克风、回复旁的喇叭，以及以后任何要用麦克风/播放器的地方都用这一套。
              id 与原来一致，所以既有逻辑照旧可用。 -->
@@ -14397,20 +14665,22 @@ async function renderDashboard(host) {
             <button class="anNiuXiao" id="anNiuMaiKeFengCeShi">${escapeHtml(tOr('audioTest.mic', '测试麦克风'))}</button>
             <button class="anNiuXiao" id="anNiuTiShiYinCeShi">${escapeHtml(tOr('audioTest.sound', '测试播放器'))}</button>
           </div>
-          <!-- 摄像头测试（R128）：选摄像头 → 点测试 → 预览弹窗（video + 关闭钮 + 状态行） -->
           <div class="shiLiHang" style="align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">
-            <span class="jingYin">${escapeHtml(tOr('audio.camera', '摄像头'))}</span>
-            <select id="sheXiangTouSheBei" style="min-width:220px"><option value="">${escapeHtml(tOr('audio.camUnnamed', '摄像头'))}</option></select>
-            <button class="anNiuXiao" id="anNiuSheXiangTouCeShi">${escapeHtml(tOr('audioTest.camera', '测试摄像头'))}</button>
-            <span class="jingYin" id="sheXiangTouXiaoXi"></span>
-          </div>
-          <div class="shiLiHang" style="align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">
-            <span style="display:inline-block;width:160px;height:10px;border-radius:6px;background:var(--hover);overflow:hidden;vertical-align:middle">
+            <!-- R138：标注这条灰色 = 麦克风音量电平表（测试麦克风时实时显示收音音量） -->
+            <span class="jingYin" style="font-size:11px">${escapeHtml(tOr('audio.micLevel', '麦克风音量'))}</span>
+            <span title="${escapeHtml(tOr('audio.micLevelTip', '麦克风音量电平表：点「测试麦克风」后实时显示收音大小，灰色是底槽、主题色是当前音量'))}" style="display:inline-block;width:160px;height:10px;border-radius:6px;background:var(--hover);overflow:hidden;vertical-align:middle">
               <span id="maiKeFengJiBieTiao" style="display:block;height:100%;width:0%;background:var(--accent);transition:width .06s linear"></span>
             </span>
             <span class="jingYin" id="maiKeFengXiaoXi"></span>
             <button class="anNiuXiao" id="anNiuBoFangLuYin" style="display:none">${escapeHtml(tOr('audioTest.playRecording', '播放录音'))}</button>
             <span class="jingYin" id="tiShiYinXiaoXi"></span>
+          </div>
+          <!-- 摄像头测试（R128；R138 用户要求移到麦克风音量行下面）：选摄像头 → 点测试 → 预览弹窗 -->
+          <div class="shiLiHang" style="align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">
+            <span class="jingYin">${escapeHtml(tOr('audio.camera', '摄像头'))}</span>
+            <select id="sheXiangTouSheBei" style="min-width:220px"><option value="">${escapeHtml(tOr('audio.camUnnamed', '摄像头'))}</option></select>
+            <button class="anNiuXiao" id="anNiuSheXiangTouCeShi">${escapeHtml(tOr('audioTest.camera', '测试摄像头'))}</button>
+            <span class="jingYin" id="sheXiangTouXiaoXi"></span>
           </div>
           <label style="display:flex;align-items:center;gap:6px;margin-top:8px">
             <input type="checkbox" id="mimicXiTongYin"/> ${escapeHtml(tOr('mimic.sysAudio', '允许接收系统 / 应用的声音'))}
@@ -14437,7 +14707,7 @@ async function renderDashboard(host) {
               <span>${escapeHtml(tOr('localSpeech.enable', '启用'))}</span>
             </label>
           </div>
-          <p class="jingYin">${escapeHtml(tOr('localSpeech.hint', '安装完成后才能启用。启用后语音识别与合成只在本机运行，失败时提示错误，不自动切换云端；关闭后按模型调用链顺序尝试。'))}</p>
+          <p class="jingYin">${escapeHtml(tOr('localSpeech.hint', '启用后会使用本地的语音识别转文字的功能，让你的语音留在本地，更安全。否则，将使用模型中的听话模型来进行语音识别。'))}</p>
           <div class="jingYin" id="benDiYuYinZhuangTai"></div>
           <div class="jingYin" id="benDiYuYinJinDu" style="color:var(--accent)"></div>
           <div class="jinDu" id="benDiYuYinJinDuGui" hidden><div class="jinDuTiao" id="benDiYuYinJinDuTiao" role="progressbar" aria-label="${escapeHtml(tOr('localSpeech.progress', '进度'))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%"></div></div>
@@ -14451,6 +14721,33 @@ async function renderDashboard(host) {
             <button class="anNiuXiao" id="anNiuBenDiYuYinShua" type="button" title="${escapeHtml(tOr('localSpeech.refreshTip', '刷新状态：重新读取安装进度、运行环境与模型是否就绪（不会重新下载）'))}">${escapeHtml(tOr('localSpeech.refresh', '刷新状态'))}</button>
           </div>
           <p class="jingYin" style="font-size:11px;margin:6px 0 0">${escapeHtml(tOr('localSpeech.btnHelp', '自检 = 本机合成一句中文再识别回来，验证「能装、能跑、能用」；刷新状态 = 只重新读一遍安装/运行状态，不下载任何东西。'))}</p>
+        </div>
+        <!-- 搜索（原「网络搜索」，用户要求改名并移到「本地语音与文字互转」下方）：默认全部关闭。启用至少一个供应商后模型才能联网。 -->
+        <div class="sheZhiSection sheZhiKa" id="souSuoPeiZhiKa" data-sec="func">
+          <h2>${escapeHtml(tOr('souSuo.title', '搜索'))}</h2>
+          <p class="jingYin">${escapeHtml(tOr('souSuo.hint', '默认全部关闭。启用至少一个搜索供应商后，模型才能使用「联网搜索 / 抓正文」；Jina Reader 只负责抓取，不能搜索。'))}</p>
+          <!-- T5（R127）：预设下拉 + 待测区/搜索调用链两分区；供应商先测试通过才进链 -->
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+            <label for="souSuoYuSheXuan">${escapeHtml(tOr('souSuo.preset', '预设'))}</label>
+            <select id="souSuoYuSheXuan" title="${escapeHtml(tOr('souSuo.preset', '预设'))}">
+              <option value="firecrawl">Firecrawl Keyless</option>
+              <option value="jina-reader">Jina Reader</option>
+              <option value="tavily">Tavily</option>
+              <option value="deepseek">DeepSeek Search</option>
+              <option value="exa">Exa</option>
+              <option value="serper">Serper（Google SERP）</option>
+              <option value="brave">Brave Search</option>
+              <option value="bocha">博查 Bocha</option>
+              <option value="custom">${escapeHtml(tOr('souSuo.custom', '自定义'))}</option>
+            </select>
+            <span class="jingYin" id="souSuoYuSheTiShi"></span>
+          </div>
+          <div id="souSuoPeiZhiLie"></div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:12px">
+            <input type="checkbox" id="quanPanSuoYinKaiGuan"/>
+            <span>${escapeHtml(tOr('souSuo.fullDiskIndex', '全盘搜索后台索引（默认开；空闲时建立，更快更完整）'))}</span>
+          </label>
+          <div class="jingYin" id="quanPanSuoYinZhuangTai" style="margin-top:4px"></div>
         </div>
         <!-- 第 63 轮项 27：使用 nm 查看器打开项目内文件（左键 nm / 右键系统；未勾选则相反） -->
         <div class="sheZhiSection sheZhiKa" id="nmKaiWenJianKa" data-sec="func">
@@ -14479,6 +14776,55 @@ async function renderDashboard(host) {
           <p class="jingYin">${escapeHtml(tOr('settings.trustedFoldersHint', '牛马可以读取这些文件夹及其子目录；写入和执行仍按安全档位审批。'))}</p>
           <div id="xinRenWenJianJiaJi"></div>
           <button class="anNiuXiao" id="xinRenWenJianJiaTianJia" style="margin-top:6px">${escapeHtml(tOr('settings.addTrustedFolder', '添加文件夹'))}</button>
+        </div>
+        <!-- R136：SSH 远程设备 —— 对接没装 WArmy 的设备（对方开 sshd 即可）；网络通道由用户自己解决 -->
+        <div class="sheZhiSection sheZhiKa" id="sshYuanChengKa" data-sec="func">
+          <h2>${escapeHtml(tOr('ssh.title', 'SSH 远程设备'))}</h2>
+          <p class="jingYin">${escapeHtml(tOr('ssh.hint', '登记装有 SSH 服务的设备（可以是任何电脑/服务器，不必装无限牛马）。网络可达性由你自己解决（局域网/VPN/端口转发均可）；牛马可通过 remote_ssh 工具在这些设备上执行命令、传文件。凭证加密存本机，每次远程操作都会弹授权并记审计。'))}</p>
+          <div id="sshMuBiaoLieBiao"></div>
+          <div class="shiLiHang" style="flex-direction:column;gap:6px;align-items:stretch;margin-top:8px">
+            <div class="shiLiHang" style="gap:8px;flex-wrap:wrap;align-items:center">
+              <input id="sshMing" placeholder="${escapeHtml(tOr('ssh.name', '显示名（如：实验室服务器）'))}" style="min-width:180px"/>
+              <input id="sshHost" placeholder="${escapeHtml(tOr('ssh.host', '主机地址（IP 或域名）'))}" style="min-width:160px"/>
+              <input id="sshPort" placeholder="${escapeHtml(tOr('ssh.port', '端口（默认 22）'))}" style="width:110px"/>
+              <input id="sshUser" placeholder="${escapeHtml(tOr('ssh.user', '用户名'))}" style="min-width:110px"/>
+            </div>
+            <div class="shiLiHang" style="gap:8px;flex-wrap:wrap;align-items:center">
+              <select id="sshRenZheng" style="min-width:120px">
+                <option value="key">${escapeHtml(tOr('ssh.authKey', '密钥认证'))}</option>
+                <option value="password">${escapeHtml(tOr('ssh.authPw', '口令认证'))}</option>
+              </select>
+              <input id="sshPingZheng" placeholder="${escapeHtml(tOr('ssh.credential', '私钥全文或口令（加密保存）'))}" style="min-width:280px" type="password"/>
+              <button class="anNiuXiao" id="sshBaoCun" type="button">${escapeHtml(tOr('ssh.save', '保存目标'))}</button>
+            </div>
+            <div class="jingYin" id="sshXiaoXi" style="font-size:11px"></div>
+          </div>
+        </div>
+        <!-- R136+：远程控制设备列表（独立区块；我的设备只读镜像自同步列表；每设备 2 勾选 + 上次方向/时间） -->
+        <div class="sheZhiSection sheZhiKa" id="yuanChengKongZhiKa" data-sec="func">
+          <h2>${escapeHtml(tOr('rc.title', '远程控制设备'))}</h2>
+          <p class="jingYin">${escapeHtml(tOr('rc.hint', '远程控制需要两台设备都装无限牛马（SSH 设备走「SSH 远程设备」）。这里是远程控制专用的设备列表：「我的设备」来自同步设备列表（同账号已配对，只读、不可删除修改）；「其他设备」可手动添加。每个设备两个勾选：① 可被该设备远程控制（默认不勾）；② 信任该设备（免本机同意直接控制，需先勾①）。'))}</p>
+          <h3 style="font-size:13px;margin:10px 0 4px">${escapeHtml(tOr('rc.myDevices', '我的设备（同步列表 · 只读）'))}</h3>
+          <div id="rcMyLieBiao"></div>
+          <h3 style="font-size:13px;margin:12px 0 4px">${escapeHtml(tOr('rc.otherDevices', '其他设备'))}</h3>
+          <div id="rcOtherLieBiao"></div>
+          <div class="shiLiHang" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+            <input id="rcMing" placeholder="${escapeHtml(tOr('rc.name', '显示名'))}" style="min-width:130px"/>
+            <select id="rcLeiXing" style="min-width:150px">
+              <option value="wamy">${escapeHtml(tOr('rc.typeWamy', '装了无限牛马的设备'))}</option>
+              <option value="ssh">${escapeHtml(tOr('rc.typeSsh', 'SSH 通道设备'))}</option>
+            </select>
+            <input id="rcZhiWen" placeholder="${escapeHtml(tOr('rc.fingerprint', '设备指纹（wamy 必填）'))}" style="min-width:200px"/>
+            <select id="rcSshId" style="min-width:150px"><option value="">${escapeHtml(tOr('rc.sshTarget', '选择 SSH 目标'))}</option></select>
+            <button class="anNiuXiao" id="rcBaoCun" type="button">${escapeHtml(tOr('rc.save', '添加设备'))}</button>
+          </div>
+          <div class="jingYin" id="rcXiaoXi" style="font-size:11px;margin-top:4px"></div>
+          <h3 style="font-size:13px;margin:12px 0 4px">${escapeHtml(tOr('rc.rejected', '永久拒绝名单（停止按钮「始终拒绝」加入；可移除）'))}</h3>
+          <div id="rcJuJueLieBiao"></div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:12px">
+            <input type="checkbox" id="kbRemoteQueryKaiGuan"/>
+            <span>${escapeHtml(tOr('kb.remoteQuery', '允许配对设备查我的知识库（默认关；开启后已配对设备可远程检索你勾选开放的知识库层）'))}</span>
+          </label>
         </div>
         <!-- 第 36 轮【项 2】：社交接入**整体搬到「牛马管理局 → 每只牛马的设置」**里（在「社交信息」上面）。
              设置→功能 这里不再重复一份 —— 两处入口会让用户以为有"全局社交"和"牛马社交"两套。 -->
@@ -14819,25 +15165,6 @@ async function renderDashboard(host) {
         <div class="sheZhiSection sheZhiKa" id="tongYiLianGuanLi" data-sec="model">
           <h2>${escapeHtml(tOr('model.unifiedTitle', '统一链管理'))}</h2>
           <p class="jingYin">${escapeHtml(tOr('model.unifiedHint', '每一条链管理一种能力的模型：链内第一个启用模型即默认，可上移 / 下移 / 置顶 / 删除；每链底部可从已拉取模型中「加入链」。'))}</p>
-          <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.chainStatus', '状态总览'))}</div>
-          <div id="smZongLan" class="smZongLan">
-            <button type="button" class="smZongLanZhang" data-zong-lan="chat"><span class="smZongLanMing">${escapeHtml(tOr('settings.chatModel', '对话模型'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="asr"><span class="smZongLanMing">${escapeHtml(t('settings.asrModel'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="embed"><span class="smZongLanMing">${escapeHtml(t('settings.embeddingModel'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="organizer"><span class="smZongLanMing">${escapeHtml(t('settings.organizerModel'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="tts"><span class="smZongLanMing">${escapeHtml(tOr('settings.ttsModel', '语音模型'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="fenLei"><span class="smZongLanMing">${escapeHtml(tOr('model.fenLei', '决策模型'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="imageUnd"><span class="smZongLanMing">${escapeHtml(tOr('settings.imageUndModel', '看图模型'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="image"><span class="smZongLanMing">${escapeHtml(tOr('settings.imageModel', '画图模型'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="videoUnd"><span class="smZongLanMing">${escapeHtml(tOr('settings.videoUndModel', '看视频模型'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="videoGen"><span class="smZongLanMing">${escapeHtml(tOr('settings.videoGenModel', '做视频模型'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="rerank"><span class="smZongLanMing">${escapeHtml(tOr('settings.rerankModel', '嵌入重排'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="safety"><span class="smZongLanMing">${escapeHtml(tOr('settings.safetyModel', '安全审核'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="translate"><span class="smZongLanMing">${escapeHtml(tOr('settings.translateModel', '翻译模型'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="ocr"><span class="smZongLanMing">${escapeHtml(tOr('settings.ocrModel', '文字识别'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="reasoning"><span class="smZongLanMing">${escapeHtml(tOr('settings.reasoningModel', '推理模型'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-            <button type="button" class="smZongLanZhang" data-zong-lan="code"><span class="smZongLanMing">${escapeHtml(tOr('settings.codeModel', '代码模型'))}</span><span class="smZongLanShu"></span><span class="smZongLanMoRen"></span></button>
-          </div>
           <!-- 对话模型：全局对话模型白名单（**默认折叠**、**无默认模型**） -->
           <details class="moXianSuLian" data-lian="chat" id="smShouChat">
             <summary>${escapeHtml(tOr('settings.chatModel', '对话模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="chat"></span></summary>
@@ -16337,15 +16664,19 @@ async function renderDashboard(host) {
           if (!mic || !spk) return;
           const tianAudio = (sel, kind, savedId) => {
             const ops = ['<option value="">' + escapeHtml(tOr('audio.defaultDevice', '系统默认设备')) + '</option>'];
+            let hit = false;
             try {
               const list = window.__audioDeviceList || [];
               list.filter((d) => d.kind === kind && d.deviceId).forEach((d) => {
                 const label = d.label || (kind === 'audioinput' ? tOr('audio.micUnnamed', '麦克风') : tOr('audio.spkUnnamed', '播放器')) + ' ' + (d.deviceId || '').slice(0, 6);
-                const sel = savedId && d.deviceId === savedId ? ' selected' : '';
-                ops.push('<option value="' + escapeHtml(d.deviceId) + '"' + sel + '>' + escapeHtml(label) + '</option>');
+                const sel2 = savedId && d.deviceId === savedId ? ' selected' : '';
+                if (sel2) hit = true;
+                ops.push('<option value="' + escapeHtml(d.deviceId) + '"' + sel2 + '>' + escapeHtml(label) + '</option>');
               });
             } catch { /* noop */ }
             sel.innerHTML = ops.join('');
+            /** 默认/失效一律显式选「系统默认设备」（不靠浏览器恰好选中第一项） */
+            if (!savedId || !hit) sel.value = '';
           };
           // 先拿权限再列设备（拿不到也继续列，至少有默认项）
           try {
@@ -16371,9 +16702,32 @@ async function renderDashboard(host) {
           mic.onchange = () => { try { window.warmy.settingsSave?.({ audioMicDevice: mic.value }); } catch { /* noop */ } };
           spk.onchange = () => { try { window.warmy.settingsSave?.({ audioSpeakerDevice: spk.value }); } catch { /* noop */ } };
         }
+        /**
+         * 摄像头下拉（R130 从 bindYinPinCeShi 挪来）：与麦克风/播放器同一时机填充——
+         * 设置页渲染后元素才存在；默认/失效一律显式选「系统默认设备」。
+         */
+        async function tianChongSheXiangTou() {
+          const sel = $('sheXiangTouSheBei');
+          if (!sel || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+          try {
+            const list = await navigator.mediaDevices.enumerateDevices();
+            const cams = list.filter((d) => d.kind === 'videoinput');
+            let savedCam = '';
+            try {
+              const r = await window.warmy.settingsGet?.();
+              savedCam = String((r && r.settings && r.settings.audioCameraDevice) || '');
+            } catch { /* noop */ }
+            if (!cams.length) { sel.innerHTML = '<option value="">' + escapeHtml(tOr('audio.camNone', '未找到摄像头')) + '</option>'; return; }
+            sel.innerHTML = '<option value="">' + escapeHtml(tOr('audio.defaultDevice', '系统默认设备')) + '</option>'
+              + cams.map((d, i) => '<option value="' + escapeHtml(d.deviceId) + '">' + escapeHtml(d.label || tOr('audio.camUnnamed', '摄像头') + ' ' + (i + 1)) + '</option>').join('');
+            sel.value = (savedCam && cams.some((d) => d.deviceId === savedCam)) ? savedCam : '';
+            sel.onchange = () => { try { window.warmy.settingsSave?.({ audioCameraDevice: sel.value }); } catch { /* noop */ } };
+          } catch { /* 枚举失败就用默认项 */ }
+        }
         void tianChongYinPinSheBei();
+        void tianChongSheXiangTou();
         try {
-          navigator.mediaDevices?.addEventListener?.('devicechange', () => { void tianChongYinPinSheBei(); });
+          navigator.mediaDevices?.addEventListener?.('devicechange', () => { void tianChongYinPinSheBei(); void tianChongSheXiangTou(); });
         } catch { /* noop */ }
         // 字幕开关
         const zm = $('mimicZiMu');
@@ -17489,6 +17843,150 @@ async function renderDashboard(host) {
           } catch { /* noop */ }
         });
         await shuaXinXinRen();
+        // R136：SSH 远程设备（登记/删除/测试连接）
+        (async function sshYuanChengChuShiHua() {
+          const lie = $('sshMuBiaoLieBiao');
+          const xiao = $('sshXiaoXi');
+          if (!lie) return;
+          async function shuaSsh() {
+            try {
+              const r = await window.warmy.sshLieBiao?.();
+              const list = Array.isArray(r?.targets) ? r.targets : [];
+              lie.innerHTML = list.length
+                ? list.map((t) => `<div class="shiLiHang" style="gap:8px;align-items:center;padding:4px 0;flex-wrap:wrap">
+                    <span class="jingYin" style="min-width:200px">${escapeHtml(t.ming)} · ${escapeHtml(t.user)}@${escapeHtml(t.host)}:${Number(t.port) || 22}（${t.renZheng === 'key' ? escapeHtml(tOr('ssh.authKey', '密钥认证')) : escapeHtml(tOr('ssh.authPw', '口令认证'))}）</span>
+                    <button class="anNiuXiao" data-ssh-test="${escapeHtml(t.id)}" type="button">${escapeHtml(tOr('ssh.test', '测试'))}</button>
+                    <button class="anNiuXiao" data-ssh-del="${escapeHtml(t.id)}" type="button">${escapeHtml(tOr('ssh.delete', '删除'))}</button>
+                  </div>`).join('')
+                : `<div class="jingYin">${escapeHtml(tOr('ssh.empty', '还没有登记任何 SSH 设备'))}</div>`;
+              lie.querySelectorAll('[data-ssh-test]').forEach((b) => b.addEventListener('click', async () => {
+                try {
+                  if (xiao) xiao.textContent = tOr('ssh.testing', '连接中…');
+                  const r2 = await window.warmy.sshCeShi?.({ id: b.getAttribute('data-ssh-test') });
+                  if (xiao) xiao.textContent = r2?.ok ? tOr('ssh.testOk', '连接正常') : `${tOr('ssh.testFail', '连接失败')}：${String(r2?.error || '')}`;
+                } catch (e) { if (xiao) xiao.textContent = String(e && e.message || e); }
+              }));
+              lie.querySelectorAll('[data-ssh-del]').forEach((b) => b.addEventListener('click', async () => {
+                try {
+                  await window.warmy.sshShanChu?.({ id: b.getAttribute('data-ssh-del') });
+                  await shuaSsh();
+                } catch { /* noop */ }
+              }));
+            } catch { lie.innerHTML = ''; }
+          }
+          $('sshBaoCun')?.addEventListener('click', async () => {
+            try {
+              const r = await window.warmy.sshBaoCun?.({
+                ming: $('sshMing')?.value || '',
+                host: $('sshHost')?.value || '',
+                port: $('sshPort')?.value || '',
+                user: $('sshUser')?.value || '',
+                renZheng: $('sshRenZheng')?.value === 'password' ? 'password' : 'key',
+                pingZheng: $('sshPingZheng')?.value || '',
+              });
+              if (xiao) xiao.textContent = r?.ok ? tOr('ssh.saved', '已保存') : `${tOr('ssh.saveFail', '保存失败')}：${String(r?.error || '')}`;
+              if (r?.ok) {
+                if ($('sshPingZheng')) $('sshPingZheng').value = '';
+                await shuaSsh();
+              }
+            } catch (e) { if (xiao) xiao.textContent = String(e && e.message || e); }
+          });
+          await shuaSsh();
+        })();
+        // R136+：远程控制设备列表（我的设备只读 / 其他设备 2 勾选 / 上次方向时间 / 拒绝名单）
+        (async function yuanChengKongZhiChuShiHua() {
+          const myLie = $('rcMyLieBiao');
+          const otLie = $('rcOtherLieBiao');
+          const jjLie = $('rcJuJueLieBiao');
+          const xiao = $('rcXiaoXi');
+          if (!myLie || !otLie) return;
+          const fmtDir = (d) => d ? escapeHtml(d) : '—';
+          async function shuaRc() {
+            try {
+              const r = await window.warmy.rcLieBiao?.();
+              const devices = Array.isArray(r?.devices) ? r.devices : [];
+              const jujue = Array.isArray(r?.jujue) ? r.jujue : [];
+              const hang = (t, readonly) => `<div class="shiLiHang" style="gap:8px;align-items:center;padding:5px 0;flex-wrap:wrap;border-bottom:1px solid var(--hover)">
+                <span class="jingYin" style="min-width:170px">${escapeHtml(t.ming)}${t.leixing === 'ssh' ? '〔SSH〕' : ''}</span>
+                <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" data-rc-kbk="${escapeHtml(t.id)}" ${t.keBeiKong ? 'checked' : ''} ${readonly ? 'disabled' : ''}/> ${escapeHtml(tOr('rc.allow', '可被该设备远程控制'))}</label>
+                <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" data-rc-xr="${escapeHtml(t.id)}" ${t.xinRen ? 'checked' : ''} ${readonly || !t.keBeiKong ? 'disabled' : ''}/> ${escapeHtml(tOr('rc.trust', '信任该设备（免同意）'))}</label>
+                <span class="jingYin" style="min-width:220px;font-size:11px">${fmtDir(t.lastFangXiangWenAn)}${t.lastShiJianWenAn ? ' · ' + escapeHtml(t.lastShiJianWenAn) : ''}</span>
+                ${readonly ? '' : `<button class="anNiuXiao" data-rc-del="${escapeHtml(t.id)}" type="button">${escapeHtml(tOr('rc.delete', '删除'))}</button>`}
+              </div>`;
+              myLie.innerHTML = devices.filter((t) => t.leixing === 'my').map((t) => hang(t, true)).join('')
+                || `<div class="jingYin">${escapeHtml(tOr('rc.noMy', '暂无已配对的同步设备'))}</div>`;
+              otLie.innerHTML = devices.filter((t) => t.leixing !== 'my').map((t) => hang(t, false)).join('')
+                || `<div class="jingYin">${escapeHtml(tOr('rc.noOther', '暂无其他设备'))}</div>`;
+              jjLie.innerHTML = jujue.length
+                ? jujue.map((id) => {
+                    const d = devices.find((x) => x.id === id);
+                    return `<div class="shiLiHang" style="gap:8px;align-items:center;padding:3px 0"><span class="jingYin">${escapeHtml(d ? d.ming : id)}</span><button class="anNiuXiao" data-rc-jj-del="${escapeHtml(id)}" type="button">${escapeHtml(tOr('rc.unblock', '移出名单'))}</button></div>`;
+                  }).join('')
+                : `<div class="jingYin">${escapeHtml(tOr('rc.noRejected', '空'))}</div>`;
+              // 勾选联动：可被控制 关 → 信任强制关且禁用
+              document.querySelectorAll('[data-rc-kbk]').forEach((ck) => ck.addEventListener('change', async () => {
+                const id = ck.getAttribute('data-rc-kbk');
+                try {
+                  const r2 = await window.warmy.rcGouXuan?.({ id, keBeiKong: ck.checked, xinRen: ck.checked ? undefined : false });
+                  if (!r2?.ok) { if (xiao) xiao.textContent = String(r2?.error || ''); }
+                  await shuaRc();
+                } catch { /* noop */ }
+              }));
+              document.querySelectorAll('[data-rc-xr]').forEach((ck) => ck.addEventListener('change', async () => {
+                const id = ck.getAttribute('data-rc-xr');
+                try {
+                  const r2 = await window.warmy.rcGouXuan?.({ id, xinRen: ck.checked });
+                  if (!r2?.ok) { if (xiao) xiao.textContent = String(r2?.error || ''); }
+                  await shuaRc();
+                } catch { /* noop */ }
+              }));
+              otLie.querySelectorAll('[data-rc-del]').forEach((b) => b.addEventListener('click', async () => {
+                try { await window.warmy.rcShanChuSheBei?.({ id: b.getAttribute('data-rc-del') }); await shuaRc(); } catch { /* noop */ }
+              }));
+              jjLie.querySelectorAll('[data-rc-jj-del]').forEach((b) => b.addEventListener('click', async () => {
+                try { await window.warmy.rcJieChuJuJue?.({ id: b.getAttribute('data-rc-jj-del') }); await shuaRc(); } catch { /* noop */ }
+              }));
+            } catch { /* noop */ }
+          }
+          // SSH 目标下拉（远程控制里的 SSH 设备引用 ssh-ops 注册表）
+          try {
+            const r = await window.warmy.sshLieBiao?.();
+            const sel = $('rcSshId');
+            if (sel && Array.isArray(r?.targets)) {
+              for (const t of r.targets) {
+                const op = document.createElement('option');
+                op.value = t.id;
+                op.textContent = `${t.ming}（${t.user}@${t.host}）`;
+                sel.appendChild(op);
+              }
+            }
+          } catch { /* noop */ }
+          $('rcBaoCun')?.addEventListener('click', async () => {
+            try {
+              const leixing = $('rcLeiXing')?.value === 'ssh' ? 'ssh' : 'wamy';
+              const r = await window.warmy.rcBaoCunSheBei?.({
+                ming: $('rcMing')?.value || '',
+                leixing,
+                zhiWen: $('rcZhiWen')?.value || '',
+                sshId: $('rcSshId')?.value || '',
+              });
+              if (xiao) xiao.textContent = r?.ok ? tOr('rc.saved', '已添加') : `${tOr('rc.saveFail', '添加失败')}：${String(r?.error || '')}`;
+              if (r?.ok) await shuaRc();
+            } catch (e) { if (xiao) xiao.textContent = String(e && e.message || e); }
+          });
+          // mesh 远程知识库查询开关（默认关）
+          try {
+            const rq = $('kbRemoteQueryKaiGuan');
+            if (rq) {
+              const st = await window.warmy.kbRemoteQueryDu?.();
+              rq.checked = st?.on === true;
+              rq.addEventListener('change', async () => {
+                try { await window.warmy.kbRemoteQueryShe?.({ on: rq.checked }); } catch { /* noop */ }
+              });
+            }
+          } catch { /* noop */ }
+          await shuaRc();
+        })();
         async function jiaZaiAsrYun() {
           try {
             const r = await window.warmy.asrCloudGet?.();
@@ -23223,6 +23721,13 @@ async function renderDashboard(host) {
     }
   }
   async function yuYinKaiShi() {
+    /** R138：顶部麦克风权限开关 —— 禁止时语音输入被拦截 */
+    try {
+      if (window.__quanXianYunXu && !window.__quanXianYunXu('mic')) {
+        showToast(tOr('perm.micBlocked', '麦克风已被禁止（点窗口顶部麦克风图标恢复）'));
+        return;
+      }
+    } catch { /* noop */ }
     if (yuYinQiDongZhong || yuYinZhuangTai || yuYinJinZhi) return;
     yuYinQiDongZhong = true;
     /** 点话筒的那一刻起：发送按钮立刻灰掉，直到最终转写（和可选的重组）全部完成 */
@@ -24763,6 +25268,10 @@ async function renderDashboard(host) {
       showToast(r && r.on ? tOr('tip.snapOn', '吸附已开：靠近屏幕边缘会自动贴边') : tOr('tip.snapOff', '吸附已关'));
     } catch { /* noop */ }
   });
+  /** R129：双击吸附图标 = 打开**空白** nm 查看器（纯浏览器窗口，停在地址栏） */
+  $('anNiuZhuXiFu')?.addEventListener('dblclick', () => {
+    try { void window.warmy.nmKai?.({ kaiWangYe: 'kongbai' }); } catch { /* noop */ }
+  });
   void (async () => {
     try {
       const r = await window.warmy.zhuXiFu?.();
@@ -25282,7 +25791,7 @@ async function renderDashboard(host) {
     let startX = 0, startW = 0, dragging = false, lastW = 0;
     const onMove = (e) => {
       if (!dragging) return;
-      lastW = setW(startW + dir * (e.clientX - startX));
+      lastW = setW(startW + dir * (e.clientX - startX) * (document.documentElement.dir === 'rtl' ? -1 : 1));
     };
     const onUp = () => {
       if (!dragging) return;
@@ -29918,7 +30427,7 @@ async function renderDashboard(host) {
           ['session', 'internal', 'private'].map((k) => '<label class="jingYin"><input type="checkbox" data-scope-kb="' + k + '" data-scope-child' +
             ((kbAll || kbSel.has(k)) ? ' checked' : '') + '/> ' + escapeHtml(({
               session: tOr('export.kb.session', '会话知识库'),
-              internal: tOr('export.kb.internal', '内部知识库'),
+              internal: tOr('export.kb.internal', '项目知识库'),
               private: tOr('export.kb.private', '私密知识库'),
             }[k] || k)) + '</label>').join('') + '</div>';
       }
@@ -31638,15 +32147,15 @@ try {
       : x.state === 'zanting' ? tOr('souSuo.stateZanting', '暂停') : tOr('souSuo.stateDaice', '待测');
     /**
      * 一行式条目（用户要求）：名称 | 链接地址 | Key（一律显示，可留空）| 保存 取消 测试 删除 | 状态。
-     * 自定义条目的名称/地址可编辑；预设条目的名称/地址只读（地址显示预设官网/端点）。
+     * R138（用户口径）：名称/地址**所有条目都可改**（含预设），不再只读。
      */
     const hangHtml = (x, shiXinZeng = false) => {
       const id = shiXinZeng ? '__new__' : String(x.id || '');
       const shiCustom = shiXinZeng || String(x.kind || '') === 'custom';
       return '<div class="ssHang" data-id="' + escapeHtml(id) + '">'
-        + '<input data-ming="' + escapeHtml(id) + '" value="' + escapeHtml(shiXinZeng ? '' : String(x.name || '')) + '"' + (shiCustom ? '' : ' disabled') + ' placeholder="' + escapeHtml(tOr('souSuo.colName', '名称')) + '" style="width:110px" title="' + escapeHtml(tOr('souSuo.colName', '名称')) + '"/>'
-        + '<input data-diZhi="' + escapeHtml(id) + '" value="' + escapeHtml(shiXinZeng ? '' : String(x.url || '')) + '"' + (shiCustom ? '' : ' disabled') + ' placeholder="http(s)://…" style="width:170px" title="' + escapeHtml(tOr('souSuo.colUrl', '链接地址')) + '"/>'
-        + '<input type="password" data-key="' + escapeHtml(id) + '" placeholder="' + escapeHtml(tOr('souSuo.colKey', 'Key（可留空）')) + '" style="width:130px" title="API Key"/>'
+        + '<input data-ming="' + escapeHtml(id) + '" value="' + escapeHtml(shiXinZeng ? '' : String(x.name || '')) + '" placeholder="' + escapeHtml(tOr('souSuo.colName', '名称')) + '" style="flex:1 1 110px;min-width:110px" title="' + escapeHtml(tOr('souSuo.colName', '名称')) + '"/>'
+        + '<input data-diZhi="' + escapeHtml(id) + '" value="' + escapeHtml(shiXinZeng ? '' : String(x.url || '')) + '" placeholder="http(s)://…" style="width:136px" title="' + escapeHtml(tOr('souSuo.colUrl', '链接地址')) + '"/>'
+        + '<input type="password" data-key="' + escapeHtml(id) + '" placeholder="' + escapeHtml(tOr('souSuo.colKey', 'Key（可留空）')) + '" style="width:108px" title="API Key"/>'
         + '<button type="button" class="anNiuXiao" data-save="' + escapeHtml(id) + '">' + escapeHtml(tOr('common.save', '保存')) + '</button>'
         + '<button type="button" class="anNiuXiao" data-cancel="' + escapeHtml(id) + '">' + escapeHtml(tOr('common.cancel', '取消')) + '</button>'
         + (shiXinZeng ? '' : '<button type="button" class="anNiuXiao" data-test="' + escapeHtml(id) + '">' + escapeHtml(tOr('souSuo.test', '测试')) + '</button>'
@@ -31687,7 +32196,8 @@ try {
           return;
         }
         const x = lie.find((e) => String(e.id || '') === id);
-        if (x && x.kind === 'custom') {
+        if (x) {
+          // 名称/地址所有条目都可改（含预设——用户口径：名称和地址要能填写和修改）
           const rr = await window.warmy.souSuoChainCaoZuo?.({ action: 'editCustom', id, name: ming || String(x.name || ''), url: dizhi || String(x.url || '') }).catch(() => null);
           if (!rr || !rr.ok) { showToast(String((rr && rr.error) || t('common.error'))); return; }
         }
@@ -33659,6 +34169,7 @@ try {
     const bubble = e.target.closest('.bubble');
     if (!siKao && !bubble) return;
     e.preventDefault();
+    e.stopPropagation();
     const sel = window.getSelection();
     const selText = sel && !sel.isCollapsed
       ? String(sel)

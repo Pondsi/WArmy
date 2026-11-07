@@ -53,7 +53,7 @@
 .warmyAuthBtnDanger { background: #7d2f2f; border-color: #a44; color: #fff; }
 .warmyAuthActions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 18px; }
 .warmyAuthLinks { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
-.warmyAuthLink { border: 0; background: transparent; color: #d9a77d; padding: 0; font: inherit; cursor: pointer; text-align: left; }
+.warmyAuthLink { border: 0; background: transparent; color: #d9a77d; padding: 0; font: inherit; cursor: pointer; text-align: start; }
 .warmyAuthLink:hover { text-decoration: underline; }
 .warmyAuthHint { color: #9e988f; font-size: 12px; margin-top: 8px; }
 .warmyAuthLockHint { color: var(--accent); font-size: 12px; font-weight: 500; margin-top: 8px; }
@@ -600,8 +600,10 @@
 }
 .warmyAuthLangGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 6px;
+  max-height: 52vh;
+  overflow-y: auto;
 }
 .warmyAuthLangTile {
   display: flex;
@@ -616,7 +618,7 @@
   color: #e8e2d9;
   font: inherit;
   font-size: 13px;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   outline: none;
   transition: background .15s, border-color .15s, color .15s;
@@ -925,3 +927,9 @@
   .warmyAuthQuitCard { animation: none; }
   .warmyAuthQuitRunner, .warmyAuthQuitRunner * { animation: none !important; }
 }
+
+/* ── RTL（ar/fa）：auth-gate 局部镜像 ── */
+[dir="rtl"] .warmyAuthPinGo { right: auto; left: 4px; }
+[dir="rtl"] .warmyAuthCloseHot { right: auto; left: 0; }
+[dir="rtl"] .warmyAuthCloseX { right: auto; left: 10px; }
+[dir="rtl"] .warmyAuthQuitRunner { left: auto; right: 0; }

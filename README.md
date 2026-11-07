@@ -10,18 +10,18 @@ WArmy is a local-first desktop workspace for people who use AI as more than a ch
 
 Use it as a private assistant, as a private team of experts, or as a shared project room where people and agents work on the same brief. Your workspace, chats, files, and memory stay on your machine by default. Cloud models, web search, networking, and IM adapters are explicit choices, never background defaults.
 
-[Download for Windows](https://github.com/Pondsi/WArmy/releases/tag/v0.2.33) · [Chinese manual](./说明.md) · [How it works](#how-it-works)
+[Download for Windows](https://github.com/Pondsi/WArmy/releases/tag/v0.4.0) · [Chinese manual](./说明.md) · [How it works](#how-it-works)
 
-[![Release](https://img.shields.io/github/v/release/Pondsi/WArmy?label=v0.2.33)](https://github.com/Pondsi/WArmy/releases/tag/v0.2.33)
+[![Release](https://img.shields.io/github/v/release/Pondsi/WArmy?label=v0.4.0)](https://github.com/Pondsi/WArmy/releases/tag/v0.4.0)
 [![License](https://img.shields.io/badge/license-MIT%20%2B%20attribution-blue)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-informational)](https://github.com/Pondsi/WArmy/releases)
 [![Electron](https://img.shields.io/badge/Electron-45.1-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Node](https://img.shields.io/badge/Node-%3E%3D24-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![Locales](https://img.shields.io/badge/UI%20locales-10-success)](#small-details)
+[![Locales](https://img.shields.io/badge/UI%20locales-27-success)](#small-details)
 
 ![First launch: choose a language, then the workhorse army gets to work](screenshots/readme-first-run.png)
 
-*First launch. Ten UI languages, one workspace.*
+*First launch. Twenty-seven UI languages, one workspace.*
 
 ---
 
@@ -177,7 +177,7 @@ Bring a local or self-hosted model that speaks a supported protocol, an OpenAI-c
 
 - Desktop shell: Electron 45.1.0, TypeScript, pnpm workspace.
 - Model protocols: OpenAI-compatible, Anthropic, and Ollama native. Enter the base URL; the API key is optional when the endpoint does not require one.
-- Languages / 语言: 简体中文 · 繁體中文 · English · 日本語 · 한국어 · Русский · Español · Français · Português · Esperanto.
+- Languages / 语言: 简体中文 · 繁體中文 · English · 日本語 · 한국어 · Русский · Español · Français · Português · Esperanto · Deutsch · Italiano · Nederlands · Polski · Svenska · Čeština · Magyar · Dansk · Norsk bokmål · Türkçe · Українська · Bahasa Indonesia · Tiếng Việt · ไทย · हिन्दी · العربية · فارسی.
 - Light and dark themes, 4K-aware layout. Physical 4K verification is still pending.
 - Local memory database: SQLite with FTS5, optionally SQLCipher-encrypted through `better-sqlite3-multiple-ciphers`.
 - Full-disk search index: Node's built-in SQLite + FTS5, stored under `WArmyData/search-index`.
@@ -199,8 +199,8 @@ Bring a local or self-hosted model that speaks a supported protocol, an OpenAI-c
 
 ### Windows 10 or 11, x64
 
-1. Open the [v0.2.33 release](https://github.com/Pondsi/WArmy/releases/tag/v0.2.33).
-2. Download `WArmy-Setup-0.2.33.exe`.
+1. Open the [v0.4.0 release](https://github.com/Pondsi/WArmy/releases/tag/v0.4.0).
+2. Download `WArmy-Setup-0.4.0.exe`.
 3. Run the installer and launch **WArmy / 无限牛马**.
 
 The installer lets you choose the installation folder. WArmy stores its data in `WArmyData` inside that folder, and keeps that folder when you uninstall or upgrade. The installer is not code-signed. Windows SmartScreen may show an unknown publisher warning. The release page lists the SHA-256 so you can verify the download. WArmy is free under the MIT license with attribution. You pay your model provider directly.
@@ -211,7 +211,7 @@ Choose a language, accept the terms, create an identity, and save the 24-word mn
 
 ## Status
 
-0.2.33 runs on Windows 10 and 11 x64. Core workflows are verified with local model servers. Three consecutive rounds of the offline gate suite plus the first-run, search-provider, full-disk index, sensitive-reveal, and lazy-loading checks passed with zero failures. macOS, physical 4K, real IM accounts, and cloud providers are still being verified.
+0.4.0 runs on Windows 10 and 11 x64. Core workflows are verified with local model servers. Three consecutive rounds of the offline gate suite plus the first-run, search-provider, full-disk index, sensitive-reveal, and lazy-loading checks passed with zero failures. macOS, physical 4K, real IM accounts, and cloud providers are still being verified.
 
 Account-level multi-device record sync is not shipped yet. The current release supports optional project networking between reachable machines. The installer is unsigned. Most workspace files are plaintext while the app is unlocked. Model output can be wrong, so review artifacts before shipping them.
 

@@ -14,6 +14,23 @@ export const SUPPORTED_LOCALES = [
   'fr',
   'pt',
   'eo',
+  'de',
+  'it',
+  'nl',
+  'pl',
+  'sv',
+  'cs',
+  'hu',
+  'da',
+  'nb',
+  'tr',
+  'uk',
+  'id',
+  'vi',
+  'th',
+  'hi',
+  'ar',
+  'fa',
 ] as const;
 
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
@@ -30,7 +47,31 @@ export const LOCALE_NATIVE_NAMES: Record<SupportedLocale, string> = {
   fr: 'Français',
   pt: 'Português',
   eo: 'Esperanto',
+  de: 'Deutsch',
+  it: 'Italiano',
+  nl: 'Nederlands',
+  pl: 'Polski',
+  sv: 'Svenska',
+  cs: 'Čeština',
+  hu: 'Magyar',
+  da: 'Dansk',
+  nb: 'Norsk bokmål',
+  tr: 'Türkçe',
+  uk: 'Українська',
+  id: 'Bahasa Indonesia',
+  vi: 'Tiếng Việt',
+  th: 'ไทย',
+  hi: 'हिन्दी',
+  ar: 'العربية',
+  fa: 'فارسی',
 };
+
+/** Right-to-left locales — UI must flip to dir=rtl (W3C: set dir on <html>, mirror with logical CSS). */
+export const RTL_LOCALES: readonly string[] = ['ar', 'fa'];
+
+export function isRtlLocale(yuYan: string | undefined | null): boolean {
+  return RTL_LOCALES.includes(jiexiYuyan(yuYan));
+}
 
 /**
  * Resolve an arbitrary yuYan tag to a supported pack id.
@@ -52,6 +93,23 @@ export function jiexiYuyan(yuYan: string | undefined | null): SupportedLocale {
   if (l.startsWith('fr')) return 'fr';
   if (l.startsWith('pt')) return 'pt';
   if (l.startsWith('eo')) return 'eo';
+  if (l.startsWith('de')) return 'de';
+  if (l.startsWith('it')) return 'it';
+  if (l.startsWith('nl')) return 'nl';
+  if (l.startsWith('pl')) return 'pl';
+  if (l.startsWith('sv')) return 'sv';
+  if (l.startsWith('cs') || l.startsWith('cz')) return 'cs';
+  if (l.startsWith('hu')) return 'hu';
+  if (l.startsWith('da')) return 'da';
+  if (l.startsWith('nb') || l.startsWith('no') || l.startsWith('nn')) return 'nb';
+  if (l.startsWith('tr')) return 'tr';
+  if (l.startsWith('uk')) return 'uk';
+  if (l.startsWith('id') || l.startsWith('in')) return 'id';
+  if (l.startsWith('vi')) return 'vi';
+  if (l.startsWith('th')) return 'th';
+  if (l.startsWith('hi')) return 'hi';
+  if (l.startsWith('ar')) return 'ar';
+  if (l.startsWith('fa') || l.startsWith('per')) return 'fa';
   if (l.startsWith('en')) return 'en-US';
   return 'zh-CN';
 }

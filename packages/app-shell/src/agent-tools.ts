@@ -315,8 +315,50 @@ export function yunXingMingLing(cmd: string, opts: { cwd?: string; timeoutMs?: n
   return new Promise((resolve) => {
     const t0 = Date.now();
     // 统一走 shell，但命令串已经过静态检测与授权判定（调用方负责判定）
-    const sh = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
+    /**
+     * R133：shell 用**绝对路径**兜底 —— 裸名 `cmd.exe` 靠 PATH 查找，运行环境 PATH 不全时
+     * 直接 `spawn cmd.exe ENOENT`（真机事故：远程控制测试里报「cmd.exe ENOENT」）。
+     */
+    const sh = (() => {
+      if (process.platform !== 'win32') return '/bin/sh';
+      const cs = String(process.env.ComSpec || '');
+      if (cs && fs.existsSync(cs)) return cs;
+      const zh = path.join(String(process.env.SystemRoot || 'C:\\Windows'), 'System32', 'cmd.exe');
+      return fs.existsSync(zh) ? zh : 'cmd.exe';
+    })();
     const args = process.platform === 'win32' ? ['/d', '/s', '/c', cmd] : ['-c', cmd];
+    /**
+     * R137：**内联易碎命令自动转临时脚本**（真机教训：PowerShell 内联含中文/引号/反引号/
+     * 多行/here-string 极易被 cmd /c 或 PS 解析吃掉转义，报出误导性错误）。
+     * 命中「多行 / 中文+多引号 / here-string」时改写为临时 .ps1（UTF-8 BOM，中文安全）
+     * 或 .cmd，再以 -File 执行 —— 语义不变、只换载体；stderr 注明转换痕迹。
+     */
+    let lingShiJiaoBen: string | null = null;
+    let yongLingShi = false;
+    if (process.platform === 'win32') {
+      const duoHang = /[\r\n]/.test(cmd);
+      const zhongWen = /[一-鿿]/.test(cmd);
+      const yinHaoShu = (cmd.match(/["']/g) || []).length;
+      const hereStr = /@['"]/.test(cmd);
+      const fanYinHao = /`/.test(cmd);
+      const xianJing = duoHang || hereStr || (zhongWen && yinHaoShu >= 4) || (fanYinHao && yinHaoShu >= 2);
+      if (xianJing) {
+        const shiPs = zhongWen || /\$|Get-|Set-|Write-|ForEach|ConvertFrom|ConvertTo|Select-Object|Invoke-/.test(cmd);
+        try {
+          if (shiPs) {
+            lingShiJiaoBen = path.join(os.tmpdir(), `warmy-run-${crypto.randomBytes(6).toString('hex')}.ps1`);
+            // UTF-8 带 BOM：Windows PowerShell 5.1 对无 BOM 的中文脚本会按 GBK 误读；
+            // 再声明输出编码 UTF-8，否则子进程按 GBK 吐中文、父进程按 UTF-8 读成乱码
+            fs.writeFileSync(lingShiJiaoBen,
+              '﻿[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;[Console]::InputEncoding=[System.Text.Encoding]::UTF8;\n' + cmd, 'utf8');
+          } else {
+            lingShiJiaoBen = path.join(os.tmpdir(), `warmy-run-${crypto.randomBytes(6).toString('hex')}.cmd`);
+            fs.writeFileSync(lingShiJiaoBen, cmd, 'utf8');
+          }
+          yongLingShi = true;
+        } catch { lingShiJiaoBen = null; yongLingShi = false; /* 写盘失败就按原样内联跑 */ }
+      }
+    }
     /**
      * 最小环境变量白名单：API Key / 令牌 / 身份私钥等**不传给普通工具进程**。
      * 需要凭据的工具必须由主进程代用，而不是把宿主环境整体继承下去。
@@ -328,13 +370,42 @@ export function yunXingMingLing(cmd: string, opts: { cwd?: string; timeoutMs?: n
       const v = process.env[k];
       if (typeof v === 'string' && v) env[k] = v;
     }
-    const child = spawn(sh, args, {
-      cwd: opts.cwd || os.homedir(),
-      env,
-      windowsHide: true,
-      detached: process.platform !== 'win32',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    /**
+     * R133：cwd 失效是 spawn ENOENT 的另一半来源（`spawn cmd.exe ENOENT` 其实是「cwd 不存在」）。
+     * 目录不存在/不是目录 ⇒ 回退家目录，并把原因如实写进 stderr。
+     */
+    const yuanCwd = opts.cwd || os.homedir();
+    let cwd = yuanCwd;
+    const cwdTiShi: string[] = [];
+    try {
+      if (!fs.statSync(cwd).isDirectory()) { cwd = os.homedir(); cwdTiShi.push(`〔工作目录不是目录：${yuanCwd}，已回退家目录〕`); }
+    } catch {
+      cwd = os.homedir();
+      cwdTiShi.push(`〔工作目录不存在：${yuanCwd}，已回退家目录〕`);
+    }
+    const child = yongLingShi && lingShiJiaoBen
+      ? spawn(
+        lingShiJiaoBen.endsWith('.ps1')
+          ? path.join(String(process.env.SystemRoot || 'C:\\Windows'), 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+          : sh,
+        lingShiJiaoBen.endsWith('.ps1')
+          ? ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', lingShiJiaoBen]
+          : ['/d', '/s', '/c', `"${lingShiJiaoBen}"`],
+        { cwd, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      : spawn(sh, args, {
+        cwd,
+        env,
+        windowsHide: true,
+        detached: process.platform !== 'win32',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    const shanLingShi = () => {
+      if (lingShiJiaoBen) { try { fs.rmSync(lingShiJiaoBen, { force: true }); } catch { /* noop */ } }
+    };
+    if (yongLingShi && lingShiJiaoBen) {
+      cwdTiShi.push(`〔内联易碎命令已转临时脚本执行：${path.basename(lingShiJiaoBen)}，语义不变〕`);
+    }
     let stdout = '';
     let stderr = '';
     let timedOut = false;
@@ -353,12 +424,16 @@ export function yunXingMingLing(cmd: string, opts: { cwd?: string; timeoutMs?: n
     const timer = setTimeout(() => { timedOut = true; sha(); }, timeoutMs);
     child.once('error', (e) => {
       clearTimeout(timer);
-      resolve({ ok: false, code: 1, stdout: shou(stdout), stderr: shou(stderr + '\n' + String((e as Error)?.message || e)), ms: Date.now() - t0, risk: jiance.risk });
+      shanLingShi();
+      const cuo = String((e as Error)?.message || e);
+      const fu = /ENOENT/i.test(cuo) ? `\n〔spawn ENOENT：shell=${sh} cwd=${cwd}。若目录存在请核对系统 shell 配置〕` : '';
+      resolve({ ok: false, code: 1, stdout: shou(stdout), stderr: shou([...cwdTiShi, stderr, cuo + fu].filter(Boolean).join('\n')), ms: Date.now() - t0, risk: jiance.risk });
     });
     child.once('close', (code, signal) => {
       clearTimeout(timer);
+      shanLingShi();
       const c = timedOut ? 124 : (typeof code === 'number' ? code : (signal ? 1 : 0));
-      resolve({ ok: !timedOut && c === 0, code: c, stdout: shou(stdout), stderr: shou(stderr), ms: Date.now() - t0, risk: jiance.risk });
+      resolve({ ok: !timedOut && c === 0, code: c, stdout: shou(stdout), stderr: shou([...cwdTiShi, stderr].filter(Boolean).join('\n')), ms: Date.now() - t0, risk: jiance.risk });
     });
   });
 }

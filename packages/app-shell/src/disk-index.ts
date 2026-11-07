@@ -7,6 +7,8 @@
  *   · 正文先打码再进 FTS：索引里不出现密钥明文；敏感结果的完整内容由按需扫描/悬停解密提供。
  *   · 扫描是**增量、可中断、低占空比**的后台循环，不阻塞聊天；关闭开关立即停。
  *   · 用 Node 内置 SQLite（Electron 45 的 Node 也带 FTS5），不新增原生依赖。
+ *   · tokenize=unicode61+prefix（schema 2）：trigram 曾把库撑到 7GB、同步插入卡死
+ *     主进程几分钟（真机事故）；中文靠前缀命中 + LIKE 兜底 + 按需扫描补完整性。
  */
 
 import fs from 'node:fs';
@@ -45,9 +47,19 @@ function shiWenBen(name: string): boolean {
   return WEN_BEN.has(ext) || (!ext && /^(dockerfile|makefile|readme|license|gitignore)$/i.test(name));
 }
 
+/**
+ * FTS5 查询词：unicode61 下中文整串是一个 token（如「中文目录名」），
+ * 只搜"大龙虾"要靠**前缀**命中 ⇒ 每个词加 `*`；token 内部截断
+ * （搜"互动区"）由 name/path 的 LIKE 兜底补。
+ */
 function ftsQuery(q: string): string {
-  return '"' + String(q || '').replace(/"/g, '""') + '"';
+  return String(q || '').split(/\s+/).filter(Boolean)
+    .map((w) => '"' + w.replace(/"/g, '""') + '"*')
+    .join(' ');
 }
+
+/** 索引库 schema 版本：tokenize 换代就 +1，旧库整删重建（见 ensureDb） */
+const SCHEMA_V = '2';
 
 /**
  * 跳过不递归的目录（对搜索无价值，却是全盘扫描的体积大头：
@@ -75,6 +87,7 @@ export class QuanPanSuoYin {
   private finishedWalk = false;
   private contentDone = 0;
   private fileCount = 0;
+  private lastCheckpoint = 0;
   readonly dbPath: string;
 
   constructor(dbPath: string) {
@@ -85,10 +98,31 @@ export class QuanPanSuoYin {
   private ensureDb(): void {
     if (this.db) return;
     fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
+    /**
+     * schema=2（第 130 轮）：旧库 tokenize='trigram' 把 128KB 正文切成 12 万条
+     * trigram ⇒ 库膨胀到 7GB+、同步插入慢到把主进程事件循环卡死几分钟。
+     * 版本不匹配一律**整库删除重建**（索引可再生，不是用户数据），顺带回收旧体积。
+     */
+    try {
+      if (fs.existsSync(this.dbPath)) {
+        const probe = new DatabaseSync(this.dbPath);
+        let v = '';
+        try {
+          v = String((probe.prepare("SELECT v FROM meta WHERE k='schema'").get() as { v?: string } | undefined)?.v || '');
+        } catch { /* 旧库无 meta 行 = 版本 1 */ }
+        try { probe.close(); } catch { /* noop */ }
+        if (v !== SCHEMA_V) {
+          for (const suf of ['', '-wal', '-shm']) {
+            try { fs.unlinkSync(this.dbPath + suf); } catch { /* 文件占用时留到下次 */ }
+          }
+        }
+      }
+    } catch { /* 探测失败按旧库处理，不挡启动 */ }
     const db = new DatabaseSync(this.dbPath);
     db.exec(`
       PRAGMA journal_mode=WAL;
       PRAGMA synchronous=NORMAL;
+      PRAGMA wal_autocheckpoint=0;
       CREATE TABLE IF NOT EXISTS files (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         path TEXT UNIQUE NOT NULL,
@@ -104,9 +138,10 @@ export class QuanPanSuoYin {
       );
       CREATE INDEX IF NOT EXISTS idx_files_prio ON files(prio);
       CREATE INDEX IF NOT EXISTS idx_files_content ON files(content_done);
-      CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(name, path, body, tokenize='trigram');
+      CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(name, path, body, tokenize=unicode61, prefix='2 3 4');
       CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
     `);
+    try { db.prepare('INSERT OR REPLACE INTO meta(k,v) VALUES(?,?)').run('schema', SCHEMA_V); } catch { /* noop */ }
     this.db = db;
     try {
       this.fileCount = Number((db.prepare('SELECT COUNT(*) AS n FROM files').get() as { n?: number })?.n || 0);
@@ -145,14 +180,25 @@ export class QuanPanSuoYin {
       void (async () => {
         const t0 = Date.now();
         try {
-          while (this.running && Date.now() - t0 < 40) {
+          while (this.running && Date.now() - t0 < 25) {
             const did = await this.step();
             if (!did) break;
           }
         } catch { this.errors++; }
+        /**
+         * 定时 PASSIVE checkpoint（wal_autocheckpoint=0 的搭档）：
+         * 自动 checkpoint 在 7GB 旧库上一触发就是同步大合并 ⇒ 主进程卡死数分钟。
+         * PASSIVE 不阻塞写入方，60 秒一次把 WAL 压回主库，WAL 永远保持在几十 MB 内。
+         */
+        try {
+          if (this.db && Date.now() - this.lastCheckpoint > 60_000) {
+            this.lastCheckpoint = Date.now();
+            this.db.exec('PRAGMA wal_checkpoint(PASSIVE)');
+          }
+        } catch { /* checkpoint 失败不影响索引 */ }
         if (this.running) this.tick();
       })();
-    }, 400);
+    }, 800);
   }
 
   private async step(): Promise<boolean> {
@@ -235,8 +281,8 @@ export class QuanPanSuoYin {
           const dm = daMa(path.basename(p) + ' ' + p);
           this.db.prepare('INSERT INTO fts(rowid,name,path,body) VALUES(?,?,?,?)').run(id, path.basename(p), p, '');
           if (dm.sensitive) this.db.prepare('UPDATE files SET sensitive=1 WHERE id=?').run(id);
-          if (shiWenBen(path.basename(p)) && st.size <= 512 * 1024 && prio <= 2) this.contentQueue.push({ id, p });
-          else if (shiWenBen(path.basename(p)) && st.size <= 512 * 1024) this.contentQueue.push({ id, p });
+          // 正文只收小文本（16KB）：大文件的 FTS 同步插入是历史卡死主因（见 indexContent）
+          if (shiWenBen(path.basename(p)) && st.size <= 16 * 1024) this.contentQueue.push({ id, p });
         }
       }
     } catch { /* 单文件失败不挡整盘 */ }
@@ -244,12 +290,22 @@ export class QuanPanSuoYin {
 
   private async indexContent(id: number, p: string): Promise<void> {
     if (!this.db) return;
+    /**
+     * 第 129 轮起防主进程卡顿：fts5 同步插入会阻塞事件循环（真机：索引到大文本
+     * 文件时界面卡住几分钟）。第 130 轮再收紧到 16KB（trigram→unicode61 后单次
+     * 插入快了约两个数量级，但同步性质没变，规模仍要限）。
+     * 超限只索引名称不读正文；正文检索让位给名称/路径检索 + 按需扫描兜底。
+     */
+    try {
+      const st = await fsp.stat(p);
+      if (!st.isFile() || st.size > 16 * 1024) return;
+    } catch { return; }
     let buf: Buffer;
     try { buf = await fsp.readFile(p); } catch { this.errors++; return; }
     const raw = buf.toString('utf8');
     if (!raw || raw.includes('\u0000')) return;
     const dm = daMa(raw);
-    const body = dm.text.slice(0, 600 * 1024);
+    const body = dm.text.slice(0, 16 * 1024);
     try {
       this.db.prepare('UPDATE fts SET body=? WHERE rowid=?').run(body, id);
       this.db.prepare('UPDATE files SET content_done=1, sensitive=? WHERE id=?').run(dm.sensitive ? 1 : 0, id);

@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { shengChengDocx, shengChengPptx, keYongPptx, shengChengXlsx } from './office-tools.js';
 import { shengChengPdf } from './pdf-tools.js';
 import { lieYaSuoBaoTiaoMu, duYaSuoBaoTiaoMu, tiaoMuMingAnQuan, jieYaYaSuoBaoDao, ZIP_JIEYA_TIAO_SHANGXIAN, ZIP_JIEYA_ZONG_SHANGXIAN } from './zip-look.js';
@@ -734,6 +735,25 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
     if (bytes > WORK_TOOL_LIMITS.maxWriteBytes) {
       return fail(tool, new Error(`content-too-large (${bytes} > ${WORK_TOOL_LIMITS.maxWriteBytes} bytes)`), relOf(baseDir, file));
     }
+    /**
+     * R137 写前护栏（真机教训）：
+     *  · **JSON 预校验**：写坏的 .json 让后续所有读取方全炸，宁可不写也别写坏（整篇写时校验）；
+     *  · **乱码体检**：UTF-8 被按 GBK 误读后的内容长这样「鍔炲叕涓撲笟…」——这种「替换字形群」
+     *    一落盘就毁文件。检测到密集乱码特征即拒写，要求先用正确编码读回原文。
+     */
+    if (/\.json$/i.test(file) && !shiZhuiJia(args)) {
+      try { JSON.parse(content); } catch (e) {
+        return fail(tool, new Error('json-invalid：内容不是合法 JSON（' + String((e as Error)?.message || e).slice(0, 120) + '）。已中止写入，避免落一个坏 .json。'), relOf(baseDir, file));
+      }
+    }
+    /**
+     * 乱码体检：UTF-8 被按 GBK 误读的「替换字形」落盘即毁文件。
+     * 判据 = 标点特征锚点（銆/锛/鈥…＝句读被误读）**且**罕见替换字密度≥5
+     * （真乱码样本实测密度 7~22；正常中文对照 0，阈值 5 安全）。
+     */
+    if (/[銆銆鈥锛傾]/.test(content) && (content.match(/[涓鏂撻敊涔娴嬭瘯鍐呭瑰簲鎴嗙瓑鎶撳埗涓嶈惤鐩樺叕鍥敓鏁ｆ鍙戦€佺浉鍏充汉鍛樿阿璋㈡槸涓€涓紪鐮侀敊涔辩殑銆傦锛屼竴鍙ュ瓧閲岄噷闂寸洿鎺ュ瘑闆傛嵁鐐圭洿]/g) || []).length >= 5) {
+      return fail(tool, new Error('mojibake-suspect：内容疑似编码错乱（UTF-8 被按 GBK 误读的「替换字形」）。已中止写入——请用正确编码读回原文后再写，不要把乱码存进文件。'), relOf(baseDir, file));
+    }
     fs.mkdirSync(path.dirname(file), { recursive: true });
     /**
      * **长文分段追加**（产品要求：一次写 5000+ 字要能真写完）。
@@ -758,9 +778,29 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
       zongBytes = Buffer.byteLength(zhen, 'utf8');
       zongZi = [...zhen].length;
     } catch { /* 读不回来就只报本次的 */ }
+    /**
+     * R137 写后校验：.mjs/.cjs 整篇写后跑 node --check（语法坏文件比没文件更害人）。
+     * 语法坏 = 如实报错并**删掉坏文件**（不留半成品），模型据此重写。
+     */
+    let yuFaTiShi = '';
+    if (/\.(mjs|cjs)$/i.test(file) && !zhuiJia && cun) {
+      try {
+        const jian = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8', timeout: 15000, windowsHide: true });
+        if (jian.status !== 0) {
+          const cuo = String(jian.stderr || '').split('\n').filter(Boolean).slice(0, 3).join(' | ');
+          try { fs.rmSync(file, { force: true }); } catch { /* noop */ }
+          return fail(tool, new Error('syntax-invalid：写入的脚本没通过 node --check（已删除坏文件）：' + cuo.slice(0, 200) + '。请修正语法后重写。'), relOf(baseDir, file));
+        }
+        yuFaTiShi = '，node --check 语法通过';
+      } catch { /* 检查器不可用时不阻断 */ }
+    }
+    /** R137 大单次写提醒：单次>3000 字容易被小模型写截断，提示改分段追加 */
+    const daDanCi = [...content].length > 3000 && !zhuiJia
+      ? '\n〔提示：本次单次写了 3000+ 字——长文请分段写（先写第 1 段，后续 append:true 续写），降低截断风险〕'
+      : '';
     return {
       ok: cun,
-      content: `${zhuiJia ? '已追加写入' : '已写入'} ${file}（本次 ${bytes} 字节 / ${[...content].length} 字符；文件当前共 ${zongBytes} 字节 / ${zongZi} 字符）${cun ? '，文件已自检存在' : '，⚠️ 自检未找到文件（异常）'}\n`
+      content: `${zhuiJia ? '已追加写入' : '已写入'} ${file}（本次 ${bytes} 字节 / ${[...content].length} 字符；文件当前共 ${zongBytes} 字节 / ${zongZi} 字符${yuFaTiShi}）${cun ? '，文件已自检存在' : '，⚠️ 自检未找到文件（异常）'}${daDanCi}\n`
         + `【请在给用户的最终回复里**原样引用这个绝对路径**】${file}`,
       meta: { tool, ok: cun, bytes: zongBytes, chars: zongZi, path: relOf(baseDir, file), abs: file, exists: cun, appended: zhuiJia, wroteChars: [...content].length },
     };
@@ -1490,7 +1530,7 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
  */
 export const HOST_TOOL_NAMES = [
   'open_path', 'open_file', 'open_url', 'schedule_task', 'monitor_process', 'lsp_diagnostics', 'ask_user', 'plan_update', 'plan_verify', 'write_skill',
-  'run_shell', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'local_search', 'download_file', 'nm_browser',
+  'run_shell', 'remote_ssh', 'supervise_worker', 'split_task', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'local_search', 'download_file', 'nm_browser', 'screen_view',
   'get_time', 'wait_seconds', 'read_profile', 'image_generate', 'video_generate',
 ] as const;
 export function isHostTool(name: unknown): boolean {
@@ -1670,6 +1710,60 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             timeoutMs: { type: 'number', description: '超时毫秒（默认 60000，上限 10 分钟）' },
           },
           required: ['command'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'remote_ssh',
+        description: '**SSH 远程执行**：在用户登记过的 SSH 目标（可以是任何装有 sshd 的设备，不必装 WArmy）上执行命令、传文件。'
+          + '网络可达性由用户自己解决（局域网/VPN/端口转发均可），本工具只负责对接对面设备的 SSH。'
+          + '每次调用都会弹用户授权卡（完全授权档自动放行）并记审计。action：run=执行命令（默认）/ get=远端文件取回本机 / put=本机文件推到远端 / list=列出已登记目标 / test=测试连通。',
+        parameters: {
+          type: 'object',
+          properties: {
+            action: { type: 'string', description: 'run | get | put | list | test，默认 run' },
+            target: { type: 'string', description: '目标 id 或 显示名（list 动作可省略）' },
+            command: { type: 'string', description: 'action=run 时：远端要执行的命令' },
+            remotePath: { type: 'string', description: 'action=get/put 时：远端路径' },
+            localPath: { type: 'string', description: 'action=get/put 时：本机路径（工作区相对或绝对）' },
+            timeoutMs: { type: 'number', description: '超时毫秒（默认 60000）' },
+          },
+          required: ['target'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'supervise_worker',
+        description: '**子代理/执行者督导**：检查你派出去的小弟/执行者是否真在干活、是否卡死、是否胜任。'
+          + '返回：① 每个执行者的状态/耗时/最后动态（超过 3 分钟无新动态标「疑似卡死」）；② 派遣记录与结果；'
+          + '③ 历史胜任度评分（从派遣经验统计成败）。派遣小弟后**每隔一段就用它看一眼**，不要盲等；'
+          + '发现卡死就停止重派或换更小的任务（拆分用 split_task）。',
+        parameters: {
+          type: 'object',
+          properties: {
+            workerId: { type: 'string', description: '只看某个执行者（可省略 = 全部）' },
+          },
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'split_task',
+        description: '**任务拆解器**：把一个大任务拆成 ≤15 个可独立交付的单元 + 增量检查点。'
+          + '派子代理/执行者前先用它拆——大任务一次性派出去容易截断、假进度、超时崩；'
+          + '拆成小单元后「写多少交多少」，每完成 5 个单元落盘一次。返回结构化清单（单元/验收标准/检查点）。',
+        parameters: {
+          type: 'object',
+          properties: {
+            task: { type: 'string', description: '要拆解的大任务描述' },
+            maxUnits: { type: 'number', description: '最大单元数（默认 15，上限 15）' },
+          },
+          required: ['task'],
         },
       },
     },
@@ -1945,6 +2039,25 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             max: { type: 'number', description: 'read 最多返回字符数（默认 8000）' },
           },
           required: ['action'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'screen_view',
+        description: '**看屏幕**（本机当前屏幕的分层观察）：需要知道屏幕上/某个软件界面上有什么时自行使用。按需选层，越省的层优先：'
+          + '① `uia` 读 Windows 控件树（按钮/输入框/标题/状态/坐标，<100ms、不拍像素、最省）——判断"有没有某个按钮/输入框里写着什么/弹窗出现了没"用这层；游戏/远程桌面/自绘界面会失效；'
+          + '② `ocr` 截屏后只抽文字（Windows OCR）——"读页面上的文字内容"用这层，不含布局图标；'
+          + '③ `look` 截屏后交给看图模型看画面并回答 question——图标/布局/真假难辨/判断"看起来是否正常"才用这层（最贵）；'
+          + '④ `auto`（默认）按 uia → ocr → look 自动降级。看屏幕属隐私操作：会弹用户授权（完全授权档自动放行），不要在无关任务里调用。',
+        parameters: {
+          type: 'object',
+          properties: {
+            mode: { type: 'string', description: 'auto|uia|ocr|look，默认 auto' },
+            target: { type: 'string', description: 'uia 层按名称/类型过滤的关键词（可选，如"保存""Button""记事本"）' },
+            question: { type: 'string', description: 'look 层要问看图模型的问题（可选，如"这个弹窗是报错还是提示？"）' },
+          },
         },
       },
     },

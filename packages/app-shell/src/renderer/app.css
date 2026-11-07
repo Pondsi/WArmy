@@ -553,8 +553,8 @@ body.liaoTianChuangKou .liaoTianBuJu {
 .xiaoXi.wo .bubble { background: var(--me-bubble); color: var(--me-bubble-ink, #111); }
 /* 我方消息：与头像同侧（右侧）对齐 —— 文字也右对齐 */
 .xiaoXi.wo { justify-content: flex-start; }
-.xiaoXi.wo .bubble { text-align: left; }   /* 文字左对齐；气泡位置仍随头像（右侧） */
-.xiaoXi.wo .bubbleWrap { align-items: flex-end; }
+.xiaoXi.wo .bubble { text-align: start; }   /* 文字左对齐；气泡位置仍随头像（右侧） */
+.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: calc(100% - 84px); max-width: calc(100% - 84px); }
 /* 时间分隔点（跨小时 / 跨日插入） */
 .shiJianFenGe {
   display: flex; align-items: center; justify-content: center;
@@ -836,7 +836,7 @@ body.liaoTianChuangKou .liaoTianBuJu {
   50% { opacity: 1; text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent); }
 }
 .shuRuCounter {
-  text-align: right; font-size: var(--fs-xs); color: var(--muted);
+  text-align: end; font-size: var(--fs-xs); color: var(--muted);
   margin: 0; padding: 0 10px; min-height: 0; border: none; background: transparent;
 }
 .shuRuQuTiao {
@@ -912,7 +912,7 @@ body.liaoTianChuangKou .liaoTianBuJu {
   border: none;
   background: transparent;
   color: var(--ink);
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   border-radius: 6px;
   font: inherit;
@@ -969,7 +969,7 @@ button.ddWen:hover { background: transparent !important; color: var(--ink); }
   font-weight: 400;
   color: var(--ink);
   line-height: 1.5;
-  text-align: left;
+  text-align: start;
   white-space: normal;
   box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.16));
   z-index: 60;
@@ -1286,7 +1286,7 @@ button.ddWen:hover { background: transparent !important; color: var(--ink); }
 .sheZhiSection { margin-bottom: 20px; }
 .sheZhiSection h2 { font-size: var(--fs-md); margin: 0 0 10px; }
 table.chaJianJi { width: 100%; border-collapse: collapse; font-size: var(--fs-base); }
-table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .huiZhang {
   display: inline-block; padding: 2px 8px; border-radius: 99px;
   font-size: var(--fs-xs); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
@@ -1542,7 +1542,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
 .shangXiaWenCaiDan button {
   border: none;
   background: transparent;
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   border-radius: 6px;
   font: inherit;
@@ -1581,7 +1581,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
   display: flex; align-items: center; cursor: pointer;
   padding: 4px 0; user-select: none;
 }
-.mianBanKaiGuan .jianTou { transition: transform 0.15s; color: var(--muted); margin-left: auto; }
+.mianBanKaiGuan .jianTou { transition: transform 0.15s; color: var(--muted); margin-inline-start: auto; }
 .mianBanKaiGuan.daKai .jianTou { transform: rotate(90deg); }
 
 /* 更多菜单边框 */
@@ -1601,7 +1601,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
   width: 100%; border: none; background: transparent;
   padding: 8px 12px; border-radius: 6px;
   font: inherit; font-size: var(--fs-base); color: var(--ink);
-  cursor: pointer; text-align: left;
+  cursor: pointer; text-align: start;
 }
 .gengDuoCaiDanMianBan button:hover,
 .gengDuoCaiDanMianBan biaoQian:hover { background: var(--hover); }
@@ -1612,7 +1612,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
 
 .lieBiaoHqTuBiao {
   border: none; background: transparent; color: var(--muted);
-  cursor: pointer; padding: 4px; margin-left: auto;
+  cursor: pointer; padding: 4px; margin-inline-start: auto;
   display: inline-flex; align-items: center; border-radius: 6px;
   /* B4：命中区 ≥32×32，视觉图标仍是 18px */
   min-width: 32px; min-height: 32px; position: relative;
@@ -1669,7 +1669,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
 .peiZhiDaoHang button {
   display: flex; align-items: center; width: 100%;
   border: none; background: transparent; border-radius: 8px;
-  padding: 9px 14px; text-align: left;
+  padding: 9px 14px; text-align: start;
   font: inherit; font-size: var(--fs-base); font-weight: 500;
   color: var(--muted); cursor: pointer;
   transition: background 0.12s, color 0.12s;
@@ -1711,7 +1711,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
 /* ── 头像选择器 ── */
 .touXiangGrid {
   display: grid;
-  grid-template-columns: repeat(5, 36px);
+  grid-template-columns: repeat(5, 40px);
   gap: 8px;
   margin-bottom: 4px;
 }
@@ -1937,14 +1937,14 @@ table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-
 /* ── 知识库结果行 ── */
 .zhiShiKuHang { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
 .zhiShiKuLink {
-  flex: 1; text-align: left; border: none; background: transparent;
+  flex: 1; text-align: start; border: none; background: transparent;
   color: var(--accent); cursor: pointer; font: inherit; font-size: var(--fs-sm);
   padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .zhiShiKuLink:hover { text-decoration: underline; }
 /* ── 成本明细表 ── */
 .chengBenTable { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
-.chengBenTable th, .chengBenTable td { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--line); }
+.chengBenTable th, .chengBenTable td { text-align: start; padding: 3px 4px; border-bottom: 1px solid var(--line); }
 .chengBenTable th { color: var(--muted); font-weight: 500; }
 .chengBenFu { margin: 6px 0 2px; font-size: var(--fs-xs); color: var(--muted); }
 /* ── 诊断面板 ── */
@@ -2176,7 +2176,7 @@ input.wangLuoInvalid { border-color: var(--danger) !important; }
 .hkFilter { width: 100%; max-width: 320px; margin: 0 0 10px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--input-bg, var(--bg)); color: var(--ink); font: inherit; }
 .hkQunBiaoTi { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); margin: 12px 0 4px; }
 table.hkapi { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
-table.hkapi th, table.hkapi td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.hkapi th, table.hkapi td { text-align: start; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 table.hkapi th { color: var(--ink-dim); font-weight: 600; }
 table.hkapi td.hkOp { font-family: ui-monospace, Consolas, monospace; white-space: nowrap; }
 table.hkapi td.hkCh, table.hkapi td.hkPa { font-family: ui-monospace, Consolas, monospace; color: var(--ink-dim); }
@@ -2184,7 +2184,7 @@ table.hkapi td.hkMiaoShu { color: var(--ink); }
 table.hkapi td.hkMiaoShu.none { color: var(--ink-dim); }
 .hkapiShiJianJi { font-size: var(--fs-xs); color: var(--ink-dim); line-height: 1.6; word-break: break-all; margin-top: 8px; }
 table.hkMiYaoJi { width: 100%; border-collapse: collapse; font-size: var(--fs-base); }
-table.hkMiYaoJi th, table.hkMiYaoJi td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.hkMiYaoJi th, table.hkMiYaoJi td { text-align: start; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 table.hkMiYaoJi th { color: var(--ink-dim); font-weight: 600; font-size: var(--fs-sm); }
 table.hkMiYaoJi td.hkMiYaoJiMiaoShu { color: var(--ink-dim); font-size: var(--fs-sm); }
 .hkMiYao {
@@ -2377,7 +2377,7 @@ table.hkMiYaoJi td.hkMiYaoJiMiaoShu { color: var(--ink-dim); font-size: var(--fs
 
 /* 第四批：「选运行环境」——选项卡片（标题 + 实现方式徽标 + 适合/需要/不可用三段） */
 .ctgHuanJingOpt {
-  display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left;
+  display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: start;
   background: var(--card); color: var(--ink); border: 1px solid var(--line);
   border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 8px; cursor: pointer;
 }
@@ -2504,9 +2504,9 @@ body.liaoTianChuangKou .pageBuJu { display: none !important; }
 /* 使用量表格（真机反馈：做成表格；**只算词元**，不算钱、不标注价目估算）
  * 数字列（输入/输出/总计）表头与单元格都右对齐（产品要求：表头与数字对齐） */
 .usageBiao { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
-.usageBiao th, .usageBiao td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.usageBiao th, .usageBiao td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: start; white-space: nowrap; }
 .usageBiao thead th { color: var(--muted); font-weight: 600; }
-.usageBiao th[style*="right"], .usageBiao td[style*="right"] { text-align: right; font-variant-numeric: tabular-nums; }
+.usageBiao th[style*="right"], .usageBiao td[style*="right"] { text-align: end; font-variant-numeric: tabular-nums; }
 .usageBiao tbody tr:hover { background: var(--hover); }
 .usageBiao tfoot td { font-weight: 600; border-top: 1px solid var(--line); border-bottom: none; }
 .dashHang { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
@@ -2553,7 +2553,7 @@ body.liaoTianChuangKou #pageBuJu, body.liaoTianChuangKou #kongTai, body.liaoTian
 }
 .lieBiaoPlusCaiDan button {
   width: 100%;
-  text-align: left;
+  text-align: start;
   padding: 8px 10px;
   border-radius: 6px;
   white-space: nowrap;
@@ -3224,7 +3224,7 @@ body.liaoTianChuangKou #appTi {
   font: inherit; font-size: 11.5px; color: var(--ink-dim, #6b6b6b);
 }
 .startGuideLater:hover { color: var(--ink, #1c1b1a); text-decoration: underline; }
-.startGuideHint { font-size: 10.5px; line-height: 1.4; color: var(--ink-dim, #6b6b6b); opacity: .8; text-align: right; }
+.startGuideHint { font-size: 10.5px; line-height: 1.4; color: var(--ink-dim, #6b6b6b); opacity: .8; text-align: end; }
 .startGuidePill {
   /* 放在左侧栏右边：右下角是聊天发送按钮，胶囊不能压住它 */
   position: fixed; left: 76px; right: auto; bottom: 18px; z-index: 900;
@@ -3256,7 +3256,7 @@ body.liaoTianChuangKou #appTi {
 }
 
 /* 聊天气泡：名称 + 气泡包一层（群聊/项目显示发言者名称，微信样式） */
-.xiaoXi .bubbleWrap { display: flex; flex-direction: column; min-width: 0; max-width: 94%; }
+.xiaoXi .bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: calc(100% - 84px); max-width: calc(100% - 84px); }
 .xiaoXiMing { font-size: var(--fs-xs); opacity: .65; margin-bottom: 2px; padding-left: 2px; }
 .xiaoXi .touXiangTuPian { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
 /* ── 拉取模型：进行中的动画（至少 1.7s，直到完成/报错）── */
@@ -3385,7 +3385,7 @@ body.liaoTianChuangKou #appTi {
 .yunXingDian.cuo i { background: var(--danger, #e06060); }
 .yunXingWen { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .yunXingShiJian { opacity: 0.55; font-variant-numeric: tabular-nums; margin-left: 16px; white-space: nowrap; flex-shrink: 0; }
-.yunXingMiao { opacity: 0.55; font-variant-numeric: tabular-nums; margin-left: 8px; white-space: nowrap; flex-shrink: 0; min-width: 3em; text-align: right; margin-right: 12px; }
+.yunXingMiao { opacity: 0.55; font-variant-numeric: tabular-nums; margin-left: 8px; white-space: nowrap; flex-shrink: 0; min-width: 3em; text-align: end; margin-right: 12px; }
 .yunXingZhuangTai.cuoWu { color: var(--danger, #e06060); }
 /* 减弱动效：打字点/转圈不再弹跳，只保留静态可见性（无障碍） */
 @media (prefers-reduced-motion: reduce) {
@@ -3549,8 +3549,10 @@ html { font-weight: var(--fw-ui, 400); }
 /* 微信/QQ 式排版：气泡尽量宽。
  * ⚠️ renderer.css 里也有 `.xiaoXi .bubbleWrap`（更高特异性、且后加载）——
  * 两边必须写同一个 max-width，否则这里改了不生效（真事故：连改三轮用户仍说"太窄"）。 */
-.bubbleWrap { display: flex; flex-direction: column; min-width: 0; max-width: 94%; align-items: flex-start; flex: 0 1 auto; }
-.xiaoXi.wo .bubbleWrap { align-items: flex-end; }
+.bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: calc(100% - 84px); max-width: calc(100% - 84px); align-items: flex-start; flex: 0 1 auto; }
+.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: calc(100% - 84px); max-width: calc(100% - 84px); }
+/* R129 铁律（内容位置不移动）：md 内联图固定 16:9 占位，加载前/后布局一致 */
+.md img { display: block; max-width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--hover, #ececec); border-radius: 6px; }
 /* 主动显示的时间（跨时/跨日）：浅分隔线 + 居中小字 */
 .zhuDongShiJian {
   text-align: center; margin: 10px 0 8px; font-size: var(--fs-xs); color: var(--muted);
@@ -3652,11 +3654,11 @@ html { font-weight: var(--fw-ui, 400); }
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 5px 0; border-bottom: 1px dashed var(--line);
 }
-.tongBuSheBeiHang .shiLiHang { margin-left: auto; }
+.tongBuSheBeiHang .shiLiHang { margin-inline-start: auto; }
 /* 「继续/重试」：独立一行、常显（不进 hover footer） */
 .huiFuRenWuHang .bubble { border-style: dashed; }
 .huiFuRenWuBtn { margin-top: 4px; min-width: 120px; }
-.huiFuRenWuHang .xiaoXiJiao { opacity: 1 !important; }
+.huiFuRenWuHang .xiaoXiJiao { visibility: visible !important; }
 .huiFuRenWuHangDuli { padding: 2px 0 6px; }
 
 /* ── 设置页长列表：跳过屏外渲染（真机：点击卡顿 / 原生 select 弹层慢）── */
@@ -3672,7 +3674,7 @@ html { font-weight: var(--fw-ui, 400); }
 }
 .provXiaLaBtn {
   width: 100%;
-  text-align: left;
+  text-align: start;
   padding: 8px 28px 8px 10px;
   border: 1px solid var(--line, #ddd);
   border-radius: 6px;
@@ -3713,7 +3715,7 @@ html { font-weight: var(--fw-ui, 400); }
 .provXiaLaPan button {
   display: block;
   width: 100%;
-  text-align: left;
+  text-align: start;
   border: 0;
   background: transparent;
   padding: 10px 12px;
@@ -3748,7 +3750,7 @@ html { font-weight: var(--fw-ui, 400); }
  * **赞 / 踩**（对话内行右侧）：点了变强调色，再点取消。
  * 行为记进智能配置文件（用户对这轮质量的判断），归档时再整理分析。
  */
-.zanCaiJi { margin-left: auto; display: inline-flex; gap: 2px; align-items: center; }
+.zanCaiJi { margin-inline-start: auto; display: inline-flex; gap: 2px; align-items: center; }
 .zanCaiBtn {
   border: 0; background: transparent; cursor: pointer;
   font-size: 12px; line-height: 1; padding: 3px 5px; border-radius: 6px;
@@ -3845,9 +3847,9 @@ html { font-weight: var(--fw-ui, 400); }
 .xiaoXiMoXing {
   font-size: 10px; color: var(--muted); margin-top: 3px;
   opacity: 0; transition: opacity .15s ease;
-  text-align: left; word-break: break-all;
+  text-align: start; word-break: break-all;
 }
-.xiaoXi.wo .xiaoXiMoXing { text-align: right; }
+.xiaoXi.wo .xiaoXiMoXing { text-align: end; }
 .xiaoXi:hover .xiaoXiMoXing { opacity: 1; }
 /* T10 翻译折叠块：原文不动，译文灰字；点块收起/再点展开（shouQi = 只留「译文」头） */
 .fanYiKuai {
@@ -3865,20 +3867,17 @@ html { font-weight: var(--fw-ui, 400); }
 .fanYiKuai.zhong .fanYiKuaiWen { opacity: .7; font-style: italic; }
 .fanYiKuai.cuo { border-left-color: #b91c1c; }
 .xiaoXiJiao {
-  position: absolute; top: calc(100% + 3px); left: 0; right: auto;
-  display: flex; flex-direction: column; gap: 2px;
-  opacity: 0; transition: opacity .15s ease;
-  z-index: 25; pointer-events: auto;
-  background: var(--panel-bg, #f5f5f5);
-  border: 1px solid var(--line, #e0e0e0); border-radius: 6px;
-  padding: 2px 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  visibility: hidden; display: flex; flex-direction: column; gap: 0; padding: 0;
+  /* R130：内容靠上（占位内顶对齐，不垂直居中） */
+  justify-content: flex-start; align-items: flex-start;
+  min-height: 2.4em;
 }
 .xiaoXi.wo .xiaoXiJiao { left: auto; right: 0; }
-.xiaoXi:hover .xiaoXiJiao { opacity: 1; }
+.xiaoXi:hover .xiaoXiJiao { visibility: visible; }
 /* 悬停捕获层：覆盖消息下方 3px 间隙，空白处悬停同样显示信息条（T102） */
 .xiaoXi::after { content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 3px; }
 /** R128 N1：悬停元信息区域本身也保持显示（模型行/时间行自己 :hover，不只靠 .xiaoXi:hover） */
-.xiaoXiMoXing:hover, .xiaoXiJiao:hover { opacity: 1; }
+.xiaoXiMoXing:hover, .xiaoXiJiao:hover { visibility: visible; }
 /* 第 35 轮 项 8：第二行**必须和第一行（模型名）左对齐** —— 以前这里挂着 inline `margin-left:12px`，
  * 于是模型名在 x=0、时间行在 x=12px，看着就是"缩进错位"。改为 0，对齐交给同一列。 */
 .xiaoXiJiaoHang { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--muted); margin-left: 0; }
@@ -3948,7 +3947,7 @@ html { font-weight: var(--fw-ui, 400); }
 .yinYongQuan { display: none; position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 60;
   max-height: 45vh; overflow: auto; padding: 10px 12px; border-radius: 8px;
   background: var(--card); color: var(--ink); border: 1px solid var(--line);
-  font-size: var(--fs-xs); line-height: 1.65; white-space: pre-wrap; word-break: break-word; text-align: left;
+  font-size: var(--fs-xs); line-height: 1.65; white-space: pre-wrap; word-break: break-word; text-align: start;
   box-shadow: 0 6px 14px rgba(0, 0, 0, .14), 0 20px 40px -18px rgba(0, 0, 0, .35); }
 .yinYongTiao:hover .yinYongQuan { display: block; }
 .yinYongWen { flex: 1; min-width: 0; font-size: var(--fs-xs); color: var(--muted);
@@ -3965,9 +3964,8 @@ html { font-weight: var(--fw-ui, 400); }
   font-size: 10px; line-height: 15px; background: var(--line); color: var(--muted); vertical-align: middle; }
 
 /* 拟态外框：被选为桌宠「原形」的牛马头像加一圈强调色环 + 小角标 */
-.mimicKuang { box-shadow: 0 0 0 2px var(--accent), 0 0 8px 1px color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 50%; position: relative; }
-.mimicKuang::after { content: ''; position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px;
-  background: var(--accent); border: 1.5px solid var(--card, #fff); border-radius: 50%; }
+/* 拟态外框：桌宠「原形」细环标记（跟随头像形状；R138 简化：去掉强裁圆与角点小圆） */
+.mimicKuang { box-shadow: 0 0 0 2px var(--accent); position: relative; }
 
 /* 拟态音频设备：麦克风 / 播放器 / 音量 **同一行**，音量用竖滑块 */
 .mimicSheBeiHang { display: flex; gap: 10px; align-items: flex-start; margin-top: 4px; }
@@ -4094,9 +4092,9 @@ html { font-weight: var(--fw-ui, 400); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 图标按钮：只有第一个吃 margin-left:auto，把两个按钮一起顶到最右并并排（修两条 auto 互顶） */
+/* 图标按钮：只有第一个吃 margin-inline-start: auto，把两个按钮一起顶到最右并并排（修两条 auto 互顶） */
 .pfHang .pfIconBtn { flex: 0 0 auto; margin-left: 0; }
-.pfHang .pfIconBtn:first-of-type { margin-left: auto; }
+.pfHang .pfIconBtn:first-of-type { margin-inline-start: auto; }
 .pfHang .pfIconBtn + .pfIconBtn { margin-left: 2px; }
 /* 图标按钮：同一套 SVG，固定 14px 盒子 + 垂直居中（emoji 字面框不一样大 ⇒ 文件夹/删除永远对不齐） */
 .pfHang .pfIconBtn { display: inline-flex; align-items: center; justify-content: center; }
@@ -4128,7 +4126,7 @@ html { font-weight: var(--fw-ui, 400); }
 .sjLie { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 .sjTou { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .sjTou b { font-size: 12px; font-weight: 600; }
-.sjTou [data-sj-tian] { margin-left: auto; }
+.sjTou [data-sj-tian] { margin-inline-start: auto; }
 .sjSou { flex: 0 1 220px; min-width: 120px; margin-left: 6px; }
 .sjGun { overflow-y: auto; overflow-x: hidden; }
 .sjHang { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
@@ -4220,7 +4218,7 @@ html { font-weight: var(--fw-ui, 400); }
  * 把**整行**都钉住了，于是播放时引用图标也跟着一直不消失。
  * 现在：整行仍可见（朗读按钮要靠它显示），但行里**除朗读按钮之外**的按钮在非悬停时隐藏。
  */
-.xiaoXi:hover .xiaoXiJiao, .xiaoXi:has(.langDuZhong) .xiaoXiJiao { opacity: 1; }
+.xiaoXi:hover .xiaoXiJiao, .xiaoXi:has(.langDuZhong) .xiaoXiJiao { visibility: visible; }
 .xiaoXi:not(:hover):has(.langDuZhong) .xiaoXiJiaoHang > :not(.xiaoXiLangDu) {
   visibility: hidden;
 }
@@ -4392,7 +4390,7 @@ html { font-weight: var(--fw-ui, 400); }
   align-items: center;
   gap: 5px;
   cursor: pointer;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .qiyongGou input[type="checkbox"] {
   width: 15px;
@@ -4402,7 +4400,7 @@ html { font-weight: var(--fw-ui, 400); }
 }
 
 .xiaoXiMoXing{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:100%;}
-.xiaoXiMoXing .zanCaiJi{margin-left:auto;display:inline-flex;gap:6px;flex:0 0 auto;}
+.xiaoXiMoXing .zanCaiJi{margin-inline-start: auto;display:inline-flex;gap:6px;flex:0 0 auto;}
 
 /* 计划任务 2 行布局 */
 .jiHuaTongJiHang { display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;margin:0 0 8px; }
@@ -4464,14 +4462,14 @@ html { font-weight: var(--fw-ui, 400); }
 /**
  * 第 37 轮【项 7】：**撤销按钮要对齐**。
  * 旧规则只有 `gap:8px`，而"操作/谁"两列宽度随内容变 ⇒ 每一行的「撤销」落在不同的横坐标上，
- * 一列看下来参差不齐。现在：时间固定、操作占满剩余宽度、按钮 `margin-left:auto` 靠右 —— 每行都齐。
+ * 一列看下来参差不齐。现在：时间固定、操作占满剩余宽度、按钮 `margin-inline-start: auto` 靠右 —— 每行都齐。
  */
 .shouQuanHang2 .shouQuanHang1 { display:flex;gap:8px;align-items:center;font-size:var(--fs-xs);color:var(--muted); }
 .shouQuanHang2 .shouQuanCaoZuo { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .shouQuanHang2 .shouQuanShui { flex:0 0 auto; max-width:38%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .shouQuanHang2 .shouQuanHang2 { display:flex;gap:8px;align-items:center; }
 .shouQuanHang2 .shouQuanLuJing { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-sm);color:var(--ink); }
-.shouQuanCheXiaoXiao { flex:0 0 auto; margin-left:auto; padding:2px 6px; font-size:var(--fs-xs); }
+.shouQuanCheXiaoXiao { flex:0 0 auto; margin-inline-start: auto; padding:2px 6px; font-size:var(--fs-xs); }
 
 /* ── dsh-market 应用内弹窗（第 27 轮 项 2）──────────────────────────
    配色/圆角/栅格照上游站点（awesome-dsh-plugin.com / dsh-market README 截图）：
@@ -4675,19 +4673,14 @@ html { font-weight: var(--fw-ui, 400); }
    R128 N1：基态**不能** pointer-events:none —— 否则条永远悬停不到、`.guoChengCaoZuo:hover`
    是死规则，鼠标一离开上方内容条就消失、够不着下面的条。保留 opacity 过渡即可。 */
 .guoChengCaoZuo {
-  position: absolute; top: calc(100% + 2px); left: 0; right: 0;
-  display: flex; justify-content: flex-start; align-items: center; gap: 6px;
-  min-width: 0; padding: 2px 8px;
+  visibility: hidden; justify-content: flex-start; align-items: center; gap: 6px;
+  min-width: 0; padding: 0;
   font-size: 10px; color: var(--muted);
-  opacity: 0; transition: opacity .15s ease;
-  z-index: 22; pointer-events: auto;
-  background: var(--panel-bg, #f5f5f5);
-  border: 1px solid var(--line, #e0e0e0); border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  min-height: 1.5em;
 }
-.siKaoKuai:hover > .guoChengCaoZuo,
-.zhongJianKa:hover > .guoChengCaoZuo,
-.guoChengCaoZuo:hover { opacity: 1; }
+.siKaoKuai:hover + .guoChengCaoZuo,
+.zhongJianKa:hover + .guoChengCaoZuo,
+.guoChengCaoZuo:hover { visibility: visible; }
 .guoChengCaoZuo .gcMoXing { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .guoChengCaoZuo .gcShiJian { flex: 0 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .guoChengCaoZuo .zanCaiJi { margin-left: 2px; gap: 2px; flex: 0 0 auto; }
@@ -4716,13 +4709,13 @@ html { font-weight: var(--fw-ui, 400); }
 
 /* �� 30 �� �� 5/6���ļ��� ���� �ļ����м�ضϡ���������ĩ������ʾ��С */
 .pfMing { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pfCaoZuo { flex: 0 0 auto; margin-left: auto; font-size: var(--fs-xs); color: var(--muted); }
+.pfCaoZuo { flex: 0 0 auto; margin-inline-start: auto; font-size: var(--fs-xs); color: var(--muted); }
 .ctgHangHead { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
 /* 第 32 轮 项 6：设置卡片里的 h3 与 h2 统一字号（此前 h3 用浏览器默认 1.17em，看着特别大） */
 .sheZhiSection h3, .sheZhiKa h3 { font-size: var(--fs-base); font-weight: 600; margin: 0 0 6px; }
 /* 第 32 轮 项 1：计划任务清理周期下拉 —— 水平居中偏右，右侧留出拖拽手柄(32px)+关闭叉(6px) */
-.jiHuaQingLiWrap { flex: 0 0 auto; margin-left: auto; margin-right: 62px; display: inline-flex; align-items: center; gap: 4px; }
+.jiHuaQingLiWrap { flex: 0 0 auto; margin-inline-start: auto; margin-right: 62px; display: inline-flex; align-items: center; gap: 4px; }
 .jiHuaQingLiWrap select { max-width: 92px; }
 
 /* 第 32 轮 项 3：dsh-market 类别下拉框 */
@@ -4737,7 +4730,7 @@ html { font-weight: var(--fw-ui, 400); }
 .sheJiaoMing { font-weight: 600; font-size: var(--fs-base); }
 .sheJiaoTag { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--hover); color: var(--muted); }
 .sheJiaoTag.warn { color: var(--warn-fg, #b45309); }
-.sheJiaoZai { margin-left: auto; font-size: 11px; color: var(--muted); }
+.sheJiaoZai { margin-inline-start: auto; font-size: 11px; color: var(--muted); }
 .sheJiaoZai.on { color: var(--ok-fg, #1a7f37); font-weight: 600; }
 .sheJiaoFields { display: flex; flex-wrap: wrap; gap: 6px; }
 .sheJiaoField { display: flex; flex-direction: column; gap: 2px; min-width: 150px; flex: 1 1 150px; }
@@ -4748,7 +4741,7 @@ html { font-weight: var(--fw-ui, 400); }
 .sheJiaoWechatList { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .sheJiaoWechatAccount { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: var(--bg); }
 .sheJiaoWechatMain { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.sheJiaoWechatMain .sheJiaoZai { margin-left: auto; }
+.sheJiaoWechatMain .sheJiaoZai { margin-inline-start: auto; }
 .sheJiaoWechatMeta { font-size: 11px; color: var(--muted); margin-top: 3px; }
 .sheJiaoWechatDong { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
 /* 第 67 轮 项 16：标注哪些第四列卡片是真的每轮注入的提示词层 */
@@ -4890,7 +4883,7 @@ html { font-weight: var(--fw-ui, 400); }
    这里把两个按钮钉成**同一个盒**，并让审批/决策那一行的按钮**等高**（`once` 是 .anNiuZhuYao、其余是 .anNiuXiao，
    原本字号与内边距都不同 ⇒ 同一行里上沿下沿都不齐）。两份 CSS（app.css / renderer.css）必须一字不差。 */
 #shouQuanKaiGuan { gap: 6px; }
-/* 「添加」跟在“授权”后面靠左；箭头仍用 margin-left:auto 顶到最右。 */
+/* 「添加」跟在“授权”后面靠左；箭头仍用 margin-inline-start: auto 顶到最右。 */
 #shouQuanKaiGuan > span:first-of-type { flex: 0 0 auto; }
 .shouQuanCheXiaoXiao,
 .shouQuanTianJiaXiao {
@@ -4904,7 +4897,7 @@ html { font-weight: var(--fw-ui, 400); }
   font-size: var(--fs-xs, 12px);
   line-height: 1.2;
 }
-.shouQuanCheXiaoXiao { margin-left: auto; }
+.shouQuanCheXiaoXiao { margin-inline-start: auto; }
 .aiqOpts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: stretch; }
 .aiqOpts > button {
   display: inline-flex;
@@ -5034,7 +5027,8 @@ html { font-weight: var(--fw-ui, 400); }
 .ssQuYu { border: 1px solid var(--line, #ddd); border-radius: 8px; margin-top: 10px; padding: 8px 10px; }
 .ssQuYuMing { font-size: 12px; font-weight: 600; color: var(--accent, #A87654); margin-bottom: 2px; user-select: none; }
 .ssKong { padding: 6px 0; font-size: 11px; }
-.ssHang { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; border-top: 1px dashed var(--line, #ddd); }
+.ssHang { display: flex; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; border-top: 1px dashed var(--line, #ddd); }
+.ssHang input { min-width: 0; flex: 0 1 auto; }
 .ssHang:first-of-type { border-top: none; }
 .ssHangMing { font-weight: 600; min-width: 110px; max-width: 190px; word-break: break-all; }
 .ssZhuangTai { font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--line, #ddd); color: var(--muted, #888); white-space: nowrap; }

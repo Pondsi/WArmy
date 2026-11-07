@@ -13,13 +13,23 @@
   const LOCALES = [
     ['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['en-US', 'English'], ['ja', '日本語'],
     ['ko', '한국어'], ['ru', 'Русский'], ['es', 'Español'], ['fr', 'Français'],
-    ['pt', 'Português'], ['eo', 'Esperanto'],
+    ['pt', 'Português'], ['eo', 'Esperanto'], ['de', 'Deutsch'], ['it', 'Italiano'],
+    ['nl', 'Nederlands'], ['pl', 'Polski'], ['sv', 'Svenska'], ['cs', 'Čeština'],
+    ['hu', 'Magyar'], ['da', 'Dansk'], ['nb', 'Norsk bokmål'], ['tr', 'Türkçe'],
+    ['uk', 'Українська'], ['id', 'Bahasa Indonesia'], ['vi', 'Tiếng Việt'], ['th', 'ไทย'],
+    ['hi', 'हिन्दी'], ['ar', 'العربية'], ['fa', 'فارسی'],
   ];
+  /** 从右往左书写的语言 */
+  const RTL_LOCALES = ['ar', 'fa'];
   /** 下拉里只留短名；完整名字太长，和「开始」并排会挤。 */
   const LOCALE_SHORT = {
     'zh-CN': '简体', 'zh-TW': '繁體', 'en-US': 'English', ja: '日本語',
     ko: '한국어', ru: 'Русский', es: 'Español', fr: 'Français',
-    pt: 'Português', eo: 'Esperanto',
+    pt: 'Português', eo: 'Esperanto', de: 'Deutsch', it: 'Italiano',
+    nl: 'Nederlands', pl: 'Polski', sv: 'Svenska', cs: 'Čeština',
+    hu: 'Magyar', da: 'Dansk', nb: 'Norsk bokmål', tr: 'Türkçe',
+    uk: 'Українська', id: 'Bahasa Indonesia', vi: 'Tiếng Việt', th: 'ไทย',
+    hi: 'हिन्दी', ar: 'العربية', fa: 'فارسی',
   };
   /**
    * 首启/登录背景：本次启动**随机选一幕并固定**，不在页面内轮播。
@@ -50,6 +60,23 @@
     pt: 'Chefe',
     ru: 'Шеф',
     eo: 'Ĉefo',
+    de: 'Chef',
+    it: 'Capo',
+    nl: 'Baas',
+    pl: 'Szef',
+    sv: 'Chef',
+    cs: 'Šéf',
+    hu: 'Főnök',
+    da: 'Chef',
+    nb: 'Sjef',
+    tr: 'Patron',
+    uk: 'Шеф',
+    id: 'Bos',
+    vi: 'Sếp',
+    th: 'นาย',
+    hi: 'बॉस',
+    ar: 'المدير',
+    fa: 'رئیس',
   };
   const state = {
     step: 'loading',
@@ -1110,7 +1137,7 @@
   }
   /**
    * 第 78 轮：新增文案统一走 tOr(key, fallback) —— 先查当前语言的内置字典，
-   * 再查已加载的 i18n 语言包（主进程 10 语言 strings），最后才落到中文兜底。
+   * 再查已加载的 i18n 语言包（主进程全量语言包 strings），最后才落到中文兜底。
    * 这样在用户补齐 i18n 键之前界面也不会露出 key 名。
    */
   function tOr(key, fallback) {
@@ -1821,7 +1848,7 @@
   }
 
   /**
-   * 第 78 轮：语言不再用下拉框。10 种语言平铺成两列，点一下即选中
+   * 第 78 轮：语言不再用下拉框。全部语言平铺成三列，点一下即选中
    * （立刻换文案 + 落盘），下方「开始」进入条款页。
    */
   function renderLanguage() {
@@ -2269,7 +2296,10 @@
   async function applyLocale(code) {
     state.locale = resolveLocale(code);
     // 立即更新本页文案（平铺选项 + 开始按钮）与文档语言，不等落盘/语言包。
-    try { document.documentElement.lang = state.locale; } catch { /* noop */ }
+    try {
+      document.documentElement.lang = state.locale;
+      document.documentElement.dir = RTL_LOCALES.some((c) => resolveLocale(state.locale) === c || state.locale === c) ? 'rtl' : 'ltr';
+    } catch { /* noop */ }
     render();
     try { void window.__warmyLoadI18n?.(state.locale); } catch { /* noop */ }
     await call('settingsSave', { yuYan: state.locale });

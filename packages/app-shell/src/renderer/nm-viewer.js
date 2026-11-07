@@ -1200,12 +1200,17 @@
     gengXinBiaoTi();
   }
   /** 第 81 轮：目录菜单「打开网站」——在当前 nm 窗口进入网站模式（本地网页文件作为第一个标签页） */
-  function daKaiWangYeMoShi() {
+  async function daKaiWangYeMoShi() {
     /** 用户要求：下拉箭头里的「打开网站」= 新开一个 nm 查看器进浏览器模式（不打断本窗口） */
     try {
-      window.warmy.nmKai?.({ kaiWangYe: qiDongYeUrl(), huiHuaId: zt.huiHuaId || '' });
-      zhuangTaiWen('已新开浏览器窗口');
-      return;
+      /** R138 修：检查返回结果（旧版忽略返回 ⇒ 开窗失败也提示成功，用户看到「没反应」）；
+       *  启动页为空（空白模式）时用 'kongbai' 兜底，保证一定开出浏览器窗口。 */
+      const r = await window.warmy.nmKai?.({ kaiWangYe: qiDongYeUrl() || 'kongbai', huiHuaId: zt.huiHuaId || '' });
+      if (r && r.ok) {
+        zhuangTaiWen('已新开浏览器窗口');
+        return;
+      }
+      zhuangTaiWen('新开浏览器窗口失败：' + String((r && r.cuo) || '未知原因'));
     } catch { /* 开新窗失败则回退到本窗口模式 */ }
     if (zt.wangYe.kai) { wangYeKai(false); }
     zt.wangYe.ka = [];
@@ -2148,6 +2153,49 @@
     }
     zhuangTaiWen(zt.fenLanZuoShou || zt.fenLanYouShou ? '分栏已收起一侧（点分隔条上的箭头恢复）' : '分栏已展开');
   }
+  /** R138：纯文本预览里的裸网址也做成超链接（样式 + Ctrl+点击打开） */
+  function linkifyCunWen(src) {
+    const tiShi = '按住 Ctrl 并点击，即可在新窗口打开';
+    return escapeHtml(String(src || '')).replace(/(https?:\/\/[^\s<>"')\]]+)/g,
+      '<a class="nmLianJie" href="$1" data-nm-lei="web" title="' + tiShi + '" rel="noreferrer">$1</a>');
+  }
+  /** 相对路径解析到当前文件所在目录（md 里的 [x](./sub/a.txt)） */
+  function jieXiXiangDui(href) {
+    const abs = benDiLuJing(href);
+    if (abs) return abs;
+    const s = String(href || '').trim();
+    if (!s || /^[a-z][a-z0-9+.-]*:/i.test(s) || !zt.luJing) return '';
+    const base = String(zt.luJing).replace(/[\\/][^\\/]*$/, '');
+    const segs = (base + '/' + s).replace(/\\/g, '/').split('/');
+    const out = [];
+    for (const seg of segs) {
+      if (seg === '.') continue;
+      if (seg === '..') { if (out.length > 1) out.pop(); continue; }
+      out.push(seg);
+    }
+    return out.join('\\');
+  }
+  /** 预览 iframe（sandbox 无脚本）里的链接：父层绑点击——Ctrl+开新窗，普通点不跳 */
+  function bangDingYuLanLianJie(f) {
+    try {
+      const doc = f.contentDocument;
+      if (!doc) return;
+      doc.querySelectorAll('a.nmLianJie').forEach((a) => {
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (!e.ctrlKey) return; // 非 Ctrl 不打开（只展示样式与提示）
+          const href = String(a.getAttribute('href') || '').trim();
+          if (!href) return;
+          if (a.getAttribute('data-nm-lei') === 'file') {
+            const lu = jieXiXiangDui(href);
+            if (lu) { try { window.warmy.nmKai?.({ luJing: lu, huiHuaId: zt.huiHuaId || '' }); } catch { /* noop */ } }
+          } else {
+            try { window.warmy.nmKai?.({ kaiWangYe: href, huiHuaId: zt.huiHuaId || '' }); } catch { /* noop */ }
+          }
+        });
+      });
+    } catch { /* 跨源拿不到 contentDocument 就不动 */ }
+  }
   function gengXinYuLan() {
     if (!zt.fenLan) return;
     const wen = el('wenBen').value;
@@ -2172,9 +2220,11 @@
       nei.innerHTML = '<iframe sandbox="allow-same-origin" title="效果预览"></iframe>';
       f = nei.querySelector('iframe');
     }
-    const yang = '<style>html,body{margin:0}body{padding:16px;font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-size:14px;line-height:1.65;color:#1b1b1b;background:#fff}img{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:break-word;background:#f6f6f6;padding:10px;border-radius:6px}code{font-family:Consolas,monospace;font-size:13px}table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:4px 8px;text-align:left}blockquote{margin:0 0 1em;padding-left:12px;border-left:3px solid #ddd;color:#555}a{color:#8a5a3c}</style>';
+    const yang = '<style>html,body{margin:0}body{padding:16px;font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-size:14px;line-height:1.65;color:#1b1b1b;background:#fff}img{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:break-word;background:#f6f6f6;padding:10px;border-radius:6px}code{font-family:Consolas,monospace;font-size:13px}table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:4px 8px;text-align:left}blockquote{margin:0 0 1em;padding-left:12px;border-left:3px solid #ddd;color:#555}a{color:#8a5a3c;text-decoration:underline}a.nmLianJie{cursor:pointer}</style>';
     f.srcdoc = '<!doctype html><html><head><meta charset="utf-8">' + yang + '</head><body>'
-      + (zt.fenLan === 'md' ? markdownToHtml(wen) : wen) + '</body></html>';
+      + (zt.fenLan === 'md' ? markdownToHtml(wen) : linkifyCunWen(wen)) + '</body></html>';
+    /** R138：每次重绘后重绑链接点击（Ctrl+开新窗） */
+    f.onload = () => bangDingYuLanLianJie(f);
   }
   function anPaiYuLan() {
     if (!zt.fenLan) return;
@@ -2191,7 +2241,13 @@
       x = x.replace(/`([^`]+)`/g, '<code>$1</code>');
       x = x.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
       x = x.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
-      x = x.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" rel="noreferrer">$1</a>');
+      /**
+       * R138（用户要求）：非浏览器模式下的链接都显示超链接样式 + 悬停提示，
+       * Ctrl+点击打开（网页 = 新 nm 查看器进浏览器模式；本地文件 = 新 nm 查看器打开文件）。
+       */
+      const tiShi = '按住 Ctrl 并点击，即可在新窗口打开';
+      x = x.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a class="nmLianJie" href="$2" data-nm-lei="web" title="' + tiShi + '" rel="noreferrer">$1</a>');
+      x = x.replace(/\[([^\]]+)\]\(((?!https?:)[^)\s]+)\)/g, '<a class="nmLianJie" href="$2" data-nm-lei="file" title="' + tiShi + '">$1</a>');
       return x;
     };
     const closeList = () => { if (list) { out += '<ul>' + list + '</ul>'; list = ''; } };
@@ -2706,6 +2762,9 @@
   }
 
   const YIN_PIN_SU_DU = [0.1, 0.2, 0.5, 1, 1.5, 2, 2.5, 3, 5];
+  /** 播放/暂停图标按钮（用户要求：不用文字按钮） */
+  const BF_BO = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  const BF_ZT = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
   function zaoYinPin(r, url) {
     const he = document.createElement('div');
     he.className = 'meiTiHe yinPinHe';
@@ -2717,7 +2776,7 @@
       '  <div class="geQuMing" title=""></div>',
       '  <div class="jinDu" role="slider" aria-label="播放进度" tabindex="0"><div class="jinDuDi"></div><div class="jinDuTian"></div><div class="jinDuHuaDian"></div></div>',
       '</div>',
-      '<div class="yinPinKongZhi"><button class="boFang">播放</button><span class="shiJian">0:00 / 0:00</span>',
+      '<div class="yinPinKongZhi"><button class="boFang" aria-label="播放" title="播放">' + BF_BO + '</button><span class="shiJian">0:00 / 0:00</span>',
       '  <label class="suDu">倍速<select class="suDuXuan" aria-label="播放速度">',
       YIN_PIN_SU_DU.map((x) => '<option value="' + x + '"' + (x === 1 ? ' selected' : '') + '>' + x + '×</option>').join(''),
       '  </select></label></div>',
@@ -2778,8 +2837,8 @@
       try { audio.playbackRate = v; } catch { /* 忽略 */ }
       zhuangTaiWen('播放速度 · ' + v + '×');
     });
-    audio.addEventListener('play', () => { boFang.textContent = '暂停'; });
-    audio.addEventListener('pause', () => { boFang.textContent = '播放'; });
+    audio.addEventListener('play', () => { boFang.innerHTML = BF_ZT; boFang.setAttribute('aria-label', '暂停'); boFang.title = '暂停'; });
+    audio.addEventListener('pause', () => { boFang.innerHTML = BF_BO; boFang.setAttribute('aria-label', '播放'); boFang.title = '播放'; });
     audio.addEventListener('timeupdate', geng);
     audio.addEventListener('loadedmetadata', geng);
     audio.addEventListener('durationchange', geng);
@@ -4849,6 +4908,24 @@
         gengXinWangYe();
       });
     } catch { /* noop */ }
+    /** R128：`web=` 参数 ⇒ 窗口打开后直接进入网页模式并加载该 URL（赞助页 PayPal 左键等）。
+     *  R129：`web=kongbai` = 空白 nm 查看器（进网页模式但停在地址栏，不加载任何页面）。 */
+    const webKai = String(canShu.get('web') || '').trim();
+    if (webKai === 'kongbai') {
+      setTimeout(() => {
+        try {
+          zt.wangYe.kai = true;
+          wangYeKai(true);
+          wangYeXin('');
+          zhuangTaiWen('就绪');
+        } catch { /* noop */ }
+      }, 120);
+      return;
+    }
+    if (webKai && /^https?:\/\//i.test(webKai)) {
+      setTimeout(() => { try { void wangYeXinAnQuan(webKai); } catch { /* noop */ } }, 120);
+      return;
+    }
     if (!lu) {
       tiShiWen('没有拿到文件路径（这个窗口需要由 WArmy 打开某个文件才会显示内容）。');
       zhuangTaiWen('就绪');
@@ -4858,11 +4935,6 @@
       /** 聊天编辑器打开后直接聚焦正文：用户马上可以 Ctrl+Z / 输入，撤销快捷键不用先点一下 */
       if (chatEditor) { try { el('wenBen')?.focus(); } catch { /* noop */ } }
     });
-    /** R128：`web=` 参数 ⇒ 窗口打开后直接进入网页模式并加载该 URL（赞助页 PayPal 左键等） */
-    const webKai = String(canShu.get('web') || '').trim();
-    if (/^https?:\/\//i.test(webKai)) {
-      setTimeout(() => { try { void wangYeXinAnQuan(webKai); } catch { /* noop */ } }, 120);
-    }
   })();
 })();
 

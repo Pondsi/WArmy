@@ -168,6 +168,23 @@ export const SETTINGS_SUPPORTED_LOCALES = [
   'fr',
   'pt',
   'eo',
+  'de',
+  'it',
+  'nl',
+  'pl',
+  'sv',
+  'cs',
+  'hu',
+  'da',
+  'nb',
+  'tr',
+  'uk',
+  'id',
+  'vi',
+  'th',
+  'hi',
+  'ar',
+  'fa',
 ] as const;
 
 export interface YingYongPeizhi {

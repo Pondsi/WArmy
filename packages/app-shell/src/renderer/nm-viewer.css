@@ -701,6 +701,7 @@ body.tuoFenGe #yuLanLie * { pointer-events: none !important; }
 .yinPinJinDuKuai .jinDuTian { background: var(--accent); }
 .yinPinJinDuKuai .jinDuHuaDian { background: var(--accent); box-shadow: 0 0 0 2px var(--card); }
 .yinPinKongZhi { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.yinPinKongZhi .boFang { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; }
 .yinPinKongZhi button {
   border: 1px solid var(--line);
   background: var(--panel-bg);

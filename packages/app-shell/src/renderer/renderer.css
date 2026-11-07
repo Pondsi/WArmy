@@ -420,8 +420,8 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 .xiaoXi.wo .bubble { background: var(--me-bubble); color: var(--me-bubble-ink, #111); }
 /* 我方消息：与头像同侧（右侧）对齐 —— 文字也右对齐 */
 .xiaoXi.wo { justify-content: flex-start; }
-.xiaoXi.wo .bubble { text-align: left; }   /* 文字左对齐；气泡位置仍随头像（右侧） */
-.xiaoXi.wo .bubbleWrap { align-items: flex-end; }
+.xiaoXi.wo .bubble { text-align: start; }   /* 文字左对齐；气泡位置仍随头像（右侧） */
+.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: calc(100% - 84px); max-width: calc(100% - 84px); }
 /**
  * 深色下我方气泡的文字色。
  *
@@ -536,7 +536,7 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
   outline: none; box-shadow: none; border: none; background: transparent;
 }
 .shuRuCounter {
-  text-align: right; font-size: var(--fs-xs); color: var(--muted);
+  text-align: end; font-size: var(--fs-xs); color: var(--muted);
   margin: 0; padding: 0 10px; min-height: 0; line-height: 1.2;
   border: none !important; background: transparent;
 }
@@ -602,7 +602,7 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
   border: none;
   background: transparent;
   color: var(--ink);
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   border-radius: 6px;
   font: inherit;
@@ -644,7 +644,7 @@ button.ddWen:hover { background: transparent !important; color: var(--ink); }
   font-weight: 400;
   color: var(--ink);
   line-height: 1.5;
-  text-align: left;
+  text-align: start;
   white-space: normal;
   box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.16));
   z-index: 60;
@@ -836,7 +836,7 @@ button.ddWen:hover { background: transparent !important; color: var(--ink); }
 .sheZhiSection { margin-bottom: 20px; }
 .sheZhiSection h2 { font-size: var(--fs-md); margin: 0 0 10px; }
 table.chaJianJi { width: 100%; border-collapse: collapse; font-size: var(--fs-base); }
-table.chaJianJi th, table.chaJianJi td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .huiZhang {
   display: inline-block; padding: 2px 8px; border-radius: 99px;
   font-size: var(--fs-xs); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
@@ -1166,7 +1166,7 @@ details.ctgShouQi > .ctgShouQiTi {
 .shangXiaWenCaiDan button {
   border: none;
   background: transparent;
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   border-radius: 6px;
   font: inherit;
@@ -1213,7 +1213,7 @@ details.ctgShouQi > .ctgShouQiTi {
 #diagMianBanKuai .mianBanKaiGuan { cursor: pointer; display: flex; align-items: center; gap: 8px; }
 #diagMianBanKuai.yinCang, #diagHost.yinCang { display: none; }
 #diagMianBanKuai .diagWhat { font-size: var(--fs-xs); }
-#diagMianBanKuai #diagJianTou { margin-left: auto; }
+#diagMianBanKuai #diagJianTou { margin-inline-start: auto; }
 
 /* 进度 / 等待协助：限高滚动 */
 .mianBanScroll {
@@ -1309,7 +1309,7 @@ details.ctgShouQi > .ctgShouQiTi {
 }
 #diagMianBanKuai .mianBanKaiGuan { display:flex; align-items:center; gap:8px; cursor:pointer; }
 #diagHost.yinCang { display:none; }
-.liaoTianDongZuoJi .anNiuDiag { order: 99; margin-left: auto; }
+.liaoTianDongZuoJi .anNiuDiag { order: 99; margin-inline-start: auto; }
 .provFocus { outline: 1px solid var(--accent); border-radius: 8px; }
 .hkPa code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--fs-xs); }
 
@@ -1386,7 +1386,7 @@ body.liaoTianChuangKou #appTi:not(.yinCangLieBiao) {
 .scrollDiAnNiu.yinCang { display: none; }
 .newXiaoXiBubble {
   position: absolute; right: 22px; bottom: 104px; z-index: 39;
-  max-width: 62%; text-align: left;
+  max-width: 62%; text-align: start;
   padding: 8px 12px; border-radius: 14px;
   border: 1px solid var(--line); background: var(--accent); color: var(--accent-ink, #fff);
   font-size: var(--fs-sm); line-height: 1.4; cursor: pointer;
@@ -1397,10 +1397,10 @@ body.liaoTianChuangKou #appTi:not(.yinCangLieBiao) {
 /* 三点菜单：勾/叉在文字前；快捷键靠右 */
 .gengDuoCaiDanMianBan .gengDuoCaiDanAnNiu { display: flex; align-items: center; gap: 8px; width: 100%; }
 .gengDuoCaiDanMianBan .mark { width: 16px; flex-shrink: 0; text-align: center; color: var(--accent); font-weight: 700; }
-.gengDuoCaiDanMianBan .caiDanSc { margin-left: auto; font-size: var(--fs-xs); color: var(--muted); }
+.gengDuoCaiDanMianBan .caiDanSc { margin-inline-start: auto; font-size: var(--fs-xs); color: var(--muted); }
 .gengDuoCaiDanMianBan .gengDuoCaiDanAnNiu.yinCang { display: none; }
 /* 输入字数 */
-.shuRuCounter { text-align: right; font-size: var(--fs-xs); color: var(--muted); margin: 0; padding: 0 10px; min-height: 0; line-height: 1.2; border: none; background: transparent; }
+.shuRuCounter { text-align: end; font-size: var(--fs-xs); color: var(--muted); margin: 0; padding: 0 10px; min-height: 0; line-height: 1.2; border: none; background: transparent; }
 .shuRuCounter.over { color: var(--danger); }
 /* 右栏分区：干活面板 vs 聊天面板 */
 .mianBanKuai[data-panel-hidden="1"] { display: none !important; }
@@ -1513,7 +1513,7 @@ body.liaoTianChuangKou .pageBuJu { display: none !important; }
 .dashStats { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; margin: 12px 0 16px; }
 /* 使用量表格（真机反馈：做成表格；**只算词元**，不算钱、不标注价目估算） */
 .usageBiao { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
-.usageBiao th, .usageBiao td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.usageBiao th, .usageBiao td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: start; white-space: nowrap; }
 .usageBiao thead th { color: var(--muted); font-weight: 600; }
 .usageBiao tbody tr:hover { background: var(--hover); }
 .usageBiao tfoot td { font-weight: 600; border-top: 1px solid var(--line); border-bottom: none; }
@@ -1561,7 +1561,7 @@ body.liaoTianChuangKou #pageBuJu, body.liaoTianChuangKou #kongTai, body.liaoTian
 }
 .lieBiaoPlusCaiDan button {
   width: 100%;
-  text-align: left;
+  text-align: start;
   padding: 8px 10px;
   border-radius: 6px;
   white-space: nowrap;
@@ -2189,8 +2189,14 @@ body.liaoTianChuangKou #appTi {
  * 宽度上限在这条**高特异性**规则上给（它会盖掉 app.css 的 .bubbleWrap） */
 .xiaoXi .bubbleWrap {
   display: flex; flex-direction: column; min-width: 0;
-  max-width: 94%;
+  /* T150 等宽：牛马头像左 ↔ 用户头像右，两侧各留 头像32+间距10 的空位 */
+  width: calc(100% - 84px);
+  max-width: calc(100% - 84px);
 }
+/* T150：气泡随行宽拉满（思考/执行块天然是块级，等宽后与气泡一致） */
+.xiaoXi .bubble { width: 100%; max-width: 100%; }
+/* 任务标题行不参与等宽（强制整行居中） */
+.huiFuRenWuHang .bubbleWrap, .huiFuRenWuHang .xiaoXiJiao { width: 100%; max-width: 100%; }
 .xiaoXiMing { font-size: var(--fs-xs); opacity: .65; margin-bottom: 2px; padding-left: 2px; }
 .xiaoXi .touXiangTuPian { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
 /* 供应商密钥：输入框 + 眼睛 */
@@ -2352,7 +2358,7 @@ html { font-weight: var(--fw-ui, 400); }
 .jiHuaBu { margin: 6px 0; padding-left: 8px; border-left: 2px solid transparent; }
 .jiHuaId { font-size: var(--fs-xs); font-weight: 600; color: var(--accent); margin-right: 6px; }
 .jiHuaMing { font-size: var(--fs-sm); }
-.jiHuaZhuangTai { float: right; font-size: var(--fs-xs); opacity: .75; }
+.jiHuaZhuangTai { float: inline-end; font-size: var(--fs-xs); opacity: .75; }
 .jiHuaBu[data-st="pending"] { border-left-color: var(--accent); }
 .jiHuaBu[data-st="doing"] { border-left-color: var(--accent); }
 .jiHuaBu[data-st="done"] { border-left-color: transparent; }
@@ -2407,9 +2413,9 @@ html { font-weight: var(--fw-ui, 400); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 图标按钮：只有第一个吃 margin-left:auto，把两个按钮一起顶到最右并并排（修两条 auto 互顶） */
+/* 图标按钮：只有第一个吃 margin-inline-start: auto，把两个按钮一起顶到最右并并排（修两条 auto 互顶） */
 .pfHang .pfIconBtn { flex: 0 0 auto; margin-left: 0; }
-.pfHang .pfIconBtn:first-of-type { margin-left: auto; }
+.pfHang .pfIconBtn:first-of-type { margin-inline-start: auto; }
 .pfHang .pfIconBtn + .pfIconBtn { margin-left: 2px; }
 /* 图标按钮：同一套 SVG，固定 14px 盒子 + 垂直居中（emoji 字面框不一样大 ⇒ 文件夹/删除永远对不齐） */
 .pfHang .pfIconBtn { display: inline-flex; align-items: center; justify-content: center; }
@@ -2431,7 +2437,7 @@ html { font-weight: var(--fw-ui, 400); }
 .sjLie { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 .sjTou { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .sjTou b { font-size: 12px; font-weight: 600; }
-.sjTou [data-sj-tian] { margin-left: auto; }
+.sjTou [data-sj-tian] { margin-inline-start: auto; }
 .sjSou { flex: 0 1 220px; min-width: 120px; margin-left: 6px; }
 .sjGun { overflow-y: auto; overflow-x: hidden; }
 .sjHang { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
@@ -2548,7 +2554,7 @@ html { font-weight: var(--fw-ui, 400); }
 
 /* ===== 第 44 轮 用户项 3：授权卡的按钮对齐（与 app.css 里同名那段**一字不差**，本文件后加载，漏改就等于白改） ===== */
 #shouQuanKaiGuan { gap: 6px; }
-/* 「添加」跟在“授权”后面靠左；箭头仍用 margin-left:auto 顶到最右。 */
+/* 「添加」跟在“授权”后面靠左；箭头仍用 margin-inline-start: auto 顶到最右。 */
 #shouQuanKaiGuan > span:first-of-type { flex: 0 0 auto; }
 .shouQuanCheXiaoXiao,
 .shouQuanTianJiaXiao {
@@ -2562,7 +2568,7 @@ html { font-weight: var(--fw-ui, 400); }
   font-size: var(--fs-xs, 12px);
   line-height: 1.2;
 }
-.shouQuanCheXiaoXiao { margin-left: auto; }
+.shouQuanCheXiaoXiao { margin-inline-start: auto; }
 .aiqOpts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: stretch; }
 .aiqOpts > button {
   display: inline-flex;
@@ -2645,7 +2651,7 @@ html { font-weight: var(--fw-ui, 400); }
 .wangLuoHostDetails > summary:hover,
 .wangLuoProviderDetails > summary:hover { background: var(--hover); }
 .wangLuoFoldTitle { font-weight: 600; }
-.wangLuoFoldSummary { margin-left: auto; font-weight: 400; font-size: var(--fs-xs); }
+.wangLuoFoldSummary { margin-inline-start: auto; font-weight: 400; font-size: var(--fs-xs); }
 .wangLuoHostBody,
 .wangLuoProviderBody { padding: 8px 2px 2px; }
 .wangLuoHostHint,
@@ -2712,7 +2718,7 @@ html { font-weight: var(--fw-ui, 400); }
   font-size: var(--fs-sm);
   font-weight: 600;
 }
-.wangLuoHostCount { margin-left: auto; font-weight: 400; }
+.wangLuoHostCount { margin-inline-start: auto; font-weight: 400; }
 .wangLuoHostList {
   display: flex;
   flex-direction: column;
@@ -2915,8 +2921,8 @@ html { font-weight: var(--fw-ui, 400); }
 @media (min-width: 1600px) {
   #pageBuJu > #pageTi > * {
     max-width: 1400px;
-    margin-left: auto;
-    margin-right: auto;
+    margin-inline-start: auto;
+    margin-inline-end: auto;
   }
 }
 
@@ -2924,8 +2930,8 @@ html { font-weight: var(--fw-ui, 400); }
 @media (min-width: 1600px) {
   #shiLiXiangQing > * {
     max-width: var(--du-wen-kuan);
-    margin-left: auto;
-    margin-right: auto;
+    margin-inline-start: auto;
+    margin-inline-end: auto;
   }
 }
 
@@ -2963,7 +2969,7 @@ html { font-weight: var(--fw-ui, 400); }
   font-size: 12px;
   font-weight: 400;
   line-height: 1.5;
-  text-align: left;
+  text-align: start;
   white-space: normal;
   box-shadow: var(--shadow-md);
   pointer-events: none;
@@ -3014,7 +3020,7 @@ html { font-weight: var(--fw-ui, 400); }
 .ssKong { font-size: 11px; padding: 4px 0 8px; }
 .ssHang {
   position: relative;
-  display: flex; flex-direction: column; gap: 4px;
+  display: flex; flex-direction: row; align-items: center; gap: 4px; flex-wrap: wrap;
   padding: 6px 8px; margin-bottom: 6px;
   border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--card) 82%, transparent);
 }
@@ -3093,3 +3099,42 @@ html { font-weight: var(--fw-ui, 400); }
   #biaoTiLan .biaoTiLanDongZuoJi button { width: 62px; }
   #biaoTiLan .biaoTiLansvg { width: 20px; height: 20px; }
 }
+
+/* ── RTL（ar/fa）：html[dir=rtl] 时镜像物理 left/right 与方向图标（W3C：方向挂 html，CSS 只补镜像） ── */
+[dir="rtl"] #lanTiaoZhengTiao { right: auto; left: -3px; }
+[dir="rtl"] #mianBanTiaoZhengTiao { right: auto; left: -3px; }
+[dir="rtl"] #ceLan .ceLanTiaoMu.youXinHao::after { right: auto; left: 7px; }
+[dir="rtl"] .zhengLiTeXiao { left: auto; right: 0; }
+[dir="rtl"] .zhengLiTeXiaoWen { left: auto; right: 0; }
+[dir="rtl"] .zhengLiTeXiaoHua { left: auto; right: 0; }
+[dir="rtl"] .zhengLiZi.isLiang::after { right: auto; left: -0.3em; }
+[dir="rtl"] .zhengLiTiShi { right: auto; left: 8px; }
+[dir="rtl"] .jinJiCaiDan { left: auto; right: 0; }
+[dir="rtl"] .yuYinCaiDan { right: auto; left: 0; }
+[dir="rtl"] .kaGuanBi { right: auto; left: 6px; }
+[dir="rtl"] .startGuide { right: auto; left: 18px; }
+[dir="rtl"] .startGuidePill { left: auto; right: 10px; }
+[dir="rtl"] .wangLuoSwitch .wangLuoSwitchTrack::after { left: auto; right: 2px; }
+[dir="rtl"] .renWuZhongDuanMark { right: auto; left: 6px; }
+[dir="rtl"] .hangJiaoBiao { right: auto; left: -6px; }
+[dir="rtl"] .hangTongBuBiaoJi { left: auto; right: -7px; }
+[dir="rtl"] .provXiaLaBtn::after { right: auto; left: 10px; }
+[dir="rtl"] .hang .av.langDuZhongAv::after, [dir="rtl"] .lieBiaoHang .av.langDuZhongAv::after { right: auto; left: -2px; }
+[dir="rtl"] #anNiuYuYin.zhengLiZhong::after { right: auto; left: 7px; }
+[dir="rtl"] .xingDongHang.isRun::before { left: auto; right: 0; }
+[dir="rtl"] .xingDongHang.isFail::before { left: auto; right: 0; }
+[dir="rtl"] .xingDongHang.isStopped::before { left: auto; right: 0; }
+[dir="rtl"] .zhongJianKa[open] > summary { right: auto; left: 5px; }
+[dir="rtl"] .banMaTou { left: auto; right: -26px; }
+[dir="rtl"] .waiJiaNeiRong::after { left: auto; right: 0; }
+[dir="rtl"] .waiBuBianJiTiao { right: auto; left: 18px; }
+[dir="rtl"] .scrollDiAnNiu { right: auto; left: 22px; }
+[dir="rtl"] .newXiaoXiBubble { right: auto; left: 22px; }
+[dir="rtl"] .wangLuoHostDetectBtn.isBusy::before { left: auto; right: 10px; }
+/* 进度条动画从右往左生长 */
+[dir="rtl"] .laQuJinDuTiao { left: auto; right: -40%; animation-name: laQuJinDuRtl; }
+@keyframes laQuJinDuRtl { 0% { right: -40%; } 100% { right: 100%; } }
+[dir="rtl"] .laQuJinDuTiao.ting { left: auto; right: 31%; }
+/* 方向性图标/箭头镜像（圆点、竖线、时钟等不镜像） */
+[dir="rtl"] .mianBanKaiGuan .jianTou { transform: scaleX(-1); }
+[dir="rtl"] .mianBanKaiGuan.daKai .jianTou { transform: scaleX(-1) rotate(90deg); }

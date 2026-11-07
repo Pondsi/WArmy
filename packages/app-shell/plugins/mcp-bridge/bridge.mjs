@@ -68,9 +68,14 @@ export class StdioMcpClient {
     this.command = String(opts.command || '');
     this.args = Array.isArray(opts.args) ? opts.args.map(String) : [];
     this.cwd = opts.cwd ? path.resolve(String(opts.cwd)) : process.cwd();
+    /** T148 监管：子进程 env 白名单（API Key 等不下发给第三方 server）；`envWhitelist: false` 可关闭（自测/兼容用） */
+    const ENV_BIAO = new Set(['path','pathext','temp','tmp','systemroot','windir','comspec','systemdrive','computername','username','userdomain','userprofile','homedrive','homepath','home','appdata','localappdata','allusersprofile','programdata','programfiles','programfiles(x86)','number_of_processors','os','processor_architecture','public','lang','lc_all','tz','node_env','node_options','node_path','electron_run_as_node']);
+    const jiChuEnv = opts.envWhitelist === false
+      ? process.env
+      : Object.fromEntries(Object.entries(process.env).filter(([k]) => ENV_BIAO.has(String(k).toLowerCase())));
     this.env = opts.env && typeof opts.env === 'object'
-      ? { ...process.env, ...Object.fromEntries(Object.entries(opts.env).map(([k, v]) => [String(k), String(v)])) }
-      : process.env;
+      ? { ...jiChuEnv, ...Object.fromEntries(Object.entries(opts.env).map(([k, v]) => [String(k), String(v)])) }
+      : jiChuEnv;
     this.timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : DEFAULT_TIMEOUT_MS;
     this.maxLineBytes = 8 * 1024 * 1024;
 

@@ -12,6 +12,14 @@ export type { ZhengjuMaodian };
 export type ZhishiCeng = 'session' | 'internal' | 'private';
 export const ZHISHI_CENG: readonly ZhishiCeng[] = ['session', 'internal', 'private'];
 
+/**
+ * T146：@ 下拉同款搜索打分器（由宿主注入，knowledge-base 不依赖拼音表）。
+ * 形态：0 名字前缀 / 1 拼音（罗马字）首字母前缀 / 2 全拼前缀 / 3 包含 / 4 未命中。
+ */
+export type MingSouSuoFen = (ming: string, q: string) => number;
+let mingSouSuoFen: MingSouSuoFen | null = null;
+export function sheMingSouSuoFen(fn: MingSouSuoFen | null): void { mingSouSuoFen = fn; }
+
 export type ShitiLeixing = 'person' | 'org' | 'material' | 'place' | 'concept' | 'tool' | 'project';
 
 export interface Shiti {
@@ -294,15 +302,35 @@ export class KnowledgeBase {
   /** 统一检索入口 */
   query(q: string): { entities: Shiti[]; events: ZhishiShijian[] } {
     const s = q.trim().toLowerCase();
+    /** T146：@ 下拉同款匹配打分（0 前缀 / 1 拼音首字母 / 2 全拼 / 3 包含 / 4 未命中）。
+     *  没注入打分器时退化为前缀 0、包含 3、其余 4 —— 与 souSuoZhuYao 同形。 */
+    const fenMing = (ming: string): number => {
+      if (!s) return 0;
+      if (mingSouSuoFen) {
+        try { return mingSouSuoFen(ming, s); } catch { /* 打分器坏了退化为包含 */ }
+      }
+      const n = ming.toLowerCase();
+      return n.startsWith(s) ? 0 : n.includes(s) ? 3 : 4;
+    };
     const entities = [...this.entities.values()].filter(
-      (e) => e.ming.toLowerCase().includes(s) || JSON.stringify(e.attrs).toLowerCase().includes(s)
+      (e) => fenMing(e.ming) <= 3 || JSON.stringify(e.attrs).toLowerCase().includes(s)
     );
     const events = [...this.events.values()].filter(
       (e) =>
-        e.biaoTi.toLowerCase().includes(s) ||
+        fenMing(e.biaoTi) <= 3 ||
         (e.result || '').toLowerCase().includes(s) ||
         (e.tool || '').toLowerCase().includes(s)
     );
+    if (s) {
+      /** 命中方式越靠前（0→3）越排前；正文/属性包含命中排在名字命中之后 */
+      const fenE = (e: Shiti) => { const f = fenMing(e.ming); return f <= 3 ? f : 4; };
+      const fenV = (e: ZhishiShijian) => {
+        const f = fenMing(e.biaoTi);
+        return f <= 3 ? f : ((e.result || '').toLowerCase().includes(s) || (e.tool || '').toLowerCase().includes(s)) ? 4 : 5;
+      };
+      entities.sort((a, b) => fenE(a) - fenE(b));
+      events.sort((a, b) => fenV(a) - fenV(b));
+    }
     return { entities, events };
   }
 

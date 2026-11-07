@@ -1,12 +1,12 @@
 {
-  "version": "0.2.33",
-  "notes": "WArmy 0.2.33: corrects full-disk search wording so the approval card and status line describe the background index plus on-demand scan; search providers remain off by default; scoped cross-session search and 429 handling included.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.2.33/WArmy-Setup-0.2.33.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.2.33/WArmy-Setup-0.2.33.exe",
-  "sha256": "03f0b484fc00db4d678b6b7f9d9f16fda4c4449225af21234df38c5c47e91073",
-  "size": 228775742,
+  "version": "0.4.0",
+  "notes": "WArmy 0.4.0: 27 fully retranslated locale packs with consistent terminology, corrected Esperanto persona and legal text, RTL layout fixes for Arabic and Persian, refreshed first-run and settings copy, and the full-disk search wording change so the approval card and status line describe the background index plus on-demand scan. Search providers remain off by default.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.0/WArmy-Setup-0.4.0.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.0/WArmy-Setup-0.4.0.exe",
+  "sha256": "2cdb6ba96e9e0ab399d69449f603b74f4a201eaca20113c01d018e1b145c39c6",
+  "size": 234139102,
   "mandatory": false,
-  "publishedAt": "2026-10-31T13:59:00.000Z",
+  "publishedAt": "2026-11-07T19:00:00.000Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.2.33"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.0"
 }

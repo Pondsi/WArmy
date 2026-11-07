@@ -45,8 +45,9 @@ import {
 } from '@warmy/providers';
 import { ComfyUiKeHu } from '@warmy/providers';
 import { CcrGateway } from '@warmy/ccr-compressor';
-import { KnowledgeBase, ZhishiCang, ZHISHI_CENG, type ZhishiCeng } from '@warmy/knowledge-base';
+import { KnowledgeBase, ZhishiCang, ZHISHI_CENG, sheMingSouSuoFen, type ZhishiCeng } from '@warmy/knowledge-base';
 import { paiFaZiYuanJian, panDuanPaiFa } from './pai-fa-pan-ding.js';
+import { McpGuanWang } from './mcp-gateway.js';
 import { guSuanZhongYaoFuZa, panDuanNanZa, jiCongWenBen, type NanYiDuJieGuo } from './nan-yi-du.js';
 import { guSuanMoXingQiangDu, guSuanMoXingSuDu, zuiQiangMoXing, zuiKuaiMoXing } from './mo-xing-qiang-du.js';
 import { panDuanTingZhi } from './chang-wen-ting-zhi.js';
@@ -205,6 +206,9 @@ import {
   duDocx, duPptx, zhuaQuWangZhi, xiaZaiWenJian,
   type AnquanDang,
 } from './agent-tools.js';
+import { SshCaoZuo } from './ssh-ops.js';
+import { YuanChengKongZhi, type RcDevice, type RcSession } from './remote-control.js';
+import { BeiKongSanJianTao } from './rc-overlay.js';
 import { jueCeMoXing, jieMoXingMing, qiYongLian, type MoXingJueCeShuRu } from './model-pick.js';
 import { taoTtsChatBody, jieXiTtsChatResponse, taoAsrChatBody, jieXiAsrChatResponse, yingGaiHuanChatShi, guiFanAsrGeShi, jieShouGeShi, yanShouGeShi, jianBieGeShi } from '@warmy/providers';
 import { daKaiZhiNengPeiZhi } from './smart-config.js';
@@ -1829,7 +1833,7 @@ function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
     }
   }
   /** 新话题判断：用户消息进入时刷新话题起点（换题设点 / 回题清除 / 超 30 分钟设点） */
-  if (tiaoMu.role === 'user') shuaXinHuaTi(key, String(tiaoMu.content || ''), Number(tiaoMu.seq) || 0);
+  if (tiaoMu.role === 'user') void shuaXinHuaTi(key, String(tiaoMu.content || ''), Number(tiaoMu.seq) || 0);
   const shuZu = chatLogs.get(key);
   if (shuZu) shuZu.push(tiaoMu);
   else chatLogs.set(key, [tiaoMu]);
@@ -2398,14 +2402,19 @@ function zhiXingZheYuSuanBaiFenBi(instId?: string): { percent: number; laiYuan: 
 function kbHardReadLayers(sessionId: string): ZhishiCeng[] {
   try {
     const sid = String(sessionId || '');
+    /**
+     * R132 用户口径（替代 R52 矩阵 + R131 授权勾选）：
+     *  · 我的牛马会话：**总是全部三层**（卡片不给勾选）；
+     *  · 群聊/项目：本会话的牛马与成员可见层 = 知识库卡「可被其他人读」勾选集
+     *    （默认：项目=会话+项目；群聊=会话。勾了私密就能看私密）；
+     *  · 联系人（无知识库卡）/判不出：只有会话层。
+     */
+    if (shiFouWoDeNiuMa(sid)) return ['private', 'internal', 'session'];
     const g = groupStore?.getGroup?.(sid) as { type?: string } | undefined;
-    if (g) return g.type === 'internal' ? ['internal', 'session'] : ['session'];
-    const lie = (settingsStore?.load() as { instances?: Array<Record<string, unknown>> } | undefined)?.instances || [];
-    const ben = lie.find((x) => String(x?.id || '') === sid);
-    if (ben) {
-      /** 「允许查看私密知识库」是**读**权限，默认不勾；没勾就连列表里都不出现这一层 */
-      const yunXu = ben.privateKb === true;
-      return yunXu ? ['private', 'internal', 'session'] : ['internal', 'session'];
+    if (g) {
+      const kai = kbDuiWaiKaiFang(sid);
+      const lie = (['private', 'internal', 'session'] as ZhishiCeng[]).filter((c) => kai[c]);
+      return lie.length ? lie : ['session'];
     }
     return ['session'];
   } catch {
@@ -4337,17 +4346,95 @@ function jiYiZuoYongYu(sessionId: string): { groupId: string } | undefined {
  * 为了一个可选能力把核心能力全关掉是错的方向（那时用户看到的就是"牛马不能干活"）。
  * 工具启停（设置→工具）在这里生效：停掉的工具模型就看不到。
  */
+/** T148：MCP 监管网关（懒启动；没配 mcp-servers.json 时 0 个工具、无副作用） */
+let _mcpGuanWang: import('./mcp-gateway.js').McpGuanWang | null = null;
+/** R136：SSH 远程通道（懒启动；对接没装 WArmy 的设备的 sshd） */
+let _sshCaoZuo: SshCaoZuo | null = null;
+function sshCaoZuo(): SshCaoZuo {
+  if (!_sshCaoZuo) _sshCaoZuo = new SshCaoZuo(app.getPath('userData'));
+  return _sshCaoZuo;
+}
+/** R136+：远程控制（WArmy 互联）——独立设备列表 + 会话；被控三件套窗口 */
+let _yuanChengKongZhi: YuanChengKongZhi | null = null;
+function rc(): YuanChengKongZhi {
+  if (!_yuanChengKongZhi) _yuanChengKongZhi = new YuanChengKongZhi(app.getPath('userData'));
+  return _yuanChengKongZhi;
+}
+const rcSanJianTao = new BeiKongSanJianTao();
+/** 远程执行结果等待表（qid → resolve；请求端用） */
+const rcqDengDai = new Map<string, (r: Record<string, unknown>) => void>();
+/** 屏幕帧接收：控制端会话 id → 查看窗 */
+let rcChaKanChuang: BrowserWindow | null = null;
+/** 被控端屏幕推流循环（rc-screen-req on 时开，off/会话结束时关） */
+let rcTuiLiuTimer: NodeJS.Timeout | null = null;
+let rcTuiLiuDuiXiang: { fp: string; sid: string } | null = null;
+function rcTuiLiuKai(fp: string, sid: string) {
+  rcTuiLiuDuiXiang = { fp, sid };
+  if (rcTuiLiuTimer) return;
+  // 低帧率低画质：1 秒 1 帧、宽 1280、JPEG q40 —— 加密通道带宽友好
+  rcTuiLiuTimer = setInterval(async () => {
+    const dx = rcTuiLiuDuiXiang;
+    if (!dx) return;
+    try {
+      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1280, height: 720 } });
+      const src = sources[0];
+      if (!src) return;
+      const jpeg = src.thumbnail.toJPEG(40);
+      const peer = duiduanYinyong().find((p) => p.zhiWen && zhiWenXiangTong(p.zhiWen, dx.fp));
+      if (peer) {
+        void secureMesh?.sendToHost(peer.host, peer.port, {
+          to: '*', channel: 'control',
+          payload: { type: 'rc-screen-frame', rc: { sid: dx.sid, jpeg: jpeg.toString('base64'), ts: Date.now() } },
+        }, { expectFingerprints: [dx.fp], keepOpen: true });
+      }
+    } catch { /* 抓帧失败不停止循环，下帧再试 */ }
+  }, 1000);
+}
+function rcTuiLiuGuan() {
+  if (rcTuiLiuTimer) { clearInterval(rcTuiLiuTimer); rcTuiLiuTimer = null; }
+  rcTuiLiuDuiXiang = null;
+}
+function mcpGuanWang(): import('./mcp-gateway.js').McpGuanWang {
+  if (!_mcpGuanWang) {
+    _mcpGuanWang = new McpGuanWang({
+      onShouQuan: async (sid, gongJuMing, canShuJson) => {
+        if (anQuanDangWei().full) return true;
+        const da = await qingQiuKaPian(sid, 'AI 请求调用第三方 MCP 工具',
+          `${gongJuMing}\n参数：${canShuJson.slice(0, 300)}\n（第三方服务器，内容未审计；拒绝 = 不调用）`,
+          [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+        return /同意/.test(da);
+      },
+      onShenJi: (lei, shuJu) => { try { audit?.log(lei, shuJu); } catch { /* noop */ } },
+      chaZhao: (() => {
+        const gen = app.getAppPath();
+        return [
+          path.join(app.getPath('userData'), 'scan-dirs', 'plugins', 'mcp-bridge'),
+          path.join(gen, 'plugins', 'mcp-bridge'),
+          path.join(gen, 'packages', 'app-shell', 'plugins', 'mcp-bridge'),
+          path.join(process.cwd(), 'plugins', 'mcp-bridge'),
+          path.join(process.cwd(), 'packages', 'app-shell', 'plugins', 'mcp-bridge'),
+        ];
+      })(),
+    });
+  }
+  return _mcpGuanWang;
+}
+
 async function zuJingGongJuGuiGe(sessionId: string, xiaoDiShangXian: number, jiyiJiuxu: boolean, keGanHuo: boolean, zuiDuo = 0): Promise<GongJuGuiGe[]> {
   const jiyiTools: GongJuGuiGe[] = jiyiJiuxu ? (memoryToolSpecs(toolLabels()) as unknown as GongJuGuiGe[]) : [];
   const ganHuoTools = keGanHuo
     ? ([...workToolSpecs(), ...hostToolSpecs(), ...(xiaoDiShangXian > 0 ? (xiaoDiToolSpecs() as unknown as GongJuGuiGe[]) : [])] as unknown as GongJuGuiGe[])
     : [];
+  /** T148：第三方 MCP 工具（经监管网关过滤/标记后并入）；没配置时为空 */
+  const mcpTools: GongJuGuiGe[] = await (async () => {
+    try { await mcpGuanWang().dong(); return mcpGuanWang().gongJuGuiGe() as unknown as GongJuGuiGe[]; } catch { return []; }
+  })();
   const ziDing = ziDingGongJuJiQu().filter((g) => gongJuKeJian(g.name));
   const ziDingGuiGe = ziDing.map((g) => ({
     type: 'function' as const,
     function: { name: g.name, description: g.description || `自定义工具：${g.name}`, parameters: g.parameters },
   })) as unknown as GongJuGuiGe[];
-  const quan = [...ganHuoTools, ...jiyiTools, ...ziDingGuiGe].filter((g) => gongJuKeJian(g.function.name));
+  const quan = [...ganHuoTools, ...jiyiTools, ...ziDingGuiGe, ...mcpTools].filter((g) => gongJuKeJian(g.function.name));
   /**
    * **窗口装不下整套工具规格时按档位截尾**（`gong-ju-fen-dang.ts`，计价侧与发送侧同调这一个函数）：
    * 用户这一轮点名/明显要用的工具与最小干活集永远不许被裁 —— 裁到连活都干不了、或者把用户点名的工具裁掉，比超预算更坏。
@@ -4367,6 +4454,7 @@ function quanBuGongJuMing(): string[] {
     return [
       ...workToolSpecs(), ...hostToolSpecs(), ...(memoryToolSpecs(toolLabels()) as unknown as GongJuGuiGe[]),
       ...(xiaoDiToolSpecs() as unknown as GongJuGuiGe[]),
+      ...(mcpGuanWang().gongJuGuiGe() as unknown as GongJuGuiGe[]),
     ].map((g) => String((g as { function?: { name?: string } }).function?.name || '')).concat(ziDingGongJuJiQu().map((g) => g.name)).filter(Boolean);
   } catch { return []; }
 }
@@ -4990,7 +5078,7 @@ async function yunXingLiaoTianXunHuan(
         fachuKongzhitai({ cat: 'tool', code: 'tool.finish', data: { tool: gongJuMing, round: ctx.round, sessionId, ok: true, chars: huiBao.length, ms: Date.now() - t1 } });
         return jieGuoShouWei(huiBao, ctx.zuiDaJieGuoZiShu, gongJuMing);
       }
-      if (isHostTool(gongJuMing) || ziDingGongJuJiQu().some((g) => g.name === gongJuMing)) {
+      if (isHostTool(gongJuMing) || gongJuMing.startsWith('mcp__') || ziDingGongJuJiQu().some((g) => g.name === gongJuMing)) {
         /**
          * 宿主工具：打开文件/网页、登记定时任务。
          * 权限：普通/严格授权下 open_path 只允许**工作区内**；完全授权才放开任意本机路径。
@@ -5865,6 +5953,148 @@ async function yunXingLiaoTianXunHuan(
               benCiRenWuGongJu.set(kOpen, jiOpen);
             }
             }
+          } else if (gongJuMing === 'remote_ssh') {
+            /**
+             * R136：SSH 远程通道 —— 对接**没装 WArmy 的设备**（对方开 sshd 即可）。
+             * 网络可达性由用户自己解决（局域网/VPN/端口转发均可），本工具只做 SSH 客户端。
+             * 门禁三重：目标在注册表（白名单）+ 每次弹授权卡（完全授权档自动放行）+ 全程审计。
+             */
+            const dongZuo = String(argsH.action || 'run').toLowerCase();
+            const muBiaoId = String(argsH.target || '').trim();
+            const ssh = sshCaoZuo();
+            if (dongZuo === 'list') {
+              const lie = ssh.lieBiao();
+              huiBaoH = `[remote_ssh] 已登记目标 ${lie.length} 个：\n` + (lie.length
+                ? lie.map((t) => `${t.id} | ${t.ming} | ${t.user}@${t.host}:${t.port} | ${t.renZheng}`).join('\n')
+                : '（空——用户可在设置里登记 SSH 目标）');
+              okH = true;
+            } else {
+              const t = ssh.lieBiao().find((x) => x.id === muBiaoId || x.ming === muBiaoId);
+              if (!t) {
+                okH = false;
+                huiBaoH = `[remote_ssh] 拒绝：目标「${muBiaoId}」不在登记列表（白名单）。先用 action=list 查看可用目标。`;
+                try { audit?.log('ssh.unknown-target', { sessionId, target: muBiaoId.slice(0, 80) }); } catch { /* noop */ }
+              } else {
+                const quanOk = anQuanDangWei().full || /同意/.test(await qingQiuKaPian(
+                  sessionId,
+                  'AI 请求 SSH 远程操作',
+                  `目标：${t.ming}（${t.user}@${t.host}:${t.port}）\n动作：${dongZuo}${dongZuo === 'run' ? `\n命令：${String(argsH.command || '').slice(0, 300)}` : ''}\n（拒绝 = 不执行）`,
+                  [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }],
+                ));
+                if (!quanOk) {
+                  okH = false;
+                  huiBaoH = huiBaoJuJue(sessionId, 'remote_ssh', 'yongHu', '');
+                } else if (dongZuo === 'test') {
+                  const r = await ssh.ceShi(t.id);
+                  okH = r.ok;
+                  huiBaoH = `[remote_ssh] 连接${r.ok ? '正常' : '失败'}${r.ms ? `（${r.ms}ms）` : ''}${r.error ? `\n${r.error}` : ''}`;
+                } else if (dongZuo === 'run') {
+                  const r = await ssh.yuanChengMingLing(t.id, String(argsH.command || ''), { timeoutMs: Number(argsH.timeoutMs) || 60000 });
+                  okH = r.ok;
+                  huiBaoH = `[remote_ssh] exit=${r.code} (${r.ms}ms, ${r.fangShi})\n${r.stdout}${r.stderr ? '\n[stderr] ' + r.stderr : ''}`;
+                } else if (dongZuo === 'get' || dongZuo === 'put') {
+                  const yuan = String(argsH.remotePath || '').trim();
+                  const mu = String(argsH.localPath || '').trim();
+                  if (!yuan || !mu) {
+                    okH = false;
+                    huiBaoH = '[remote_ssh] get/put 需要 remotePath 与 localPath';
+                  } else {
+                    const r = await ssh.chuanWenJian(t.id, dongZuo === 'get' ? 'get' : 'put', yuan, mu, { timeoutMs: Number(argsH.timeoutMs) || 120000 });
+                    okH = r.ok;
+                    huiBaoH = `[remote_ssh] scp ${dongZuo} exit=${r.code} (${r.ms}ms)\n${r.stdout}${r.stderr ? '\n[stderr] ' + r.stderr : ''}`;
+                  }
+                } else {
+                  okH = false;
+                  huiBaoH = `[remote_ssh] 未知动作：${dongZuo}（run|get|put|list|test）`;
+                }
+                try { audit?.log('ssh.exec', { sessionId, target: t.id, action: dongZuo, ok: okH }); } catch { /* noop */ }
+              }
+            }
+          } else if (gongJuMing === 'supervise_worker') {
+            /**
+             * R137：子代理/执行者督导（真机教训：盲等子代理、假进度、卡死无人管）。
+             * 三面：执行者状态（含疑似卡死检测）+ 派遣记录 + 历史胜任度（派遣经验统计）。
+             */
+            const zhiShui = String(argsH.workerId || '').trim();
+            const xianZai = Date.now();
+            const zhiXing = executorStatus
+              .filter((x) => !zhiShui || x.id === zhiShui)
+              .slice(-10)
+              .map((x) => ({
+                id: x.id, ming: x.ming, brief: String(x.brief || '').slice(0, 120),
+                status: x.status, durationMs: x.durationMs,
+                lastTs: new Date(x.ts).toLocaleString('zh-CN', { hour12: false }),
+                // 假进度/卡死检测：running 但超过 3 分钟没有新动态（ts 不更新）
+                yiChang: x.status === 'running' && (xianZai - x.ts) > 180000 ? '疑似卡死（超过 3 分钟无新动态）' : '',
+              }));
+            const paiJiLu: Array<{ ts: string; muDi: string; renWu: string; jieGuo: string }> = [];
+            for (const arr of ziLiPaiQianJiLu.values()) {
+              for (const r of arr) {
+                if (zhiShui && !String(r.renWu).includes(zhiShui) && !String(r.muDi).includes(zhiShui)) continue;
+                paiJiLu.push({
+                  ts: new Date(r.ts).toLocaleString('zh-CN', { hour12: false }),
+                  muDi: String(r.muDi || '').slice(0, 40),
+                  renWu: String(r.renWu || '').slice(0, 120),
+                  jieGuo: String(r.jieGuo || '（进行中/未回填）').slice(0, 120),
+                });
+              }
+            }
+            // 胜任度：从派遣经验文件统计成败行（结果列含 成/绿/好/通过 记 +1；败/红/崩/超时 记 -1）
+            let jingYanHang: string[] = [];
+            const cheng = { hao: 0, huai: 0 };
+            try {
+              const s = fs.readFileSync(ziLiJingYanLu(), 'utf8');
+              jingYanHang = s.split(/\r?\n/).filter((l) => /^\|/.test(l)).slice(-12);
+              for (const l of jingYanHang) {
+                if (/成|绿|好|通过|成功/.test(l)) cheng.hao++;
+                if (/败|红|崩|超时|截断|失败/.test(l)) cheng.huai++;
+              }
+            } catch { /* 没有经验文件 = 新环境 */ }
+            const pingFen = (cheng.hao + cheng.huai) === 0 ? '暂无历史（新）'
+              : `${(cheng.hao / (cheng.hao + cheng.huai) * 100).toFixed(0)}% 成功率（成功 ${cheng.hao} / 失败 ${cheng.huai}）`;
+            huiBaoH = `[supervise_worker]\n` + JSON.stringify({
+              zhixingzhe: zhiXing,
+              paiqian_jilu: paiJiLu.slice(-12),
+              shengrendu: pingFen,
+              jingYan_zuijin: jingYanHang.slice(-6),
+              jianyi: zhiXing.some((x) => x.yiChang)
+                ? '有执行者疑似卡死：请发消息催进度或停止后换更小的任务重派（用 split_task 拆小）'
+                : '执行者正常推进；派小弟后每隔几分钟用本工具看一眼，不要盲等',
+            }, null, 1);
+            okH = true;
+            try { audit?.log('worker.supervise', { sessionId, worker: zhiShui || 'all', stale: zhiXing.filter((x) => x.yiChang).length }); } catch { /* noop */ }
+          } else if (gongJuMing === 'split_task') {
+            /** R137：任务拆解器（真机教训：大任务一次性派发 → 截断/假进度/超时崩） */
+            const renWu = String(argsH.task || '').trim().slice(0, 3000);
+            const maxDanYuan = Math.min(15, Math.max(1, Number(argsH.maxUnits) || 15));
+            if (!renWu) {
+              okH = false;
+              huiBaoH = '[split_task] 请给出 task';
+            } else {
+              const danYuan: string[] = [];
+              // 启发式拆分：按 换行/分号/。/；/、 切分出可独立交付的片段
+              for (const seg of renWu.split(/[\n;；。]+/)) {
+                const s2 = seg.trim();
+                if (s2.length >= 4) danYuan.push(s2);
+              }
+              const quShang = Math.min(maxDanYuan, Math.max(1, danYuan.length));
+              const lie = [];
+              for (let i = 0; i < quShang; i++) {
+                lie.push({
+                  id: i + 1,
+                  danYuan: danYuan[i] || `（把任务拆成 ${quShang} 个单元之一——请自行细化）`,
+                  yanShou: '完成的可验证产物（文件/条目/结果）',
+                  jianChaDian: (i + 1) % 5 === 0 ? `✅ 检查点 ${Math.ceil((i + 1) / 5)}：落盘一次并 JSON/语法自检（写多少交多少）` : '',
+                });
+              }
+              huiBaoH = `[split_task] 请按下面的结构执行（≤${maxDanYuan} 单元 + 每 5 单元落盘自检）：\n`
+                + JSON.stringify(lie, null, 1)
+                + `\n规则：① 每个单元独立可交付，不许「写一半先放着」；② 每完成 5 个单元就落盘一次并自检（增量交付）；`
+                + `③ 某单元失败/被内容过滤拦截时：换中性措辞重试一次，仍失败就跳过该单元继续下一个，最后如实报告缺口；`
+                + `④ 派子代理时一个子代理只带 5~15 个单元的子集，不要把全量塞给一个子代理。`;
+              okH = true;
+              try { audit?.log('task.split', { sessionId, units: quShang }); } catch { /* noop */ }
+            }
           } else if (gongJuMing === 'check_safety') {
             const cmd = String(argsH.command || '');
             const p0 = String(argsH.path || '');
@@ -6192,6 +6422,29 @@ async function yunXingLiaoTianXunHuan(
               ? `[nm_browser] ${String(rNb.action || argsH.action || '')} 成功：${JSON.stringify(rNb)}`
               : `[nm_browser] 失败：${String(rNb.cuo || '未知原因')}`;
             try { audit?.log('nm.browser', { sessionId, action: String(argsH.action || ''), ok: !!rNb.ok }); } catch { /* noop */ }
+          } else if (gongJuMing === 'screen_view') {
+            /** T147/N6：牛马看屏幕（分层：uia → ocr → look）。隐私敏感 ⇒ 每次经用户授权（完全授权档自动放行） */
+            const moShi = String(argsH.mode || 'auto').toLowerCase();
+            const muBiao = String(argsH.target || '').trim();
+            const tiWen = String(argsH.question || '').trim();
+            const quanOk = anQuanDangWei().full || /同意/.test(await qingQiuKaPian(
+              sessionId, 'AI 请求查看屏幕',
+              `模式：${moShi}${muBiao ? `（过滤：${muBiao}）` : ''}。看屏幕会采集桌面内容（隐私敏感），截屏会存到本机 screenshots 目录。（拒绝 = 不查看）`,
+              [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }],
+            ));
+            if (!quanOk) {
+              okH = false;
+              huiBaoH = huiBaoJuJue(sessionId, 'screen_view', 'yongHu', '');
+            } else {
+              okH = true;
+              huiBaoH = `[screen_view]\n${await zhiXingKanPingMu(moShi, muBiao, tiWen)}`;
+            }
+            try { audit?.log('screen.view', { sessionId, mode: moShi, ok: okH }); } catch { /* noop */ }
+          } else if (gongJuMing.startsWith('mcp__')) {
+            /** T148：第三方 MCP 工具 —— 一律经监管网关（白名单/限速/授权/注入扫描/审计都在网关里） */
+            const rMcp = await mcpGuanWang().diaoYong(gongJuMing, argsH, String(sessionId || ''));
+            okH = rMcp.ok;
+            huiBaoH = rMcp.wen;
           } else if (gongJuMing === 'download_file') {
             const url = String(argsH.url || '').trim();
             const wlX4 = wangLuoMoShiQu();
@@ -7752,12 +8005,13 @@ function contextBudgetChars(modelId?: string, yangBenWen?: string, gongYingFen?:
  * 第 122 轮：**新话题判断**（用户要求）—— 判定为新话题后，**只把话题起点之后的内容注入模型上下文**，
  * 旧话题内容不传递（避免无关上下文干扰）；需要时模型可用 recall/retrieve 工具查回全部历史。
  *
- * 判定（启发式，不花模型调用）：
+ * 判定（第 129 轮升级：启发式快速路径 + 模型判定兜底）：
  *  · 会话第一条用户消息 = 话题起点；
  *  · 距上一条用户消息超过 30 分钟 = 新话题；
  *  · 以「换题词」开头（换个话题 / 另外 / 对了 / 话说回来 / 新话题 / 先不说这个 / 不聊这个 / 说点别的）= 新话题；
  *  · 以「回题词」开头（回到之前 / 继续刚才 / 继续之前 / 回到最初 / 接着刚才 / 刚才那个 / 回到正题）= **回到旧话题，
  *    清除话题起点**（恢复全量上下文）——对应「中途插入无关对话、之后又回到最初对话」的场景。
+ *  · 以上都判不出时：调分类链专业模型判定（new/same/return），失败/节流内保持现状。
  */
 const huaTiQiDian = new Map<string, number>();
 /**
@@ -7787,7 +8041,39 @@ function duHuaTiFanKuiCi(): void {
 try { duHuaTiFanKuiCi(); } catch { /* noop */ }
 const HUA_TI_HUAN = /^\s*(换个?话题|另外[,，]?|对了[,，]?|话说回来|新话题|先不说这个|不聊这个|说点别的)/;
 const HUA_TI_HUI = /^\s*(回到?之前|继续刚才|继续之前|回到最初|接着刚才|刚才那个|回到?正题)/;
-function shuaXinHuaTi(key: string, wenBen: string, seq: number): void {
+/** 同一会话模型判定的节流（10 秒内不重复调，控制成本；模糊情况才值得花） */
+const huaTiMoXingJieLiu = new Map<string, number>();
+/**
+ * 第 129 轮（用户要求）：模糊情况（启发式判不出）改用**模型判定**是否开新话题。
+ * 走分类链（fenLei）专业模型；没配/失败/节流内 ⇒ 返回 null，调用方保持现状（不设点不清点）。
+ */
+async function huaTiMoXingPanDing(sid: string, wen: string): Promise<'new' | 'same' | 'return' | null> {
+  try {
+    const zuo = huaTiMoXingJieLiu.get(sid) || 0;
+    if (Date.now() - zuo < 10 * 1000) return null;
+    huaTiMoXingJieLiu.set(sid, Date.now());
+    const qiDian = huaTiQiDian.get(sid) || 0;
+    const arr = chatLogs.get(sid) || [];
+    const benHuaTi = arr
+      .filter((e) => Number((e as { seq?: number }).seq || 0) >= qiDian && (e as { role?: string }).role === 'user')
+      .map((e) => String((e as { content?: unknown }).content || ''))
+      .join('\n')
+      .slice(0, 600);
+    const txt = await wenTeShuMoXing('fenLei', [
+      {
+        role: 'system',
+        content: '判断用户最新一条消息是否开启了与之前对话无关的新话题。'
+          + '最新消息延续或回应之前的话题输出 same；转向完全无关的新话题输出 new；明确要回到更早话题输出 return。'
+          + '只输出 JSON：{"judge":"new"|"same"|"return"}，不要解释。',
+      },
+      { role: 'user', content: '【当前话题内容】\n' + (benHuaTi || '（无）') + '\n\n【最新消息】\n' + String(wen || '').slice(0, 300) },
+    ], 64);
+    if (!txt) return null;
+    const m = String(txt).match(/"judge"\s*:\s*"(new|same|return)"/);
+    return m ? (m[1] as 'new' | 'same' | 'return') : null;
+  } catch { return null; }
+}
+async function shuaXinHuaTi(key: string, wenBen: string, seq: number): Promise<void> {
   try {
     const sid = String(key || '');
     if (!sid) return;
@@ -7805,6 +8091,18 @@ function shuaXinHuaTi(key: string, wenBen: string, seq: number): void {
     if (shouTiao || jiuGe || HUA_TI_HUAN.test(wen) || huanCi) {
       huaTiQiDian.set(sid, Number(seq) || 0);
       huaTiFanKuiJiLu.set(sid, [...(huaTiFanKuiJiLu.get(sid) || []), { ts: Date.now(), panDuan: '换题（设起点 seq ' + String(seq) + '）：' + wen.slice(0, 40) }]);
+      return;
+    }
+    // 模糊情况：模型判定（第 129 轮升级；失败/节流 = 保持现状）
+    const j = await huaTiMoXingPanDing(sid, wen);
+    if (j === 'new') {
+      huaTiQiDian.set(sid, Number(seq) || 0);
+      huaTiFanKuiJiLu.set(sid, [...(huaTiFanKuiJiLu.get(sid) || []), { ts: Date.now(), panDuan: '换题（模型判定，seq ' + String(seq) + '）：' + wen.slice(0, 40) }]);
+    } else if (j === 'return') {
+      huaTiQiDian.delete(sid);
+      huaTiFanKuiJiLu.set(sid, [...(huaTiFanKuiJiLu.get(sid) || []), { ts: Date.now(), panDuan: '回题（模型判定，清边界）：' + wen.slice(0, 40) }]);
+    } else if (j === 'same') {
+      huaTiFanKuiJiLu.set(sid, [...(huaTiFanKuiJiLu.get(sid) || []), { ts: Date.now(), panDuan: '同题（模型判定）：' + wen.slice(0, 40) }]);
     }
   } catch { /* 话题判定失败不挡消息写入 */ }
 }
@@ -8545,6 +8843,7 @@ function kanTuMeiKanDao(wen: string): boolean {
 async function kanTuWeiTuoDaiMo(
   tuKuaiJi: Array<{ type: string; image_url?: { url?: string } }>,
   tuMingJi: string[] = [],
+  wenTi: string = '',
 ): Promise<{ jie: string; mo: string } | null> {
   const tuJi = (tuKuaiJi || [])
     .map((b, i) => ({ url: String(b?.image_url?.url || ''), ming: String(tuMingJi[i] || `图片 ${i + 1}`) }))
@@ -8558,7 +8857,7 @@ async function kanTuWeiTuoDaiMo(
       const rr = await p.chat({
         model: mo,
         xiaoXiJi: [{ role: 'user', content: [
-          { type: 'text', text: `请客观、详细地描述这张图片（文件：${t.ming}）：画面内容、能看清的文字/数字（照原样抄出）、布局、颜色与可能含义。看不清的地方如实说看不清。` },
+          { type: 'text', text: (wenTi ? `${wenTi}\n` : '') + `请客观、详细地描述这张图片（文件：${t.ming}）：画面内容、能看清的文字/数字（照原样抄出）、布局、颜色与可能含义。看不清的地方如实说看不清。` },
           { type: 'image_url' as const, image_url: { url: t.url } },
         ] }] as never,
         maxTokens: 900,
@@ -9005,6 +9304,11 @@ async function yindao() {
   const userData = app.getPath('userData');
   board = new KanbanCang(path.join(userData, 'board'));
   knowledge = new ZhishiCang(path.join(userData, 'knowledge'));
+  /** T146：知识库搜索框沿用 @ 下拉同套搜索规则（前缀 → 拼音首字母 → 全拼 → 包含） */
+  try {
+    const { souSuoZhuYao } = await import('./du-yin.js');
+    sheMingSouSuoFen((ming, q) => souSuoZhuYao(ming, q));
+  } catch { /* 拼音表加载失败就退回纯包含匹配 */ }
   duBanDaiHui();
   checkpoints = new JianChaDianCang(path.join(userData, 'checkpoints'));
   // 第 67 轮 项 13：工具写盘前留原件（工作区外也能回档）
@@ -9342,6 +9646,8 @@ async function yindao() {
         joinApproved?: { groupId?: string; ming?: string; kind?: string; token?: string; publicKey?: string; issuerFp?: string; role?: string; creatorMing?: string };
         deviceSync?: { from?: string; fromMing?: string; ts?: number; token?: string; entries?: Array<{ domain: SyncDomain; id: string; kind: string; ts: number; data?: string }>; dels?: Array<{ domain: SyncDomain; id: string; ts: number }> };
         deviceId?: string;
+        kbq?: { qid?: string; from?: string; fromMing?: string; q?: string; sessionId?: string; layers?: string[]; limit?: number; ok?: boolean; reason?: string; entities?: unknown[]; events?: unknown[]; truncated?: boolean };
+        rc?: Record<string, unknown>;
       } | null;
       // R125 任务15：设备同步消息（control 通道）。peerFingerprint 来自握手，冒充不了。
       if (xiaoXi.channel === 'control' && syncService && payload && payload.type) {
@@ -9405,8 +9711,161 @@ async function yindao() {
             syncService.markPeerSeen(fromId, xiaoXi.peerFingerprint);
           } else if (payload.type === 'device-sync-revoke' && payload.deviceId) {
             syncService.onRevokedByPeer(String(payload.deviceId));
+          } else if (payload.type === 'kb-query' && payload.kbq) {
+            /**
+             * T151/T158：mesh 知识库查询应答（docs/mesh-kb-query-protocol.md）。
+             * R132 口径：可查哪些层 = **应答方**在该会话「可被其他人读」的勾选集（私密勾了就能看）；
+             * 未配对/没开远程查询一律 deny。
+             */
+            const qid = String(payload.kbq.qid || '');
+            const peiDui = syncService.state().devices.find((x) => x.fingerprint && zhiWenXiangTong(x.fingerprint, xiaoXi.peerFingerprint) && !x.revoked);
+            const q = String(payload.kbq.q || '').trim().slice(0, 200);
+            const sidQ = String(payload.kbq.sessionId || '');
+            const kaiCeng = kbDuiWaiKaiFang(sidQ);
+            const ceng = (['private', 'internal', 'session'] as ZhishiCeng[]).filter((c) => kaiCeng[c]);
+            const shen = (o: Record<string, unknown>) => {
+              const out: Record<string, unknown> = {};
+              for (const [k, v] of Object.entries(o)) out[k] = (/(token|key|secret|password|credential)/i.test(k) && String(v).length > 4) ? '*****' : v;
+              return out;
+            };
+            const huiZhi = (lei: string, shuJu: Record<string, unknown>) => { try { audit?.log(lei, shuJu); } catch { /* noop */ } };
+            /** R138：远程查询开关（协议铁律：默认关；用户显式开才应答） */
+            const kaiGuan = (() => {
+              try {
+                const all = (settingsStore?.load() as { kbRemoteQuery?: { on?: boolean } } | undefined)?.kbRemoteQuery;
+                return all?.on === true;
+              } catch { return false; }
+            })();
+            if (!kaiGuan) {
+              replyTo({ type: 'kb-query-deny', kbq: { qid, from: localNodeId, reason: 'remote-query-off' } });
+              huiZhi('mesh.kb-query-serve', { deny: 'remote-query-off', peer: xiaoXi.peerFingerprint.slice(0, 12) });
+            } else if (!peiDui) {
+              replyTo({ type: 'kb-query-deny', kbq: { qid, from: localNodeId, reason: 'not-paired' } });
+              huiZhi('mesh.kb-query-serve', { deny: 'not-paired', peer: xiaoXi.peerFingerprint.slice(0, 12) });
+            } else if (!ceng.length || q.length < 2) {
+              replyTo({ type: 'kb-query-deny', kbq: { qid, from: localNodeId, reason: 'bad-layers' } });
+              huiZhi('mesh.kb-query-serve', { deny: 'bad-layers', peer: xiaoXi.peerFingerprint.slice(0, 12) });
+            } else {
+              const limit = Math.min(20, Math.max(1, Number(payload.kbq.limit) || 10));
+              const r = knowledge ? knowledge.queryLayers(ceng, q) : { entities: [], events: [] };
+              const shiTi = (r.entities || []).slice(0, limit).map((e) => ({ id: e.id, ming: e.ming, kind: e.kind, attrs: shen({ ...(e.attrs || {}) }), _ceng: (e as { _ceng?: string })._ceng }));
+              const shiJian = (r.events || []).slice(0, limit).map((e) => ({ id: e.id, biaoTi: e.biaoTi, result: String(e.result || '').slice(0, 200), ts: e.ts, _ceng: (e as { _ceng?: string })._ceng }));
+              replyTo({ type: 'kb-query-ack', kbq: { qid, from: localNodeId, ok: true, layers: ceng, entities: shiTi, events: shiJian, truncated: shiTi.length + shiJian.length >= limit } });
+              huiZhi('mesh.kb-query-serve', { peer: xiaoXi.peerFingerprint.slice(0, 12), qi: q.length, e: shiTi.length, v: shiJian.length });
+            }
+          } else if ((payload.type === 'kb-query-ack' || payload.type === 'kb-query-deny') && payload.kbq?.qid) {
+            /** T151：请求端收口 —— qid 对号入座，超时由 IPC 侧计时器兜底 */
+            const cb = kbqDengDai.get(String(payload.kbq.qid));
+            if (cb) { kbqDengDai.delete(String(payload.kbq.qid)); cb(payload.kbq); }
           }
         } catch { /* 设备同步消息处理异常不阻断其它入站 */ }
+      }
+      /**
+       * R136+：远程控制消息（control 通道；与同步复用 SecureMesh，但独立准入/会话/设备列表）。
+       * 被控端准入 = 远程控制设备列表里「可被该设备远程控制」勾选；信任 = 免授权卡。
+       * 停止按钮/永久拒绝由 BeiKongSanJianTao + YuanChengKongZhi 承担。
+       */
+      if (xiaoXi.channel === 'control' && payload && payload.type && String(payload.type).startsWith('rc-')) {
+        void (async () => {
+        try {
+          const rcP = payload.rc as Record<string, unknown> | undefined;
+          const fp = xiaoXi.peerFingerprint;
+          const replyRc = (msg: Record<string, unknown>) => {
+            try {
+              const peer = duiduanYinyong().find((p) => p.zhiWen && zhiWenXiangTong(p.zhiWen, fp));
+              if (peer) void secureMesh?.sendToHost(peer.host, peer.port, { to: '*', channel: 'control', payload: msg }, { expectFingerprints: [fp], keepOpen: true });
+            } catch { /* noop */ }
+          };
+          const zhun = rc().zhunRu(fp);
+          const duiMing = String(rcP?.fromMing || zhun.device?.ming || fp.slice(0, 12));
+          // —— 被控端：远程执行请求 ——
+          if (payload.type === 'rc-exec-req' && rcP) {
+            const qid = String(rcP.qid || '');
+            if (!zhun.ok || !zhun.device) {
+              replyRc({ type: 'rc-exec-res', rc: { qid, ok: false, reason: zhun.reason || 'denied' } });
+              audit?.log('rc.exec-denied', { peer: fp.slice(0, 12), reason: zhun.reason });
+            } else {
+              const cmd = String(rcP.command || '').slice(0, 2000);
+              let fangXing = zhun.xinRen === true; // 信任 = 免卡
+              if (!fangXing) {
+                const da = await qingQiuKaPian(String(rcP.sessionId || 'rc'), '远程设备请求执行命令',
+                  `设备：${duiMing}\n命令：${cmd.slice(0, 300)}\n（这是你允许被远程控制的设备发起的请求；拒绝 = 不执行）`,
+                  [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+                fangXing = /同意|^yes/i.test(String(da));
+              }
+              if (!fangXing) {
+                replyRc({ type: 'rc-exec-res', rc: { qid, ok: false, reason: 'user-denied' } });
+                audit?.log('rc.exec-denied', { peer: fp.slice(0, 12), reason: 'user-denied' });
+              } else {
+                const hui = rc().kaiHuiHua(zhun.device.id, 'bei');
+                rcSanJianTao.kaiQi({
+                  duiFangMing: duiMing,
+                  kaiShi: hui.kaiShi,
+                  onTingZhi: ({ yongJiuJuJue }) => {
+                    if (yongJiuJuJue) rc().zhongZhiBingJuJue(zhun.device!.id);
+                    else rc().jieShuHuiHua(hui.sid);
+                    replyRc({ type: 'rc-end', rc: { sid: hui.sid, reason: yongJiuJuJue ? 'rejected-forever' : 'stopped' } });
+                    audit?.log('rc.stopped-by-button', { peer: fp.slice(0, 12), yongJiuJuJue });
+                  },
+                });
+                const r2 = await yunXingMingLing(cmd, { cwd: os.homedir(), timeoutMs: Math.min(300000, Number(rcP.timeoutMs) || 60000) });
+                replyRc({ type: 'rc-exec-res', rc: { qid, ok: r2.code === 0, code: r2.code, stdout: r2.stdout, stderr: r2.stderr, ms: r2.ms, sid: hui.sid } });
+                audit?.log('rc.exec-done', { peer: fp.slice(0, 12), ok: r2.code === 0, cmd: cmd.slice(0, 120) });
+              }
+            }
+          // —— 被控端：屏幕查看开关 ——
+          } else if (payload.type === 'rc-screen-req' && rcP) {
+            const on = !!rcP.on;
+            const sid = String(rcP.sid || '');
+            if (!zhun.ok || !zhun.device) {
+              replyRc({ type: 'rc-screen-res', rc: { sid, ok: false, reason: zhun.reason || 'denied' } });
+            } else {
+              const hui = (sid ? rc().huiHua(sid) : undefined) || rc().kaiHuiHua(zhun.device.id, 'bei');
+              rc().shePingMuChaKan(hui.sid, on);
+              if (!rcSanJianTao.visible) {
+                rcSanJianTao.kaiQi({
+                  duiFangMing: duiMing,
+                  kaiShi: hui.kaiShi,
+                  onTingZhi: ({ yongJiuJuJue }) => {
+                    if (yongJiuJuJue) rc().zhongZhiBingJuJue(zhun.device!.id);
+                    else rc().jieShuHuiHua(hui.sid);
+                    replyRc({ type: 'rc-end', rc: { sid: hui.sid, reason: yongJiuJuJue ? 'rejected-forever' : 'stopped' } });
+                  },
+                });
+              }
+              rcSanJianTao.shePingMuZhuangTai(on, on ? '对方正在查看屏幕内容' : '');
+              if (on) rcTuiLiuKai(fp, hui.sid);
+              else rcTuiLiuGuan();
+              replyRc({ type: 'rc-screen-res', rc: { sid: hui.sid, ok: true, on } });
+              audit?.log('rc.screen-view', { peer: fp.slice(0, 12), on, sid: hui.sid });
+            }
+          // —— 控制端：收到屏幕帧 ——
+          } else if (payload.type === 'rc-screen-frame' && rcP) {
+            const jpeg = String(rcP.jpeg || '');
+            if (jpeg && rcChaKanChuang && !rcChaKanChuang.isDestroyed()) {
+              try {
+                rcChaKanChuang.webContents.executeJavaScript(
+                  `window.__rcFrame && window.__rcFrame(${JSON.stringify('data:image/jpeg;base64,' + jpeg.slice(0, 400000))});`,
+                ).catch(() => { /* noop */ });
+              } catch { /* noop */ }
+            }
+          // —— 双端：会话结束 ——
+          } else if (payload.type === 'rc-end' && rcP) {
+            const sid = String(rcP.sid || '');
+            const hui = sid ? rc().huiHua(sid) : undefined;
+            if (hui) rc().jieShuHuiHua(sid);
+            // 我是被控端：收掉三件套+停推流；我是控制端：收掉查看窗
+            rcTuiLiuGuan();
+            rcSanJianTao.guanBi();
+            if (rcChaKanChuang && !rcChaKanChuang.isDestroyed()) { try { rcChaKanChuang.destroy(); } catch { /* noop */ } rcChaKanChuang = null; }
+            audit?.log('rc.session-end', { peer: fp.slice(0, 12), sid, reason: String(rcP.reason || '') });
+          // —— 控制端：执行结果回执 ——
+          } else if (payload.type === 'rc-exec-res' && rcP && rcP.qid) {
+            const cb = rcqDengDai.get(String(rcP.qid));
+            if (cb) { rcqDengDai.delete(String(rcP.qid)); cb(rcP as Record<string, unknown>); }
+          }
+        } catch { /* 远程控制消息异常不阻断其它入站 */ }
+        })();
       }
       // W07：投递业务回执（对端只在**落盘之后**才发；这里只按握手指纹认收件人）
       if (xiaoXi.channel === 'control' && payload && payload.type === 'toudi-ack') {
@@ -10113,6 +10572,13 @@ function chuangjianChuangkou() {
    */
   win.webContents.on('before-input-event', (_e, input) => {
     if (!win || win.isDestroyed() || input.type !== 'keyDown') return;
+    /** T152 轻量 DevTools（零负担）：F12 / Ctrl+Shift+I 开关主窗口 DevTools。
+     *  不加菜单、不加面板、不加常驻开销 —— Electron 自带 devtools，只是补一个入口（nm 查看器早有独立按钮）。 */
+    if (input.key === 'F12' || (input.control && input.shift && String(input.key).toLowerCase() === 'i')) {
+      _e.preventDefault();
+      try { win.webContents.toggleDevTools(); } catch { /* noop */ }
+      return;
+    }
     if (input.alt || input.control || input.meta) return;
     if (input.key === 'F11') {
       _e.preventDefault();
@@ -11543,7 +12009,7 @@ function i18nDir(): string {
 }
 
 chuliIpc('warmy:i18n', (_e, yuYan: string) => {
-  // Resolve to any of the 10 supported packs — never collapse to zh-CN/en-US only.
+  // Resolve to any of the 全量语言包 — never collapse to zh-CN/en-US only.
   const weiZhi = jiexiYuyan(yuYan);
   const file = path.join(i18nDir(), `${weiZhi}.json`);
   let strings: Record<string, string> = {};
@@ -12067,6 +12533,8 @@ chuliIpc('warmy:jieTuKaiShi', async (_e, p0?: { sessionId?: string }) => {
       lu = path.join(dir, `shot-${Date.now()}.png`);
       await fs.promises.writeFile(lu, tu.toPNG());
       jieTuZuiHouLuJing = lu;
+      /** 截屏完成即进系统剪贴板（用户要求）：可直接粘贴到任何应用 */
+      try { await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(tu.toPNG())], { type: 'image/png' }) })]); } catch { /* 剪贴板失败不影响截图 */ }
       /**
        * 第 30 轮 项 8：截图 = 创建文件 ⇒ 进「最近改动」台账；
        * 并广播给界面（第四列文件卡立刻刷新）。
@@ -12132,6 +12600,7 @@ chuliIpc('warmy:pingMuJieTu', async () => {
       fs.mkdirSync(dir, { recursive: true });
       shotPath = path.join(dir, `shot-${Date.now()}.png`);
       fs.writeFileSync(shotPath, src.thumbnail.toPNG());
+      try { await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(src.thumbnail.toPNG())], { type: 'image/png' }) })]); } catch { /* 剪贴板失败不影响截屏 */ }
     } catch { /* 落盘失败不影响截屏本身 */ }
     if (cangQi) { try { win?.show(); } catch { /* noop */ } }
     return { ok: true, dataUrl, path: shotPath, width: src.thumbnail.getSize().width, height: src.thumbnail.getSize().height };
@@ -12140,6 +12609,166 @@ chuliIpc('warmy:pingMuJieTu', async () => {
     return { ok: false, error: xiJingCuoWu(e) };
   }
 });
+
+// ── T147 / N6：牛马「看屏幕」分层观察（screen_view 工具宿主实现） ──
+/**
+ * 分层（调研 docs/research-remote-screen.md 推荐组合）：
+ *  层1 UIA 控件树（<100ms、不拍像素、最省 token）→ 层2 截屏 + Windows OCR 抽文字
+ *  → 层3 截屏 + 看图模型（最贵，只在前两层不够时用）。每层失败/空结果自动降级。
+ * 截屏不藏窗、不写剪贴板；落盘 <userData>/screenshots/ 供审计与用户查看。
+ */
+
+/** 非交互抓屏（给 screen_view 用）：不藏窗、不写剪贴板 */
+async function pingMuZhuaZhen(): Promise<{ ok: boolean; dataUrl?: string; path?: string; error?: string }> {
+  try {
+    const disp = screen.getPrimaryDisplay();
+    const { width, height } = disp.size;
+    const scale = disp.scaleFactor || 1;
+    const sources = await Promise.race([
+      desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: Math.round(width * scale), height: Math.round(height * scale) } }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('capture-timeout')), 20000)),
+    ]);
+    const src = sources.find((s) => s.display_id === String(disp.id)) || sources[0];
+    if (!src) return { ok: false, error: 'no-screen' };
+    let shotPath = '';
+    try {
+      const dir = path.join(app.getPath('userData'), 'screenshots');
+      fs.mkdirSync(dir, { recursive: true });
+      shotPath = path.join(dir, `shot-${Date.now()}.png`);
+      fs.writeFileSync(shotPath, src.thumbnail.toPNG());
+    } catch { /* 落盘失败不影响本次观察 */ }
+    return { ok: true, dataUrl: src.thumbnail.toDataURL(), path: shotPath };
+  } catch (e) {
+    return { ok: false, error: xiJingCuoWu(e) };
+  }
+}
+
+/** 两段 PowerShell 用到的 WinRT 异步桥 + UIA/OCR 脚本（运行时写 temp，不进资产链） */
+function kanPingMuJiaoBen(): { uia: string; ocr: string } {
+  const uia = String.raw`
+Add-Type -AssemblyName UIAutomationClient | Out-Null
+Add-Type -AssemblyName UIAutomationTypes | Out-Null
+$target = [string]$args[0]
+$walker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+$script:budget = 500
+$script:lines = New-Object System.Collections.Generic.List[string]
+function Walk($el, $depth) {
+  if ($script:budget -le 0 -or $depth -gt 8) { return }
+  $script:budget--
+  try {
+    if ($el.Current.IsOffscreen) { return }
+    $name = [string]$el.Current.Name
+    $ct = [string]($el.Current.ControlType.ProgrammaticName -replace 'ControlType\.','')
+    $r = $el.Current.BoundingRectangle
+    $val = ''
+    try { $vp = $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern); if ($vp) { $val = [string]$vp.Current.Value } } catch {}
+    $line = '[' + $ct + '] "' + $name + '"' + $(if ($val) { ' value="' + $val + '"' } else { '' }) + ' (' + [int]$r.X + ',' + [int]$r.Y + ' ' + [int]$r.Width + 'x' + [int]$r.Height + ')'
+    if ((-not $target) -or $name -like ('*' + $target + '*') -or $ct -like ('*' + $target + '*')) { [void]$script:lines.Add($line) }
+  } catch {}
+  try { $child = $walker.GetFirstChild($el) } catch { return }
+  while ($null -ne $child) {
+    Walk $child ($depth + 1)
+    try { $child = $walker.GetNextSibling($child) } catch { break }
+  }
+}
+Walk ([System.Windows.Automation.AutomationElement]::RootElement) 0
+$script:lines | Select-Object -First 220
+`.trim();
+  const ocr = String.raw`
+[Windows.Media.Ocr.OcrEngine,Windows.Foundation,ContentType=WindowsRuntime] | Out-Null
+[Windows.Storage.StorageFile,Windows.Storage,ContentType=WindowsRuntime] | Out-Null
+[Windows.Graphics.Imaging.BitmapDecoder,Windows.Graphics,ContentType=WindowsRuntime] | Out-Null
+$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq ('IAsyncOperation' + [char]96 + '1') })[0]
+function Await($op, $resultType) {
+  $t = $asTaskGeneric.MakeGenericMethod($resultType).Invoke($null, @($op))
+  $t.Wait(-1) | Out-Null
+  return $t.Result
+}
+$png = [string]$args[0]
+$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($png)) ([Windows.Storage.StorageFile])
+$stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
+$dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+$bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+if ($null -eq $engine) {
+  $langs = [Windows.Media.Ocr.OcrEngine]::AvailableRecognizerLanguages
+  if ($langs.Count -gt 0) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($langs[0]) }
+}
+if ($null -eq $engine) { Write-Output 'NO-OCR-ENGINE'; exit 1 }
+$res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
+Write-Output $res.Text
+`.trim();
+  return { uia, ocr };
+}
+
+/** 层1：UIA 控件树快照（PowerShell + UIAutomationClient） */
+async function uiaKongJianKuaiZhao(target: string): Promise<string> {
+  try {
+    const { uia } = kanPingMuJiaoBen();
+    const ps = path.join(app.getPath('temp'), `warmy-uia-${process.pid}.ps1`);
+    fs.writeFileSync(ps, uia, 'utf8');
+    const out = await new Promise<string>((resolve) => {
+      const zi = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps, target], { windowsHide: true, timeout: 15000 });
+      let shou = '';
+      let shu = '';
+      zi.stdout.on('data', (d) => { shou += String(d); });
+      zi.stderr.on('data', (d) => { shu += String(d); });
+      zi.on('close', () => resolve(shou.trim() || shu.trim().slice(0, 400)));
+      zi.on('error', (e) => resolve('UIA-ERROR ' + xiJingCuoWu(e)));
+    });
+    try { fs.unlinkSync(ps); } catch { /* noop */ }
+    return out;
+  } catch (e) { return 'UIA-ERROR ' + xiJingCuoWu(e); }
+}
+
+/** 层2a：Windows OCR（WinRT）；失败返回 '' 由调用方降级 */
+async function winOcrShiBie(pngPath: string): Promise<string> {
+  try {
+    const { ocr } = kanPingMuJiaoBen();
+    const ps = path.join(app.getPath('temp'), `warmy-ocr-${process.pid}.ps1`);
+    fs.writeFileSync(ps, ocr, 'utf8');
+    const out = await new Promise<string>((resolve) => {
+      const zi = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps, pngPath], { windowsHide: true, timeout: 20000 });
+      let shou = '';
+      zi.stdout.on('data', (d) => { shou += String(d); });
+      zi.on('close', () => resolve(shou.trim()));
+      zi.on('error', () => resolve(''));
+    });
+    try { fs.unlinkSync(ps); } catch { /* noop */ }
+    return out === 'NO-OCR-ENGINE' ? '' : out;
+  } catch { return ''; }
+}
+
+/** screen_view 分层执行：mode = uia | ocr | look | auto（auto = uia → ocr → look 逐层降级） */
+async function zhiXingKanPingMu(mode: string, target: string, question: string): Promise<string> {
+  const cengUia = async (): Promise<string> => {
+    const t = await uiaKongJianKuaiZhao(target);
+    if (!t || t.startsWith('UIA-ERROR')) return '';
+    return `〔UIA 控件树${target ? `（过滤：${target}）` : ''}〕\n${t}`;
+  };
+  const cengOcr = async (): Promise<string> => {
+    const shot = await pingMuZhuaZhen();
+    if (!shot.ok || !shot.dataUrl) return `截屏失败：${shot.error || 'unknown'}`;
+    const wen = await winOcrShiBie(shot.path || '');
+    if (wen) return `〔Windows OCR 文字〕${shot.path ? `（图：${shot.path}）` : ''}\n${wen}`;
+    const r = await kanTuWeiTuoDaiMo([{ type: 'image_url', image_url: { url: shot.dataUrl } }], ['屏幕截图（OCR 不可用，降级转写）'], '只把图中的文字内容照原样抄出来，不要描述画面。');
+    return r ? `〔屏幕文字（看图模型转写，由 ${r.mo} 完成）〕${shot.path ? `（图：${shot.path}）` : ''}\n${r.jie}` : '';
+  };
+  const cengLook = async (): Promise<string> => {
+    const shot = await pingMuZhuaZhen();
+    if (!shot.ok || !shot.dataUrl) return `截屏失败：${shot.error || 'unknown'}`;
+    const r = await kanTuWeiTuoDaiMo([{ type: 'image_url', image_url: { url: shot.dataUrl } }], ['屏幕截图'], question || '请描述当前屏幕画面：可见的软件窗口、布局、能看清的文字、任何异常之处。');
+    return r ? `〔看图模型 ${r.mo}〕${shot.path ? `（图：${shot.path}）` : ''}\n${r.jie}` : '看图模型未能给出描述（链上模型都不可用）';
+  };
+  if (mode === 'uia') return (await cengUia()) || '（UIA 没取到控件——可能目标是游戏/远程桌面/自绘界面，可改用 ocr 或 look）';
+  if (mode === 'ocr') return (await cengOcr()) || '（OCR 没取到文字）';
+  if (mode === 'look') return (await cengLook());
+  const a = await cengUia();
+  if (a) return a;
+  const b = await cengOcr();
+  if (b && !b.startsWith('截屏失败')) return b;
+  return (await cengLook()) || b || '（三层都没取到屏幕内容）';
+}
 
 chuliIpc('warmy:yuYanXinXi', () =>
   anQuanChuLi(
@@ -13995,7 +14624,8 @@ async function zhenZhengFaSongBen(
            */
           try {
             if (knowledge) {
-              const quan = knowledge.queryLayers(ZHISHI_CENG as readonly ZhishiCeng[], '');
+              /** T145：只统计本会话有权读的层 —— 群聊/项目别把私密层条数泄进提示词 */
+              const quan = knowledge.queryLayers(kbLayersFor(sessionId), '');
               const shiTiShu = (quan.entities || []).length;
               const shiJianShu = (quan.events || []).length;
               if (shiTiShu + shiJianShu > 0) {
@@ -18501,7 +19131,7 @@ chuliIpc('warmy:zhiShiCengKeJian', (_e, p0?: { sessionId?: string }) => {
     })();
     let isCreator = true;
     try { isCreator = benJiShiXiangMuChuangJianZhe(sid); } catch { /* 拿不到按创建者 */ }
-    return { ok: true, kind, isCreator, layers: kbLayersFor(sid) };
+    return { ok: true, kind, isCreator, layers: kbLayersFor(sid), leiXing: huiHuaLeiXing(sid) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
@@ -18535,6 +19165,202 @@ chuliIpc('warmy:kbPermShe', (_e, p0?: { sessionId?: string; read?: string[]; wri
     settingsStore?.save({ kbPerms: all } as never);
     audit?.log('kb.perms-saved', { sessionId: sid, ...next });
     return { ok: true, read: kbLayersFor(sid), write: kbWriteLayers(sid), archive: kbArchiveLayers(sid), hardRead: hardR, hardWrite: hardW };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** T151：kb-query 请求端等待表（qid → 回调；15 秒超时由 IPC 侧清表） */
+const kbqDengDai = new Map<string, (r: unknown) => void>();
+/** T151：远程查对方知识库（mesh kb-query，docs/mesh-kb-query-protocol.md）——只读、结果不落本机库 */
+chuliIpc('warmy:kbYuanChengSouSuo', async (_e, p0?: { zhiWen?: string; q?: string; sessionId?: string; limit?: number }) => {
+  try {
+    const fp = String(p0?.zhiWen || '');
+    const q = String(p0?.q || '').trim().slice(0, 200);
+    if (!fp || q.length < 2) return { ok: false, error: 'bad-args' };
+    const peer = duiduanYinyong().find((p) => p.zhiWen && zhiWenXiangTong(p.zhiWen, fp));
+    if (!peer || !secureMesh) return { ok: false, error: 'no-peer' };
+    const qid = 'kq-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+    const jie = await new Promise<Record<string, unknown>>((resolve) => {
+      const t = setTimeout(() => { kbqDengDai.delete(qid); resolve({ reason: 'timeout' }); }, 15000);
+      kbqDengDai.set(qid, (r) => { clearTimeout(t); resolve(r as Record<string, unknown>); });
+      void secureMesh?.sendToHost(peer.host, peer.port, {
+        to: '*', channel: 'control',
+        payload: { type: 'kb-query', kbq: { qid, from: localNodeId, fromMing: shiYongHuMing(), q, sessionId: String(p0?.sessionId || ''), limit: Math.min(20, Math.max(1, Number(p0?.limit) || 10)) } },
+      }, { expectFingerprints: [fp], keepOpen: true });
+    });
+    try { audit?.log('mesh.kb-query', { peer: fp.slice(0, 12), qi: q.length, ok: jie.ok === true, reason: String(jie.reason || '') }); } catch { /* noop */ }
+    if (jie.reason) return { ok: false, error: String(jie.reason) };
+    return { ok: true, ...jie };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R138：mesh 远程知识库查询开关（默认关；设置页「允许配对设备查我的知识库」） */
+chuliIpc('warmy:kbRemoteQueryDu', () => {
+  try {
+    const all = (settingsStore?.load() as { kbRemoteQuery?: { on?: boolean } } | undefined)?.kbRemoteQuery;
+    return { ok: true, on: all?.on === true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:kbRemoteQueryShe', (_e, p0?: { on?: boolean }) => {
+  try {
+    settingsStore?.save({ kbRemoteQuery: { on: !!p0?.on } } as never);
+    try { audit?.log('kb.remote-query-toggle', { on: !!p0?.on }); } catch { /* noop */ }
+    return { ok: true, on: !!p0?.on };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R140：预设提示词统一中文（不再按语言存正文），personaRongYiDu 取正文通道已下线 */
+/** R136：SSH 远程通道目标管理（设置页用；凭证走 safeStorage，明文不落盘） */
+chuliIpc('warmy:sshLieBiao', () => {
+  try { return { ok: true, targets: sshCaoZuo().lieBiao() }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:sshBaoCun', (_e, p0?: { ming?: string; host?: string; port?: number | string; user?: string; renZheng?: 'key' | 'password'; pingZheng?: string }) => {
+  try {
+    const r = sshCaoZuo().baoCunMuBiao({ ming: String(p0?.ming || ''), host: String(p0?.host || ''), port: p0?.port, user: String(p0?.user || ''), renZheng: p0?.renZheng, pingZheng: String(p0?.pingZheng || '') });
+    try { audit?.log('ssh.target-save', { ok: r.ok, id: r.id }); } catch { /* noop */ }
+    return r;
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:sshShanChu', (_e, p0?: { id?: string }) => {
+  try {
+    const ok = sshCaoZuo().shanChuMuBiao(String(p0?.id || ''));
+    try { audit?.log('ssh.target-remove', { id: String(p0?.id || '').slice(0, 16), ok }); } catch { /* noop */ }
+    return { ok };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:sshCeShi', async (_e, p0?: { id?: string }) => {
+  try {
+    const r = await sshCaoZuo().ceShi(String(p0?.id || ''));
+    try { audit?.log('ssh.test', { id: String(p0?.id || '').slice(0, 16), ok: r.ok }); } catch { /* noop */ }
+    return r;
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R136+：远程控制设备列表（独立于同步列表；my 区只读镜像自同步列表） */
+chuliIpc('warmy:rcLieBiao', () => {
+  try {
+    // 「我的设备」= 同步列表里同账号已配对设备（只读镜像，天然包含、不可删改）
+    const my = (syncService?.state().devices ?? [])
+      .filter((d) => !d.revoked)
+      .map((d) => ({ id: d.id, ming: d.ming, zhiWen: d.fingerprint }));
+    rc().tongBuMySheBei(my);
+    const fmt = (t?: number) => (t
+      ? new Date(t).toLocaleString('zh-CN', { hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+      : '');
+    const devices = rc().lieBiao().map((d) => ({
+      ...d,
+      lastFangXiangWenAn: d.lastFangXiang ? (d.lastFangXiang === 'kong' ? '我控制了对方' : '我被对方控制') : '',
+      lastShiJianWenAn: fmt(d.lastShiJian),
+    }));
+    return { ok: true, devices, jujue: rc().jujueLieBiao() };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:rcBaoCunSheBei', (_e, p0?: { id?: string; ming?: string; leixing?: string; zhiWen?: string; sshId?: string }) => {
+  try {
+    const leixing = p0?.leixing === 'ssh' ? 'ssh' : 'wamy';
+    const r = rc().baoCunSheBei({ id: p0?.id, ming: String(p0?.ming || ''), leixing, zhiWen: p0?.zhiWen, sshId: p0?.sshId });
+    try { audit?.log('rc.device-save', { ok: r.ok, leixing }); } catch { /* noop */ }
+    return r;
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:rcShanChuSheBei', (_e, p0?: { id?: string }) => {
+  try {
+    const ok = rc().shanChuSheBei(String(p0?.id || ''));
+    try { audit?.log('rc.device-remove', { id: String(p0?.id || '').slice(0, 16), ok }); } catch { /* noop */ }
+    return { ok };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:rcGouXuan', (_e, p0?: { id?: string; keBeiKong?: boolean; xinRen?: boolean }) => {
+  try {
+    return rc().sheGouXuan(String(p0?.id || ''), p0?.keBeiKong, p0?.xinRen);
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:rcJieChuJuJue', (_e, p0?: { id?: string }) => {
+  try {
+    return { ok: rc().jieChuJuJue(String(p0?.id || '')) };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/**
+ * 控制端：远程执行（rc-exec-req → 等 rc-exec-res；15s 超时）。
+ * 只对远程控制列表里的 wamy 设备有效（ssh 目标走 remote_ssh 工具）。
+ */
+chuliIpc('warmy:rcYuanChengZhiXing', async (_e, p0?: { deviceId?: string; command?: string }) => {
+  try {
+    const dev = rc().lieBiao().find((d) => d.id === String(p0?.deviceId || ''));
+    if (!dev || dev.leixing !== 'wamy' || !dev.zhiWen) return { ok: false, error: 'not-wamy-device' };
+    const cmd = String(p0?.command || '').trim().slice(0, 2000);
+    if (!cmd) return { ok: false, error: 'no-command' };
+    const peer = duiduanYinyong().find((p) => p.zhiWen && zhiWenXiangTong(p.zhiWen, dev.zhiWen!));
+    if (!peer || !secureMesh) return { ok: false, error: 'peer-offline' };
+    const qid = 'rcq-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+    const jie = await new Promise<Record<string, unknown>>((resolve) => {
+      const t = setTimeout(() => { rcqDengDai.delete(qid); resolve({ ok: false, reason: 'timeout' }); }, 30000);
+      rcqDengDai.set(qid, (r) => { clearTimeout(t); resolve(r); });
+      void secureMesh?.sendToHost(peer.host, peer.port, {
+        to: '*', channel: 'control',
+        payload: { type: 'rc-exec-req', rc: { qid, fromMing: shiYongHuMing(), command: cmd, timeoutMs: 60000 } },
+      }, { expectFingerprints: [dev.zhiWen!], keepOpen: true });
+    });
+    // 会话方向记录：我控制了对方（不论成败，有请求即记方向；时间在结束时记）
+    const hui = rc().kaiHuiHua(dev.id, 'kong');
+    try { audit?.log('rc.exec', { device: dev.id, ok: jie.ok === true, reason: String(jie.reason || '') }); } catch { /* noop */ }
+    return { ...jie, sid: hui.sid };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/**
+ * 控制端：屏幕查看开关（rc-screen-req；开了弹查看窗收 rc-screen-frame）。
+ */
+chuliIpc('warmy:rcPingMuKaiGuan', async (_e, p0?: { deviceId?: string; on?: boolean }) => {
+  try {
+    const dev = rc().lieBiao().find((d) => d.id === String(p0?.deviceId || ''));
+    if (!dev || dev.leixing !== 'wamy' || !dev.zhiWen) return { ok: false, error: 'not-wamy-device' };
+    const on = !!p0?.on;
+    const peer = duiduanYinyong().find((p) => p.zhiWen && zhiWenXiangTong(p.zhiWen, dev.zhiWen!));
+    if (!peer || !secureMesh) return { ok: false, error: 'peer-offline' };
+    const hui = rc().kaiHuiHua(dev.id, 'kong');
+    void secureMesh?.sendToHost(peer.host, peer.port, {
+      to: '*', channel: 'control',
+      payload: { type: 'rc-screen-req', rc: { sid: hui.sid, fromMing: shiYongHuMing(), on } },
+    }, { expectFingerprints: [dev.zhiWen!], keepOpen: true });
+    if (on) {
+      if (!rcChaKanChuang || rcChaKanChuang.isDestroyed()) {
+        rcChaKanChuang = new BrowserWindow({
+          width: 1100, height: 720, title: `远程屏幕 · ${dev.ming}`,
+          webPreferences: { nodeIntegration: false, contextIsolation: true },
+        });
+        void rcChaKanChuang.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
+          `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+            body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;height:100vh;}
+            img{max-width:100%;max-height:100vh;}
+            #tip{position:fixed;top:12px;left:12px;color:#9ca3af;font:13px sans-serif;}
+          </style></head><body>
+            <div id="tip">正在接收远程屏幕…（${dev.ming}）</div>
+            <img id="f"/>
+            <script>window.__rcFrame=function(u){document.getElementById('f').src=u;document.getElementById('tip').style.display='none';};<\/script>
+          </body></html>`));
+        rcChaKanChuang.on('closed', () => { rcChaKanChuang = null; });
+      }
+    } else if (rcChaKanChuang && !rcChaKanChuang.isDestroyed()) {
+      try { rcChaKanChuang.destroy(); } catch { /* noop */ }
+      rcChaKanChuang = null;
+    }
+    try { audit?.log('rc.screen-toggle', { device: dev.id, on }); } catch { /* noop */ }
+    return { ok: true, on, sid: hui.sid };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 控制端：随时退出远程控制（结束会话 + 关查看窗 + 通知对端） */
+chuliIpc('warmy:rcTuiChu', (_e, p0?: { deviceId?: string }) => {
+  try {
+    const dev = rc().lieBiao().find((d) => d.id === String(p0?.deviceId || ''));
+    if (!dev) return { ok: false, error: 'not-found' };
+    for (const h of rc().huoYueHuiHua().filter((s) => s.duiFang === dev.id && s.fangXiang === 'kong')) {
+      rc().jieShuHuiHua(h.sid);
+      if (dev.zhiWen) {
+        const peer = duiduanYinyong().find((p) => p.zhiWen && zhiWenXiangTong(p.zhiWen, dev.zhiWen!));
+        if (peer) void secureMesh?.sendToHost(peer.host, peer.port, {
+          to: '*', channel: 'control',
+          payload: { type: 'rc-end', rc: { sid: h.sid, reason: 'controller-exit' } },
+        }, { expectFingerprints: [dev.zhiWen!], keepOpen: true });
+      }
+    }
+    if (rcChaKanChuang && !rcChaKanChuang.isDestroyed()) { try { rcChaKanChuang.destroy(); } catch { /* noop */ } rcChaKanChuang = null; }
+    try { audit?.log('rc.exit', { device: dev.id }); } catch { /* noop */ }
+    return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 /**
@@ -24557,6 +25383,7 @@ chuliIpc('warmy:gongJuLieBiao', () => {
   };
   try { add(workToolSpecs() as never, 'work'); } catch { /* noop */ }
   try { add(hostToolSpecs() as never, 'host'); } catch { /* noop */ }
+  try { add(mcpGuanWang().gongJuGuiGe() as never, 'mcp'); } catch { /* noop */ }
   try { add(memory?.isReady ? (memoryToolSpecs() as never) : undefined, 'memory'); } catch { /* noop */ }
   for (const g of ziDingGongJuJiQu()) {
     out.push({ name: g.name, description: g.description, source: 'custom', enabled: qi[g.name] !== false });
@@ -28149,9 +28976,14 @@ async function guiDangYiGeHuiHua(
       if (pai.length) {
                 const lu1 = ziLiJingYanLu();
         if (!fs.existsSync(lu1)) {
-          fs.writeFileSync(lu1, '# 子代理派遣经验（归档/复盘时更新；派遣前先读本文件）\n\n> 判定式：拆分价值 = 隔离目的（噪音/时间/权限/并行） × 边界清晰度 ÷ 通信开销。能不分就不分。\n\n| 时间 | 隔离目的 | 任务 | 结果/影响 |\n| --- | --- | --- | --- |\n', 'utf8');
+          fs.writeFileSync(lu1, '# 子代理派遣经验（归档/复盘时更新；派遣前先读本文件）\n\n> 判定式：拆分价值 = 隔离目的（噪音/时间/权限/并行） × 边界清晰度 ÷ 通信开销。能不分就不分。\n> 评分列：5=成功 3=中性/无结论 1=失败（崩/截断/超时/被过滤）——下次派活优先挑评分高的模式。\n\n| 时间 | 隔离目的 | 任务 | 结果/影响 | 评分 |\n| --- | --- | --- | --- | --- |\n', 'utf8');
         }
-        fs.appendFileSync(lu1, pai.map((x) => '| ' + now + ' | ' + x.muDi.replace(/[|\n]/g, ' ') + ' | ' + x.renWu.replace(/[|\n]/g, ' ').slice(0, 120) + ' | ' + String(x.jieGuo || '完成').replace(/[|\n]/g, ' ').slice(0, 80) + ' |').join('\n') + '\n', 'utf8');
+        /** R137：结果启发式评分（5 成功 / 3 中性 / 1 失败）——供下次派遣前挑模式 */
+        const ping = (guo: string) => /败|红|崩|超时|截断|失败|被过滤/.test(guo) ? 1 : (/成|绿|好|通过|完成/.test(guo) ? 5 : 3);
+        fs.appendFileSync(lu1, pai.map((x) => {
+          const guo = String(x.jieGuo || '完成').replace(/[|\n]/g, ' ').slice(0, 80);
+          return '| ' + now + ' | ' + x.muDi.replace(/[|\n]/g, ' ') + ' | ' + x.renWu.replace(/[|\n]/g, ' ').slice(0, 120) + ' | ' + guo + ' | ' + ping(String(x.jieGuo || '')) + ' |';
+        }).join('\n') + '\n', 'utf8');
         ziLiPaiQianJiLu.delete(sid);
       }
       const tp = huaTiFanKuiJiLu.get(sid) || [];
@@ -30444,7 +31276,8 @@ chuliIpc('warmy:souSuoChainCaoZuo', async (_e, p0?: { action?: string; id?: stri
       return { ok: true, id: cid, list: lie };
     } else if (action === 'editCustom') {
       const i = lie.findIndex((x) => x.id === id);
-      if (i < 0 || lie[i]!.kind !== 'custom') return { ok: false, error: 'not-found' };
+      // R138（用户口径）：名称/地址**所有条目都可改**（含预设），不再限 custom
+      if (i < 0) return { ok: false, error: 'not-found' };
       const name = String(p0?.name || '').trim().slice(0, 80);
       const url = String(p0?.url || '').trim().slice(0, 500);
       if (!name || !/^https?:\/\//i.test(url)) return { ok: false, error: 'bad-custom' };
@@ -30919,7 +31752,7 @@ async function paoXiaoDiRenWu(zhi: {
     });
     try { audit?.log('chat.tonghu-dispatch', { sessionId: sid, idem: xinFeng.idem_key, yanZheng: yanZheng(xinFeng).ok, shuoMing: jiao.shuoMing }); } catch { /* noop */ }
     const xieyiTou = `【互通协议 v1】${xinFeng.from.id} → ${xinFeng.to.id} · intent=${xinFeng.intent} · idem=${xinFeng.idem_key}\n【认知】${jiao.geiDuiFangDeRenZhi || '（无）'}\n【印象】${jiao.woDeDaoDeYinXiang ? jiao.woDeDaoDeYinXiang.slice(0, 600) : '（对方未开启交换，不传）'}`;
-    const ziRenWu = `你是子代理「${lu.ming}」，由「${lu.fuMing}」派出。请独立完成下面这一件具体的事，需要写文件就直接写（路径用工作区相对路径），并在最后给出可交付的结论。\n\n${xieyiTou}\n\n【子任务】${String(lu.task || '').slice(0, 2000)}`;
+    const ziRenWu = `你是子代理「${lu.ming}」，由「${lu.fuMing}」派出。请独立完成下面这一件具体的事，需要写文件就直接写（路径用工作区相对路径），并在最后给出可交付的结论。\n\n${xieyiTou}\n\n【子任务】${String(lu.task || '').slice(0, 2000)}\n\n【增量交付协议（必须遵守）】\n① 写多少交多少：每完成 5 个交付单元就把结果落盘一次（JSON/文本自检通过再继续），不许攒到最后一次性写（大单次写容易被截断成半成品）。\n② 单次 write_file 不超过 1500 字，长内容用 append:true 分段续写。\n③ 遇到内容过滤拦截/报错：换中性措辞重试一次；仍失败就跳过该单元继续下一个，最后如实报告哪些没做成。\n④ 文件落盘用 Node 脚本执行（写 .cjs 再跑），不要用内联复杂命令（引号/多行/中文极易被解析吃掉）。`;
     const subBase = workspaceDirOf(app.getPath('userData'), sid);
     try { fs.mkdirSync(subBase, { recursive: true }); } catch { /* noop */ }
     const subLoop = await liaoTianDaiGongJu(
@@ -31825,6 +32658,14 @@ chuliIpc('warmy:ttsLangDu', async (_e, p0?: { text?: string }) => {
     localEnabled = !!zhuangTaiBenDiYuYin().qiYong;
     const s = String(p0?.text || '').trim();
     if (!s) return { ok: false, error: 'empty-text', source: localEnabled ? 'bendi-yuyin' : 'tts-chain' };
+    /** R138 诊断面包屑（真机：点喇叭后程序闪退、无崩溃日志 —— 下次崩溃看得到卡在哪一步） */
+    try { qidong(`tts-langdu start chars=${s.length} local=${localEnabled}`); } catch { /* noop */ }
+    /**
+     * R138 护栏：合成音频过大时**如实拒绝**，不把几十 MB 的 dataUrl 塞回渲染层
+     * （大 base64 经 IPC + new Audio(dataUrl) 极易把渲染层撑爆 ⇒ 表现为点喇叭后整机闪退）。
+     */
+    const shangXianZiFu = 24_000_000; // ≈18MB 二进制（wav/mp3 base64 后约 1.33 倍）
+    const yanZheng = (dataUrl: string) => dataUrl.length <= shangXianZiFu;
     const sm = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
     /** 音色/语速：界面配置优先（默认 alloy 是 OpenAI 的口径；不认的网关会在报错里给清单，见 ttsChatShi） */
     const voice = String((sm as { ttsVoice?: string }).ttsVoice || 'alloy');
@@ -31834,9 +32675,16 @@ chuliIpc('warmy:ttsLangDu', async (_e, p0?: { text?: string }) => {
       const sidM = /(\d+)/.exec(voice);
       const he = await benDiHeCheng(s, sidM ? Number(sidM[1]) : 0, speed);
       if (he.ok && he.wav?.length) {
+        const dataUrl = `data:audio/wav;base64,${he.wav.toString('base64')}`;
+        if (!yanZheng(dataUrl)) {
+          try { qidong('tts-langdu too-large local'); } catch { /* noop */ }
+          return { ok: false, error: 'tts-audio-too-large（本地合成音频过大，请缩短朗读文本）', source: 'bendi-yuyin', local: true };
+        }
         try { audit?.log('tts.bendi.used', { chars: s.length, model: he.moXing || '', sid: he.yangShu ?? 0 }); } catch { /* noop */ }
-        return { ok: true, dataUrl: `data:audio/wav;base64,${he.wav.toString('base64')}`, model: he.moXing, via: 'bendi-yuyin', source: 'bendi-yuyin', voice, local: true };
+        try { qidong('tts-langdu done local'); } catch { /* noop */ }
+        return { ok: true, dataUrl, model: he.moXing, via: 'bendi-yuyin', source: 'bendi-yuyin', voice, local: true };
       }
+      try { qidong('tts-langdu local-failed ' + String(he.error || '').slice(0, 60)); } catch { /* noop */ }
       return { ok: false, error: he.error || 'bendi-yuyin-empty-audio', source: 'bendi-yuyin', local: true };
     }
     /**
@@ -31862,9 +32710,15 @@ chuliIpc('warmy:ttsLangDu', async (_e, p0?: { text?: string }) => {
         });
         if (res.ok) {
           const buf = Buffer.from(await res.arrayBuffer());
+          const dataUrl = `data:audio/mpeg;base64,${buf.toString('base64')}`;
+          if (!yanZheng(dataUrl)) {
+            try { qidong('tts-langdu too-large cloud'); } catch { /* noop */ }
+            return { ok: false, error: 'tts-audio-too-large（合成音频过大，请缩短朗读文本）' };
+          }
           jiangTeShuMoXingTiDaoLianShou('tts', mo);
           try { audit?.log('tts.used', { model: mo, via: 'audio-speech', chars: s.length, attempts: errors.length + 1 }); } catch { /* noop */ }
-          return { ok: true, dataUrl: `data:audio/mpeg;base64,${buf.toString('base64')}`, model: mo, via: 'audio-speech' };
+          try { qidong('tts-langdu done cloud/audio-speech'); } catch { /* noop */ }
+          return { ok: true, dataUrl, model: mo, via: 'audio-speech' };
         }
         /**
          * 标准音频端点不通（404/400/405…）⇒ **换 chat 式再试**：实测 MiMo 这类网关
@@ -31874,9 +32728,15 @@ chuliIpc('warmy:ttsLangDu', async (_e, p0?: { text?: string }) => {
         if (yingGaiHuanChatShi(res.status)) {
           const r2 = await ttsChatShi(an, mo, s, voice, speed);
           if (r2.ok) {
+            const du = String(r2.dataUrl || '');
+            if (!yanZheng(du)) {
+              try { qidong('tts-langdu too-large chat'); } catch { /* noop */ }
+              return { ok: false, error: 'tts-audio-too-large（合成音频过大，请缩短朗读文本）' };
+            }
             try { audit?.log('tts.used', { model: mo, voice: r2.voice || voice, via: 'chat-completions', chars: s.length, attempts: errors.length + 1 }); } catch { /* noop */ }
+            try { qidong('tts-langdu done cloud/chat'); } catch { /* noop */ }
             jiangTeShuMoXingTiDaoLianShou('tts', mo);
-            return { ok: true, dataUrl: r2.dataUrl, model: mo, voice: r2.voice, via: 'chat-completions' };
+            return { ok: true, dataUrl: du, model: mo, voice: r2.voice, via: 'chat-completions' };
           }
           if (Array.isArray(r2.voices)) for (const v of r2.voices) if (!voices.includes(v)) voices.push(v);
           errors.push(`${mo}: ${String(r2.error || 'chat-tts-failed')}`);

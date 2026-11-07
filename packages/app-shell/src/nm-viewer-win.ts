@@ -2558,12 +2558,24 @@ export async function nmBrowserTool(act: string, args: Record<string, unknown> =
 
 /** 打开（或聚焦）一个 nm 查看器窗口 */
 export function nmShiTuKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yiCunZai?: boolean; cuo?: string } {  try {
-    const abs = path.resolve(String(xuan?.luJing || ''));
-    if (!abs || !fs.existsSync(abs)) return { ok: false, cuo: '文件不存在' };
-    if (fs.statSync(abs).isDirectory()) return { ok: false, cuo: '这是目录，不是文件' };
+    const luJingYuan = String(xuan?.luJing || '').trim();
+    const abs = luJingYuan ? path.resolve(luJingYuan) : '';
+    /** R129：`kaiWangYe:'kongbai'` = 空白 nm 查看器（纯浏览器窗口，不加载文件/网页，停在地址栏） */
+    const kaiWangYe = String(xuan?.kaiWangYe || '').trim();
+    const shiKongBai = kaiWangYe === 'kongbai';
+    /**
+     * R138 修（真机：工具里「打开网站」点了没反应）：
+     * 只给 kaiWangYe（网址）不给文件路径时，旧代码 `path.resolve('')` 得到**工作目录**，
+     * 于是被「这是目录，不是文件」拒绝 —— 窗口从未创建。现在：没给文件路径 + 有 kaiWangYe
+     * ⇒ 纯浏览器模式窗口，不做任何文件检查。
+     */
+    const shiChunWangYe = !luJingYuan && !!kaiWangYe;
+    if (!shiKongBai && !shiChunWangYe && (!abs || !fs.existsSync(abs))) return { ok: false, cuo: '文件不存在' };
+    if (!shiKongBai && !shiChunWangYe && fs.statSync(abs).isDirectory()) return { ok: false, cuo: '这是目录，不是文件' };
     for (const z of CHUANG_KOU.values()) {
-      /** 同文件 + 同会话才复用；不同会话打开同一路径必须各自绑定，下载目录不能串 */
-      if (z.luJing === abs && z.huiHuaId === xuan?.huiHuaId && !z.win.isDestroyed()) {
+      /** 同文件 + 同会话才复用；不同会话打开同一路径必须各自绑定，下载目录不能串。
+       *  纯浏览器窗口（无文件）不参与复用 —— 每次都开新窗。 */
+      if (!shiChunWangYe && z.luJing === abs && z.huiHuaId === xuan?.huiHuaId && !z.win.isDestroyed()) {
         z.win.show();
         z.win.focus();
         return { ok: true, id: z.id, yiCunZai: true };
@@ -2581,7 +2593,7 @@ export function nmShiTuKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yi
       height: luo.gao,
       minWidth: 420,
       minHeight: 300,
-      title: `${path.basename(abs)} · nm 文件查看器`,
+      title: (shiKongBai || shiChunWangYe) ? '浏览器 · nm 查看器' : `${path.basename(abs)} · nm 文件查看器`,
       frame: isMac,
       titleBarStyle: isMac ? 'hiddenInset' : 'default',
       backgroundColor: zhuTi.mode === 'dark' ? '#1e1e1e' : '#ededed',
@@ -2651,7 +2663,7 @@ export function nmShiTuKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yi
         theme: zhuTi.mode,
         accent: zhuTi.accent,
         ink: zhuTi.ink || '',
-        ...(String(xuan?.kaiWangYe || '').trim() ? { web: String(xuan.kaiWangYe).trim() } : {}),
+        ...(kaiWangYe ? { web: kaiWangYe } : {}),
       },
     });
     /** 拖文件到普通 nm 窗口：不导航替换当前页，而是**新开一个 nm 窗口**打开该文件 */
