@@ -663,6 +663,8 @@ body.liaoTianChuangKou .liaoTianBuJu {
 }
 #shuRu {
   width: 100%; resize: none;
+  /* 滚动条出现/消失都不改变文字可用宽度，避免重排 */
+  scrollbar-gutter: stable;
   border: none; outline: none;
   background: transparent;
   caret-color: var(--ink);
@@ -3624,7 +3626,17 @@ html { font-weight: var(--fw-ui, 400); }
   pointer-events: none; z-index: 2;
 }
 .hangJiaoBiao.wen { background: var(--accent); }
-.hangJiaoBiao.tan { background: var(--accent); }
+.hangJiaoBiao.tan { background: var(--danger, #d9534f); }
+/* R147 项7：未读 ⇒ 头像右下角红色未读字数（与右上角 ?/! 互不遮挡，可同时出现） */
+.weiDuZi {
+  position: absolute; right: -5px; bottom: -5px;
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+  background: var(--danger, #d9534f); color: #fff;
+  font-size: 10px; line-height: 16px; text-align: center; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--card, #fff);
+  pointer-events: none; z-index: 2;
+}
 /* 停用会话：头像右上角圆形灰色停用图标（用户要求；与 ?/! 同位） */
 .hangJiaoBiao.tingYong {
   background: #cfd4d8; color: #5f6368;

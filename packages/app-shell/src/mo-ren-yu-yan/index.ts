@@ -1,10 +1,11 @@
 /**
- * 出厂默认提示词的多语言入口（第 54 轮项 1；**现行口径：预设提示词统一中文**）。
+ * 出厂默认提示词的多语言入口（第 54 轮项 1；**R147 项7b 现行口径：27 语各有真实出厂稿**）。
  *
- * 用户口径（本轮）：**预设的提示词全部直接使用中文，不再按界面语言单独翻译**；
- * 预设的名称（老板/牛马、模板名等）**照常翻译**（见 YONG_HU_MING_MO_REN 与 i18n 语言包）。
- * 因此道/术出厂稿所有界面语言都指向中文：zh-CN 用简体稿，zh-TW 用繁体稿（同属中文），
- * 其余语言一律用简体稿。旧版按语言播过种的历史出厂稿**继续识别为「未改过」**
+ * R147 项7b（用户拍板「真补 17 份」）：原先只有 10 份语言稿、其余 17 语回落中文，
+ * 现在 27 语**各有真实的道/术出厂稿**（de it nl pl sv cs hu da nb tr uk id vi th hi ar fa 已补齐）。
+ * 每份都按简体中文上限写（道 ≤2600 / 术 ≤4200，见 ti-shi-shang-xian.ts），条目结构一致、大意不变。
+ * 预设的名称（老板/牛马、模板名等）照常翻译（见 YONG_HU_MING_MO_REN 与 i18n 语言包）。
+ * 旧版中文出厂稿与按语言播过种的历史稿**继续识别为「未改过」**
  * （升级后不能把老用户的出厂稿误判成"用户改过"而不再跟版）。
  *
  * 这里只放**道 / 术**两层的正文（每层都有固定上限，见 ti-shi-shang-xian.ts）。
@@ -20,47 +21,65 @@ import { DAO_MOREN as D_ES, SHU_MOREN as S_ES } from './es.js';
 import { DAO_MOREN as D_PT, SHU_MOREN as S_PT } from './pt.js';
 import { DAO_MOREN as D_RU, SHU_MOREN as S_RU } from './ru.js';
 import { DAO_MOREN as D_EO, SHU_MOREN as S_EO } from './eo.js';
+import { DAO_MOREN as D_DE, SHU_MOREN as S_DE } from './de.js';
+import { DAO_MOREN as D_IT, SHU_MOREN as S_IT } from './it.js';
+import { DAO_MOREN as D_NL, SHU_MOREN as S_NL } from './nl.js';
+import { DAO_MOREN as D_PL, SHU_MOREN as S_PL } from './pl.js';
+import { DAO_MOREN as D_SV, SHU_MOREN as S_SV } from './sv.js';
+import { DAO_MOREN as D_CS, SHU_MOREN as S_CS } from './cs.js';
+import { DAO_MOREN as D_HU, SHU_MOREN as S_HU } from './hu.js';
+import { DAO_MOREN as D_DA, SHU_MOREN as S_DA } from './da.js';
+import { DAO_MOREN as D_NB, SHU_MOREN as S_NB } from './nb.js';
+import { DAO_MOREN as D_TR, SHU_MOREN as S_TR } from './tr.js';
+import { DAO_MOREN as D_UK, SHU_MOREN as S_UK } from './uk.js';
+import { DAO_MOREN as D_ID, SHU_MOREN as S_ID } from './id.js';
+import { DAO_MOREN as D_VI, SHU_MOREN as S_VI } from './vi.js';
+import { DAO_MOREN as D_TH, SHU_MOREN as S_TH } from './th.js';
+import { DAO_MOREN as D_HI, SHU_MOREN as S_HI } from './hi.js';
+import { DAO_MOREN as D_AR, SHU_MOREN as S_AR } from './ar.js';
+import { DAO_MOREN as D_FA, SHU_MOREN as S_FA } from './fa.js';
 
 export type MoRenYuYan = { dao: string; shu: string };
 
 const ZH_JIAN: MoRenYuYan = { dao: D_ZH, shu: S_ZH };
 const ZH_FAN: MoRenYuYan = { dao: D_ZH_TW, shu: S_ZH_TW };
 
-/** 与 i18n 的语言包同键（新增语言必须两边一起加，门禁会查）；值统一中文出厂稿 */
+/** 与 i18n 的语言包同键（新增语言必须两边一起加，门禁会查）；R147 项7b：各语言用自己的真实出厂稿 */
 export const MO_REN_YU_YAN: Record<string, MoRenYuYan> = {
   'zh-CN': ZH_JIAN,
   'zh-TW': ZH_FAN,
-  'en-US': ZH_JIAN,
-  ja: ZH_JIAN,
-  ko: ZH_JIAN,
-  fr: ZH_JIAN,
-  es: ZH_JIAN,
-  pt: ZH_JIAN,
-  ru: ZH_JIAN,
-  eo: ZH_JIAN,
-  de: ZH_JIAN,
-  it: ZH_JIAN,
-  nl: ZH_JIAN,
-  pl: ZH_JIAN,
-  sv: ZH_JIAN,
-  cs: ZH_JIAN,
-  hu: ZH_JIAN,
-  da: ZH_JIAN,
-  nb: ZH_JIAN,
-  tr: ZH_JIAN,
-  uk: ZH_JIAN,
-  id: ZH_JIAN,
-  vi: ZH_JIAN,
-  th: ZH_JIAN,
-  hi: ZH_JIAN,
-  ar: ZH_JIAN,
-  fa: ZH_JIAN,
+  'en-US': { dao: D_EN, shu: S_EN },
+  ja: { dao: D_JA, shu: S_JA },
+  ko: { dao: D_KO, shu: S_KO },
+  fr: { dao: D_FR, shu: S_FR },
+  es: { dao: D_ES, shu: S_ES },
+  pt: { dao: D_PT, shu: S_PT },
+  ru: { dao: D_RU, shu: S_RU },
+  eo: { dao: D_EO, shu: S_EO },
+  de: { dao: D_DE, shu: S_DE },
+  it: { dao: D_IT, shu: S_IT },
+  nl: { dao: D_NL, shu: S_NL },
+  pl: { dao: D_PL, shu: S_PL },
+  sv: { dao: D_SV, shu: S_SV },
+  cs: { dao: D_CS, shu: S_CS },
+  hu: { dao: D_HU, shu: S_HU },
+  da: { dao: D_DA, shu: S_DA },
+  nb: { dao: D_NB, shu: S_NB },
+  tr: { dao: D_TR, shu: S_TR },
+  uk: { dao: D_UK, shu: S_UK },
+  id: { dao: D_ID, shu: S_ID },
+  vi: { dao: D_VI, shu: S_VI },
+  th: { dao: D_TH, shu: S_TH },
+  hi: { dao: D_HI, shu: S_HI },
+  ar: { dao: D_AR, shu: S_AR },
+  fa: { dao: D_FA, shu: S_FA },
 };
 
 export const MO_REN_YU_YAN_KE = Object.keys(MO_REN_YU_YAN);
 
 /** 历史语言出厂稿（旧版本按界面语言播过种）：只用于识别「未改过」，不再用作默认值 */
 const LI_SHI_CHU_CHANG: readonly MoRenYuYan[] = [
+  ZH_JIAN,
   { dao: D_EN, shu: S_EN },
   { dao: D_JA, shu: S_JA },
   { dao: D_KO, shu: S_KO },
@@ -73,6 +92,7 @@ const LI_SHI_CHU_CHANG: readonly MoRenYuYan[] = [
 
 /** 取某语言的出厂稿；没有这一种就用 zh-CN（绝不返回空串，空串会把用户的道清掉） */
 export function quMoRen(lang: string): MoRenYuYan {
+  /* 未知语言回落 zh-CN（简体中文是出厂稿的事实来源）；绝不返回空串，空串会把用户的道清掉 */
   return MO_REN_YU_YAN[String(lang || '')] || MO_REN_YU_YAN['zh-CN']!;
 }
 

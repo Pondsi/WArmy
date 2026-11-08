@@ -597,13 +597,21 @@
   align-items: stretch;
   width: min(360px, 92vw);
   gap: 10px;
+  /*
+   * 光学居中：上面重（27 个语言瓦片），下面轻（1 个「开始」按钮），
+   * 纯几何居中时眼睛会觉得整体在往下掉。整块向上抬一点抵消错觉。
+   * 用 transform 而不是 margin：不影响父级 flex 居中与滚动区的尺寸计算。
+   */
+  transform: translateY(-14px);
 }
 .warmyAuthLangGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  /* R147 项8：minmax(0,1fr) 而不是 1fr —— 长名不可断行时也不会把整列撑宽挤坏邻居 */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   max-height: 52vh;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .warmyAuthLangTile {
   display: flex;
@@ -611,6 +619,8 @@
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
+  /* R147 项8：高度由内容决定，不写死 min-height —— 两行名自然撑开，同行瓦片由 grid 拉齐 */
+  min-height: 0;
   padding: 9px 11px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
@@ -631,7 +641,18 @@
   color: #fff5e8;
 }
 .warmyAuthLangTile.is-on::after { content: '✓'; color: #e6b98d; font-size: 12px; flex: none; }
-.warmyAuthLangTileName { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* R147 项8：先自然换行（Norsk (Bokmål) 这类两行名完整可见）；
+   极端长名/窄屏兜底截到两行 + 省略号，完整名由瓦片 title 悬停给出，绝不横向溢出。 */
+.warmyAuthLangTileName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 .warmyAuthLangFoot {
   display: flex;
   align-items: center;
@@ -933,3 +954,20 @@
 [dir="rtl"] .warmyAuthCloseHot { right: auto; left: 0; }
 [dir="rtl"] .warmyAuthCloseX { right: auto; left: 10px; }
 [dir="rtl"] .warmyAuthQuitRunner { left: auto; right: 0; }
+
+
+/* R145 项1：首启语言页禁止框选文字；卡片空白区与上边缘可拖动，交互元素除外 */
+.warmyAuthFirstCard.warmyAuthLangCard,
+.warmyAuthFirstCard.warmyAuthLangCard * {
+  -webkit-user-select: none; user-select: none;
+}
+.warmyAuthFirstCard.warmyAuthLangCard input,
+.warmyAuthFirstCard.warmyAuthLangCard textarea {
+  -webkit-user-select: text; user-select: text;
+}
+.warmyAuthFirstCard.warmyAuthLangCard { -webkit-app-region: drag; }
+.warmyAuthFirstCard.warmyAuthLangCard button,
+.warmyAuthFirstCard.warmyAuthLangCard input,
+.warmyAuthFirstCard.warmyAuthLangCard textarea,
+.warmyAuthFirstCard.warmyAuthLangCard a,
+.warmyAuthFirstCard.warmyAuthLangCard .warmyAuthLangTile { -webkit-app-region: no-drag; }

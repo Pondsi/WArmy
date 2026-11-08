@@ -197,6 +197,8 @@ contextBridge.exposeInMainWorld('warmy', {
   // 「运行」产物：入口路径**由主进程自己解析**（渲染层只给 sessionId），且必须可在本机运行
   productRun: (payload) => ipcRenderer.invoke('warmy:chanPinYunXing', payload),
   // 待执行队列持久化（渲染层 state.queues）+ Router 队列只读快照
+  chaHuaTongBu: (p) => ipcRenderer.invoke('warmy:chaHuaTongBu', p),
+  onChaHuaYiPai: (cb) => ipcRenderer.on('warmy:chaHuaYiPai', (_e, d) => cb(d)),
   uiQueuesGet: () => ipcRenderer.invoke('warmy:uiDuiLieJiQu'),
   uiQueuesSet: (queues) => ipcRenderer.invoke('warmy:uiDuiLieJiSheZhi', { queues }),
   routerQueuesGet: () => ipcRenderer.invoke('warmy:luYouQiDuiLieJiQu'),
@@ -262,6 +264,9 @@ contextBridge.exposeInMainWorld('warmy', {
   toolEnable: (p) => ipcRenderer.invoke('warmy:gongJuQiYong', p),
   /** 第 99 轮：聊天框文本编辑器（nm 查看器盖住第三列；编辑实时回传聊天框） */
   chatEditorKai: (p) => ipcRenderer.invoke('warmy:chatEditorKai', p),
+  chatEditorGuan: () => ipcRenderer.invoke('warmy:chatEditorGuan'),
+  chatEditorHotkeySet: (p) => ipcRenderer.invoke('warmy:chatEditorHotkey', p),
+  onChatEditorHotkey: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:chatEditorHotkey', h); return () => ipcRenderer.removeListener('warmy:chatEditorHotkey', h); },
   chatEditorSync: (p) => ipcRenderer.invoke('warmy:chatEditorSync', p),
   onChatEditorContent: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:chatEditorContent', h); return () => ipcRenderer.removeListener('warmy:chatEditorContent', h); },
   /** 聊天编辑器窗口拖入文件 = 添加附件（与聊天框附件同步） */

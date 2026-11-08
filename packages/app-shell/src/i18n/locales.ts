@@ -84,7 +84,7 @@ export function jiexiYuyan(yuYan: string | undefined | null): SupportedLocale {
     return raw as SupportedLocale;
   }
   const l = raw.toLowerCase().replace('_', '-');
-  if (l.startsWith('zh-tw') || l.startsWith('zh-hant') || l === 'zh-hk' || l === 'zh-mo' || l === 'zh-hant') return 'zh-TW';
+  if (l.startsWith('zh-tw') || l.startsWith('zh-hant') || l.startsWith('zh-hk') || l.startsWith('zh-mo')) return 'zh-TW';
   if (l.startsWith('zh')) return 'zh-CN';
   if (l.startsWith('ja')) return 'ja';
   if (l.startsWith('ko')) return 'ko';

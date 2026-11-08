@@ -2688,7 +2688,10 @@ async function lieKeYongMoXing(): Promise<string[]> {
 function anQuanDangWei(): { full: boolean; ask: boolean; dang: AnquanDang } {
   try {
     const s = settingsStore?.load() as { globalSecurity?: string; askOnExceed?: boolean } | undefined;
-    const raw = String(s?.globalSecurity || 'normal');
+    // 权威来源是运行时安全档位（首启/设置里的档位下拉写 p1.security）。
+    // settingsStore.globalSecurity 全库没有写入点、恒为默认 normal；此前只读它，
+    // 导致用户切「完全授权」后命令判权仍按 normal，每条非白名单命令都弹卡。
+    const raw = String(p1?.security.getMode() || s?.globalSecurity || 'normal');
     const dang: AnquanDang = raw === 'full' ? 'full' : raw === 'strict' ? 'strict' : 'normal';
     return { full: dang === 'full', ask: s?.askOnExceed !== false, dang };
   } catch {
@@ -5095,7 +5098,7 @@ async function yunXingLiaoTianXunHuan(
         const jieH = jieXiGongJuCanShu(rawArgsH);
         const argsH: Record<string, unknown> = jieH.args;
         const quanQuan = () => {
-          try { return String((settingsStore?.load() as { globalSecurity?: string } | undefined)?.globalSecurity || 'normal') === 'full'; }
+          try { return String(p1?.security.getMode() || (settingsStore?.load() as { globalSecurity?: string } | undefined)?.globalSecurity || 'normal') === 'full'; }
           catch { return false; }
         };
         let huiBaoH = '';
@@ -5881,7 +5884,11 @@ async function yunXingLiaoTianXunHuan(
             const cwdAbs = path.resolve(baseAbs, String(argsH.cwd || '.'));
             const cwdWai = !(cwdAbs === baseAbs || cwdAbs.startsWith(baseAbs + path.sep));
             const cwdWhy = cwdWai ? `工作目录越界：${cwdAbs}` : '';
-            const cmdWhy = protectedCommandReason(cmd, cwdAbs, baseAbs) || cwdWhy;
+            /* R147 项5：完全授权的边界只有「其他会话工作区/历史 + 程序安装目录」。
+             * cwd 落在本会话工作区之外但不在禁止区（例如临时目录、用户自己的项目目录）时，
+             * 完全授权必须放行；以前 cwdWhy 无条件拼进来，导致每条越出工作区的命令都弹卡。
+             * 禁止区本身已由 protectedCommandReason 内部的 protectedPathReason(cwd) 覆盖。 */
+            const cmdWhy = protectedCommandReason(cmd, cwdAbs, baseAbs) || (dang === 'full' ? '' : cwdWhy);
             if (cmdWhy) {
               /**
                * 第 99 轮：完全授权不是“无边界”。命令涉及**项目程序目录 / 其他会话工作区或历史**
@@ -8140,6 +8147,12 @@ function renderChatView(key: string, recallHint?: string, budgetCharsOverride?: 
 
 /** 运行中的插入指令级别 */
 const insertMode = new Map<string, 'outer' | 'inner'>();
+/**
+ * R147 项9：「插入」信箱。用户口径 —— 排队(P3)=整次回复全部结束后再发；
+ * 插入(P2)=牛马这一轮（内部续派的一轮）告一段落时就把话加进去；加急(P1)=立刻停下并换新内容。
+ * 渲染层把队列里的 P2 项同步进来，内部续派轮在边界取出注入，并广播已派发让界面摘掉队列项。
+ */
+const chaHuaXin = new Map<string, Array<{ id: string; text: string }>>();
 /**
  * Provider 配置（由设置 UI 写入）。
  * **落盘**：元数据进 settings.json 的 `activeProvider`，密钥进 SecureKeyStore，
@@ -10634,7 +10647,7 @@ nmSheZhiXuNiWenJian((p) => {
 });
 function dakaiLiaoTianBianJiQi(
   opener: Electron.WebContents,
-  payload: { content?: string; sessionId?: string; rect?: { left?: number; top?: number; width?: number; height?: number }; files?: { path?: string; name?: string; bytes?: number }[] },
+  payload: { content?: string; sessionId?: string; hotkeys?: string[]; rect?: { left?: number; top?: number; width?: number; height?: number }; files?: { path?: string; name?: string; bytes?: number }[] },
 ): { ok: boolean; id?: number; reason?: string } {
   try {
     if (!nmChaJianQiYong()) {
@@ -10743,6 +10756,8 @@ function dakaiLiaoTianBianJiQi(
         accent: zhuTi.accent,
         ink: zhuTi.ink || '',
         chatEditor: '1',
+        /* R147 项3：把「文本编辑器」快捷键带进编辑器窗口，在里面再按一次就关掉回聊天框 */
+        hk: (Array.isArray(payload?.hotkeys) ? payload!.hotkeys! : []).map(String).filter(Boolean).join('|'),
       },
     });
     return { ok: true, id: bianWin.id };
@@ -10750,6 +10765,7 @@ function dakaiLiaoTianBianJiQi(
     return { ok: false, reason: xiJingCuoWu(e).slice(0, 160) };
   }
 }
+
 
 // ── 安全 IPC 辅助函数 ──
 function anQuanChuLi<T>(fn: () => T, huiTui: T): T {
@@ -10922,6 +10938,29 @@ function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeE
 /* 旧的“复用主界面当文本编辑器”入口已删除（第 99 轮改为 nm 查看器聊天编辑模式） */
 chuliIpc('warmy:chatEditorKai', (e, p0?: { content?: string; sessionId?: string; rect?: { left?: number; top?: number; width?: number; height?: number }; files?: { path?: string; name?: string; bytes?: number }[] }) =>
   dakaiLiaoTianBianJiQi(e.sender, p0 || {}));
+/** R147 项3：关掉本聊天窗的文本编辑器（快捷键在编辑器里再按一次 / 主窗切换都走这里） */
+chuliIpc('warmy:chatEditorGuan', (e) => {
+  let closed = 0;
+  for (const [id, it] of [...chatEditorWins]) {
+    // R148 修复：调用者两种身份都认——①打开编辑器的主窗（关它开的编辑器，qieHuanBianJiQi 走这）
+    // ②编辑器窗口自己（F9/同键再按一次关自己）。旧实现只认 opener ⇒ 编辑器里按快捷键关不掉自己
+    //（真机实测抓到：chatEditorGuan 从编辑器调用返回 closed:0，窗口留着）。
+    if (it.opener !== e.sender && it.win.webContents !== e.sender) continue;
+    try { it.win.destroy(); } catch { /* noop */ }
+    chatEditorDocs.delete(it.path);
+    chatEditorWins.delete(id);
+    closed++;
+  }
+  return { ok: true, closed };
+});
+/** R147 项3：设置里改了快捷键 ⇒ 已开着的编辑器窗口也要跟着换键 */
+chuliIpc('warmy:chatEditorHotkey', (_e, p?: { hotkeys?: string[] }) => {
+  const hk = (Array.isArray(p && p.hotkeys) ? p!.hotkeys! : []).map(String).filter(Boolean);
+  for (const [, it] of chatEditorWins) {
+    try { it.win.webContents.send('warmy:chatEditorHotkey', { hotkeys: hk }); } catch { /* noop */ }
+  }
+  return { ok: true, count: chatEditorWins.size };
+});
 chuliIpc('warmy:chatEditorSync', (e, p0?: { content?: string }) => {
   try {
     const win = BrowserWindow.fromWebContents(e.sender);
@@ -11599,6 +11638,8 @@ chuliIpc('warmy:tingZhiDuiHua', async (_e, payload?: string | { sessionId?: stri
     const xian = quTingZhiXianChang(sid, stopTs);
     const youDongXi = !!(xian.content.trim() || xian.reasoningDuan.length || xian.zhongJian.length);
     stoppedSessions.add(sid);
+    /* R147 项9：停止后信箱清空 —— 没注入的「插入」项仍留在渲染层队列里，由整轮结束后的冲刷派发 */
+    chaHuaXin.delete(sid);
     zhongZhiXinHao(sid); // 真的把在途请求取消掉
     /** 用户明确停止：把本会话还没答的卡**取消**（不是替用户选/拒绝）；等卡的那一路会立刻收到 __stopped__ */
     try { for (const q of aiQuestions.LieBiao(sid)) if (q.status === 'pending') aiQuestions.cancel(q.id); } catch { /* noop */ }
@@ -14160,6 +14201,25 @@ async function zhenZhengFaSongBen(
     if (!jueCe) {
       jueCe = { model: providerCfg.model || 'deepseek-chat', why: 'fallback', chainIndex: -1 };
       modelId = jueCe.model;
+    }
+    /**
+     * R147 项10：非智能模式下用户明明设了默认模型，却被换成别的 —— 必须留下可取证的原因。
+     * 以前只有 chat.model-blocked（白名单）一条，其余三种（被禁用 / 不在可跑清单 / 本轮已失败）
+     * 都是静默回落，用户只看到「默认是 Ollama、回答却来自 MiMo」，无从判断。
+     */
+    if (!zhiNengShiJi) {
+      const qing = jieMoXingMing(dmPayload);
+      if (qing && qing !== '__smart__' && qing !== modelId) {
+        const beiJin = ((xiaoXi.moXingJueCe && xiaoXi.moXingJueCe.chainDisabled) || []).some((d) => jieMoXingMing(d) === qing);
+        const reason = beiJin ? 'disabled'
+          : !yunXuDuiHua(qing) ? 'chat-whitelist'
+            : !keYongMoXing.includes(qing) ? 'not-runnable'
+              : 'failed-this-round';
+        try { audit?.log('chat.default-model-skipped', { sessionId, want: qing, got: modelId, reason }); } catch { /* noop */ }
+        try {
+          fachuKongzhitai({ cat: 'model', code: 'model.default-skipped', data: { sessionId, want: qing, got: modelId, reason } });
+        } catch { /* noop */ }
+      }
     }
     if (!zhu.apiKey && zhu.protocol !== 'ollama') {
       const reply = tMain('llm.noKey') + xiaoXi.content.slice(0, 80)
@@ -17878,12 +17938,22 @@ async function yanXuJiHuaRenWu(
    * 撞上"这个会话还有一轮在跑"⇒ 静默让路（那一轮自己会收尾），不当成出错报给用户。
    */
   const paiYiLun = async (content: string, ziYouHuiDa = false): Promise<void> => {
+    /* R147 项9：「插入」就在这一轮边界注入 —— 上一轮已收尾、最终回复还没出，正是用户说的「告一段落」 */
+    let neiRong = content;
+    const cha = chaHuaXin.get(sessionId) || [];
+    if (cha.length) {
+      chaHuaXin.delete(sessionId);
+      neiRong = content + '\n\n' + tMain('chat.interjectHead', '【用户插话（插入）】') + '\n'
+        + cha.map((c) => c.text).join('\n');
+      try { audit?.log('chat.interject-inner', { sessionId, ids: cha.map((c) => c.id), count: cha.length }); } catch { /* noop */ }
+      try { broadcastToWindows('warmy:chaHuaYiPai', { sessionId, items: cha }); } catch { /* noop */ }
+    }
     const r = await zhenZhengFaSong(undefined, {
       ...xiaoXi,
       /** 内部指令：进模型上下文，但**不出现在聊天记录**里 */
       internal: true,
       attachments: [],
-      content,
+      content: neiRong,
       ...(ziYouHuiDa ? { ziYouHuiDa: true } : {}),
     } as never);
     if (r && (r as { skipped?: string }).skipped === 'in-flight') {
@@ -19437,6 +19507,16 @@ chuliIpc('warmy:quInsertMoShi', (_e, sessionId: string) => ({
   ok: true,
   mode: insertMode.get(sessionId) || 'outer',
 }));
+/** R147 项9：整表同步（幂等）—— 渲染层队列里现有的 P2 项就是信箱的全部内容 */
+chuliIpc('warmy:chaHuaTongBu', (_e, p?: { sessionId?: string; items?: Array<{ id?: string; text?: string }> }) => {
+  const sid = String((p && p.sessionId) || '');
+  if (!sid) return { ok: false, error: 'bad-payload' };
+  const lie = (Array.isArray(p && p.items) ? p!.items! : [])
+    .map((x) => ({ id: String((x && x.id) || ''), text: String((x && x.text) || '') }))
+    .filter((x) => x.id && x.text.trim());
+  if (lie.length) chaHuaXin.set(sid, lie); else chaHuaXin.delete(sid);
+  return { ok: true, count: lie.length };
+});
 
 // ── 指标 ──
 chuliIpc('warmy:zhiBiaoJiZhaiYao', () => anQuanChuLi(() => ({ ok: true, ...metrics.summary() }), { ok: true, turns: 0, avgDurationMs: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: 0, cacheHitTokens: 0, cacheMissTokens: 0, ccrOriginalBytes: 0, ccrCompressedBytes: 0, ccrRatio: 1, healthyCache: false, viewSamples: 0, viewBytes: 0, logBytes: 0, viewBudgetChars: 0, viewBytesMin: 0, viewBytesMax: 0, logEntries: 0, viewPointers: 0, viewBounded: true, gongJuDiaoYongJi: 0, toolCallsOk: 0, toolChars: 0, toolTurns: 0, toolDegradedTurns: 0, toolStopReasons: {}, toolLoopBounded: true }))
@@ -20622,7 +20702,7 @@ function boZhongDaoMoRen(): void {
     const p = daoLu();
     if (fs.existsSync(p)) return;
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    /** 第 54 轮项 1：按**当前界面语言**播种（10 种语言各有出厂稿） */
+    /** 第 54 轮项 1：按**当前界面语言**播种（出厂稿目前 10 语，其余语言回落 en-US） */
     const mo = quMoRen(dangQianYuYan());
     fs.writeFileSync(p, mo.dao, 'utf8');
     audit?.log('settings.dao-md-seeded', { chars: mo.dao.length, lang: dangQianYuYan() });

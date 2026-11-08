@@ -21,6 +21,40 @@
   const chuangKouId = Number(canShu.get('id') || '0');
   /** 聊天框临时编辑模式：内容实时回传聊天框，不落盘、不提示保存 */
   const chatEditor = canShu.get('chatEditor') === '1';
+  /* R147 项3：聊天编辑器里再按一次「文本编辑器」快捷键 ⇒ 关掉窗口回到聊天框。
+   * 键位由主窗口打开时带过来（hk=主键|备键），设置里改键后主进程会广播新键位。
+   * 归一规则与主窗 comboFromEvent 完全一致：Ctrl/Alt/Shift/Meta 顺序 + 单字符大写。 */
+  let bianJiJian = String(canShu.get('hk') || '').split('|').map((x) => x.trim()).filter(Boolean);
+  function zuHeFromEvent(e) {
+    const raw = String(e.key || '');
+    if (!raw || raw === 'Control' || raw === 'Alt' || raw === 'Shift' || raw === 'Meta') return '';
+    let k = raw;
+    if (raw === ' ') k = 'Space';
+    else if (raw === 'Esc') k = 'Escape';
+    else if (raw.length === 1) k = raw.toUpperCase();
+    const mods = [];
+    if (e.ctrlKey) mods.push('Ctrl');
+    if (e.altKey) mods.push('Alt');
+    if (e.shiftKey) mods.push('Shift');
+    if (e.metaKey) mods.push('Meta');
+    return mods.concat([k]).join('+');
+  }
+  if (chatEditor) {
+    document.addEventListener('keydown', (e) => {
+      if (!bianJiJian.length) return;
+      const c = zuHeFromEvent(e);
+      if (!c || !bianJiJian.includes(c)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      try { void window.warmy.chatEditorGuan?.(); } catch { /* 关不掉就留着窗口 */ }
+    }, true);
+    try {
+      window.warmy.onChatEditorHotkey?.((d) => {
+        const lie = (d && Array.isArray(d.hotkeys)) ? d.hotkeys : [];
+        bianJiJian = lie.map((x) => String(x || '').trim()).filter(Boolean);
+      });
+    } catch { /* 监听失败不影响编辑 */ }
+  }
 
   /* ── 主题 / 强调色 / 字体颜色 ─────────────────────────────
    * 参数优先；缺 theme 时用系统深浅色；再取不到用 CSS 默认值。

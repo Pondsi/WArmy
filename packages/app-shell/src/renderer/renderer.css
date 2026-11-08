@@ -3117,6 +3117,7 @@ html { font-weight: var(--fw-ui, 400); }
 [dir="rtl"] .wangLuoSwitch .wangLuoSwitchTrack::after { left: auto; right: 2px; }
 [dir="rtl"] .renWuZhongDuanMark { right: auto; left: 6px; }
 [dir="rtl"] .hangJiaoBiao { right: auto; left: -6px; }
+[dir="rtl"] .weiDuZi { right: auto; left: -5px; }
 [dir="rtl"] .hangTongBuBiaoJi { left: auto; right: -7px; }
 [dir="rtl"] .provXiaLaBtn::after { right: auto; left: 10px; }
 [dir="rtl"] .hang .av.langDuZhongAv::after, [dir="rtl"] .lieBiaoHang .av.langDuZhongAv::after { right: auto; left: -2px; }
