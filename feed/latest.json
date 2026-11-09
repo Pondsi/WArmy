@@ -1,12 +1,12 @@
 {
-  "version": "0.4.1",
-  "notes": "WArmy 0.4.1: fixes for default model selection drift, authorization card auto-scroll interruption, chat status marker layering, queue priority promotion with unified tiers, and text editor shortcuts; the in-app text editor now closes with its own hotkey; factory prompt drafts ship in all 27 languages and follow the UI language until you edit them; language tiles use flexible layout with explicit Norwegian (Bokmal) naming. Adds a self-healing layer for model calls: error classification with backoff retry, a circuit breaker, and loop/stall detection, plus clearer retry notices. Hardens context-length error detection and makes retry backoff monotonic.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.1/WArmy-Setup-0.4.1.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.1/WArmy-Setup-0.4.1.exe",
-  "sha256": "8c0476972729e9592318bc9b223ae949c1113f0406ad384c7520082af47f305a",
-  "size": 234237666,
+  "version": "0.4.2",
+  "notes": "WArmy 0.4.2: the continue/retry action row is now truly centered in the chat area; running conversation avatars show a flowing theme-color gradient overlay; mobile preview fixes (board tasks render, and the English UI no longer falls back to Chinese); five previously-red gates repaired (e2e, history-persist, tool-call-e2e, live-ui, mobile-ui); PRIVACY and TERMS are now published in the repository.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.2/WArmy-Setup-0.4.2.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.2/WArmy-Setup-0.4.2.exe",
+  "sha256": "4cff23baa4b518ba1c59dfa8d9066e9fda8cbd5fdec5ecf8eca6cec05bf901af",
+  "size": 234238088,
   "mandatory": false,
-  "publishedAt": "2026-11-09T10:14:13.184Z",
+  "publishedAt": "2026-11-09T13:40:54.652Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.1"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.2"
 }
