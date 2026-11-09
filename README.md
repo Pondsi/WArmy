@@ -25,6 +25,15 @@ Use it as a private assistant, as a private team of experts, or as a shared proj
 
 ---
 
+## At a glance
+
+- **Local-first by architecture.** No WArmy account, no WArmy cloud. Your data lives in `WArmyData` on your disk.
+- **Bring your own models.** Local, self-hosted, OpenAI-compatible, or Anthropic — the key field stays empty when the server does not need one.
+- **A team, not a tab pile.** Roles, a duty agent, a shared board, and a local memory service that survives the window.
+- **Explicit before dangerous.** Shell commands and out-of-workspace writes stop at an approval card; every tool call is audited.
+- **Private by default.** No analytics or ad SDK. Secrets use OS secure storage. Networking and search stay off until you turn them on.
+- **Honest about limits.** Unfinished paths say so; unavailable services fail loudly instead of inventing results.
+
 It is 11 p.m. One chat wrote the plan. Another wrote the code. A third has no idea why any of it exists. You paste the same background into every window and hope the next one remembers.
 
 WArmy keeps the team in one workspace. The plan, the board, the files, and the memory survive the window. And because the workspace is yours, the default path does not go through someone else's server.
