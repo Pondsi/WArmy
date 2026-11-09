@@ -25,6 +25,13 @@ import {
 } from './memory-client.js';
 import { GroupChatRouter, DEFAULT_PERMISSIONS } from '@warmy/group-router';
 import { KanbanCang, JieLing } from '@warmy/board';
+import { classifyError } from './error-classifier.js';
+import { withRetry, CircuitBreaker } from './retry-engine.js';
+import { LoopDetector } from './loop-detector.js';
+
+/* R149 自愈：全局循环检测器实例 */
+const _loopDetector = new LoopDetector({ sameCallThreshold: 3, stallWindow: 5 });
+(globalThis as Record<string, unknown>).__loopDetector = _loopDetector;
 import {
   congYuSheChuangJian,
   liaoTianDaiGongJu,
@@ -4207,6 +4214,25 @@ function baoZhuangLiuShi(
         const xiaoXi = String((e as Error)?.message || e);
         // 用户停了 / 整轮被掐 / 空闲超时且已原样重发过 / 已经退过一次非流式 ⇒ 如实失败，不再非流式干等一遍
         if (signal?.aborted || yiHuiTui || /^stream-(?:first|idle)-timeout/.test(xiaoXi)) { jieShu(false); throw e; }
+        /** R149 自愈：错误分类 + 可重试错误（429/断网/5xx）指数退避重试 */
+        const errInfo = classifyError(e);
+        if (errInfo.retryable && !signal?.aborted) {
+          const dengMs = Math.min(errInfo.suggestedDelayMs + Math.floor(Math.random() * 500), 30000);
+          try { audit?.log('chat.self-heal-retry', { model: Qiu.model, category: errInfo.category, delayMs: dengMs }); } catch { /* noop */ }
+          /* R149 自愈：通知 UI 显示重试状态（非警告、非异常） */
+          try { broadcastToWindows('warmy:selfHealStatus', { message: errInfo.userMessage, category: errInfo.category, retrying: true }); } catch { /* noop */ }
+          await new Promise((r) => setTimeout(r, dengMs));
+          // 重试一次非流式（带退避）
+          try {
+            const hui = await yuan.chat(Qiu, daiChaoShi(signal, FEI_LIU_MS));
+            try { broadcastToWindows('warmy:selfHealStatus', { message: '', retrying: false }); } catch { /* noop */ }
+            jiaZhunYongLiang(gongYingFen, Qiu, hui);
+            return hui;
+          } catch (e2) {
+            if (signal?.aborted) throw e2;
+            // 二次失败 → 走原有 fallback
+          }
+        }
         // 端点不支持流式 / 流式出错 ⇒ 就地退回一次普通对话（有上限，绝不无声挂死）
         try {
           const hui = await yuan.chat(Qiu, daiChaoShi(signal, FEI_LIU_MS));
@@ -4928,6 +4954,21 @@ async function yunXingLiaoTianXunHuan(
       const gongJuMing = String((call && call.function && call.function.name) || '');
       // 本轮工具名记账：上限 64（防长跑无限增长）
       if (gongJuMing && benLunGongJuMing.length < 64) benLunGongJuMing.push(gongJuMing);
+      /* R149 自愈：循环检测器 —— 记录工具调用指纹，检测同工具同参数反复调用 */
+      try {
+        const _ld = (globalThis as Record<string, unknown>).__loopDetector as LoopDetector | undefined;
+        if (_ld) {
+          const _argsStr = String((call as { function?: { arguments?: unknown } } | undefined)?.function?.arguments || '');
+          _ld.recordToolCall(gongJuMing, _argsStr, '');
+          const _dr = _ld.detect();
+          if (_dr.isLooping && _dr.loopType === 'same-tool-call') {
+            audit?.log('chat.loop-detected', { tool: gongJuMing, count: _dr.consecutiveCount, suggestion: _dr.suggestion });
+            if (_dr.suggestion === 'escalate-to-user') {
+              return `[${gongJuMing}] ${_dr.modelHint}`;
+            }
+          }
+        }
+      } catch { /* 循环检测不影响工具执行 */ }
       {
         let yiZuo = buZhouYiZuoGuo(String(sessionId || ''), gongJuMing,
           (call as { function?: { arguments?: unknown } } | undefined)?.function?.arguments,
@@ -5899,8 +5940,8 @@ async function yunXingLiaoTianXunHuan(
               if (keWen) {
                 const da = await qingQiuKaPian(
                   sessionId,
-                  'AI 请求执行会改动项目/其他会话的命令',
-                  `命令：${cmd}\n原因：${cmdWhy}\n（这是项目程序目录或其他会话的工作区/历史；同意 = 仅这一次放行）`,
+                  dang === 'full' ? '【保护目录确认】此命令涉及受保护区域' : 'AI 请求执行会改动项目/其他会话的命令',
+                  `命令：${cmd}\n原因：${cmdWhy}\n${dang === 'full' ? '（完全授权模式下，受保护目录仍需单独确认——这是一次性保护，不是授权问题。同意 = 仅这一次放行）' : '（这是项目程序目录或其他会话的工作区/历史；同意 = 仅这一次放行）'}`,
                   [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }],
                 );
                 if (/^同意/.test(da)) {
@@ -14653,8 +14694,13 @@ async function zhenZhengFaSongBen(
               const yuMing = {
                 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en-US': 'English', 'ja': '日本語',
                 'ko': '한국어', 'fr': 'français', 'es': 'español', 'pt': 'português', 'ru': 'русский', 'eo': 'Esperanto',
+                'de': 'Deutsch', 'it': 'italiano', 'nl': 'Nederlands', 'pl': 'polski', 'sv': 'svenska',
+                'cs': 'čeština', 'hu': 'magyar', 'da': 'dansk', 'nb': 'norsk', 'tr': 'Türkçe',
+                'uk': 'українська', 'id': 'Bahasa Indonesia', 'vi': 'Tiếng Việt', 'th': 'ไทย',
+                'hi': 'हिन्दी', 'ar': 'العربية', 'fa': 'فارسی',
               }[muBiaoYuYan] || muBiaoYuYan;
-              const yueGeJu = tMain('llm.strictLanguage', '【语言约束】请**始终**使用{lang}作答：思考过程与正文都用{lang}，不要夹杂其他语言。').replace(/\{lang\}/g, yuMing);
+              /* R149 项2：加强约束——思考链与正文都必须用目标语言，措辞更强制 */
+              const yueGeJu = tMain('llm.strictLanguage', '【语言约束 · 强制】你的**所有输出**必须使用{lang}：包括思考链（reasoning）、工具调用的说明、中间回复、最终正文，全部用{lang}。绝对不要夹杂任何其他语言的词汇或句子。如果你发现自己在用其他语言思考，立即切换回{lang}。').replace(/\{lang\}/g, yuMing);
               ju.push(yueGeJu);
               /**
                * 审计留痕（"这个勾到底有没有生效"必须可查 —— 真机反馈里用户就是这么问的）。
@@ -16872,11 +16918,18 @@ function kadianKaMoxing(lei: RenWuKadian, x: { why: string; jieDuan: string; err
   biaoTi: string; ti: string; options: Array<{ id: string; biaoQian: string; description?: string; tuiJian?: boolean; keXinDu?: number }>;
 } {
   const anQuan = (s: string) => String(s || '').slice(0, 240);
+  /* R149 项14：说明模板 —— 正在做什么 / 做了什么但没结果 / 预期 vs 实际 */
+  const mo = (dongZuo: string, yuQi: string, shiJi: string) =>
+    `【正在做什么】${dongZuo}\n【做了什么】${anQuan(x.why)}\n【预期结果】${yuQi}\n【实际结果】${shiJi}`;
   switch (lei) {
     case 'step-capped':
       return {
         biaoTi: '同一步骤反复续派仍未推进，需要你定夺',
-        ti: `已按次数尺子把这一步标成「跳过」并如实记录：${anQuan(x.why)}\n\n再派下去只会重复同样的动作，所以停在这里等你选方向。`,
+        ti: mo(
+          `执行任务步骤${x.jieDuan ? `「${anQuan(x.jieDuan)}」` : ''}`,
+          '完成该步骤并产出结果',
+          `多次尝试后仍无进展：${anQuan(x.why)}。已按次数尺子标成「跳过」，再派下去只会重复同样动作，停在这里等你选方向。`,
+        ),
         options: [
           { id: 'retry', biaoQian: '重试这一步（换做法）', description: '把被跳过的那一步放回待办，禁止重复原调用', tuiJian: true, keXinDu: 68 },
           { id: 'model', biaoQian: '换模型/调用链后继续' },
@@ -16887,7 +16940,11 @@ function kadianKaMoxing(lei: RenWuKadian, x: { why: string; jieDuan: string; err
     case 'eta-anomaly':
       return {
         biaoTi: '本轮被判定为异常（时间或次数远超预估），需要你定夺',
-        ti: `判定依据：${anQuan(x.why)}\n\n已暂停自动继续，避免一直烧 token。请选择处理方式：`,
+        ti: mo(
+          `执行任务${x.jieDuan ? `「${anQuan(x.jieDuan)}」阶段` : ''}`,
+          '在预估时间内完成',
+          `时间或调用次数远超预估：${anQuan(x.why)}。已暂停自动继续，避免一直烧 token。`,
+        ),
         options: [
           { id: 'retry', biaoQian: '按新预估继续（换一种做法）', description: '清掉异常标记与续派计数，重新分析后再动手', tuiJian: true, keXinDu: 62 },
           { id: 'model', biaoQian: '换模型/调用链后继续' },
@@ -16898,7 +16955,11 @@ function kadianKaMoxing(lei: RenWuKadian, x: { why: string; jieDuan: string; err
     case 'length-short':
       return {
         biaoTi: '长文没写够就停了，需要你定夺',
-        ti: `${anQuan(x.why)}\n\n（这是工具自检回来的真实字数，不是模型自述。）请选择：`,
+        ti: mo(
+          '撰写长文内容',
+          '写到用户要求的字数',
+          `${anQuan(x.why)}（工具自检的真实字数，不是模型自述）。`,
+        ),
         options: [
           { id: 'retry', biaoQian: '接着往后追加写完', description: '不重写、不覆盖，用 append 继续追加', tuiJian: true, keXinDu: 75 },
           { id: 'model', biaoQian: '换更擅长写长文的模型' },
@@ -16909,7 +16970,11 @@ function kadianKaMoxing(lei: RenWuKadian, x: { why: string; jieDuan: string; err
     case 'tool-stall':
       return {
         biaoTi: '工具循环连续一段时间没有任何真实产出',
-        ti: `${anQuan(x.error)}\n\n多为模型反复调同一件事却没落盘。已中断本轮请求，请选择：`,
+        ti: mo(
+          `执行工具调用${x.jieDuan ? `（${anQuan(x.jieDuan)}）` : ''}`,
+          '工具执行后产出结果并推进任务',
+          `反复调用但无真实产出：${anQuan(x.error)}。已中断本轮请求。`,
+        ),
         options: [
           { id: 'retry', biaoQian: '换做法继续（禁止重复原调用）', tuiJian: true, keXinDu: 58 },
           { id: 'model', biaoQian: '换模型/调用链后继续' },
@@ -16920,7 +16985,11 @@ function kadianKaMoxing(lei: RenWuKadian, x: { why: string; jieDuan: string; err
     case 'tool-hard-cap':
       return {
         biaoTi: '本轮工作时长顶到了硬顶（仍在推进，但已到兜底上限）',
-        ti: `${anQuan(x.error)}\n\n硬顶是防止死循环的兜底，不代表任务做完了。你可以：`,
+        ti: mo(
+          `执行任务${x.jieDuan ? `（${anQuan(x.jieDuan)}）` : ''}`,
+          '在正常时长内完成',
+          `到达硬顶上限：${anQuan(x.error)}。硬顶是防止死循环的兜底，不代表任务做完了。`,
+        ),
         options: [
           { id: 'extend', biaoQian: '再给它 30 分钟继续', description: '只延长这一次，用完即失效', tuiJian: true, keXinDu: 66 },
           { id: 'retry', biaoQian: '重新拆分任务后继续' },
@@ -19926,6 +19995,9 @@ chuliIpc('warmy:peiZhiBaoCun', (e, partial: Record<string, unknown>) => {
         qidong('restore-defaults: instances cleared');
       } catch (e) { qidong('restore-defaults: instances clear skip ' + String(e)); }
       try { broadcastToWindows('warmy:peiZhiChanged', { keys: ['restoreDefaults'] }, e?.sender?.id); } catch { /* noop */ }
+      /* 项12: 恢复出厂后立即同步出厂稿 + 用户名跟随语言 */
+      try { moRenYuYanTongBu(); } catch { /* noop */ }
+      try { yongHuMingSuiYuYan(); } catch { /* noop */ }
       return { ok: true, settings: ji, restored: true };
     } catch (err) { return { ok: false, error: xiJingCuoWu(err) }; }
   }
@@ -20758,7 +20830,21 @@ function moRenYuYanTongBu(): void {
         audit?.log('prompt.default-kept-user-edited', { ceng: x.ceng, lang, ziShu: cur.length });
         continue;
       }
-      try { fs.copyFileSync(p, p + '.bak-lang-' + Date.now()); } catch { /* noop */ }
+      try {
+        fs.copyFileSync(p, p + '.bak-lang-' + Date.now());
+        /* 项11: 有界清理 —— 只保留最近 3 份 .bak-lang-* 备份，防止无限累积 */
+        try {
+          const dir = path.dirname(p);
+          const base = path.basename(p);
+          const baks = fs.readdirSync(dir)
+            .filter((f) => f.startsWith(base + '.bak-lang-'))
+            .sort(); // 按名称排序（含时间戳后缀）
+          while (baks.length > 3) {
+            const oldest = baks.shift();
+            if (oldest) { try { fs.rmSync(path.join(dir, oldest), { force: true }); } catch { /* noop */ } }
+          }
+        } catch { /* noop */ }
+      } catch { /* noop */ }
       fs.writeFileSync(p, x.wen, 'utf8');
       audit?.log('prompt.default-relocalized', { ceng: x.ceng, lang, qian: cur.length, hou: x.wen.length });
     } catch { /* 单层失败不影响其它层 */ }

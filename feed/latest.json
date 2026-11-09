@@ -1,12 +1,12 @@
 {
   "version": "0.4.1",
-  "notes": "WArmy 0.4.1: fixes for default model selection drift, authorization card auto-scroll interruption, chat status marker layering, queue priority promotion with unified tiers, and text editor shortcuts; the in-app text editor now closes with its own hotkey; factory prompt drafts now ship in all 27 languages and follow the UI language until you edit them; language tiles use flexible layout with explicit Norwegian (Bokmal) naming.",
+  "notes": "WArmy 0.4.1: fixes for default model selection drift, authorization card auto-scroll interruption, chat status marker layering, queue priority promotion with unified tiers, and text editor shortcuts; the in-app text editor now closes with its own hotkey; factory prompt drafts ship in all 27 languages and follow the UI language until you edit them; language tiles use flexible layout with explicit Norwegian (Bokmal) naming. Adds a self-healing layer for model calls: error classification with backoff retry, a circuit breaker, and loop/stall detection, plus clearer retry notices. Hardens context-length error detection and makes retry backoff monotonic.",
   "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.1/WArmy-Setup-0.4.1.exe",
   "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.1/WArmy-Setup-0.4.1.exe",
-  "sha256": "79f8bec8309ea462964acd1a33b632d024fa2e2b9c41d5223c2f0cd0163a81c1",
-  "size": 234230623,
+  "sha256": "8c0476972729e9592318bc9b223ae949c1113f0406ad384c7520082af47f305a",
+  "size": 234237666,
   "mandatory": false,
-  "publishedAt": "2026-11-08T18:06:21.462Z",
+  "publishedAt": "2026-11-09T10:14:13.184Z",
   "repo": "https://github.com/Pondsi/WArmy",
   "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.1"
 }

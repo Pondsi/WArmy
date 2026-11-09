@@ -115,10 +115,15 @@ export function shiMoRenYongHuMing(ming: string): boolean {
   return !!s && Object.values(YONG_HU_MING_MO_REN).includes(s);
 }
 
+/** 行尾归一化（CRLF→LF）：出厂稿比较/匹配前必须做，防止用户用编辑器保存后行尾变化导致误判"改过" */
+function normalizeLineEndings(s: string): string {
+  return String(s || '').replace(/\r\n/g, '\n');
+}
+
 /** 这段内容是不是"出厂稿"（任意语言、任意一层）：是 ⇒ 没被用户改过，可以跟版 */
 export function shiChuChangGao(wen: string): boolean {
-  const s = String(wen || '');
+  const s = normalizeLineEndings(String(wen || ''));
   if (!s.trim()) return false;
   const all = [...Object.values(MO_REN_YU_YAN), ...LI_SHI_CHU_CHANG];
-  return all.some((x) => x.dao === s || x.shu === s);
+  return all.some((x) => normalizeLineEndings(x.dao) === s || normalizeLineEndings(x.shu) === s);
 }

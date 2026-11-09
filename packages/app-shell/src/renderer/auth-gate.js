@@ -10,14 +10,19 @@
   'use strict';
 
   const $ = (id) => document.getElementById(id);
+  /* R149 项1：简体第一、繁体第二、其余按中文名拼音首字母排（阿→波→丹→德→俄→法→韩→荷→捷→挪→葡→日→瑞→世→泰→土→乌→西→匈→意→印→英→越） */
   const LOCALES = [
-    ['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['en-US', 'English'], ['ja', '日本語'],
-    ['ko', '한국어'], ['ru', 'Русский'], ['es', 'Español'], ['fr', 'Français'],
-    ['pt', 'Português'], ['eo', 'Esperanto'], ['de', 'Deutsch'], ['it', 'Italiano'],
-    ['nl', 'Nederlands'], ['pl', 'Polski'], ['sv', 'Svenska'], ['cs', 'Čeština'],
-    ['hu', 'Magyar'], ['da', 'Dansk'], ['nb', 'Norsk bokmål'], ['tr', 'Türkçe'],
-    ['uk', 'Українська'], ['id', 'Bahasa Indonesia'], ['vi', 'Tiếng Việt'], ['th', 'ไทย'],
-    ['hi', 'हिन्दी'], ['ar', 'العربية'], ['fa', 'فارسی'],
+    ['zh-CN', '简体中文'], ['zh-TW', '繁體中文'],
+    ['ar', 'العربية'], ['pl', 'Polski'], ['fa', 'فارسی'],
+    ['da', 'Dansk'], ['de', 'Deutsch'],
+    ['ru', 'Русский'], ['fr', 'Français'],
+    ['ko', '한국어'], ['nl', 'Nederlands'],
+    ['cs', 'Čeština'], ['nb', 'Norsk bokmål'],
+    ['pt', 'Português'], ['ja', '日本語'], ['sv', 'Svenska'],
+    ['eo', 'Esperanto'], ['th', 'ไทย'], ['tr', 'Türkçe'],
+    ['uk', 'Українська'], ['es', 'Español'], ['hu', 'Magyar'],
+    ['it', 'Italiano'], ['hi', 'हिन्दी'], ['en-US', 'English'],
+    ['id', 'Bahasa Indonesia'], ['vi', 'Tiếng Việt'],
   ];
   /** 从右往左书写的语言 */
   const RTL_LOCALES = ['ar', 'fa'];

@@ -439,6 +439,27 @@ body.liaoTianChuangKou .liaoTianBuJu {
   width: 40px; height: 40px; border-radius: 6px; object-fit: cover;
   flex-shrink: 0; background: var(--hover); display: block;
 }
+/* R149：执行中头像动画——淡主题色渐变流动覆盖层 */
+.lieBiaoTiaoMu .av, .lieBiaoTiaoMu .avTuPian { position: relative; }
+.lieBiaoTiaoMu .av.yunXingZhong::after,
+.lieBiaoTiaoMu .avTuPian.yunXingZhong::after {
+  content: '';
+  position: absolute; inset: 0; border-radius: 6px;
+  background: linear-gradient(135deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent, #e2b28c) 28%, transparent) 25%,
+    transparent 50%,
+    color-mix(in srgb, var(--accent, #e2b28c) 18%, transparent) 75%,
+    transparent 100%);
+  background-size: 200% 200%;
+  animation: yunXingLiuDong 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes yunXingLiuDong {
+  0%   { background-position: 200% 200%; opacity: .7; }
+  50%  { background-position: 0% 0%; opacity: 1; }
+  100% { background-position: -200% -200%; opacity: .7; }
+}
 .lieBiaoTiaoMu .meta { min-width: 0; flex: 1; }
 .lieBiaoTiaoMu .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* R125 任务13：名称复制友好 —— 拖动框选后自动复制，名称闪主题色反馈 */

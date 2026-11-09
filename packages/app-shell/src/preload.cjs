@@ -659,6 +659,7 @@ contextBridge.exposeInMainWorld('warmy', {
   laJiHuiFu: (payload) => ipcRenderer.invoke('warmy:laJiHuiFu', payload),
   laJiYongJiuShanChu: (payload) => ipcRenderer.invoke('warmy:laJiYongJiuShanChu', payload),
   onXiaoDiBianGeng: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:xiaoDiBianGeng', h); return () => ipcRenderer.removeListener('warmy:xiaoDiBianGeng', h); },
+  onSelfHealStatus: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:selfHealStatus', h); return () => ipcRenderer.removeListener('warmy:selfHealStatus', h); },
   sessionSummary: (payload) => ipcRenderer.invoke('warmy:huiHuaZhaiYao', payload),
   cleanupRun: (opts) => ipcRenderer.invoke('warmy:qingLiYunXing', opts),
   roleModelsSet: (roles) => ipcRenderer.invoke('warmy:jueSeMoXingJiSheZhi', roles),

@@ -2531,6 +2531,8 @@ async function langDuWenBen(text, btnEl) {
     } catch { /* 读不到就不显示，不影响主流程 */ }
   }
   try { window.warmy.onWaiBuBianJiZhuangTai?.(() => { void shuaXinWaiBuBianJi(); }); } catch { /* noop */ }
+  /* R149 自愈：重试状态通知（显示 toast，不弹警告不标异常） */
+  try { window.warmy.onSelfHealStatus?.((d) => { try { if (d && d.retrying && d.message) showToast(d.message); } catch { /* noop */ } }); } catch { /* noop */ }
   void shuaXinWaiBuBianJi();
 
   /** 应用主题色（色板与自定义入口共用） */
@@ -3579,9 +3581,13 @@ async function langDuWenBen(text, btnEl) {
     /* R147 项7：「本轮出现过卡」只在**这一轮还在跑**时兜底（防连续卡之间问号闪没）。
      * 以前它是无条件常驻：收尾清理一旦没走到（切会话/异常结束），问号与第一列圆点就永远亮着。 */
     const haiZaiPao = !!(state.sessionRuns && state.sessionRuns[S] && state.sessionRuns[S].running);
+    /* R149 修复：「本轮出现过卡」不能整个任务期间都亮圆点——只在最近 3 秒内有过卡时才兜底
+     * （防连续卡之间问号闪没，但不会在任务长时间运行时误亮） */
+    const aiqZuiJin = (state.aiqBenLun && state.aiqBenLun.get && state.aiqBenLun.get(S)) || 0;
+    const kaJianKongChuang = haiZaiPao && aiqZuiJin > 0 && (Date.now() - aiqZuiJin < 3000);
     const daiJueCe = (state.aiQuestions || []).some((q) => q && q.status === 'pending' && !q.answered
       && (q.sessionId === S || q.groupId === S))
-      || (haiZaiPao && !!(state.aiqBenLun && state.aiqBenLun.has && state.aiqBenLun.has(S)));
+      || kaJianKongChuang;
     /**
      * 异常 = 回复异常 或 任务被中断（两者对用户都是"出事了，需要你看一眼"）。
      * 但**用户看过就不再提醒**：`yiChaKanYiChang` 记下看过的会话 ——
@@ -3633,6 +3639,9 @@ async function langDuWenBen(text, btnEl) {
     try {
       const st = hangJiaoBiaoZhuangTai(sid);
       const av = hangYuanSu.querySelector('.av,.avTuPian');
+      /* R149 主人定稿：执行中会话的头像叠加流动主题色动画 */
+      const yunXing = !!(state.sessionRuns && state.sessionRuns[String(sid)] && state.sessionRuns[String(sid)].running);
+      if (av) av.classList.toggle('yunXingZhong', yunXing);
       const tingYong = !!hangYuanSu.querySelector('.hangJiaoBiao.tingYong');
       /* R147 项7（用户定稿语义）：第二列会话图标上三种标记彼此独立 ——
        *   待决策 / 待选择卡 ⇒ 问号；异常 ⇒ 感叹号；未读 ⇒ 红色未读字数。
@@ -3741,6 +3750,8 @@ async function langDuWenBen(text, btnEl) {
     const you = (sids) => {
       for (const sid of sids) {
         if (state.unread && Number(state.unread[String(sid)] || 0) > 0) return true;
+        /* R149 主人定稿：任务执行中也亮圆点 */
+        if (state.sessionRuns && state.sessionRuns[String(sid)] && state.sessionRuns[String(sid)].running) return true;
         const st = hangJiaoBiaoZhuangTai(sid);
         if (st.yiChang || st.daiJueCe) return true;
       }
@@ -5241,8 +5252,13 @@ async function langDuWenBen(text, btnEl) {
         const newNode = tpl.firstElementChild;
         if (newNode) {
           newNode.dataset.sig = sig;
+          /* R149 项8：重建前保存 <details> 展开状态，重建后恢复（否则点击展开瞬间被流式刷新拍回折叠） */
+          const oldDetails = lie.querySelectorAll('details');
+          const openStates = [...oldDetails].map((d) => d.open);
           lie.replaceWith(newNode);
           lie = newNode;
+          const newDetails = lie.querySelectorAll('details');
+          newDetails.forEach((d, i) => { if (i < openStates.length) d.open = openStates[i]; });
         }
         }
       }
@@ -10251,10 +10267,10 @@ window.__keYiLiaoTian = keYiLiaoTian;
         const items = [...rawItems].sort((a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0));
         const pending = items.filter((q) => q.status === 'pending');
         try { state.aiQuestions = items; } catch { /* noop */ }
-        // 本轮出现过未答卡 ⇒ 记下会话：问号保持到「收尾且无卡」才消失（连续卡不闪没）
+        // 本轮出现过未答卡 ⇒ 记下会话+时间戳：问号只在最近 3 秒内的空隙保持（连续卡不闪没）
         try {
-          const bl = state.aiqBenLun || (state.aiqBenLun = new Set());
-          for (const q of pending) if (q && (q.sessionId || q.groupId)) bl.add(String(q.sessionId || q.groupId));
+          const bl = state.aiqBenLun || (state.aiqBenLun = new Map());
+          for (const q of pending) if (q && (q.sessionId || q.groupId)) bl.set(String(q.sessionId || q.groupId), Date.now());
         } catch { /* noop */ }
         // ① 先处理音效（与能不能画出来无关）
         xiangKaPianYin(pending.map((q) => q.id), 'render');
@@ -10288,21 +10304,35 @@ window.__keYiLiaoTian = keYiLiaoTian;
         const zongShu = items.length;
         host.innerHTML = pending.map((q) => {
           const qi = items.findIndex((x) => String(x.id) === String(q.id));
-          const opts = (q.options || []).map((o) => {
-            // **改名**：同意→本次允许；新增「允许」（长期）
+          /* R149 项9：选项固定顺序 = 允许一次、允许(长期)、拒绝、其他 */
+          const rawOpts = (q.options || []).map((o) => {
             let label = escapeHtml(o.biaoQian);
-            if (label === '同意' || label === 'Allow') label = escapeHtml(tOr('aiq.allowOnce', '允许（仅限一次）'));
-            /**
-             * 模型自评的最优方案标「推荐」：用户开着「自动选择」时，它会**直接被采用**；
-             * 关着时也让人一眼看出模型建议选哪个。说明收进 title，不占版面。
-             */
+            if (label === '同意' || label === 'Allow') label = escapeHtml(tOr('aiq.allowOnce', '允许一次'));
             const tui = o.tuiJian
               ? '<span class="aiqTuiJian">' + escapeHtml(tOr('aiq.recommended', '推荐')) + '</span>'
               : '';
             const cls = o.tuiJian ? 'anNiuXiao aiqTuiJianNiu' : 'anNiuXiao';
             const sm = o.description ? ` title="${escapeHtml(String(o.description))}"` : '';
-            return `<button class="${cls}" data-aiq="${escapeHtml(q.id)}" data-opt="${escapeHtml(o.id)}"${sm}>${label}${tui}</button>`;
-          }).join(' ');
+            const html = `<button class="${cls}" data-aiq="${escapeHtml(q.id)}" data-opt="${escapeHtml(o.id)}"${sm}>${label}${tui}</button>`;
+            /* 分类：允许一次/同意类=1, 拒绝类=3, 其他模型选项=1.5 */
+            const isAllowOnce = /同意|允许一次|Allow|Approve|Yes/i.test(String(o.biaoQian || ''));
+            const isReject = /拒绝|Reject|Deny|No/i.test(String(o.biaoQian || ''));
+            return { html, order: isAllowOnce ? 1 : isReject ? 3 : 1.5 };
+          });
+          /* 允许（长期）只在授权卡上出现（有拒绝+同意/允许配对）；决策卡/选择卡不加 */
+          const shiShouQuanKa = rawOpts.some((x) => x.order === 3) && rawOpts.some((x) => x.order === 1);
+          if (shiShouQuanKa) {
+            rawOpts.push({
+              html: `<button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__allow__">${escapeHtml(tOr('aiq.allow', '允许'))}</button>`,
+              order: 2,
+            });
+          }
+          rawOpts.push({
+            html: `<button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__custom__">${escapeHtml(t('aiq.custom')||'Other')}</button>`,
+            order: 4,
+          });
+          rawOpts.sort((a, b) => a.order - b.order);
+          const opts = rawOpts.map((x) => x.html).join(' ');
           const jiShu = zongShu > 1 ? '<span class="aiqJiShu">' + (qi + 1) + '/' + zongShu + '</span>' : '';
           /**
            * 「选了会怎样」：**只取选项自带的 description**，绝不回落到选项名。
@@ -10323,10 +10353,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
               <button type="button" class="ddWen" aria-label="?">${wanHao}<span class="ddDesc">${bangZhu}</span></button>
             </div>
             ${q.ti ? `<div class="jingYin">${escapeHtml(q.ti)}</div>` : ''}
-            <div class="aiqOpts">${opts}
-              <button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__allow__">${escapeHtml(tOr('aiq.allow', '允许'))}</button>
-              <button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__custom__">${escapeHtml(t('aiq.custom')||'Other')}</button>
-            </div>
+            <div class="aiqOpts">${opts}</div>
             ${houGuo ? `<div class="jingYin aiqJuJue">${escapeHtml(tOr('aiq.whatHappens', '选了会怎样：'))} ${houGuo}</div>` : ''}
             <div class="aiqCustom yinCang"><input class="aiqShuRu" placeholder="${escapeHtml(t('aiq.custom')||'')}"/>
               <button class="anNiuZhuYao" data-aiq-submit="${escapeHtml(q.id)}">${escapeHtml(t('aiq.submit')||'OK')}</button></div>
@@ -10385,6 +10412,17 @@ window.__keYiLiaoTian = keYiLiaoTian;
             if (r2 && r2.ok === false) uiAlert(String(r2.error||''));
             renderAiQuestions();
           };
+        });
+        /* R149 项5：数字键 1-4 快捷选择选项（自定义输入框聚焦时不触发） */
+        host.addEventListener('keydown', (e) => {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+          const n = parseInt(e.key, 10);
+          if (n < 1 || n > 4) return;
+          const ka = e.target.closest?.('.aiqKa') || host.querySelector('.aiqKa');
+          if (!ka) return;
+          const btns = ka.querySelectorAll('.aiqOpts [data-opt]');
+          const btn = btns[n - 1];
+          if (btn) { e.preventDefault(); btn.click(); }
         });
         requestAnimationFrame(() => {
           try {
@@ -11192,7 +11230,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
      * 还有卡在等 ⇒ 保留，问号继续亮到答完）。
      */
     try {
-      if (state.aiqBenLun && state.aiqBenLun.has && state.aiqBenLun.has(sid)) {
+      if (state.aiqBenLun && state.aiqBenLun.get && state.aiqBenLun.get(sid)) {
         const haiYou = (state.aiQuestions || []).some((q) => q && q.status === 'pending' && !q.answered
           && (q.sessionId === sid || q.groupId === sid));
         if (!haiYou) state.aiqBenLun.delete(sid);
@@ -26504,7 +26542,10 @@ async function renderDashboard(host) {
     const typing =
       !!tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable);
     // 正在打字时不抢：只有带真修饰键（Ctrl/Alt/Meta）的组合才算快捷键
-    if (typing && !(e.ctrlKey || e.altKey || e.metaKey)) return;
+    // R149 项7：文本编辑器（F9）例外——聊天界面开着就该响应，即使光标在输入框里
+    const c2 = c.combo;
+    const isEditorKey = c2 === 'F9' || shortcutBinding('textEditor') === c2 || shortcutBinding('textEditor', true) === c2;
+    if (typing && !(e.ctrlKey || e.altKey || e.metaKey) && !isEditorKey) return;
     for (const a of SHORTCUT_ACTIONS) {
       if (shortcutBinding(a.id) !== c.combo && shortcutBinding(a.id, true) !== c.combo) continue;
       e.preventDefault();
