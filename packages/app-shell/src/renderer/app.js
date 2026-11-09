@@ -3741,6 +3741,22 @@ async function langDuWenBen(text, btnEl) {
   }
 
   /**
+   * R152：运行态变化时**只刷新对应会话头像的流动动画类**，不整表重绘（避免抢滚动/重建 DOM）。
+   * 旧缺口：yunXingZhong 类只在 attachChatMarks（列表重绘）里切，而运行态广播只改 running 不重绘列表，
+   * 导致执行中头像的主题色流动动画不一定随任务开始/结束及时亮灭。这里把运行态直接接到头像类。
+   */
+  function gengXinTouXiangYunXing(sid0) {
+    const sid = String(sid0 || '');
+    if (!sid) return;
+    const yunXing = !!(state.sessionRuns && state.sessionRuns[sid] && state.sessionRuns[sid].running);
+    document.querySelectorAll('.lieBiaoTiaoMu').forEach((row) => {
+      if (String(row.dataset.sid || '') !== sid) return;
+      const av = row.querySelector('.av,.avTuPian');
+      if (av) av.classList.toggle('yunXingZhong', yunXing);
+    });
+  }
+
+  /**
    * **第一列图标右上角主题色圆点**（R147 项7 用户定稿）：
    * 该分区下任一会话有「未读 / 待决策 / 待选择 / 异常」⇒ 亮圆点；四者都没有 ⇒ 不亮。
    * 判定复用 `hangJiaoBiaoZhuangTai`（与第二列角标同一口径），未读用 state.unread。
@@ -34953,6 +34969,8 @@ try {
             yunXingZhuangTaiKai(sid, { xinRenWu, xinLun: true, ts: d.ts });
           }
         } else yunXingZhuangTaiGuan(true, sid, run?.generation);
+        // R152：运行态落到头像流动动画（不整表重绘）
+        try { gengXinTouXiangYunXing(sid); } catch { /* noop */ }
       } catch { /* noop */ }
     });
     /**

@@ -51,7 +51,47 @@
     'preview.settingsNotice': '以下设置仅为本机预览：改动不会保存，也不会同步到桌面端。', 'xiaoXi.smtpDesktopOnly': 'SMTP 验证需要桌面端配合，手机端仅作界面预览。', 'prompt.providerName': '供应商名称',
     'xiaoXi.latest': '当前已是最新版本', 'xiaoXi.inviteCopied': '邀请码已复制到剪贴板', 'xiaoXi.scanOnDesktop': '请使用桌面端扫码功能', 'export.tiShi': '导出当前会话为 Markdown',
   };
-  const t = (k) => (I18N.strings && I18N.strings[k]) || D[k] || k;
+  // 移动端专属键（tab.* / wo.* 等）不在桌面语言包里：给一份英文兜底，
+  // 切到 en-US 时不再回落中文 D，避免英文界面残留中文。
+  const D_EN = {
+    'brand.name': 'WArmy', 'brand.fu': 'WArmy (Workhorse Army)',
+    'tab.sessions': 'Sessions', 'tab.cattle': 'Workhorses', 'tab.board': 'Board', 'tab.wo': 'Me',
+    'sessions.biaoTi': 'Sessions', 'cattle.biaoTi': 'Workhorses',
+    'board.biaoTi': 'Board', 'board.running': 'Running', 'board.done': 'Done today',
+    'board.instances': 'Instances', 'board.queue': 'Queued', 'board.jinDu': 'Session progress',
+    'wo.biaoTi': 'Me', 'wo.settings': 'Settings', 'wo.appearance': 'Appearance', 'wo.provider': 'Providers',
+    'wo.smtp': 'Email SMTP', 'wo.mesh': 'Network', 'wo.about': 'About',
+    'wo.language': 'Language', 'wo.theme': 'Theme', 'wo.accent': 'Accent color',
+    'wo.light': 'Light', 'wo.dark': 'Dark', 'wo.system': 'System',
+    'wo.version': 'Version', 'wo.checkUpdate': 'Check for updates', 'wo.opensource': 'Open source',
+    'wo.copyright': 'Copyright', 'wo.deviceId': 'Device ID', 'wo.owner': 'Owner',
+    'chat.placeholder': 'Type a message', 'm.chat.placeholder': 'Type a message', 'chat.faSong': 'Send', 'chat.more': 'More',
+    'chat.members': 'Members', 'chat.model': 'Models', 'chat.kb': 'Knowledge base',
+    'chat.checkpoints': 'Checkpoints', 'chat.metrics': 'Metrics', 'chat.export': 'Export session',
+    'chat.urgent': 'Urgent', 'chat.insert': 'Insert', 'chat.queue': 'Queue',
+    'chat.cancel': 'Cancel', 'chat.systemNote': 'The phone is an appearance preview; orchestration happens on desktop.',
+    'inst.status.running': 'Running', 'inst.status.stopped': 'Stopped',
+    'inst.defaultModel': 'Default model', 'inst.models': 'Available models', 'inst.chain': 'Call chain',
+    'inst.persona': 'Write more', 'inst.group': 'Members',
+    'kb.tiShi': 'Search the knowledge base', 'cp.empty': 'No checkpoints', 'cp.rollback': 'Roll back', 'cp.rollbackHint': 'Roll back: stops the current task and returns to this node.',
+    'metrics.turns': 'Turns', 'metrics.cost': 'Cost (¥)',
+    'common.yes': 'Yes',
+    'ui.type.single': 'Workhorse', 'ui.type.internal': 'Project', 'ui.type.contact': 'Contact', 'ui.type.external': 'Group',
+    'board.blocked': 'Blocked', 'board.readonlyHint': 'The board is a read-only aggregate view; make changes by talking to the duty worker.',
+    'chat.fu.single': 'My workhorse', 'chat.fu.group': 'Group',
+    'export.hasTs': 'Include timestamps', 'accent.custom': 'Custom color',
+    'provider.list': 'Provider list', 'provider.add': '+ Add provider', 'provider.configured': 'Configured', 'provider.notConfigured': 'Not configured',
+    'smtp.settings': 'Email SMTP settings', 'smtp.hostLabel': 'SMTP server', 'smtp.portLabel': 'Port', 'smtp.userLabel': 'Username',
+    'smtp.passLabel': 'Auth code', 'smtp.passPlaceholder': 'Enter auth code', 'smtp.fromLabel': 'From name', 'smtp.fromPlaceholder': 'WArmy notification', 'smtp.verifyBtn': 'Verify & save',
+    'notify.biaoTi': 'Email notifications', 'notify.done': 'Completion', 'notify.req': 'Requests', 'notify.err': 'Errors',
+    'mesh.portLabel': 'Listen port', 'mesh.stateLabel': 'Network switch', 'mesh.peers': 'Known peers', 'mesh.start': 'Enable network', 'mesh.stop': 'Disable network',
+    'mesh.stopped': 'Off', 'mesh.invite': 'Invite', 'mesh.genInvite': 'Generate invite code', 'mesh.scanJoin': 'Scan to join',
+    'about.license': 'License',
+    'xiaoXi.initFailed': 'Mobile init failed: ',
+    'preview.settingsNotice': 'These settings are a local preview only: changes are not saved or synced to desktop.', 'xiaoXi.smtpDesktopOnly': 'SMTP verification needs the desktop app; the phone is a UI preview only.', 'prompt.providerName': 'Provider name',
+    'xiaoXi.latest': 'Already the latest version', 'xiaoXi.inviteCopied': 'Invite code copied to clipboard', 'xiaoXi.scanOnDesktop': 'Use the desktop app to scan', 'export.tiShi': 'Export the current session as Markdown',
+  };
+  const t = (k) => (I18N.strings && I18N.strings[k]) || (I18N.yuYan === 'en-US' && D_EN[k]) || D[k] || k;
   const brandName = () => t('brand.name');
   /** 可见文字一律 esc(t(...))；对象/空值不直出 */
   const disp = (v) => {
@@ -779,7 +819,7 @@
   function boardAddTask(biaoTi) {
     const v = String(biaoTi || '').trim();
     if (!v) return false;
-    state.boardTasks.push({ id: 'bt-' + Date.now(), title: v, pct: 0 });
+    state.boardTasks.push({ id: 'bt-' + Date.now(), biaoTi: v, pct: 0 });
     return true;
   }
 

@@ -79,7 +79,10 @@ packages/app-shell/scripts/verify-local-search.mjs
 
 # 发布仓库口径（用户要求）：只发布程序必须文件 + 说明.md/LICENSE/SPONSORS.md，
 # 开发/验收/交接类文件一律不入库（本地保留）
-/docs/
+# D5（R152 拍板）：PRIVACY/TERMS 英文版要真的出现在 GitHub，单独开例外
+/docs/*
+!/docs/PRIVACY.md
+!/docs/TERMS.md
 /dev/
 /references/
 /spikes/

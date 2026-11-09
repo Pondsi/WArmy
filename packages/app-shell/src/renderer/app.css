@@ -3776,8 +3776,10 @@ html { font-weight: var(--fw-ui, 400); }
  * 它带 xiaoXi/bubbleWrap 这套消息类，会被消息的左右对齐带跑 —— 这里强制拉满宽度并居中。
  */
 .huiFuRenWuHang { display: flex; justify-content: center; width: 100%; }
-.huiFuRenWuHang .bubbleWrap { width: 100%; display: flex; justify-content: center; }
-.huiFuRenWuHang .xiaoXiJiao { width: 100%; display: flex; justify-content: center; }
+/* R152：列方向 flex 的横轴由 align-items 决定（justify-content 在列方向是纵轴，旧写法居中失效）。
+   覆盖基础 .bubbleWrap 的 max-width:calc(100%-84px) 与 align-items:flex-start，让恢复行真正水平居中于整个聊天区。 */
+.huiFuRenWuHang .bubbleWrap { width: 100%; max-width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.huiFuRenWuHang .xiaoXiJiao { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 
 /**
  * **赞 / 踩**（对话内行右侧）：点了变强调色，再点取消。
