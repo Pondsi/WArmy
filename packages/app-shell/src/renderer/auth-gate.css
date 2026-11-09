@@ -971,10 +971,17 @@
 .warmyAuthFirstCard.warmyAuthLangCard textarea,
 .warmyAuthFirstCard.warmyAuthLangCard a,
 .warmyAuthFirstCard.warmyAuthLangCard .warmyAuthLangTile { -webkit-app-region: no-drag; }
+/* R153：整个首启语言场景的满窗背景可拖。放在不带 transform 的外层容器上，
+   拖动区就不受语言卡 transform/backdrop-filter 的矩形计算偏移影响——顶部与卡片四周都能稳稳拖动。
+   只作用于语言页（:not(.warmyAuthCardOnScene)），条款/登录页另有布局，不被波及。 */
+.warmyAuthCard.warmyAuthCardScene:not(.warmyAuthCardOnScene) { -webkit-app-region: drag; }
+/* 语言列表是 overflow-y:auto 滚动容器：drag 落在滚动容器上会与滚动冲突形成死区，
+   明确 no-drag，让列表只管点选/滚动，拖窗交给背景与顶部握把。 */
+.warmyAuthFirstCard.warmyAuthLangCard .warmyAuthLangGrid { -webkit-app-region: no-drag; }
 /* R153：首启语言卡顶部加高拖动区——旧版顶部只有 12px padding，难以抓握。
    这里给一条明确的握把（细横条提示可拖），整块继承卡片的 drag。 */
 .warmyAuthLangGrip {
-  height: 26px;
+  height: 40px;
   margin: -2px 0 2px;
   display: flex;
   align-items: center;
