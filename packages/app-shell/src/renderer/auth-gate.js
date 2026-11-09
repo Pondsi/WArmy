@@ -3593,6 +3593,7 @@
       </button>`;
     }).join('');
     return `<div class="warmyAuthFirstCard warmyAuthLangCard">
+        <div class="warmyAuthLangGrip" aria-hidden="true"></div>
         <div class="warmyAuthLangGrid" id="warmyAuthLang" role="radiogroup" aria-label="Language">${opts}</div>
         <div class="warmyAuthLangFoot">
           <button class="warmyAuthBtn warmyAuthBtnPrimary warmyAuthStartBtn" id="warmyAuthStart" data-auth-action="language-start">${escapeHtml(t('start'))}</button>

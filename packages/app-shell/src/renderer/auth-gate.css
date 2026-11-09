@@ -971,3 +971,21 @@
 .warmyAuthFirstCard.warmyAuthLangCard textarea,
 .warmyAuthFirstCard.warmyAuthLangCard a,
 .warmyAuthFirstCard.warmyAuthLangCard .warmyAuthLangTile { -webkit-app-region: no-drag; }
+/* R153：首启语言卡顶部加高拖动区——旧版顶部只有 12px padding，难以抓握。
+   这里给一条明确的握把（细横条提示可拖），整块继承卡片的 drag。 */
+.warmyAuthLangGrip {
+  height: 26px;
+  margin: -2px 0 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: drag;
+}
+.warmyAuthLangGrip::before {
+  content: '';
+  width: 42px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: .22;
+}
