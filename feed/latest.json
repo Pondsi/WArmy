@@ -1,12 +1,12 @@
 {
-  "version": "0.4.3",
-  "notes": "WArmy 0.4.3: the security level picked in the chat bar now reaches the authorization engine (full authorization no longer prompts for ordinary task files); command execution restores standard system environment variables on machines where they are missing so dotnet/NuGet builds work again; PowerShell-syntax commands are no longer misrouted through cmd; the continue/retry button is anchored to the message where the latest interruption happened; the running small-text bar shows in independent windows and no longer double-prints the ellipsis; all 1000 Chinese busy phrases and 27 languages of status lines were rewritten as fluent complete sentences; the strict-language constraint now really applies (including chain-of-thought and tool arguments) and is also injected for subagent tasks; authorization cards show what a command is for and collapse the full command text; model capability detection fixes (embed context cap, bare bark TTS).",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.3/WArmy-Setup-0.4.3.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.3/WArmy-Setup-0.4.3.exe",
-  "sha256": "8e5949e1575a7126205d233f694e325bc858aeb2b939aea8152dc9471c0e1c2a",
-  "size": 234247985,
+  "version": "0.4.4",
+  "notes": "WArmy 0.4.4: workhorse tasks no longer stop before they are finished — when a run ends with plan steps still open, the system now keeps dispatching follow-up turns (with stall/repeat/step circuit breakers still in place) instead of giving up; per-turn tool budgets raised so code-heavy runs are not forced to wrap up after a few file reads; follow-up turns are told not to re-read files they already read; the per-step follow-up counter resets whenever real progress is made.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.4/WArmy-Setup-0.4.4.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.4/WArmy-Setup-0.4.4.exe",
+  "sha256": "23628d16a7bdabbb1a963692ed3c8dc5767aeceba849107520b3a165f69174f3",
+  "size": 234248885,
   "mandatory": false,
-  "publishedAt": "2026-11-10T02:31:09.511Z",
+  "publishedAt": "2026-11-10T07:18:16.353Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.3"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.4"
 }

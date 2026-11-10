@@ -2099,8 +2099,16 @@ function toolLimits(instId?: string): { zuiDaLunShu: number; zuiDaJieGuoZiShu: n
   })();
   const lunShuYuan = Number(instCfg?.zuiDaLunShu ?? s?.contextToolMaxRounds);
   const lunShu = lunShuYuan === 12 ? 20 : lunShuYuan;
-  const mei = Number(instCfg?.zuiDaJieGuoZiShu ?? s?.contextToolResultChars);
-  const total = Number(instCfg?.totalChars ?? s?.contextToolTotalChars);
+  /**
+   * R155（项17「不停直到完成」）：真机实测旧默认「总结果 12000 字符」在代码类任务里
+   * 3~4 次读文件就烧光 ⇒ 每轮被迫收尾，续派一直在勘察、写不上代码。
+   * 与 contextToolMaxRounds 的 12→20 同理：旧默认值是程序写进用户配置的，按迁移抬到新默认；
+   * 用户真正改过别的值就照旧尊重。
+   */
+  const meiYuan = Number(instCfg?.zuiDaJieGuoZiShu ?? s?.contextToolResultChars);
+  const ziShuYuan = Number(instCfg?.totalChars ?? s?.contextToolTotalChars);
+  const mei = meiYuan === 4000 ? 8000 : meiYuan;
+  const total = ziShuYuan === 12000 ? 60000 : ziShuYuan;
   return {
     /**
      * 轮数上限：**多任务必须能跑完**。真事故：默认 3 轮时
@@ -17710,7 +17718,9 @@ function yingGaiZiDongJiXu(
   }
   const z = zhang;
   const kuai = xuPaiKuaiZhao(sid);
-  if (z.ci > 0) z.kongZhuan = kuai !== z.kuaiZhao ? 0 : z.kongZhuan + 1;
+  /** 本轮宿主事实有没有变（真进展）：空转计数与同一步续派计数共用这一条 */
+  const zheLunYouJinZhan = z.ci > 0 ? kuai !== z.kuaiZhao : true;
+  if (z.ci > 0) z.kongZhuan = zheLunYouJinZhan ? 0 : z.kongZhuan + 1;
   z.kuaiZhao = kuai;
   const pai = (liYou: string): { jiXu: boolean; liYou: string } => {
     z.ci += 1;
@@ -17725,8 +17735,12 @@ function yingGaiZiDongJiXu(
     try { audit?.log('plan.auto-continue-repeat-anomaly', { sessionId: sid, n: zuiDuo, fp: zuiDuoFp.slice(0, 80) }); } catch { /* noop */ }
     return true;
   };
-  /** 核对轮回了 NO_REPLY = 模型确认没有要补的了：到此为止（还开着的步骤由出口如实列给用户） */
-  if (shangLun?.noReply) return { jiXu: false, liYou: jiHuaWeiWanCheng(sid).length ? 'open-left' : 'done' };
+  /**
+   * 核对轮回了 NO_REPLY = 模型确认没有要补的了。
+   * R155（项17「不停直到完成」）：计划账本里还有没销账的步骤 ⇒ 不收工，落进下面的计划块
+   * 继续派 `plan-open-keep`（空转/同指纹重复/同一步上限这三把熔断仍在）；真没欠账才收工。
+   */
+  if (shangLun?.noReply && !jiHuaWeiWanCheng(sid).length) return { jiXu: false, liYou: 'done' };
   if (z.kongZhuan >= 2) return { jiXu: false, liYou: 'no-progress' };
   /** 续派**不再有简单次数硬顶**（用户裁决）：超限后的停/不停由 eta 预警点机制决定 ——
    *  40 次/20 分钟到点 → 模型判断是否还在进行 + 预估还需几轮（写入 eta.json 方法库、
@@ -17758,11 +17772,16 @@ function yingGaiZiDongJiXu(
   const weiWan = jiHuaWeiWanCheng(sid);
   if (weiWan.length) {
     if (chongFu3()) return { jiXu: false, liYou: 'repeat-3x' };
+    /**
+     * R155（项17）：模型停下、核对也做过、步骤还是没销账 —— 以前这里直接放弃（open-left）。
+     * 现在继续派 `plan-open-keep`：计划是「做完为止」的账本，模型自述做完不算数。
+     * 熔断仍在：空转两次（no-progress）、同指纹重复 3 次（repeat-3x）、
+     * 同一步续派 4 次跳过（step-capped）、eta 异常、用户手动停止。
+     */
     const keXu = beiJieDuan ? 'plan-pending'
-      : (!z.heDui || weiWan.length < z.heDuiWeiWan) ? 'completion-check' : '';
-    if (!keXu) {
-      try { audit?.log('plan.open-left', { sessionId: sid, n: weiWan.length, ids: weiWan.map((b) => b.id).slice(0, 12) }); } catch { /* noop */ }
-      return { jiXu: false, liYou: 'open-left' };
+      : (!z.heDui || weiWan.length < z.heDuiWeiWan) ? 'completion-check' : 'plan-open-keep';
+    if (keXu === 'plan-open-keep') {
+      try { audit?.log('plan.open-left-keep', { sessionId: sid, n: weiWan.length, ids: weiWan.map((b) => b.id).slice(0, 12) }); } catch { /* noop */ }
     }
     /**
      * **同一步骤续派上限**：卡住的那一步如实标 blocked（界面删除线），后面的步骤照常推进；
@@ -17770,7 +17789,11 @@ function yingGaiZiDongJiXu(
      */
     const xia = weiWan[0]!;
     const m = buZhouYanXu.get(sid) || new Map<string, number>();
-    const n = (m.get(xia.id) || 0) + 1;
+    /**
+     * R155：同一步骤的续派上限只拦「原地打转」——这一步真有推进就重新计数，
+     * 分多轮推进的大步骤（写完整项目代码这类）不被 4 次上限误杀。
+     */
+    const n = zheLunYouJinZhan ? 1 : (m.get(xia.id) || 0) + 1;
     m.set(xia.id, n);
     buZhouYanXu.set(sid, m);
     if (n > BUZHOU_YANXU_SHANGXIAN) {
@@ -18414,6 +18437,8 @@ async function yanXuJiHuaRenWu(
         })()
       : pan.liYou === 'talk-only'
       ? tMain('llm.continueNoAction', '【继续执行 · 必须动手】你上一条**只说了要做什么，一次工具都没调**，用户要的文件/操作并没有发生。现在**第一步就要发起工具调用**（write_file / make_pptx / open_path / get_time 等），禁止先写计划或口号。做完再简短汇报结果与路径。')
+      : pan.liYou === 'plan-open-keep'
+        ? tMain('llm.planOpenKeep', '【继续执行 · 把剩下的做完】你上一轮说没有要补的，但计划里仍有没销账的步骤（见下面清单）。不要再核对、不要只汇报、不要回复 NO_REPLY：现在就从第一个未完成步骤开始**用工具真的做完它**（write_file / run_shell / dotnet build 等），做完用 plan_verify 带证据标掉，然后接着做下一步，直到清单里全部 done。已经产出的文件不要重做、不要重写。')
       : heDui
         /**
          * **完成核对**（第 34 轮 项 12）：模型自然停下了，但计划里还有没标完成的步骤 / 自述完成却缺证据 / 被截断。
@@ -18463,7 +18488,8 @@ async function yanXuJiHuaRenWu(
         + (youZhengJu ? '\n\n【重要 · 防止重做】上面有些步骤状态还是 pending/doing，但**备注里已经写了完成证据**（文件已生成、已打开、已等满等）。这些步骤**禁止再做一遍**：先用 plan_verify 带证据把它验证掉（证据就用备注里那条，或最小代价核实一次），再处理真正没做的那几条。' : '')
         + (yiWanChanPin ? `\n\n【已完成的产物 · 不要重复生成同名文件】\n${yiWanChanPin}` : '')
         + (yiDaKaiLie ? `\n\n【已经打开过的文件 · 不要再 open_path】${yiDaKaiLie}` : '')
-        + '\n\n（这是系统自动接着派的一轮，不需要等我说话。请只做还没完成的部分。）',
+        + '\n\n（这是系统自动接着派的一轮，不需要等我说话。请只做还没完成的部分。）'
+        + '\n\n（R155：不要重读已经读过的文件与需求文档——内容宿主已经在上下文里给过你，重读只会烧掉干活的额度。直接从写代码、构建、测试这类动手步骤开始。）',
       heDui,
     );
   } catch (e) {
