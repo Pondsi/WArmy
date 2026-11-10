@@ -6352,6 +6352,8 @@ async function langDuWenBen(text, btnEl) {
    * 文件右键菜单：复制 / 复制路径 / 打开目录（替代「右键直接打开文件夹」）。
    */
   function shouWenJianYouJianCaiDan(p, x, y) {
+    /** R159 项1：先收掉任何已开着的右键菜单（含正文那套复制/引用/翻译），保证同一时刻只有一个 */
+    try { closeContextMenu(); } catch { /* noop */ }
     document.querySelectorAll('.wenJianYouJianCaiDan').forEach((n) => n.remove());
     const mk = document.createElement('div');
     mk.className = 'wenJianYouJianCaiDan';
@@ -11294,6 +11296,15 @@ window.__keYiLiaoTian = keYiLiaoTian;
     if (!sid || !run || (generation != null && generation !== run.generation)) return;
     run.running = false;
     /**
+     * R159 项11：整轮真的结束 ⇒ 清掉本轮占用并放行队列。
+     * 以前只有 deliver 的 finally 清 queueRounds，而「主进程自动续派收尾」走的是这条广播路
+     * （deliver 早已按 planPending 返回、finally 不清）⇒ queueRounds 残留 true，
+     * 之后用户再发消息只进「待执行队列」永远不派发（真机：空闲 103 分钟、队列等 19 分钟无反应）。
+     * 这里与 deliver 共用同一个收口，两条路都必须放行。
+     */
+    queueRounds[sid] = false;
+    try { scheduleQueueFlush(sid); } catch { /* noop */ }
+    /**
      * **完成提示音只在这里播一次**（第 110 轮）。
      *
      * 真机缺陷：第一轮最终回复之后，宿主又自动跑了一轮“完成核对”，最终回复由主进程
@@ -11751,10 +11762,27 @@ window.__keYiLiaoTian = keYiLiaoTian;
     return false;
   }
 
+  /**
+   * R159 项11：队列放行闸。真在跑就等；只是上一轮残留就清掉再放行，绝不永久卡住。
+   * 判据全部取「事实」而非单个标志：正在逐条派发 / 运行态仍在跑 / 10 秒内真有几路都不放行；
+   * 三者皆无而 queueRounds 还是 true ⇒ 它只是残留，交给 qingLiJiaMang 收（可见忙时它自己会拒绝）。
+   */
+  function duiLieKeFangXing(chatId) {
+    const sid = String(chatId || '');
+    if (!sid) return false;
+    if (!queueBusy(sid)) return true;
+    if (queueDrains[sid]) return false;
+    const run = state.sessionRuns && state.sessionRuns[sid];
+    if (run && run.running) return false;
+    if (huiHuaZaiZhenPao(sid)) return false;
+    qingLiJiaMang(sid);
+    return !queueBusy(sid);
+  }
+
   /** 排定一次"轮边界"冲刷；有轮在跑就交给那一轮结束时冲刷，不重复排 */
   function scheduleQueueFlush(chatId) {
     if (!chatId || queueTimers[chatId] || queueDrains[chatId]) return;
-    if (queueBusy(chatId)) return;
+    if (!duiLieKeFangXing(chatId)) return;
     queueTimers[chatId] = setTimeout(() => {
       delete queueTimers[chatId];
       flushQueue(chatId);
@@ -11767,7 +11795,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
       clearTimeout(queueTimers[chatId]);
       delete queueTimers[chatId];
     }
-    if (queueBusy(chatId)) return; // 还有轮在跑：等它结束
+    if (!duiLieKeFangXing(chatId)) return; // 还有轮在跑：等它结束
     void drainQueue(chatId);
   }
 
@@ -27242,6 +27270,8 @@ async function renderDashboard(host) {
       b.textContent = it.biaoQian;
       if (it.weixian) b.classList.add('danger');
       if (it.checked) b.classList.add('qiYong');
+      /** R159 项1：不可用项要真的灰掉且点不动（例如没框选内容时的「翻译选中内容」） */
+      if (it.disabled) { b.disabled = true; b.classList.add('jinYong'); if (it.title) b.title = it.title; }
       b.onclick = async () => {
         closeContextMenu();
         await it.onClick?.();
@@ -27254,6 +27284,12 @@ async function renderDashboard(host) {
     setTimeout(() => {
       document.addEventListener('click', closeContextMenu, { once: true });
       document.addEventListener('keydown', onCtxKey, { once: true });
+      /**
+       * R159 项1：再次右键也要收掉旧菜单。以前只监听 click/keydown，
+       * 于是「先右键正文弹出复制/引用/翻译，再右键超链接弹出打开/复制/复制路径/打开目录」
+       * 两个菜单会叠在一起（用户报的重叠）。
+       */
+      document.addEventListener('contextmenu', closeContextMenu, { once: true });
     }, 0);
   }
   function onCtxKey(e) {
@@ -27261,6 +27297,8 @@ async function renderDashboard(host) {
   }
   function closeContextMenu() {
     document.getElementById('shangXiaWenCaiDan')?.remove();
+    /** 文件/超链接右键菜单是另一套 DOM，必须一起收，否则两套互相叠 */
+    document.querySelectorAll('.wenJianYouJianCaiDan').forEach((n) => n.remove());
   }
 
   function shouldNotify(sessionId) {
@@ -34560,6 +34598,12 @@ try {
   // T. 消息右键：复制/引用/翻译
   // 思考过程 / 内心活动也要能右键复制与引用（产品要求）—— 先看是不是点在 .siKaoKuai 上
   $('xiaoXiJi')?.addEventListener('contextmenu', (e) => {
+    /**
+     * R159 项1：右键落在超链接 / 文件路径 / 产物链接上 ⇒ 这套「复制/引用/翻译」菜单完全不出，
+     * 只让链接自己的菜单（打开/复制/复制路径/打开目录）显示。以前两套会叠在一起。
+     */
+    const lian = e.target.closest && e.target.closest('.luJingLian, a[data-open], a[href], [data-art-open], [data-art-reveal], [data-nm-web]');
+    if (lian) return;
     const siKao = e.target.closest('.siKaoKuai');
     const bubble = e.target.closest('.bubble');
     if (!siKao && !bubble) return;
@@ -34583,6 +34627,8 @@ try {
     const inScope = (siKao && sel && !sel.isCollapsed && siKao.contains(sel.anchorNode))
       || (bubble && sel && !sel.isCollapsed && bubble.contains(sel.anchorNode));
     const quoteText = (inScope ? selText : '') || fullText;
+    /** R159 项1：「翻译选中内容」只有真的框选了文字才可用，否则灰掉不可点 */
+    const xuanWen = String(selText || '').trim();
     openContextMenu(e.clientX, e.clientY, [
       { biaoQian: t('common.copy'), onClick: () => {
         try { navigator.clipboard?.writeText((inScope ? selText : '') || fullText); showToast(tOr('chat.copied', '已复制')); } catch { /* noop */ }
@@ -34595,28 +34641,15 @@ try {
       { biaoQian: tOr('chat.translate', '翻译'), onClick: () => {
           void fanYiDiaoYongRuKuai(xiaoXiEl, mkey, (inScope ? selText : '') || fullText);
         } },
-      /** T86 完整功能（用户澄清）：右键翻译选中内容 + 翻译网页（不是三点菜单项） */
-      { biaoQian: tOr('chat.translateSelection', '翻译选中内容'), onClick: () => {
-          const xuan = (inScope ? selText : '').trim();
-          if (!xuan) { showToast(tOr('chat.translateNoSelection', '先选中要翻译的文字再试')); return; }
+      /** R159 项1：菜单定为 复制 / 引用 / 翻译 / 翻译选中内容（后者无选区时灰掉）；「翻译网页」按用户要求去掉 */
+      { biaoQian: tOr('chat.translateSelection', '翻译选中内容'), disabled: !xuanWen,
+        title: xuanWen ? '' : tOr('chat.translateNoSelection', '先选中要翻译的文字再试'),
+        onClick: () => {
           void (async () => {
             if (typeof window.__fanYiDiaoYong !== 'function') { showToast(tOr('chat.translateNotConfigured', '未配置翻译服务：请先在设置里配置翻译模型')); return; }
             let r = null;
-            try { r = await window.__fanYiDiaoYong({ text: xuan, target: fanYiMuBiaoXuan() }); } catch { r = null; }
+            try { r = await window.__fanYiDiaoYong({ text: xuanWen, target: fanYiMuBiaoXuan() }); } catch { r = null; }
             if (r && r.ok && String(r.text || '').trim()) uiAlert(tOr('chat.translateDone', '已翻译') + '：\n\n' + String(r.text));
-            else showToast(String((r && r.error) || tOr('chat.translateFail', '翻译失败')));
-          })();
-        } },
-      { biaoQian: tOr('chat.translatePage', '翻译网页'), onClick: () => {
-          void (async () => {
-            const he = $('xiaoXiJi');
-            const ye = String((he && he.innerText) || '').trim().slice(0, 2400);
-            if (!ye) { showToast(tOr('chat.translateEmpty', '输入框没有可翻译的内容')); return; }
-            if (typeof window.__fanYiDiaoYong !== 'function') { showToast(tOr('chat.translateNotConfigured', '未配置翻译服务：请先在设置里配置翻译模型')); return; }
-            showToast(tOr('chat.translating', '正在翻译…'));
-            let r = null;
-            try { r = await window.__fanYiDiaoYong({ text: ye, target: fanYiMuBiaoXuan() }); } catch { r = null; }
-            if (r && r.ok && String(r.text || '').trim()) uiAlert(tOr('chat.translatePageDone', '整页译文') + '：\n\n' + String(r.text));
             else showToast(String((r && r.error) || tOr('chat.translateFail', '翻译失败')));
           })();
         } },
@@ -35307,6 +35340,17 @@ try {
   try { bindCtxBudget(); bindSummaryControls(); void ctxLoad(); void loadSummaryPref(); } catch { /* noop */ }
   setInterval(() => {
     __loopTick++;
+    /**
+     * R159 项11：队列自愈。任何「排着队却没人在跑」的会话都要被放行，
+     * 不依赖某一条收尾路径记得调 flushQueue（漏一条就是永久卡死）。
+     */
+    if (__loopTick % 2 === 0) {
+      try {
+        for (const [qid, arr] of Object.entries(state.queues || {})) {
+          if (Array.isArray(arr) && arr.length) scheduleQueueFlush(qid);
+        }
+      } catch { /* noop */ }
+    }
     if (__loopTick % 2 === 0) raf(refreshMetrics);
     if (__loopTick % 3 === 0) raf(refreshCost);
     if (__loopTick % 4 === 0) raf(shuaxinZhixingqiji);

@@ -137,7 +137,7 @@ export interface EtaYuCe {
 /** 一类行为的"预测方法"（持久文件里越用越准的那部分） */
 export interface EtaFangFa {
   xingWei: XingWei;
-  /** 任务签名（同类工作量的聚类键；空 = 按行为类型整体统计） */
+  /** 条件桶键（情况/任务/工具/环境/步数档；空 = 按行为类型整体统计） */
   qianMing: string;
   yangBen: number;
   /** 预测时长的滑动平均 */
@@ -154,18 +154,50 @@ export interface EtaFangFa {
   mingZhongLv: number;
   /** 最近 9 次真实样本（产品要求：留 9 次供下次预测校准） */
   yangBenWei: number[];
+  /**
+   * **分位数水库**（最多 200 个）：p50/p90/MAD 从这里算。
+   * 只留 9 个时 p90≈最大值（噪声永不衰减）；留 200 个时经验分位数由 Glivenko–Cantelli
+   * 定理**一致收敛**到真实分位数 ⇒ 截止时刻估计本身也"越来越准"。
+   */
+  fenWeiYang: number[];
   liZi: Array<{ ts: number; yuCeMs: number; shiJiMs: number; mingZhong: boolean; moXing?: string }>;
   gengXinTs: number;
+  /**
+   * **累积均值统计**（数学上可证收敛的那部分；见 docs/ETA-CONVERGENCE.md）：
+   *  · `leiJiHe/leiJiN` = 实际耗时的累积和/次数 ⇒ 样本均值 = leiJiHe/leiJiN，
+   *    以 1/n 步长更新，由强大数定律（SLLN）**几乎必然收敛**到该条件桶的真实均值；
+   *  · 常数 α 的 EMA **不会**收敛到真值（稳态方差 α/(2-α)·σ²），只用来追短期漂移。
+   */
+  leiJiHe: number;
+  leiJiN: number;
+  /** Σ log(实际/预测)：偏移修正因子 = exp(duiShuHe/leiJiN)（Robbins–Monro 一致估计） */
+  duiShuHe: number;
+  /** 预测绝对对数误差 |log(实际/预测)| 的 EMA —— 文件"越用越准"的可视证据 */
+  wuChaEma: number;
+  /** 区间校准账：预测区间测了几次、盖住几次（P90 真覆盖 90% 的依据） */
+  fuGaiCe: number;
+  fuGaiZhong: number;
+  /**
+   * **区间乘子**（Adaptive Conformal Inference 思路，Gibbs & Candès 2021）：
+   * 没盖住就放大、盖住就缓慢回收，长期覆盖率收敛到目标 90%。
+   * 步长 γ_n = c/√n 递减 ⇒ 随机逼近收敛（见 docs/ETA-CONVERGENCE.md 定理 5）。
+   */
+  quJianXiShu: number;
+  /** 本桶的条件（''桶为 null） */
+  tiaoJian?: TiaoJian | null;
 }
 
 /** 持久文件（方法库） */
 export interface EtaKu {
-  version: 2;
+  /** 2=旧版（无累积统计）；3=条件分桶+收缩估计版（当前） */
+  version: number;
   shouCiTs: number;
   gengXinTs: number;
   quanJu: { yangBen: number; piaoYiXiShu: number; mingZhongLv: number; yuCeEmaMs: number; shiJiEmaMs: number };
-  /** 行为类型 → 签名 → 方法 */
+  /** 行为类型 → 条件桶键 → 方法 */
   fangFa: Partial<Record<XingWei, Record<string, EtaFangFa>>>;
+  /** 自学习进度账：按时间记录整体误差水平（证明"越来越准"的可查轨迹） */
+  jingDuGuiJi: Array<{ ts: number; yangBen: number; wuChaEma: number; piaoYiXiShu: number; mingZhongLv: number }>;
 }
 
 /** 临时文件里，某个行为在本轮的实时状态 */
@@ -312,20 +344,143 @@ export function renWuQianMing(p: {
   zhiShuoBuZuo?: boolean;
   moXing?: string;
   gongJu?: string;
+  /** 情况：首发 / 自动续派 / 中断恢复（缺省按首发） */
+  qingKuang?: string;
+  /** 环境：本地模型 / 云模型（缺省由模型名推断） */
+  huanJing?: string;
 }): string {
-  const bu = Math.max(0, Math.floor(youXian(p.buShu, 0)));
-  const dang = bu === 0 ? '0' : bu <= 3 ? '1-3' : bu <= 8 ? '4-8' : bu <= 20 ? '9-20' : '21+';
-  const gj = [...new Set((p.gongJuMing || []).map((x) => String(x || '').trim()).filter(Boolean))].sort().slice(0, 8).join(',') || 'none';
-  const mo = moXingZu(p.moXing);
-  const dan = String(p.gongJu || '').trim();
-  return [dan ? `工具=${dan}` : '', `步数=${dang}`, `工具集=${gj}`, p.zhiShuoBuZuo ? '只说不做' : '', mo ? `模型=${mo}` : '']
-    .filter(Boolean).join('|');
+  const t = fenTiaoJian(p);
+  return tiaoJianJian(t);
 }
 
 export function moXingZu(mo?: string): string {
   const s = String(mo || '').trim().toLowerCase();
   if (!s) return '';
   return s.replace(/[-_ ]?(v?\d+(\.\d+)*|20\d{2}[-.]?\d{2}([-.]?\d{2})?)$/i, '').slice(0, 32);
+}
+
+// ───────────────────────── 条件分桶：情况 / 任务 / 工具 / 环境 ─────────────────────────
+/**
+ * **预测账不是一概而论的**（产品要求）：同类行为在不同**情况、任务、工具、环境**下
+ * 耗时分布不同（本地 7B 写代码 ≠ 云端写文档 ≠ 构建测试），必须分开记、分开估。
+ *
+ * 四个维度 + 步数档，构成一个条件桶；样本不足时沿 `huiTuiLian` **逐级回退**
+ * （n-gram 平滑里的 backoff 思想：细桶向粗桶收缩，粗桶永远有数据兜底）。
+ */
+
+/** 情况：这次行为发生在什么情境下 */
+export type QingKuang = 'shouCi' | 'xuPai' | 'duanXu';
+/** 任务类型：从工具构成推断"在干什么活" */
+export type RenWuLei = 'yanJiu' | 'bianMa' | 'wenDang' | 'gouJian' | 'yunWei' | 'xieTong' | 'guiHua' | 'duiHua' | 'zongHe' | 'qiTa';
+/** 工具构成：本轮以哪类工具为主 */
+export type GongJuLei = 'du' | 'xie' | 'ling' | 'wang' | 'mou' | 'duo' | 'wu';
+/** 环境：本地（Ollama 等）还是云端推理 */
+export type HuanJing = 'benDi' | 'yun' | 'unknown';
+
+export interface TiaoJian {
+  qingKuang: QingKuang;
+  renWu: RenWuLei;
+  gongJu: GongJuLei;
+  huanJing: HuanJing;
+  /** 步数档（'0' | '1-3' | '4-8' | '9-20' | '21+'） */
+  buShu: string;
+}
+
+/** 单个工具名 → 工具类（判定规则固定、可解释，不许拍脑袋） */
+export function gongJuFenLei(ming?: string): GongJuLei {
+  const s = String(ming || '').trim().toLowerCase();
+  if (!s) return 'wu';
+  if (/subagent|spawn|delegate|actor/.test(s)) return 'mou';
+  if (/plan_|ask_user|question|decision/.test(s)) return 'mou';
+  if (/read|grep|glob|search|list_|find|recall|retrieve|open_path|sha_kan|view|look/.test(s)) return 'du';
+  if (/write|edit|str_replace|patch|append|create_file|save/.test(s)) return 'xie';
+  if (/shell|run_|exec|command|terminal|powershell|\.ps1|\.cmd|npm|dotnet|cargo|git\b/.test(s)) return 'ling';
+  if (/web|fetch|http|browse|url|download|crawl/.test(s)) return 'wang';
+  return 'du';
+}
+
+/** 工具构成：按类计数取主导；两类以上且没有明显主导 ⇒ duo */
+export function fenGongJuLei(gongJuMing?: string[], dan?: string): GongJuLei {
+  const all = [...(gongJuMing || []).map(gongJuFenLei), ...(dan ? [gongJuFenLei(dan)] : [])].filter((x) => x !== 'wu');
+  if (!all.length) return 'wu';
+  const ji = new Map<GongJuLei, number>();
+  for (const x of all) ji.set(x, (ji.get(x) || 0) + 1);
+  const pai = [...ji.entries()].sort((a, b) => b[1] - a[1]);
+  const zui = pai[0] as [GongJuLei, number];
+  const leiBie = ji.size;
+  if (leiBie >= 3) return 'duo';
+  if (leiBie === 2 && zui[1] < all.length * 0.7) return 'duo';
+  return zui[0];
+}
+
+/** 任务类型：从工具构成推断"在干什么活"（同一套行为在不同活上耗时分布不同） */
+export function fenRenWuLei(p: { gongJuMing?: string[]; gongJu?: string; zhiShuoBuZuo?: boolean }): RenWuLei {
+  if (p.zhiShuoBuZuo) return 'duiHua';
+  const ming = [...(p.gongJuMing || []).map((x) => String(x || '').trim().toLowerCase()), String(p.gongJu || '').trim().toLowerCase()].filter(Boolean);
+  if (!ming.length) return 'qiTa';
+  const lei = ming.map(gongJuFenLei);
+  const you = (x: GongJuLei): boolean => lei.includes(x);
+  const duoShao = (x: GongJuLei): number => lei.filter((y) => y === x).length;
+  // 计划类工具为主且几乎没动手 ⇒ 规划；子代理为主 ⇒ 协同
+  if (ming.every((n) => /^plan_/.test(n)) || (duoShao('mou') >= lei.length * 0.6 && ming.some((n) => /^plan_/.test(n)))) return 'guiHua';
+  if (duoShao('mou') >= Math.max(2, lei.length * 0.5) && ming.some((n) => /subagent|spawn|delegate/.test(n))) return 'xieTong';
+  if (you('wang') && !you('xie') && !you('ling')) return 'yanJiu';
+  if (you('ling') && you('xie')) return 'gouJian';
+  if (you('ling') && !you('xie')) return 'gouJian';
+  if (you('xie') && !you('ling')) {
+    // 写代码还是写文档：看文件工具的对手盘（读文件+写=改代码；只写=产出文档）
+    return you('du') ? 'bianMa' : 'wenDang';
+  }
+  if (you('du') && !you('xie') && !you('ling')) return 'yanJiu';
+  return 'zongHe';
+}
+
+/** 环境：本地推理（Ollama/本地模型名）还是云端（产品白名单 mimo 等） */
+export function fenHuanJing(mo?: string, anZhao?: string): HuanJing {
+  const an = String(anZhao || '').trim().toLowerCase();
+  if (an === 'benDi' || an === 'yun' || an === 'unknown') return an;
+  const s = String(mo || '').trim().toLowerCase();
+  if (!s) return 'unknown';
+  if (/ollama|localhost|127\.0\.0\.1|:11434|qwen|llama|deepseek-r|glm-|phi-|gemma|minicpm|yi-|baichuan/.test(s)) return 'benDi';
+  return 'yun';
+}
+
+/** 四维+步数档 → 条件桶（顺序固定：越靠前的维度回退时越先保留） */
+export function fenTiaoJian(p: {
+  buShu?: number;
+  gongJuMing?: string[];
+  zhiShuoBuZuo?: boolean;
+  moXing?: string;
+  gongJu?: string;
+  qingKuang?: string;
+  huanJing?: string;
+}): TiaoJian {
+  const bu = Math.max(0, Math.floor(youXian(p.buShu, 0)));
+  const qk = String(p.qingKuang || '').trim();
+  const qingKuang: QingKuang = qk === 'xuPai' || qk === 'duanXu' ? qk : 'shouCi';
+  return {
+    qingKuang,
+    renWu: fenRenWuLei(p),
+    gongJu: fenGongJuLei(p.gongJuMing, p.gongJu),
+    huanJing: fenHuanJing(p.moXing, p.huanJing),
+    buShu: bu === 0 ? '0' : bu <= 3 ? '1-3' : bu <= 8 ? '4-8' : bu <= 20 ? '9-20' : '21+',
+  };
+}
+
+export function tiaoJianJian(t: TiaoJian): string {
+  return `renWu=${t.renWu}|qingKuang=${t.qingKuang}|gongJu=${t.gongJu}|huanJing=${t.huanJing}|buShu=${t.buShu}`;
+}
+
+/**
+ * **回退链**：细桶 → 逐级去掉一个维度 → 该行为的整体（''）。
+ * 样本会写进链上**每一级**（粗桶永远攒得住数据），预测时从细到粗找第一个有数据的桶，
+ * 并用上一级做**收缩先验**（样本少时向粗桶均值靠，James–Stein / 经验贝叶斯思想）。
+ */
+export function huiTuiLian(jian: string): string[] {
+  const duan = String(jian || '').split('|').filter(Boolean);
+  const chu: string[] = [];
+  for (let i = duan.length; i >= 0; i -= 1) chu.push(duan.slice(0, i).join('|'));
+  return chu;
 }
 
 /**
@@ -415,8 +570,26 @@ function kongFangFa(xingWei: XingWei, qianMing: string, now: number): EtaFangFa 
   return {
     xingWei, qianMing, yangBen: 0, yuCeEmaMs: 0, shiJiEmaMs: 0, piaoYiXiShu: 1,
     holtShuiPing: 0, holtQuShi: 0,
-    p50Ms: 0, p90Ms: 0, mingZhongLv: 0, yangBenWei: [], liZi: [], gengXinTs: now,
+    p50Ms: 0, p90Ms: 0, mingZhongLv: 0, yangBenWei: [], fenWeiYang: [], liZi: [], gengXinTs: now,
+    leiJiHe: 0, leiJiN: 0, duiShuHe: 0, wuChaEma: 0, fuGaiCe: 0, fuGaiZhong: 0,
+    quJianXiShu: 1,
+    tiaoJian: null,
   };
+}
+
+/** 旧版（v2）方法条目迁移到 v3：补累积统计字段（按已有滑动值近似初始化） */
+function qianYiFangFa(f: EtaFangFa, now: number): EtaFangFa {
+  const x = { ...kongFangFa(f.xingWei, f.qianMing, now), ...f };
+  if (!Array.isArray(x.fenWeiYang)) x.fenWeiYang = Array.isArray(x.yangBenWei) ? [...x.yangBenWei] : [];
+  if (!(x.leiJiN > 0)) {
+    x.leiJiN = Math.max(1, Math.floor(x.yangBen || 1));
+    x.leiJiHe = Math.round((x.shiJiEmaMs || 0) * x.leiJiN);
+    x.duiShuHe = Math.log(Math.max(0.05, Math.min(20, x.piaoYiXiShu || 1))) * x.leiJiN;
+    x.wuChaEma = 0.25;
+    x.fuGaiCe = x.leiJiN;
+    x.fuGaiZhong = Math.round(x.leiJiN * (x.mingZhongLv || 0.5));
+  }
+  return x;
 }
 
 // ───────────────────────── 持久文件：预测方法库 ─────────────────────────
@@ -433,12 +606,24 @@ export class EtaZhangBen {
 
   constructor(file?: string | null, now = Date.now()) {
     this.jieDian = file ? String(file) : null;
-    const du = this.jieDian ? (duJsonWenJian<EtaKu | null>(this.jieDian, null) as EtaKu | null) : null;
-    this.ku = (du && du.version === 2 && du.fangFa) ? du : {
-      version: 2, shouCiTs: now, gengXinTs: now,
+    // 读盘时放宽版本号类型（历史文件是 v2，要能认出来做迁移）
+    const du = this.jieDian ? (duJsonWenJian<{ version?: number; fangFa?: EtaKu['fangFa']; jingDuGuiJi?: EtaKu['jingDuGuiJi']; shouCiTs?: number; gengXinTs?: number; quanJu?: EtaKu['quanJu'] } | null>(this.jieDian, null)) : null;
+    this.ku = (du && (du.version === 2 || du.version === 3) && du.fangFa) ? du as unknown as EtaKu : {
+      version: 3, shouCiTs: now, gengXinTs: now,
       quanJu: { yangBen: 0, piaoYiXiShu: 1, mingZhongLv: 0, yuCeEmaMs: 0, shiJiEmaMs: 0 },
-      fangFa: {},
+      fangFa: {}, jingDuGuiJi: [],
     };
+    // v2 → v3 迁移：补累积统计字段 + 精度轨迹账
+    if (this.ku.version !== 3 || !this.ku.jingDuGuiJi) {
+      for (const an of Object.values(this.ku.fangFa || {})) {
+        for (const [k, f] of Object.entries(an || {})) {
+          if (f) an![k] = qianYiFangFa(f, now);
+        }
+      }
+      this.ku.version = 3;
+      if (!Array.isArray(this.ku.jingDuGuiJi)) this.ku.jingDuGuiJi = [];
+      this.paiXie(now, true);
+    }
   }
 
   kuaiZhao(): EtaKu { return JSON.parse(JSON.stringify(this.ku)) as EtaKu; }
@@ -446,13 +631,31 @@ export class EtaZhangBen {
 
   /** 查"这类行为/这类任务"的预测方法（没有就 null —— **绝不编一个出来**） */
   chaFangFa(xingWei: XingWei, qianMing?: string): EtaFangFa | null {
+    return this.chaFangFaLian(xingWei, qianMing).zuiXi || null;
+  }
+
+  /**
+   * **沿回退链找方法**：返回最细的有数据桶 + 它的收缩先验（下一级有数据的粗桶）。
+   * 样本少的细桶预测时向粗桶均值收缩，避免"只见过 1 次就当真理"。
+   */
+  chaFangFaLian(xingWei: XingWei, qianMing?: string): { zuiXi: EtaFangFa | null; xianYan: EtaFangFa | null; ceng: number } {
     const an = this.ku.fangFa[xingWei] || {};
-    const jing = qianMing ? an[String(qianMing)] : null;
-    if (jing && jing.yangBen > 0) return jing;
-    // 签名没命中时退到"该行为整体"的统计（方法库天生该有兜底层次）
-    const zheng = an[''] || null;
-    if (zheng && zheng.yangBen > 0) return zheng;
-    return null;
+    const lian = qianMing ? huiTuiLian(String(qianMing)) : [''];
+    let zuiXi: EtaFangFa | null = null;
+    let xianYan: EtaFangFa | null = null;
+    let ceng = 0;
+    for (const jian of lian) {
+      const f = an[jian] || null;
+      if (f && f.yangBen > 0) {
+        if (!zuiXi) { zuiXi = f; ceng = lian.indexOf(jian); }
+        else { xianYan = f; break; }
+      }
+    }
+    if (!zuiXi) {
+      const zheng = an[''] || null;
+      if (zheng && zheng.yangBen > 0) return { zuiXi: zheng, xianYan: null, ceng: lian.length - 1 };
+    }
+    return { zuiXi, xianYan, ceng };
   }
 
   /** 这类行为的样本总数（决定"有没有方法可用"） */
@@ -464,8 +667,40 @@ export class EtaZhangBen {
   /**
    * **写/更新一个预测方法**（需求里"把新的该类型任务的预测方法写入持久的配置文件"）。
    * 每轮真实结束都会带一个样本进来，方法随之变准。
+   *
+   * 自学习（docs/ETA-CONVERGENCE.md 的定理 1/2）：
+   *  · 样本写进**回退链上的每一级**（细桶精、粗桶永不缺数据）；
+   *  · `leiJiHe/leiJiN` 用 1/n 步长累计 ⇒ 样本均值几乎必然收敛到该桶真实均值；
+   *  · `duiShuHe` 累计 log(实际/预测) ⇒ 偏移因子 exp(均值) 一致收敛到真实偏移；
+   *  · 常数 α 的 EMA/Holt 只用来追**短期漂移**，不再充当中心估计。
    */
   jiFangFa(xingWei: XingWei, qianMing: string, yangBen: { yuCeMs: number; shiJiMs: number; mingZhong: boolean; moXing?: string }, now = Date.now()): EtaFangFa {
+    const lian = huiTuiLian(qianMing);
+    let zuiXi: EtaFangFa | null = null;
+    for (const jian of lian) {
+      const f = this.jiYiCeng(xingWei, jian, yangBen, now, jian === (lian[0] || ''));
+      if (jian === (lian[0] || '')) zuiXi = f;
+    }
+    const q = this.ku.quanJu;
+    const bi = yangBen.yuCeMs > 0 ? yangBen.shiJiMs / yangBen.yuCeMs : 1;
+    q.yangBen += 1;
+    q.yuCeEmaMs = ema(q.yuCeEmaMs, yangBen.yuCeMs);
+    q.shiJiEmaMs = ema(q.shiJiEmaMs, yangBen.shiJiMs);
+    q.piaoYiXiShu = emaXiShu(q.piaoYiXiShu, Math.min(20, Math.max(0.05, bi)));
+    q.mingZhongLv = Number((q.yangBen > 1 ? q.mingZhongLv * 0.7 + (yangBen.mingZhong ? 0.3 : 0) : (yangBen.mingZhong ? 1 : 0)).toFixed(3));
+    // 精度轨迹：每次学习记一笔（文件自己证明"越来越准"）
+    const zong = this.zongWuChaEma();
+    const gui = this.ku.jingDuGuiJi || (this.ku.jingDuGuiJi = []);
+    if (!gui.length || now - (gui[gui.length - 1] as { ts: number }).ts > 10 * 60 * 1000 || gui.length < 64) {
+      gui.push({ ts: now, yangBen: q.yangBen, wuChaEma: zong, piaoYiXiShu: q.piaoYiXiShu, mingZhongLv: q.mingZhongLv });
+      if (gui.length > 256) gui.splice(0, gui.length - 256);
+    }
+    this.paiXie(now, true);
+    return zuiXi || kongFangFa(xingWei, qianMing, now);
+  }
+
+  /** 回退链上单个桶的一次样本更新 */
+  private jiYiCeng(xingWei: XingWei, qianMing: string, yangBen: { yuCeMs: number; shiJiMs: number; mingZhong: boolean; moXing?: string }, now: number, shiZuiXi: boolean): EtaFangFa {
     const an = this.ku.fangFa[xingWei] || (this.ku.fangFa[xingWei] = {});
     const f = an[qianMing] || kongFangFa(xingWei, qianMing, now);
     const bi = yangBen.yuCeMs > 0 ? yangBen.shiJiMs / yangBen.yuCeMs : 1;
@@ -473,29 +708,57 @@ export class EtaZhangBen {
     f.yuCeEmaMs = ema(f.yuCeEmaMs, yangBen.yuCeMs);
     f.shiJiEmaMs = ema(f.shiJiEmaMs, yangBen.shiJiMs);
     f.piaoYiXiShu = emaXiShu(f.piaoYiXiShu, Math.min(20, Math.max(0.05, bi)));
-    // Holt 双指数平滑：跟上"越跑越快/慢"的趋势
+    // Holt 双指数平滑：跟上"越跑越快/慢"的趋势（只作漂移追踪）
     const h = holtYuCe(f.holtShuiPing, f.holtQuShi, yangBen.shiJiMs);
     f.holtShuiPing = h.shuiPing;
     f.holtQuShi = h.quShi;
+    // 累积均值统计（1/n 步长 ⇒ SLLN 收敛）
+    f.leiJiN += 1;
+    f.leiJiHe += Math.max(1000, Math.round(yangBen.shiJiMs));
+    f.duiShuHe += Math.log(Math.max(0.05, Math.min(20, bi)));
+    f.wuChaEma = emaXiShu(f.wuChaEma, Math.abs(Math.log(Math.max(0.1, bi))), 0.2);
+    f.fuGaiCe += 1;
+    if (yangBen.mingZhong) f.fuGaiZhong += 1;
+    // ACI 式区间乘子：没盖住 ⇒ 放大；盖住 ⇒ 缓慢回收。目标覆盖率 90%，步长递减收敛
+    if (!(f.quJianXiShu > 0)) f.quJianXiShu = 1;
+    const gamma = Math.min(0.2, 1.2 / Math.sqrt(f.fuGaiCe));
+    f.quJianXiShu = Math.max(0.85, Math.min(3, f.quJianXiShu * Math.exp(gamma * (0.9 - (yangBen.mingZhong ? 1 : 0)))));
     f.yangBenWei.push(yangBen.shiJiMs);
     // 产品要求：保留最近 9 次真实样本供下次预测校准
     if (f.yangBenWei.length > YANG_BEN_BAO_LIU) f.yangBenWei.splice(0, f.yangBenWei.length - YANG_BEN_BAO_LIU);
-    f.p50Ms = fenWei(f.yangBenWei, 0.5);
-    f.p90Ms = fenWei(f.yangBenWei, 0.9);
+    // 分位数水库（≤200）：经验分位数一致收敛到真实分位数（Glivenko–Cantelli）
+    f.fenWeiYang = f.fenWeiYang || [];
+    f.fenWeiYang.push(yangBen.shiJiMs);
+    if (f.fenWeiYang.length > 200) f.fenWeiYang.splice(0, f.fenWeiYang.length - 200);
+    const fenYuan = f.fenWeiYang.length >= 9 ? f.fenWeiYang : f.yangBenWei;
+    f.p50Ms = fenWei(fenYuan, 0.5);
+    f.p90Ms = fenWei(fenYuan, 0.9);
     f.mingZhongLv = Number((f.yangBen > 1 ? f.mingZhongLv * 0.7 + (yangBen.mingZhong ? 0.3 : 0) : (yangBen.mingZhong ? 1 : 0)).toFixed(3));
-    f.liZi.push({ ts: now, yuCeMs: yangBen.yuCeMs, shiJiMs: yangBen.shiJiMs, mingZhong: yangBen.mingZhong, moXing: yangBen.moXing });
-    if (f.liZi.length > YANG_BEN_BAO_LIU) f.liZi.splice(0, f.liZi.length - YANG_BEN_BAO_LIU);
+    // 最细桶才记逐条例子（粗桶只做统计，避免文件膨胀）
+    if (shiZuiXi) {
+      f.liZi.push({ ts: now, yuCeMs: yangBen.yuCeMs, shiJiMs: yangBen.shiJiMs, mingZhong: yangBen.mingZhong, moXing: yangBen.moXing });
+      if (f.liZi.length > YANG_BEN_BAO_LIU) f.liZi.splice(0, f.liZi.length - YANG_BEN_BAO_LIU);
+      if (!f.tiaoJian) {
+        const t = fenTiaoJian({ gongJuMing: [], moXing: yangBen.moXing });
+        f.tiaoJian = t;
+      }
+    }
     f.gengXinTs = now;
     an[qianMing] = f;
-
-    const q = this.ku.quanJu;
-    q.yangBen += 1;
-    q.yuCeEmaMs = ema(q.yuCeEmaMs, yangBen.yuCeMs);
-    q.shiJiEmaMs = ema(q.shiJiEmaMs, yangBen.shiJiMs);
-    q.piaoYiXiShu = emaXiShu(q.piaoYiXiShu, Math.min(20, Math.max(0.05, bi)));
-    q.mingZhongLv = Number((q.yangBen > 1 ? q.mingZhongLv * 0.7 + (yangBen.mingZhong ? 0.3 : 0) : (yangBen.mingZhong ? 1 : 0)).toFixed(3));
-    this.paiXie(now, true);
     return f;
+  }
+
+  /** 全库平均预测误差（|log(实际/预测)| 的样本量加权）——"越来越准"的总量尺 */
+  zongWuChaEma(): number {
+    let zi = 0, mu = 0;
+    for (const an of Object.values(this.ku.fangFa || {})) {
+      for (const f of Object.values(an || {})) {
+        if (!f || !(f.yangBen > 0)) continue;
+        zi += (f.wuChaEma || 0) * f.yangBen;
+        mu += f.yangBen;
+      }
+    }
+    return mu > 0 ? Number((zi / mu).toFixed(4)) : 0;
   }
 
   /**
@@ -503,45 +766,57 @@ export class EtaZhangBen {
    * 返回 null = 连方法都没有 ⇒ 调用方请模型自己预测。
    */
   yuCeByFangFa(xingWei: XingWei, qianMing: string, now = Date.now()): EtaYuCe | null {
-    const f = this.chaFangFa(xingWei, qianMing);
+    const { zuiXi: f, xianYan: fu, ceng } = this.chaFangFaLian(xingWei, qianMing);
     if (!f) return null;
     /**
-     * 预测方法（科学组合，持久文件自我优化）：
-     *  1. Holt 双指数平滑：水平 + 趋势（能跟上"越跑越快/慢"）
-     *  2. 历史中位数 × 偏移系数（一贯偏乐观就自动放大）
-     *  3. 抬到 90 分位（宁可高估，别让长任务反复被判超时）
-     *  三者取较优（更保守 = 更大），再夹到 [10s, 24h]。
-     */
-    /**
-     * 预测方法 v2（科学组合，持久文件自我优化）：
-     *  1. Holt 双指数平滑（水平+趋势）
-     *  2. 加权分位数 p50/p90（近期样本权重指数衰减 0.85^(n-1-i)）
-     *  3. 中位数 × 偏移系数（一贯偏乐观就自动放大）
-     *  4. MAD 鲁棒区间：预测值 + 1.48×MAD 上界（宁可高估）
+     * 预测方法 v3（条件分桶 + 收缩估计，收敛性证明见 docs/ETA-CONVERGENCE.md）：
+     *  1. **中心** = 收缩样本均值：μ̂ = (n·x̄_bucket + λ·μ̂_parent)/(n+λ)，λ=5。
+     *     样本少向粗桶（更泛的条件）均值靠，样本多则自己说了算 —— n→∞ 时 μ̂→x̄→真值（SLLN）。
+     *  2. **偏移修正** = exp(Σlog(实际/预测)/n)，一致收敛到真实乐观/保守偏移。
+     *  3. Holt 双指数平滑：只用来追短期漂移（越跑越快/慢），不作中心。
+     *  4. 加权分位数 p50/p90（近期样本权重指数衰减）+ MAD 鲁棒区间（宁可高估）。
      *  取较保守（更大）者，夹到 [10s, 24h]。
      */
+    const n = Math.max(1, f.leiJiN || f.yangBen);
+    const ziYangBen = f.leiJiN > 0 ? f.leiJiHe / f.leiJiN : (f.shiJiEmaMs || 0);
+    const fuYangBen = fu && fu.leiJiN > 0 ? fu.leiJiHe / fu.leiJiN : 0;
+    const quanJuMu = this.ku.quanJu.yangBen > 0 ? (this.ku.quanJu.shiJiEmaMs || 0) : 0;
+    const mu = fuYangBen > 0 ? fuYangBen : (quanJuMu > 0 ? quanJuMu : ziYangBen);
+    const LAMBDA = 5;
+    const shouSuo = mu > 0 ? (n * ziYangBen + LAMBDA * mu) / (n + LAMBDA) : ziYangBen;
+    const pianYi = n > 0 ? Math.exp(Math.max(-Math.log(4), Math.min(Math.log(4), f.duiShuHe / n))) : 1;
+    const zhongXin = Math.round(shouSuo * pianYi);
     const holt = f.holtShuiPing > 0 ? Math.round(f.holtShuiPing + f.holtQuShi) : 0;
-    const jiaQuan50 = jiaQuanFenWei(f.yangBenWei, 0.5);
-    const jiaQuan90 = jiaQuanFenWei(f.yangBenWei, 0.9);
-    const zhongWei = Math.max(f.p50Ms || 0, jiaQuan50, Math.round((f.shiJiEmaMs || 0) * (f.piaoYiXiShu || 1)));
-    const p90 = Math.max(f.p90Ms ? Math.round(f.p90Ms * 0.9) : 0, jiaQuan90 ? Math.round(jiaQuan90 * 0.9) : 0);
-    const madQuJian = f.yangBenWei.length >= 3 ? Math.round(zhongWei + 1.4826 * mad(f.yangBenWei)) : 0;
+    const fenYuan = (f.fenWeiYang && f.fenWeiYang.length >= 9) ? f.fenWeiYang : f.yangBenWei;
+    const jiaQuan50 = jiaQuanFenWei(fenYuan, 0.5);
+    const jiaQuan90 = jiaQuanFenWei(fenYuan, 0.9);
+    const zhongWei = Math.max(f.p50Ms || 0, jiaQuan50, zhongXin);
+    const quJian = f.quJianXiShu > 0 ? f.quJianXiShu : 1;
+    const p90 = Math.round(Math.max(f.p90Ms ? Math.round(f.p90Ms * 0.9) : 0, jiaQuan90 ? Math.round(jiaQuan90 * 0.9) : 0) * quJian);
+    const madQuJian = fenYuan.length >= 3 ? Math.round((zhongWei + 1.4826 * mad(fenYuan)) * quJian) : 0;
     const eta = Math.max(ETA_ZUI_XIAO_MS, Math.min(ETA_ZUI_DA_MS,
       Math.max(holt, zhongWei, p90, madQuJian) || zhongWei || 0));
     if (!(eta > 0)) return null;
+    const fuGaiLv = f.fuGaiCe > 0 ? Math.round((f.fuGaiZhong / f.fuGaiCe) * 100) : 0;
     return {
       etaMs: eta, jieZhiMs: now + eta, yiYongMs: 0,
-      genJu: `方法库（${f.yangBen} 次记录：加权中位 ${shuoShiChang(jiaQuan50)}／加权P90 ${shuoShiChang(jiaQuan90)}／偏移 ${f.piaoYiXiShu}／趋势 ${f.holtQuShi >= 0 ? '+' : ''}${shuoShiChang(Math.abs(f.holtQuShi))}／MAD区间 ${shuoShiChang(madQuJian)}）`,
+      genJu: `条件桶（${f.qianMing || '行为整体'}｜${f.yangBen} 次记录，回退第 ${ceng} 层）：`
+        + `收缩均值 ${shuoShiChang(Math.round(shouSuo))}×偏移 ${pianYi.toFixed(2)}→中心 ${shuoShiChang(zhongXin)}；`
+        + `加权中位 ${shuoShiChang(jiaQuan50)}／加权P90 ${shuoShiChang(jiaQuan90)}×区间乘子 ${quJian.toFixed(2)}／趋势 ${f.holtQuShi >= 0 ? '+' : ''}${shuoShiChang(Math.abs(f.holtQuShi))}／MAD区间 ${shuoShiChang(madQuJian)}；`
+        + `历史区间覆盖 ${fuGaiLv}%、预测误差 ${(f.wuChaEma || 0).toFixed(3)}`,
       laiYuan: 'fangFa', ts: now, mingZhong: null,
     };
   }
 
   /** 给模型看的参考文本（方法库那一半；自己写过的历次预测在临时文件那一半） */
   canKaoWenBen(xingWei: XingWei, qianMing: string): string {
-    const f = this.chaFangFa(xingWei, qianMing);
+    const { zuiXi: f, ceng } = this.chaFangFaLian(xingWei, qianMing);
     if (!f) return `【这类行为的经验】还没有历史记录（这是第一次），你只能靠自己判断 —— 请给**偏保守**的估计。`;
-    return `【这类行为的经验（${f.yangBen} 次真实记录）】实际耗时中位数 ${shuoShiChang(f.p50Ms)}，90 分位 ${shuoShiChang(f.p90Ms)}；`
-      + `历史预测命中率 ${Math.round(f.mingZhongLv * 100)}%；模型一向偏${f.piaoYiXiShu >= 1 ? '乐观' : '保守'}（实际/预测 ≈ ${f.piaoYiXiShu.toFixed(2)}）。`;
+    const tiao = f.qianMing ? `条件「${f.qianMing}」` : '该行为整体';
+    return `【这类行为的经验（${tiao}：${f.yangBen} 次真实记录${ceng > 0 ? `，按回退链第 ${ceng} 层的粗桶` : ''}）】`
+      + `实际耗时中位数 ${shuoShiChang(f.p50Ms)}，90 分位 ${shuoShiChang(f.p90Ms)}；`
+      + `历史预测命中率 ${Math.round(f.mingZhongLv * 100)}%；模型一向偏${f.piaoYiXiShu >= 1 ? '乐观' : '保守'}（实际/预测 ≈ ${f.piaoYiXiShu.toFixed(2)}）；`
+      + `条件分桶后预测误差 ${(f.wuChaEma || 0).toFixed(3)}（越小越准）。`;
   }
 
   baCun(): void {

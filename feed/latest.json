@@ -1,12 +1,12 @@
 {
-  "version": "0.4.5",
-  "notes": "WArmy 0.4.5: smarter working budget — follow-up tool calls are now gated by the prediction ledger (past predictions, overruns, corrections) instead of a fixed count; round/result ceilings raised with prediction-based review as the primary gate and a generous safety net; follow-up turns carry the model own ETA estimate (and a correction prompt when it slips); clear rules for when to read files: read before editing an existing file, only the needed parts, and big files are read in chunks with an on-disk running summary before computing results.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.5/WArmy-Setup-0.4.5.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.5/WArmy-Setup-0.4.5.exe",
-  "sha256": "e956d948ec034d94d269358ed42d1485f214d878dfc629a0df100a646b7f5d6f",
-  "size": 234250025,
+  "version": "0.4.6",
+  "notes": "WArmy 0.4.6: fixes the authorization label reverting to Normal after a reply, and a pending-queue deadlock that left every later message queued forever when a long task ended through the continuation broadcast. Reply right-click menu is now Copy/Quote/Translate/Translate selection (selection-gated), and link menus no longer overlap. nm viewer: run executables via Ctrl+Enter or the context menu; fixed panels being covered, blank pages and split-toolbar height; address-bar buttons can be reordered, collapsed into the overflow menu and dragged back out; incognito tabs use neutral styling and an icon; in-page search and four new toolbar icons. Localized brand names for 23 locales (WArmy / local brand / local tagline); Simplified Chinese, Traditional Chinese and Japanese unchanged.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.6/WArmy-Setup-0.4.6.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.6/WArmy-Setup-0.4.6.exe",
+  "sha256": "704bb2f35820422b142f47df7b6c540ef363f2452ff0306bb69656b9cbf16999",
+  "size": 234263820,
   "mandatory": false,
-  "publishedAt": "2026-11-10T10:25:01.327Z",
+  "publishedAt": "2026-11-10T18:49:14.805Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.5"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.6"
 }

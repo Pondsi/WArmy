@@ -1149,6 +1149,11 @@ body.tuoYaSuoFenGe { cursor: col-resize; user-select: none; }
   flex: 0 0 auto;
 }
 #wangYeGongJu button svg { width: 14px; height: 14px; display: block; }
+/* R159 项4c：地址栏右侧按钮拖拽反馈（换位 / 收进三点 / 从三点拖出） */
+#wangYeHang1 button.tb2[draggable="true"] { cursor: grab; }
+#wangYeHang1 button.tb2.zhengZaiTuo { opacity: .45; }
+#wangYeHang1 button.tb2.tuoFangMuBiao { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gongJuCaiDan button[draggable="true"] { cursor: grab; }
 #wangYeGongJu button:hover { background: var(--hover); }
 #wangYeGongJu button:disabled { opacity: .45; cursor: not-allowed; }
 #wangYeGongJu button.fenLanAnNiu[aria-pressed="true"],
@@ -1493,9 +1498,10 @@ body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
 }
 .chatEditorAttachChip button:hover { color: var(--accent); }
 
-/* ── 无痕标签页标识（标题前缀「无痕 ·」+ 边框/文字主题色区分） ── */
-.wangYeTab.yinSi { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); }
-.wangYeTab.yinSi .tabMing { color: color-mix(in srgb, var(--accent) 72%, var(--ink)); }
+/* ── 无痕标签页标识（R159 项4：只用图标区分；外框与文字和正常标签一样是黑灰，不用主题色） ── */
+.wangYeTab.yinSi { border-color: var(--line); }
+.wangYeTab.yinSi .tabMing { color: inherit; }
+.tabYinSiTu { width: 12px; height: 12px; flex: 0 0 12px; color: var(--muted); }
 
 /* ── nm 查看器统一的弹窗按钮 ──
    清理数据 / 启动页设置 / 账号密码 / 收藏夹弹窗此前只引用了主界面类名，

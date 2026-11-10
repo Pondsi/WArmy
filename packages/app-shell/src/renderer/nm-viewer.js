@@ -999,9 +999,14 @@
       /** 无痕按标签（用户要求）：每个标签自带 yinSi 属性，只有无痕标签带标识 */
       const yinSi = !!k.yinSi;
       b.classList.toggle('yinSi', yinSi);
+      /** R159 项4：无痕标签不再写「无痕」二字，改用「新建无痕浏览标签页」按钮的那个图标 */
+      if (yinSi) {
+        const yuan = document.querySelector('#anNiuWangYeYinSi svg');
+        if (yuan) { const tu = yuan.cloneNode(true); tu.setAttribute('class', 'tabYinSiTu'); b.appendChild(tu); }
+      }
       const s = document.createElement('span');
       s.className = 'tabMing';
-      s.textContent = (yinSi ? '无痕 · ' : '') + (k.zang ? '● ' : '') + wangYeBiaoTi(k);
+      s.textContent = (k.zang ? '● ' : '') + wangYeBiaoTi(k);
       b.appendChild(s);
       b.addEventListener('click', () => { void qieHuanWangYeKa(i); });
       b.addEventListener('dblclick', (e) => { e.stopPropagation(); void guanWangYeKa(i); });
@@ -1011,6 +1016,7 @@
     try { gengXinYinSiAnNiu(); } catch { /* noop */ }
     try { gengXinShouCangZhuangTai(); } catch { /* noop */ }
     try { bangDingXinKaiAnNiu(); } catch { /* noop */ }
+    try { chuShiHuaWangYeAnNiu(); } catch { /* noop */ }
   }
   function gengXinTabGun() {
     const lie = el('wangYeTabLie');
@@ -1422,27 +1428,40 @@
       + d.dingCeng.map(scLianJieHtml).join('')
       + '<div class="scKong' + (d.dingCeng.length || d.wenJianJia.length ? ' yinCang' : '') + '">还没有收藏内容。点收藏夹图标可收藏当前网页。</div>';
     document.body.appendChild(mb);
+    /**
+     * R159 项3：这个面板是直接 append 到 body 的，没走 kaiCaiDan ⇒ 以前不隐藏原生网页视图，
+     * 于是收藏夹面板被网页盖住（用户报「显示的内容被遮挡」）。这里显式遮挡，关闭时精确恢复一次。
+     */
+    zheDangYeShiTu();
+    let yiGuan = false;
+    let scWaiFn = null;
+    const guanMianBan = () => {
+      if (yiGuan) return;
+      yiGuan = true;
+      if (scTing) { clearTimeout(scTing); scTing = null; }
+      mb.remove();
+      if (scWaiFn) document.removeEventListener('click', scWaiFn);
+      huiFuYeShiTu();
+    };
     const fang = b.getBoundingClientRect();
     const mw = 240;
     mb.style.left = Math.max(4, Math.min(window.innerWidth - mw - 4, Math.round(fang.left))) + 'px';
     mb.style.top = Math.round(fang.bottom + 6) + 'px';
     mb.addEventListener('mouseenter', () => { if (scTing) { clearTimeout(scTing); scTing = null; } });
-    mb.addEventListener('mouseleave', () => { scTing = setTimeout(() => mb.remove(), 220); });
-    b.addEventListener('mouseleave', () => { scTing = setTimeout(() => { if (document.body.contains(mb)) mb.remove(); }, 220); });
-    mb.querySelector('#scXinJian').addEventListener('click', () => { mb.remove(); xinJianShouCangJia(); });
+    mb.addEventListener('mouseleave', () => { scTing = setTimeout(guanMianBan, 220); });
+    b.addEventListener('mouseleave', () => { scTing = setTimeout(() => { if (document.body.contains(mb)) guanMianBan(); }, 220); });
+    mb.querySelector('#scXinJian').addEventListener('click', () => { guanMianBan(); xinJianShouCangJia(); });
     mb.querySelectorAll('.scJia').forEach((j) => {
       j.addEventListener('mouseenter', () => { j.querySelector('.scJiaNei').hidden = false; });
       j.addEventListener('mouseleave', () => { j.querySelector('.scJiaNei').hidden = true; });
     });
     mb.querySelectorAll('[data-sc-url]').forEach((a) => {
-      a.addEventListener('click', (e) => { e.preventDefault(); mb.remove(); wangYeXin(String(a.getAttribute('data-sc-url'))); });
+      a.addEventListener('click', (e) => { e.preventDefault(); guanMianBan(); wangYeXin(String(a.getAttribute('data-sc-url'))); });
     });
-    document.addEventListener('click', function scWai(e) {
-      if (!e.target.closest('#anNiuWangYeShouCang') && !e.target.closest('#scXuanTingMianBan')) {
-        mb.remove();
-        document.removeEventListener('click', scWai);
-      }
-    });
+    scWaiFn = (e) => {
+      if (!e.target.closest('#anNiuWangYeShouCang') && !e.target.closest('#scXuanTingMianBan')) guanMianBan();
+    };
+    document.addEventListener('click', scWaiFn);
   }
   function scLianJieHtml(x) {
     const ming = String((x && x.ming) || (x && x.url) || '');
@@ -1479,13 +1498,168 @@
   }
 
   /* ══ R128：三个点收纳菜单（标签页下面这行的 ⋯）—— 启动页 / 新标签页打开 / 清理数据 / 账号密码 ══ */
+  /* ── R159 项4c：地址栏右侧按钮可左右换位 / 拖进三点收纳 / 从三点拖出 ──────────
+   * 数据驱动：anNiuXu = 地址栏右侧从左到右的按钮 id（含三点）；shouNa = 收进三点菜单的 id。
+   * 两者互斥、并集 = 全部可收纳按钮；持久化到 localStorage（与收藏夹同风格）。
+   * 拖拽期间必须遮挡原生 WebContentsView —— 它盖在 DOM 之上会吃掉 dragover/drop。 */
+  const WY_AN_NIU_KEY = 'nm_wangYeAnNiu_v1';
+  const WY_QUAN = [
+    'anNiuWangYeLiShi', 'anNiuWangYeShouCang', 'anNiuWangYeFenLan', 'anNiuWangYeXiaZai',
+    'anNiuWangYeXinKai', 'anNiuWangYeShouYe', 'anNiuWangYeQingLi', 'anNiuWangYeZhangHao',
+    'anNiuWangYeSouSuo', 'anNiuWangYeDianDian',
+  ];
+  const WY_XU_MO_REN = ['anNiuWangYeLiShi', 'anNiuWangYeShouCang', 'anNiuWangYeFenLan', 'anNiuWangYeXiaZai', 'anNiuWangYeXinKai', 'anNiuWangYeDianDian'];
+  const WY_NA_MO_REN = ['anNiuWangYeShouYe', 'anNiuWangYeSouSuo', 'anNiuWangYeQingLi', 'anNiuWangYeZhangHao'];
+  const WY_BIAO = {
+    anNiuWangYeLiShi: '历史', anNiuWangYeShouCang: '收藏夹', anNiuWangYeFenLan: '分栏',
+    anNiuWangYeXiaZai: '下载', anNiuWangYeXinKai: '在新标签页打开链接',
+    anNiuWangYeShouYe: '启动页设置…', anNiuWangYeQingLi: '清理数据…',
+    anNiuWangYeZhangHao: '查看账号和密码…', anNiuWangYeSouSuo: '搜索', anNiuWangYeDianDian: '更多',
+  };
+
+  function duWangYeAnNiuBuJu() {
+    try {
+      const j = JSON.parse(localStorage.getItem(WY_AN_NIU_KEY) || 'null');
+      if (j && Array.isArray(j.xu) && Array.isArray(j.na)) {
+        const xu = j.xu.filter((x) => WY_QUAN.includes(x));
+        const na = j.na.filter((x) => WY_QUAN.includes(x) && !xu.includes(x));
+        for (const id of WY_QUAN) if (!xu.includes(id) && !na.includes(id)) na.push(id);
+        if (xu.includes('anNiuWangYeDianDian') && xu.length) return { xu, na };
+      }
+    } catch { /* 读不动就用默认 */ }
+    return { xu: WY_XU_MO_REN.slice(), na: WY_NA_MO_REN.slice() };
+  }
+  function cunWangYeAnNiuBuJu() {
+    try { localStorage.setItem(WY_AN_NIU_KEY, JSON.stringify({ xu: zt.wangYe.anNiuXu, na: zt.wangYe.shouNa })); } catch { /* noop */ }
+  }
+  function buJuWangYeAnNiu() {
+    const hang = el('wangYeHang1');
+    const url = el('wangYeUrl');
+    if (!hang || !url || !Array.isArray(zt.wangYe.anNiuXu)) return;
+    let hou = url;
+    for (const id of zt.wangYe.anNiuXu) {
+      const b = el(id);
+      if (!b) continue;
+      b.hidden = false;
+      if (hou.nextSibling !== b) hang.insertBefore(b, hou.nextSibling);
+      hou = b;
+    }
+    for (const id of (zt.wangYe.shouNa || [])) { const b = el(id); if (b) b.hidden = true; }
+  }
+  function shouNaWangYeAnNiu(id) {
+    if (!WY_QUAN.includes(id) || id === 'anNiuWangYeDianDian') return;
+    const xu = zt.wangYe.anNiuXu, na = zt.wangYe.shouNa;
+    const i = xu.indexOf(id);
+    if (i >= 0) xu.splice(i, 1);
+    if (!na.includes(id)) na.push(id);
+    cunWangYeAnNiuBuJu(); buJuWangYeAnNiu();
+    zhuangTaiWen('已收进三点菜单：' + (WY_BIAO[id] || id));
+  }
+  function fangChuWangYeAnNiu(id, canZhao) {
+    if (!WY_QUAN.includes(id)) return;
+    const xu = zt.wangYe.anNiuXu, na = zt.wangYe.shouNa;
+    const n = na.indexOf(id);
+    if (n >= 0) na.splice(n, 1);
+    const i = xu.indexOf(id);
+    if (i >= 0) xu.splice(i, 1);
+    let k = canZhao ? xu.indexOf(canZhao) : -1;
+    if (k < 0) k = xu.length;
+    xu.splice(k, 0, id);
+    cunWangYeAnNiuBuJu(); buJuWangYeAnNiu();
+  }
+
   function wangYeDianDianCaiDan() {
-    kaiCaiDan(el('anNiuWangYeDianDian'), [
-      { label: '启动页设置…', onClick: () => kaiQiDongYeSheZhi() },
-      { sep: true },
-      { label: '清理数据…', onClick: () => kaiQingLiShuJu() },
-      { label: '查看账号和密码…', onClick: () => kaiZhangHaoMiMa() },
-    ], 'dianDian');
+    const xiang = [];
+    for (const id of (zt.wangYe.shouNa || [])) {
+      const b = el(id);
+      xiang.push({
+        label: WY_BIAO[id] || (b ? b.title : id),
+        icon: b ? b.innerHTML : '',
+        tuoId: id,
+        onClick: () => { if (b) b.click(); },
+      });
+    }
+    if (!xiang.length) xiang.push({ label: '（把地址栏右侧的按钮拖到这里收纳）', disabled: true });
+    kaiCaiDan(el('anNiuWangYeDianDian'), xiang, 'dianDian');
+  }
+
+  /** 给地址栏右侧按钮装拖拽：换位 / 拖到三点上收纳；三点菜单项由 kaiCaiDan 的 tuoId 支持拖出 */
+  function bangWangYeAnNiuTuo() {
+    const hang = el('wangYeHang1');
+    if (!hang) return;
+    for (const id of WY_QUAN) {
+      const b = el(id);
+      if (!b || b.dataset.tuoBang) continue;
+      b.dataset.tuoBang = '1';
+      b.draggable = true;
+      b.addEventListener('dragstart', (e) => {
+        try { e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'move'; } catch { /* noop */ }
+        zt.wangYe.tuoAnNiu = id;
+        zheDangYeShiTu();
+        b.classList.add('zhengZaiTuo');
+      });
+      b.addEventListener('dragend', () => {
+        b.classList.remove('zhengZaiTuo');
+        hang.querySelectorAll('.tuoFangMuBiao').forEach((n) => n.classList.remove('tuoFangMuBiao'));
+        if (zt.wangYe.tuoAnNiu) { zt.wangYe.tuoAnNiu = ''; huiFuYeShiTu(); }
+      });
+      b.addEventListener('dragover', (e) => {
+        if (!zt.wangYe.tuoAnNiu || zt.wangYe.tuoAnNiu === id) return;
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'move'; } catch { /* noop */ }
+        b.classList.add('tuoFangMuBiao');
+      });
+      b.addEventListener('dragleave', () => b.classList.remove('tuoFangMuBiao'));
+      b.addEventListener('drop', (e) => {
+        const lai = zt.wangYe.tuoAnNiu;
+        if (!lai || lai === id) return;
+        e.preventDefault(); e.stopPropagation();
+        b.classList.remove('tuoFangMuBiao');
+        if (id === 'anNiuWangYeDianDian') shouNaWangYeAnNiu(lai);
+        else fangChuWangYeAnNiu(lai, id);
+      });
+    }
+    // 落在空白处 ⇒ 放到最右（三点之前没有强制约束，主人要求三点也能被拖到任意位置）
+    hang.addEventListener('dragover', (e) => { if (zt.wangYe.tuoAnNiu) e.preventDefault(); });
+    hang.addEventListener('drop', (e) => {
+      const lai = zt.wangYe.tuoAnNiu;
+      if (!lai) return;
+      e.preventDefault();
+      fangChuWangYeAnNiu(lai, null);
+    });
+  }
+
+  /** 4 颗新按钮：图标 + 点击行为（与三点菜单里原来是同一套动作） */
+  function bangWangYeXinAnNiu() {
+    const pei = [
+      ['anNiuWangYeShouYe', TU_SHOU_YE, () => kaiQiDongYeSheZhi()],
+      ['anNiuWangYeQingLi', TU_QING_LI, () => kaiQingLiShuJu()],
+      ['anNiuWangYeZhangHao', TU_ZHANG_HAO, () => kaiZhangHaoMiMa()],
+      ['anNiuWangYeSouSuo', TU_SOU_SOU, () => {
+        const ka = wangYeDangQian();
+        if (zt.wangYe.kai && ka && !ka.shiBenDi && ka.url) wangYeSouKai(true);
+        else { try { el('souRu').focus(); el('souRu').select(); } catch { /* noop */ } }
+      }],
+    ];
+    for (const [id, tu, zuo] of pei) {
+      const b = el(id);
+      if (!b || b.dataset.bound) continue;
+      b.dataset.bound = '1';
+      b.innerHTML = tu;
+      b.addEventListener('click', (e) => { e.stopPropagation(); zuo(); });
+    }
+  }
+
+  function chuShiHuaWangYeAnNiu() {
+    if (zt.wangYe.anNiuYiChuShi) { buJuWangYeAnNiu(); return; }
+    zt.wangYe.anNiuYiChuShi = true;
+    const j = duWangYeAnNiuBuJu();
+    zt.wangYe.anNiuXu = j.xu;
+    zt.wangYe.shouNa = j.na;
+    zt.wangYe.tuoAnNiu = '';
+    bangWangYeXinAnNiu();
+    bangWangYeAnNiuTuo();
+    buJuWangYeAnNiu();
   }
   /** 第 123 轮：「在新标签页打开链接」从三点菜单移到地址栏右侧（用户要求），常驻开关按钮 */
   function bangDingXinKaiAnNiu() {
@@ -3654,6 +3828,10 @@
   const TU_PRINT = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.8h7V6M4.5 11.2H3.2c-.7 0-1.2-.5-1.2-1.2V7.2c0-.7.5-1.2 1.2-1.2h9.6c.7 0 1.2.5 1.2 1.2V10c0 .7-.5 1.2-1.2 1.2h-1.3" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><rect x="4.5" y="9.2" width="7" height="4" rx=".6" fill="none" stroke="currentColor" stroke-width="1.25"/></svg>';
   const TU_FILE = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 2.5h5.2L12.5 6v7.5h-9z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M8.6 2.6V6h3.8" fill="none" stroke="currentColor" stroke-width="1.25"/></svg>';
   const TU_YU = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M2.6 8h10.8M8 2.4c1.7 1.5 2.6 3.4 2.6 5.6S9.7 12.1 8 13.6M8 2.4C6.3 3.9 5.4 5.8 5.4 8s.9 4.1 2.6 5.6" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
+  const TU_SHOU_YE = '<svg fill="currentColor" aria-hidden="true" focusable="false" viewBox="0 0 1030 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M943.321212 577.163636c12.412121 18.618182 31.030303 31.030303 55.854546 37.236364 6.206061 0 12.412121 6.206061 12.412121 6.206061 6.206061 6.206061 18.618182 18.618182 18.618182 31.030303v24.824242c-6.206061 24.824242-12.412121 43.442424-24.824243 62.060606l-6.20606 12.412121c-6.206061 12.412121-12.412121 18.618182-24.824243 24.824243-6.206061 6.206061-18.618182 6.206061-24.824242 6.20606-6.206061 0-12.412121 0-18.618182-6.20606-18.618182-6.206061-37.236364-6.206061-55.854546-6.206061h6.206061-12.412121c-18.618182 0-31.030303 6.206061-43.442424 12.412121 0 0-12.412121 6.206061-24.824243 18.618182-12.412121 12.412121-24.824242 37.236364-24.824242 62.060606 0 18.618182 0 37.236364 12.412121 62.060606 6.206061 12.412121 6.206061 31.030303-6.206061 43.442425-12.412121 12.412121-24.824242 18.618182-37.236363 24.824242-6.206061 6.206061-37.236364 18.618182-68.266667 24.824242 37.236364-6.206061 12.412121 0-12.412121 0h-6.206061c-6.206061 0-12.412121 0-18.618182-6.20606-6.206061-6.206061-12.412121-12.412121-12.412121-24.824243v6.206061c-12.412121-31.030303-31.030303-55.854545-55.854545-68.266667 0-6.206061-24.824242-12.412121-49.648485-12.412121s-49.648485 6.206061-68.266667 24.824243c-24.824242 18.618182-43.442424 43.442424-49.648485 74.472727 0-6.206061-6.206061 0-12.412121 0 0 0-12.412121 6.206061-18.618182 6.20606-12.412121 0-18.618182 0-37.236363-6.20606-12.412121-6.206061-24.824242-6.206061-37.236364-12.412121l-37.236364-18.618182c-12.412121-6.206061-18.618182-12.412121-24.824242-24.824243-6.206061-6.206061-6.206061-12.412121-6.206061-18.618181 0-6.206061 0-18.618182 6.206061-31.030304 6.206061-6.206061 12.412121-24.824242 12.412121-49.648484s-12.412121-43.442424-31.030303-62.060606c-12.412121-12.412121-24.824242-18.618182-43.442424-24.824243h-24.824242-6.206061c-12.412121 0-31.030303 6.206061-49.648485 6.206061h-12.412121c-6.206061 0-12.412121 0-18.618182-6.206061-6.206061 0-12.412121-12.412121-24.824242-18.618182-18.618182-31.030303-31.030303-68.266667-37.236364-105.50303v-6.206061c0-18.618182 12.412121-24.824242 24.824242-31.030303 24.824242-6.206061 43.442424-24.824242 62.060606-43.442424 18.618182-6.206061 24.824242-31.030303 24.824243-55.854545s-6.206061-49.648485-24.824243-68.266667C62.060606 415.806061 31.030303 397.187879 0 390.981818c18.618182 6.206061 12.412121 0 12.412121-6.20606-6.206061-6.206061-6.206061-18.618182-6.20606-24.824243 0-6.206061 0-18.618182 6.20606-31.030303 6.206061-24.824242 18.618182-49.648485 31.030303-68.266667-12.412121 24.824242-6.206061 12.412121 0 6.206061 0-12.412121 6.206061-18.618182 12.412121-24.824242 6.206061 0 6.206061-6.206061 12.412122-6.206061s12.412121 0 18.618181 6.206061c24.824242 6.206061 49.648485 12.412121 74.472728 6.20606 24.824242 0 43.442424-12.412121 62.060606-31.030303 12.412121-12.412121 18.618182-24.824242 18.618182-43.442424 6.206061 0 6.206061-12.412121 6.20606-24.824242v-18.618182-18.618182c0-18.618182-6.206061-43.442424-12.412121-62.060606 6.206061 31.030303 0 18.618182 0 6.20606v0c12.412121-6.206061 18.618182-12.412121 31.030303-18.618181l37.236364-18.618182c12.412121-6.206061 24.824242-6.206061 37.236363-12.412121 12.412121-6.206061 24.824242-6.206061 31.030303-6.206061 12.412121 0 18.618182 0 24.824243 12.412121 6.206061 6.206061 12.412121 18.618182 12.412121 31.030303 6.206061 12.412121 18.618182 24.824242 37.236364 43.442424s37.236364 24.824242 62.060606 24.824243 49.648485-6.206061 68.266666-18.618182c24.824242-24.824242 37.236364-43.442424 43.442425-68.266667 0-6.206061 6.206061-12.412121 12.412121-18.618181 6.206061 0 12.412121-6.206061 18.618182-6.206061 12.412121 0 18.618182 0 31.030303 6.206061 12.412121 0 24.824242 6.206061 37.236363 12.412121 12.412121 6.206061 24.824242 12.412121 31.030303 18.618182 12.412121 6.206061 18.618182 18.618182 24.824243 24.824242 0 6.206061 6.206061 6.206061 6.20606 12.412121v6.206061c0 6.206061-6.206061 18.618182-6.20606 24.824242 0 6.206061-6.206061 24.824242-6.206061 37.236364v18.618182c6.206061 24.824242 12.412121 43.442424 31.030303 62.060606 18.618182 18.618182 37.236364 24.824242 62.060606 31.030303 24.824242 0 49.648485 0 68.266667-12.412121 6.206061 0 12.412121-6.206061 18.618182-6.206061h6.20606c6.206061 0 18.618182 6.206061 24.824243 12.412121 12.412121 12.412121 18.618182 24.824242 31.030303 43.442424 6.206061 18.618182 12.412121 43.442424 18.618182 62.060607 0 12.412121 0 24.824242-6.206061 31.030303-6.206061 6.206061-12.412121 12.412121-24.824242 18.618181-24.824242 6.206061-49.648485 31.030303-62.060606 55.854546-6.206061 6.206061-12.412121 24.824242-12.412122 49.648485-6.206061 24.824242 0 49.648485 18.618182 68.266666zM682.666667 341.333333c-43.442424-43.442424-105.50303-68.266667-167.563637-68.266666-31.030303 0-62.060606 6.206061-93.090909 18.618181-43.442424 18.618182-80.678788 49.648485-105.50303 86.884849-6.206061-6.206061-24.824242 37.236364-37.236364 80.678788 0-18.618182-6.206061 12.412121-6.20606 49.648485 0 31.030303 6.206061 62.060606 18.618181 93.090909 12.412121 31.030303 31.030303 55.854545 49.648485 74.472727 18.618182 24.824242 49.648485 37.236364 74.472728 49.648485 31.030303 12.412121 62.060606 18.618182 93.090909 18.618182s62.060606-6.206061 93.090909-18.618182c43.442424-18.618182 80.678788-49.648485 105.50303-86.884849-6.206061 12.412121 12.412121-12.412121 24.824243-43.442424 12.412121-31.030303 18.618182-62.060606 18.618181-93.090909s-6.206061-62.060606-18.618181-93.090909C713.69697 372.363636 682.666667 335.127273 645.430303 310.30303l37.236364 31.030303z"></path></svg>';
+  const TU_QING_LI = '<svg fill="currentColor" aria-hidden="true" focusable="false" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M230.788982 391.691543l29.521858-51.135174 625.776881 361.291311-29.521858 51.135174zM297.308685 802.38781a29.557904 29.557904 0 0 1-25.520727-44.264764l67.838995-117.582785a29.485812 29.485812 0 1 1 51.113547 29.485812l-67.838995 117.582785a29.485812 29.485812 0 0 1-25.59282 14.778952zM492.967593 915.861326a28.83698 28.83698 0 0 1-14.41849-3.965085 29.557904 29.557904 0 0 1-10.741775-40.299679l68.199458-118.159525a29.485812 29.485812 0 1 1 51.113546 29.485812L518.560413 901.442836a29.557904 29.557904 0 0 1-25.59282 14.41849z" fill="currentColor"></path><path d="M876.715702 497.148379L764.323573 432.120989l144.761639-250.809632A120.754853 120.754853 0 0 0 699.440369 60.628597L555.25547 311.366136l-112.608406-64.883204a118.159525 118.159525 0 0 0-161.27081 43.255469l-177.347426 306.465003a118.159525 118.159525 0 0 0 43.25547 161.198718l434.357008 250.809632a118.231617 118.231617 0 0 0 161.27081-43.25547l177.059056-306.681281a118.159525 118.159525 0 0 0-43.25547-161.126624z m-184.917133 438.322093a58.971624 58.971624 0 0 1-80.599358 21.627735L176.77011 706.288575a58.971624 58.971624 0 0 1-21.627735-80.599359l177.059056-306.68128a59.043716 59.043716 0 0 1 80.599358-21.627735L545.883451 374.302845a35.541578 35.541578 0 0 0 48.518219-13.048734l11.751069-20.330071L749.905084 91.988812a63.225078 63.225078 0 0 1 81.680745-26.457929A61.855322 61.855322 0 0 1 858.043758 151.68136L704.991487 416.332743v0.937202l-3.316252 5.767396a35.397393 35.397393 0 0 0 12.976641 48.446126L847.22989 548.189833a58.971624 58.971624 0 0 1 21.627735 80.599359z" fill="currentColor"></path></svg>';
+  const TU_ZHANG_HAO = '<svg fill="currentColor" aria-hidden="true" focusable="false" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M616.4 544.9c-35.2 0-70.4-13.4-97.1-40.2-25.9-25.9-40.2-60.4-40.2-97.1 0-36.7 14.3-71.2 40.2-97.1 25.9-25.9 60.4-40.2 97.1-40.2 36.7 0 71.2 14.3 97.1 40.2 53.6 53.6 53.6 140.7 0 194.3-26.8 26.8-62 40.1-97.1 40.1z m0-206.6c-18.5 0-35.9 7.2-49 20.3-13.1 13.1-20.3 30.5-20.3 49s7.2 35.9 20.3 49c27 27 71.1 27 98.1 0s27-71.1 0-98.1c-13.2-13-30.6-20.2-49.1-20.2z"></path><path d="M221.5 926c-29.9 0-58-11.6-79.2-32.8l-11.5-11.5c-43.7-43.7-43.7-114.7 0-158.4l198.7-198.7c-21.1-51.7-27.8-107.8-19.3-163.7 10-65.6 40.1-125.1 87.1-172.1 58.5-58.5 136.2-90.7 219-90.7s160.5 32.2 219 90.7S926 325 926 407.8c0 82.7-32.2 160.5-90.7 219-47 47-106.6 77.2-172.1 87.1-55.9 8.5-112 1.8-163.7-19.3l-35.7 35.7 8.2 8.2c17.6 17.6 27.4 41.1 27.4 66.1s-9.7 48.4-27.4 66.1l-12.6 12.6c-17.6 17.6-41.1 27.4-66.1 27.4s-48.4-9.7-66.1-27.4l-8.2-8.2-18.3 18.3c-21.1 21-49.3 32.6-79.2 32.6z m394.9-760c-64.5 0-125.2 25.1-170.9 70.8-36.7 36.7-60.2 83.1-68 134.3-7.6 50.2 0.4 100.5 23.1 145.5 6.6 13.1 4.1 29-6.3 39.4L178.9 771.4c-17.1 17.2-17.1 45.1 0 62.2l11.5 11.5c8.3 8.3 19.4 12.9 31.1 12.9 11.7 0 22.8-4.6 31.1-12.9l42.3-42.3c13.3-13.3 34.8-13.3 48.1 0l32.2 32.2c4.8 4.8 11.2 7.4 18 7.4s13.2-2.6 18-7.4l12.6-12.6c4.8-4.8 7.4-11.2 7.4-18 0-6.8-2.6-13.2-7.4-18l-32.2-32.2c-13.3-13.3-13.3-34.8 0-48.1l76.5-76.5c10.4-10.4 26.3-12.9 39.4-6.3 45 22.8 95.4 30.7 145.5 23.1 51.1-7.8 97.6-31.3 134.3-68 45.6-45.6 70.8-106.3 70.8-170.9S833 282.3 787.3 236.6 680.9 166 616.4 166z"></path></svg>';
+  const TU_SOU_SOU = '<svg fill="currentColor" aria-hidden="true" focusable="false" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M480.216064 622.645248C396.107264 622.645248 327.68 554.21696 327.68 470.107136c0-84.108288 68.427264-152.536064 152.536064-152.536064 84.109824 0 152.538112 68.427264 152.538112 152.536064 0 84.109824-68.428288 152.538112-152.538112 152.538112z m0-283.956224c-72.463872 0-131.418112 58.95424-131.418112 131.418112s58.95424 131.418112 131.418112 131.418112 131.418112-58.95424 131.418112-131.418112-58.95424-131.418112-131.418112-131.418112z"></path><path d="M580.669952 572.238848l114.085888 114.085888c5.241856 5.241856 5.241856 14.049792 0 19.29216-5.243904 5.243904-14.05184 5.243904-19.294208 0l-114.085888-114.08384c-5.241856-5.243904-5.241856-14.05184 0-19.294208 5.244416-5.241856 14.052352-5.241856 19.294208 0z m0 0"></path><path d="M685.108224 706.47808c-2.864128 0-5.518336-1.077248-7.473664-3.033088l-114.0864-114.084352c-4.050432-4.051968-4.050432-10.898432 0-14.949376 1.95584-1.954304 4.611072-3.031552 7.476224-3.031552 2.86464 0 5.518336 1.076736 7.473664 3.031552l114.0864 114.085888c1.954816 1.955328 3.031552 4.609536 3.031552 7.474176s-1.076736 5.518336-3.031552 7.474176c-1.956864 1.955328-4.611584 3.032576-7.476224 3.032576z"></path></svg>';
   /** 第 81 轮项 11：无匹配用图标，不再写「无匹配」文字 */
   const TU_WU_PI_PEI = '<svg class="wuPiPeiTu" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m10.2 10.2 3 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5.3 5.3l3.4 3.4M8.7 5.3 5.3 8.7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
 
@@ -3750,21 +3928,35 @@
     caiDanZuiHou = null;
   }
 
+  /**
+   * R159 项3：原生 WebContentsView 永远盖在 DOM 之上（z-index 无效）。
+   * 任何浮层（工具栏菜单 / 收藏夹悬停面板 / 分栏拖动）打开期间都必须把视图藏起来。
+   * 以前是单个布尔 + 一个全局恢复函数：收藏夹面板根本没走这条路（⇒ 面板被网页盖住），
+   * 菜单与分栏拖动又共用同一个布尔，交错时一方会把另一方的视图提前放出来、或永远藏着（⇒ 页面全白）。
+   * 改成**计数**：每个浮层各加一次、各减一次，归零才真的恢复视图。
+   */
+  let yeShiTuZheDang = 0;
+  function zheDangYeShiTu() {
+    yeShiTuZheDang += 1;
+    if (yeShiTuZheDang !== 1) return;
+    zt.wangYe.yeKuangHide = true;
+    zt.wangYe.shiTuKey = '';
+    try { wangYeShiTuTongBu(); } catch { /* noop */ }
+  }
+  function huiFuYeShiTu() {
+    if (yeShiTuZheDang > 0) yeShiTuZheDang -= 1;
+    if (yeShiTuZheDang !== 0) return;
+    zt.wangYe.yeKuangHide = false;
+    zt.wangYe.shiTuKey = '';
+    try { wangYeShiTuTongBu(); } catch { /* noop */ }
+  }
   function kaiCaiDanShouShiTu() {
-    /** 原生 WebContentsView 永远盖在 DOM 之上（z-index 无效）：弹菜单时先隐藏视图 */
+    /** 弹菜单时先隐藏视图；同一个菜单重复开不重复计数 */
     try {
       const ka = wangYeDangQian();
-      if (ka && !ka.shiBenDi && ka.url && zt.wangYe.kai && !zt.wangYe.yeKuangHide) {
-        zt.wangYe.yeKuangHide = true;
-        zt.wangYe.shiTuKey = '';
-        wangYeShiTuTongBu();
-        const huiFu = () => {
-          zt.wangYe.yeKuangHide = false;
-          zt.wangYe.shiTuKey = '';
-          try { wangYeShiTuTongBu(); } catch { /* noop */ }
-          window.__huiFuWangYeShiTu = null;
-        };
-        window.__huiFuWangYeShiTu = huiFu;
+      if (ka && !ka.shiBenDi && ka.url && zt.wangYe.kai && !window.__huiFuWangYeShiTu) {
+        zheDangYeShiTu();
+        window.__huiFuWangYeShiTu = () => { window.__huiFuWangYeShiTu = null; huiFuYeShiTu(); };
       }
     } catch { /* noop */ }
   }
@@ -3807,6 +3999,18 @@
       b.type = 'button';
       b.disabled = !!x.disabled;
       if (x.icon) b.innerHTML = x.icon;
+      /** R159 项4c：三点菜单里的条目可拖到地址栏右侧，成为常驻按钮 */
+      if (x.tuoId) {
+        b.draggable = true;
+        b.addEventListener('dragstart', (e) => {
+          try { e.dataTransfer.setData('text/plain', x.tuoId); e.dataTransfer.effectAllowed = 'move'; } catch { /* noop */ }
+          zt.wangYe.tuoAnNiu = x.tuoId;
+          try { zheDangYeShiTu(); } catch { /* noop */ }
+        });
+        b.addEventListener('dragend', () => {
+          if (zt.wangYe.tuoAnNiu) { zt.wangYe.tuoAnNiu = ''; try { huiFuYeShiTu(); } catch { /* noop */ } }
+        });
+      }
       const sp = document.createElement('span');
       sp.textContent = x.label;
       b.appendChild(sp);
@@ -3945,11 +4149,37 @@
     zhuangTaiWen('插入对话暂不可用：window.warmy 还没有「插入当前聊天框」的 IPC；内容已复制到剪贴板。');
     tiShiWen('插入对话暂不可用（缺少 window.warmy 插入 IPC）。内容已复制到剪贴板，可到聊天框 Ctrl+V。');
   }
+  /**
+   * R159 项2：打开的是可执行文件时给「运行」入口（右键菜单第一项 + Ctrl+Enter）。
+   * 走系统默认打开（ShellExecute）——对 exe/bat/cmd 等就是执行，与资源管理器双击一致。
+   */
+  const KE_ZHI_XING_EXT = /\.(exe|msi|bat|cmd|com|scr|ps1|vbs|lnk)$/i;
+  function shiKeZhiXingWenJian() {
+    const lu = String(zt.luJing || '');
+    return !!lu && KE_ZHI_XING_EXT.test(lu);
+  }
+  async function yunXingDangQianWenJian() {
+    const lu = String(zt.luJing || '');
+    if (!lu) { zhuangTaiWen('没有打开的文件'); return; }
+    if (!shiKeZhiXingWenJian()) { zhuangTaiWen('这不是可执行文件，不能运行'); return; }
+    try {
+      const r = await window.warmy.daKaiLuJing?.({ path: lu });
+      if (r && r.ok === false) { tiShiWen('运行失败：' + String(r.error || '未知原因')); return; }
+      zhuangTaiWen('已运行：' + lu);
+    } catch (e) { tiShiWen('运行失败：' + String((e && e.message) || e)); }
+  }
+
   function kaiYouJianCaiDan(e, t) {
     const keBian = shuRuYuanSu(t);
     const youXuan = !!quXuanZhongWen(t);
     const wen = quXuanZhongWen(t) || quanWenQu(t);
-    const xiang = [
+    const xiang = [];
+    /** R159 项2：可执行文件 ⇒「运行」放第一位 */
+    if (shiKeZhiXingWenJian()) {
+      xiang.push({ label: '运行', hint: 'Ctrl+Enter', onClick: () => { void yunXingDangQianWenJian(); } });
+      xiang.push({ sep: true });
+    }
+    xiang.push(
       { label: '撤销', disabled: !keBian, onClick: () => { keBian.focus(); zhiXingMingLing('undo'); } },
       { label: '重做（前进）', disabled: !keBian, onClick: () => { keBian.focus(); zhiXingMingLing('redo'); } },
       { sep: true },
@@ -3960,7 +4190,7 @@
       { label: '全选', onClick: () => { if (!xuanQuan(keBian || t)) zhuangTaiWen('这里没有可全选的内容'); } },
       { sep: true },
       { label: '插入对话', disabled: !wen, onClick: () => { void chaRuDuiHua(wen.slice(0, 200000)); } },
-    ];
+    );
     kaiCaiDan(null, xiang, 'youJian', { x: e.clientX, y: e.clientY });
   }
 
@@ -4403,9 +4633,8 @@
     document.body.classList.toggle('tuoWangYeFenGeShu', wangYeFenLanShu() === 3);
     /** 原生 WebContentsView 在 DOM 之上，会吃掉 mousemove：拖动期间先隐藏，松手再按新边界显示 */
     if (!ka.shiBenDi && ka.url) {
-      zt.wangYe.yeKuangHide = true;
-      zt.wangYe.shiTuKey = '';
-      try { wangYeShiTuTongBu(); } catch { /* noop */ }
+      zheDangYeShiTu();
+      zt.wangYe.tuoFenGeZheDang = true;
     }
   });
   document.addEventListener('mousemove', (e) => {
@@ -4426,8 +4655,7 @@
     if (!zt.wangYe.tuoFenGe) return;
     zt.wangYe.tuoFenGe = false;
     document.body.classList.remove('tuoWangYeFenGe', 'tuoWangYeFenGeShu');
-    zt.wangYe.yeKuangHide = false;
-    zt.wangYe.shiTuKey = '';
+    if (zt.wangYe.tuoFenGeZheDang) { zt.wangYe.tuoFenGeZheDang = false; huiFuYeShiTu(); }
     yingYongWangYeFenLan();
     gengXinWangYeYuan();
   });
@@ -4691,6 +4919,8 @@
     if (ctrl && e.key === '-') { e.preventDefault(); sheSuoFang(zt.suoFang - 0.1); return; }
     if (ctrl && e.key === '0') { e.preventDefault(); chongZhiShiTu(); return; }
     if (ctrl && e.key === '9') { e.preventDefault(); shiYingChuangKou(); return; }
+    /** R159 项2：Ctrl+Enter = 运行当前可执行文件；不是可执行文件就不拦截回车 */
+    if (ctrl && e.key === 'Enter' && shiKeZhiXingWenJian()) { e.preventDefault(); void yunXingDangQianWenJian(); return; }
     if (e.key === 'F3') {
       e.preventDefault();
       const ka = wangYeDangQian();
@@ -4835,6 +5065,17 @@
       const he = el('wangYeKuangHe');
       if (he && typeof ResizeObserver === 'function') {
         new ResizeObserver(() => { if (zt.wangYe.kai) wangYeShiTuTongBu(); }).observe(he);
+      }
+      /**
+       * R159 项3：网页工具栏自己换行/长高（窄窗、查找行、下载面板、分栏切换）时也要重排 + 重测边界，
+       * 否则原生视图按旧边界摆放 ⇒ 盖住工具栏按钮或 leaving 一片白（用户报「分栏工具栏高度不对」）。
+       */
+      const gj = el('wangYeGongJu');
+      if (gj && typeof ResizeObserver === 'function') {
+        new ResizeObserver(() => {
+          try { anPaiGongJuLan(); } catch { /* noop */ }
+          if (zt.wangYe.kai) { zt.wangYe.shiTuKey = ''; try { wangYeShiTuTongBu(); } catch { /* noop */ } }
+        }).observe(gj);
       }
     } catch { /* noop */ }
     try {

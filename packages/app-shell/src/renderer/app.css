@@ -1577,6 +1577,10 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 .shangXiaWenCaiDan button.danger { color: var(--danger); }
 .shangXiaWenCaiDan button.danger:hover { background: rgba(250,81,81,.12); }
 .shangXiaWenCaiDan button.qiYong { color: var(--accent); }
+/* R159 项1：不可用项灰掉且不给悬停反馈（无选区时的「翻译选中内容」） */
+.shangXiaWenCaiDan button:disabled,
+.shangXiaWenCaiDan button.jinYong { opacity: .42; cursor: default; }
+.shangXiaWenCaiDan button:disabled:hover { background: transparent; }
 .shangXiaWenFenGe { height: 1px; background: var(--line); margin: 4px 8px; }
 
 .gengDuoDd { position: relative; display: inline-flex; }

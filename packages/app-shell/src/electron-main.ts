@@ -4738,7 +4738,7 @@ async function yunXingLiaoTianXunHuan(
             xingWei: 'dengDaiHuiFu', sessionId,
             moXing: String(Qiu.model || providerCfg.model || ''),
             shiJiMs: wan.ms, ciShu: ci,
-            qianMing: renWuQianMing({ gongJuMing: benLunGongJuMing, buShu: (jiHuaRenWuJi.get(sessionId) || []).length, moXing: String(Qiu.model || '') }),
+            qianMing: renWuQianMing({ gongJuMing: benLunGongJuMing, buShu: (jiHuaRenWuJi.get(sessionId) || []).length, moXing: String(Qiu.model || ''), qingKuang: qingKuangOf(sessionId) }),
             jieDuan, zhongLei: wan.ms >= xingWeiGui('dengDaiHuiFu').miao ? 'shiJian' : 'ciShu',
           });
           if (jie.yiChang) biaoEtaYiChang(sessionId, 'dengDaiHuiFu', jie.liYou);
@@ -5164,7 +5164,7 @@ async function yunXingLiaoTianXunHuan(
             xingWei: 'dengDaiXingDong', sessionId,
             moXing: moXingId,
             shiJiMs: haoShi, ciShu: 1,
-            qianMing: renWuQianMing({ gongJu: 'spawn_subagent', gongJuMing: benLunGongJuMing, buShu: (jiHuaRenWuJi.get(sessionId) || []).length }),
+            qianMing: renWuQianMing({ gongJu: 'spawn_subagent', gongJuMing: benLunGongJuMing, buShu: (jiHuaRenWuJi.get(sessionId) || []).length, moXing: moXingId, qingKuang: qingKuangOf(sessionId) }),
             jieDuan: `等待子代理「${lu.ming}」完成：耗时 ${shuoShiChang(haoShi)}`,
             zhongLei: haoShi >= xingWeiGui('dengDaiXingDong').miao ? 'shiJian' : 'ciShu',
           });
@@ -7371,7 +7371,7 @@ async function yunXingLiaoTianXunHuan(
             xingWei: 'gongJu', sessionId,
             moXing: String(Qiu.model || providerCfg.model || ''),
             shiJiMs: haoShi, ciShu: ci,
-            qianMing: renWuQianMing({ gongJu: ming, gongJuMing: benLunGongJuMing, buShu: (jiHuaRenWuJi.get(sessionId) || []).length }),
+            qianMing: renWuQianMing({ gongJu: ming, gongJuMing: benLunGongJuMing, buShu: (jiHuaRenWuJi.get(sessionId) || []).length, moXing: String(Qiu.model || ''), qingKuang: qingKuangOf(sessionId) }),
             jieDuan, zhongLei: haoShi >= xingWeiGui('gongJu').miao ? 'shiJian' : 'ciShu',
           });
           if (jie.yiChang) {
@@ -16807,7 +16807,12 @@ export function etaBaCun(): void {
 /** 本轮任务的**签名**（预测经验按它聚类；只用与工作量相关的稳定特征） */
 function benLunQianMing(sessionId: string, zhiShuoBuZuo: boolean, moXing?: string): string {
   const bu = (jiHuaRenWuJi.get(sessionId) || []).length;
-  return renWuQianMing({ buShu: bu, gongJuMing: benLunGongJuMing, zhiShuoBuZuo, moXing });
+  return renWuQianMing({ buShu: bu, gongJuMing: benLunGongJuMing, zhiShuoBuZuo, moXing, qingKuang: qingKuangOf(sessionId) });
+}
+
+/** 条件桶的「情况」维度：已经自动续派过 ⇒ xuPai（续派轮的耗时分布与首发不同，分开记） */
+function qingKuangOf(sessionId: string): 'shouCi' | 'xuPai' {
+  try { return (yanXuZhuangTai.get(String(sessionId || ''))?.yanXu ?? 0) > 0 ? 'xuPai' : 'shouCi'; } catch { return 'shouCi'; }
 }
 
 /** 行为名（给用户看的；审计与聊天里都用它，避免各处各写一套说法） */
