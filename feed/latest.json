@@ -1,12 +1,12 @@
 {
-  "version": "0.4.4",
-  "notes": "WArmy 0.4.4: workhorse tasks no longer stop before they are finished — when a run ends with plan steps still open, the system now keeps dispatching follow-up turns (with stall/repeat/step circuit breakers still in place) instead of giving up; per-turn tool budgets raised so code-heavy runs are not forced to wrap up after a few file reads; follow-up turns are told not to re-read files they already read; the per-step follow-up counter resets whenever real progress is made.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.4/WArmy-Setup-0.4.4.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.4/WArmy-Setup-0.4.4.exe",
-  "sha256": "23628d16a7bdabbb1a963692ed3c8dc5767aeceba849107520b3a165f69174f3",
-  "size": 234248885,
+  "version": "0.4.5",
+  "notes": "WArmy 0.4.5: smarter working budget — follow-up tool calls are now gated by the prediction ledger (past predictions, overruns, corrections) instead of a fixed count; round/result ceilings raised with prediction-based review as the primary gate and a generous safety net; follow-up turns carry the model own ETA estimate (and a correction prompt when it slips); clear rules for when to read files: read before editing an existing file, only the needed parts, and big files are read in chunks with an on-disk running summary before computing results.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.5/WArmy-Setup-0.4.5.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.5/WArmy-Setup-0.4.5.exe",
+  "sha256": "e956d948ec034d94d269358ed42d1485f214d878dfc629a0df100a646b7f5d6f",
+  "size": 234250025,
   "mandatory": false,
-  "publishedAt": "2026-11-10T07:18:16.353Z",
+  "publishedAt": "2026-11-10T10:25:01.327Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.4"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.5"
 }

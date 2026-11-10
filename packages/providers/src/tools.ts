@@ -232,7 +232,8 @@ export async function liaoTianDaiGongJu(
   const zhiChi = typeof o.supportsTools === 'boolean' ? o.supportsTools : gongYingZhiChiGongJu(provider);
   const emit = typeof o.onEvent === 'function' ? o.onEvent : () => {};
   const daoShangXianWenMoXing = o.daoShangXianWenMoXing !== false;
-  const zuiDaZongLun = qianZhiZhengShu(o.zuiDaZongLun, 1, 128, 64);
+  // R156：总轮天花板默认抬到 96（主闸是预测/进展判断，这里只是防失控的网）
+  const zuiDaZongLun = qianZhiZhengShu(o.zuiDaZongLun, 1, 128, 96);
   /** 到过上限后由模型自估加过的轮数（只允许有限次，防无限续命） */
   let jiaLunCiShu = 0;
   let zuiDaLunShuDongTai = zuiDaLunShu;
@@ -496,7 +497,8 @@ export async function liaoTianDaiGongJu(
          * 未完成且还要加 ⇒ 提高上限继续；已完成 / 说不清 / 加轮超硬顶 ⇒ 走原来的强制收敛。
          * 这是**第二档**：宿主按事实拒绝续预算之后，才听模型自己的判断（它说要加也得有硬顶）。
          */
-        if (daoLunShangXian && !yuSuanShuChu && !ciShuShuChu && daoShangXianWenMoXing && jiaLunCiShu < 3 && lunShu < zuiDaZongLun) {
+        // R156：自估加轮不再只有 3 次 —— 由预测精度兜底（宿主按 eta 预测账判异常），硬底是 zuiDaZongLun
+        if (daoLunShangXian && !yuSuanShuChu && !ciShuShuChu && daoShangXianWenMoXing && jiaLunCiShu < 8 && lunShu < zuiDaZongLun) {
           try {
             const PAN = '工具轮数已到上限。请判断当前任务是否已经完成。\n'
               + '只输出 JSON：{"done":true|false,"needRounds":数字（若未完成，还需要几轮工具调用；1~8）,"etaSeconds":数字（预计还需多少秒，可选）,"reason":"一句话理由"}\n'

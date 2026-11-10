@@ -2179,10 +2179,16 @@ interface BenLunYuSuanZhang {
   yingDingFangKuan: boolean;
   kaiShiTs: number;
 }
-/** 续预算次数硬顶（一次用户消息内） */
+/**
+ * 续预算的「免费档」次数（一次用户消息内）：这几次只按 huizhuYouJinZhan 三条件判。
+ * R156：超过免费档**不再一刀切拒绝** —— 改看预测账（eta）有没有判过异常：
+ * 没有连续超预估/超时就继续批，有就收口。绝对安全网见 BEN_LUN_XU_YU_SUAN_ANQUAN。
+ */
 const BEN_LUN_XU_YU_SUAN_ZUIDA = 4;
-/** 三条仪表的绝对天花板：续到哪都不许越过（防失控，也防把"用户没叫停"当成"可以无限跑"） */
-const YU_SUAN_TING = { lun: 64, ci: 600, zi: 120000 };
+/** 续预算绝对安全网（防失控；正常任务靠预测/进展判断收口，碰不到这里） */
+const BEN_LUN_XU_YU_SUAN_ANQUAN = 12;
+/** 三条仪表的绝对天花板：最后一道安全网（R156 抬高——主闸已改为预测判断，见 benLunXuYuSuan） */
+const YU_SUAN_TING = { lun: 128, ci: 1200, zi: 300000 };
 const benLunYuSuanZhang = new Map<string, BenLunYuSuanZhang>();
 
 /** 按任务尺寸开一条新预算（每次进入工具循环都重开：续派轮用的是**新额度**，进展证据另算） */
@@ -2264,9 +2270,26 @@ function huizhuYouJinZhan(sid: string): { you: boolean; yin: string } {
 function benLunXuYuSuan(sid: string, k: { yuanYin: string; lunShu: number; zuiDaLunShu: number; gongJuCiShu: number; zuiDaGongJuCiShu: number; jieGuoZiShu: number; zongYuSuan: number }): { lunShu?: number; gongJuCiShu?: number; jieGuoZiShu?: number } | null {
   const s = String(sid || '');
   const zhang = huoBenLunYuSuan(s);
-  if (zhang.xuCi >= BEN_LUN_XU_YU_SUAN_ZUIDA) {
+  /**
+   * R156：超过免费档不再一刀切 —— 先看预测账（eta）的异常计数：
+   * 判「没卡死」时预警点是**按预测续期**的，这里也按同一本账决定续不续。
+   * 预测账显示连续超预估/累计超限（3 次即异常）⇒ 收口；否则继续批（每批仍要过 huizhuYouJinZhan）。
+   * BEN_LUN_XU_YU_SUAN_ANQUAN 是防失控的绝对安全网。
+   */
+  if (zhang.xuCi >= BEN_LUN_XU_YU_SUAN_ANQUAN) {
     try { audit?.log('chat.budget.extend-capped', { sessionId: s, reason: k.yuanYin, xuCi: zhang.xuCi }); } catch { /* noop */ }
     return null;
+  }
+  if (zhang.xuCi >= BEN_LUN_XU_YU_SUAN_ZUIDA) {
+    try {
+      const wYu = etaHuo().xingWei(s, 'gongJu');
+      const yuCeChao = wYu.chaoShiCiShu >= 3 || wYu.lianXuChaoShi >= 3;
+      if (yuCeChao) {
+        audit?.log('chat.budget.extend-capped', { sessionId: s, reason: k.yuanYin, xuCi: zhang.xuCi, why: 'eta-anomaly' });
+        return null;
+      }
+      audit?.log('chat.budget.extend-beyond-free', { sessionId: s, reason: k.yuanYin, xuCi: zhang.xuCi, chaoShiCiShu: wYu.chaoShiCiShu });
+    } catch { /* 预测账读不到就按免费档收口（保守） */ return null; }
   }
   const jin = huizhuYouJinZhan(s);
   if (!jin.you) {
@@ -7402,6 +7425,24 @@ async function yunXingLiaoTianXunHuan(
          * "额度掐死了正在推进的任务"还是"模型自己在打转"。
          */
         if (Shi.kind === 'budget') audit?.log('chat.budget.event', { sessionId, round: Shi.round, detail: Shi.detail });
+        /**
+         * R156：模型自估「还要 N 轮 / 预计 X 秒」时，把预估**写进预测账**（eta）——
+         * 与超时/超次数共用同一套「预测→判超没超→校正」机制，下次预估更准。
+         */
+        if (Shi.kind === 'final' && /max-rounds-extended/.test(String(Shi.detail || ''))) {
+          try {
+            const mEta = /eta=(\d+)s/.exec(String(Shi.detail || ''));
+            const mRounds = /\(\+(\d+)/.exec(String(Shi.detail || ''));
+            const etaMs = mEta ? Number(mEta[1]) * 1000 : (mRounds ? Number(mRounds[1]) * 90 * 1000 : 0);
+            if (etaMs > 0) {
+              etaHuo().jiYuCe(String(sessionId || ''), 'gongJu', {
+                etaMs,
+                genJu: '模型自估加轮：' + String(Shi.detail || '').slice(0, 80),
+                laiYuan: 'model',
+              });
+            }
+          } catch { /* 预测记账失败不影响主流程 */ }
+        }
       },
     }
       ),
@@ -18489,7 +18530,20 @@ async function yanXuJiHuaRenWu(
         + (yiWanChanPin ? `\n\n【已完成的产物 · 不要重复生成同名文件】\n${yiWanChanPin}` : '')
         + (yiDaKaiLie ? `\n\n【已经打开过的文件 · 不要再 open_path】${yiDaKaiLie}` : '')
         + '\n\n（这是系统自动接着派的一轮，不需要等我说话。请只做还没完成的部分。）'
-        + '\n\n（R155：不要重读已经读过的文件与需求文档——内容宿主已经在上下文里给过你，重读只会烧掉干活的额度。直接从写代码、构建、测试这类动手步骤开始。）',
+        + (() => {
+          try {
+            const wY = etaHuo().huiHua(String(sessionId || '')).xingWei?.ziDongXuPai || etaHuo().xingWei(String(sessionId || ''), 'gongJu');
+            const yu = wY && wY.shangCiYuCe;
+            if (yu && Number(yu.etaMs) > 0) {
+              const chaoGuo = Date.now() > Number(yu.jieZhiMs || 0);
+              return '\n\n（【预估】你上一次预估还需约 ' + Math.round(Number(yu.etaMs) / 60000) + ' 分钟'
+                + (chaoGuo ? '，实际**已经超了这个预估**。先按实际情况修正预估再继续（预估与实际都会写进预测文件用于校准）' : '。按预估推进；如果发现会超，先说明并给出修正预估')
+                + '。）';
+            }
+          } catch { /* 预测账读不到就不注入 */ }
+          return '';
+        })()
+        + '\n\n（R155读文件的分寸：① 需求文档读过一次就不要再整篇重读；② 要修改/续写一个**已存在的文件**（自己写的或别人写的）时，动手前必须先读它——但只读需要的部分：先看开头与结构，再用 read_file 的 offset/maxChars 读要改的段落，不必一次读完全文；③ 超过约两万字的大文件：分段读，每读一段就把**有用的信息**追加总结到一个摘要文件（write_file 带 append:true），下一轮先看摘要、再用 offset 续读下一段，直到读完，然后基于摘要计算结果；④ 已经在摘要或计划备注里的信息，不要再去读原文核对。）',
       heDui,
     );
   } catch (e) {
