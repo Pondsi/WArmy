@@ -5074,3 +5074,9 @@ html { font-weight: var(--fw-ui, 400); }
 .ssKeyHang input { width: 150px !important; }
 .ssUrl { font-size: 11px; color: var(--muted, #888); word-break: break-all; }
 .ssUrl { width: 100%; padding-left: 132px; font-size: 11px; color: var(--muted, #888); word-break: break-all; }
+
+/* R154 项8: 授权卡命令全文折叠——展开后高度限制+滚动条 */
+.aiqCmdFold { margin: 4px 0; }
+.aiqCmdFold summary { cursor: pointer; font-size: 12px; color: var(--accent, #4a9eff); user-select: none; }
+.aiqCmdFold summary:hover { text-decoration: underline; }
+.aiqCmdText { max-height: 120px; overflow-y: auto; font-size: 11px; background: var(--bg2, #f5f5f5); border: 1px solid var(--line, #ddd); border-radius: 6px; padding: 6px 8px; margin: 4px 0; white-space: pre-wrap; word-break: break-all; font-family: Consolas, monospace; }

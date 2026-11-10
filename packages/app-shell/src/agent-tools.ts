@@ -341,9 +341,15 @@ export function yunXingMingLing(cmd: string, opts: { cwd?: string; timeoutMs?: n
       const yinHaoShu = (cmd.match(/["']/g) || []).length;
       const hereStr = /@['"]/.test(cmd);
       const fanYinHao = /`/.test(cmd);
-      const xianJing = duoHang || hereStr || (zhongWen && yinHaoShu >= 4) || (fanYinHao && yinHaoShu >= 2);
-      if (xianJing) {
-        const shiPs = zhongWen || /\$|Get-|Set-|Write-|ForEach|ConvertFrom|ConvertTo|Select-Object|Invoke-/.test(cmd);
+      /**
+       * PowerShell 语法特征：这类命令在 cmd /c 下会失败或被吃引号
+       * （真机：`Get-ChildItem env:` 被当 cmd 执行；`powershell -File "..."` 的引号被 cmd 吃掉）
+       * ⇒ 走临时脚本 + 对应 shell，不再让 cmd 解析。
+       */
+      const psYuFa = /\$|Get-|Set-|Write-|ForEach|ConvertFrom|ConvertTo|Select-Object|Invoke-|Where-Object|Test-Path|Start-Process|Copy-Item|Move-Item|New-Item|Remove-Item|-ExecutionPolicy\b|-(File|Command|EncodedCommand)\b/.test(cmd);
+      const xianJing = duoHang || hereStr || (zhongWen && yinHaoShu >= 4) || (fanYinHao && yinHaoShu >= 2) || (psYuFa && yinHaoShu >= 2);
+      if (xianJing || psYuFa) {
+        const shiPs = zhongWen || psYuFa;
         try {
           if (shiPs) {
             lingShiJiaoBen = path.join(os.tmpdir(), `warmy-run-${crypto.randomBytes(6).toString('hex')}.ps1`);
@@ -362,13 +368,35 @@ export function yunXingMingLing(cmd: string, opts: { cwd?: string; timeoutMs?: n
     /**
      * 最小环境变量白名单：API Key / 令牌 / 身份私钥等**不传给普通工具进程**。
      * 需要凭据的工具必须由主进程代用，而不是把宿主环境整体继承下去。
+     * 系统目录类变量（APPDATA/LOCALAPPDATA/ProgramData/ProgramFiles…）不是秘密，
+     * 但被剔除会让 NuGet/MSBuild/dotnet 等工具在 `_GetRestoreSettings` 抛
+     * `Path.Combine(path1=null)`（真机事故：任务为编译反复空转 26 次工具调用）——一并放行。
      */
     const env: Record<string, string> = {};
     const allow = ['PATH', 'SystemRoot', 'SystemDrive', 'windir', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP',
-      'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'LANG', 'LC_ALL', 'TZ'];
+      'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'LANG', 'LC_ALL', 'TZ',
+      'APPDATA', 'LOCALAPPDATA', 'ProgramData', 'ALLUSERSPROFILE', 'PUBLIC',
+      'ProgramFiles', 'ProgramFiles(x86)', 'CommonProgramFiles', 'CommonProgramFiles(x86)',
+      'PSModulePath', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_IDENTIFIER', 'OS'];
+    /**
+     * 系统标准变量兜底默认值：本机实测系统环境表可能缺 ProgramFiles/ALLUSERSPROFILE 等
+     * （真机事故：NuGet `GetRestoreSettings` 因此抛 `Path.Combine(path1=null)`，dotnet restore 全挂）。
+     * 宿主缺失/为空时补 Windows 标准值，保证构建类工具在受损机器上也能跑。
+     */
+    const biaoZhunMoRen: Record<string, string> = {
+      ProgramFiles: 'C:\\Program Files',
+      'ProgramFiles(x86)': 'C:\\Program Files (x86)',
+      CommonProgramFiles: 'C:\\Program Files\\Common Files',
+      'CommonProgramFiles(x86)': 'C:\\Program Files (x86)\\Common Files',
+      ProgramData: 'C:\\ProgramData',
+      ALLUSERSPROFILE: 'C:\\ProgramData',
+      PUBLIC: 'C:\\Users\\Public',
+      SystemRoot: 'C:\\WINDOWS',
+    };
     for (const k of allow) {
       const v = process.env[k];
       if (typeof v === 'string' && v) env[k] = v;
+      else if (biaoZhunMoRen[k]) env[k] = biaoZhunMoRen[k];
     }
     /**
      * R133：cwd 失效是 spawn ENOENT 的另一半来源（`spawn cmd.exe ENOENT` 其实是「cwd 不存在」）。

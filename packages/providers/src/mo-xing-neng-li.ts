@@ -170,7 +170,7 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
    * **语音模型（TTS，文字转语音）**：能把文字"读"出来的模型。
    * 代表：CosyVoice / MeloTTS / VITS / Bark / Kokoro / F5-TTS / XTTS / edge-tts / fish-speech。
    */
-  { shi: /cosyvoice|melo-?tts|melo\b|vits|bark-|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'tts' } },
+  { shi: /cosyvoice|melo-?tts|melo\b|vits|\bbark\b|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts/i, neng: { vision: false, thinking: false, tools: false, thinkLevels: [], kind: 'tts' } },
   /**
    * **分类模型**（RLCD = Reinforcement Learning for Calibrated Decisions）：
    * 输出**带置信度的决策**而不是长文本，用并行约束解码（JSON schema 100% 准确、比自回归快 5~7 倍）。
@@ -206,7 +206,7 @@ export function caiZhongLei(ming: string): MoXingNengLi['kind'] {
   const s = String(ming || '').toLowerCase();
   if (/text-embedding|bge-(?!r?erank)|bge_|m3e|gte-|e5-|contriever|jina-embed|nomic-embed|\bembed\b/.test(s)) return 'embedding';
   if (/rerank|re-?rank|bge-?reranker/.test(s)) return 'rerank';
-  if (/cosyvoice|melo-?tts|melo\b|vits|bark-|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts|(^|[-_/])tts([-_/]|$)/.test(s)) return 'tts';
+  if (/cosyvoice|melo-?tts|melo\b|vits|\bbark\b|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts|(^|[-_/])tts([-_/]|$)/.test(s)) return 'tts';
   if (/whisper|sense-?voice|paraformer|moonshine|speech-?to-?text|\bstt\b|asr-|vosk|sherpa|(^|[-_/])asr([-_/]|$)/.test(s)) return 'asr';
   // 看图模型（图像**理解** / VLM）—— 必须在「画图」之前判，否则 *-vl 会被误当成生成
   if (/llava|minicpm-?v|qwen\d*-?vl|qwen2\.5-?vl|internvl|cogvlm|fuyu|paligemma|moondream|deepseek-?vl|janus|minigpt|glm-?4v|glm-?4\.5v|\bvlm\b|vision-?only|image-?understand|visual-?question/.test(s)) return 'imageUnd';

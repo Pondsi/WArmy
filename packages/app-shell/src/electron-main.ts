@@ -543,6 +543,33 @@ function shuaXinZhuJinChengYuYanFromSettings(): void {
 function tMain(k: string, huiTui = ''): string {
   return MAIN_I18N[k] || huiTui || k;
 }
+/** 目标语言名映射：locale → 提示词里对该语言的称呼（主聊天链与子代理链共用） */
+const YU_YAN_MING: Record<string, string> = {
+  'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en-US': 'English', 'ja': '日本語',
+  'ko': '한국어', 'fr': 'français', 'es': 'español', 'pt': 'português', 'ru': 'русский', 'eo': 'Esperanto',
+  'de': 'Deutsch', 'it': 'italiano', 'nl': 'Nederlands', 'pl': 'polski', 'sv': 'svenska',
+  'cs': 'čeština', 'hu': 'magyar', 'da': 'dansk', 'nb': 'norsk', 'tr': 'Türkçe',
+  'uk': 'українська', 'id': 'Bahasa Indonesia', 'vi': 'Tiếng Việt', 'th': 'ไทย',
+  'hi': 'हिन्दी', 'ar': 'العربية', 'fa': 'فارسی',
+};
+/**
+ * **加强 AI 语言约束**（设置 → 语言里那个勾）：勾上就返回强制约束句，没勾返回空串。
+ * 主聊天链与子代理链**共用同一句**（T18-4：只对主链注入时，小弟会用别的语言思考/交付）。
+ * 文案走 `llm.strictLanguage`（跟随界面语言 yuYan），`{lang}` 换成目标语言名。
+ */
+function yuYanYueShuJu(): string {
+  try {
+    const pei = (settingsStore?.load() ?? {}) as { strictAiLanguage?: boolean; yuYan?: string };
+    if (!pei.strictAiLanguage) return '';
+    const muBiaoYuYan = pei.yuYan || app.getLocale();
+    const yuMing = YU_YAN_MING[muBiaoYuYan] || muBiaoYuYan;
+    return tMain('llm.strictLanguage',
+      '【语言约束 · 强制】你的**所有输出**必须使用{lang}：最终回复、中间回复、思考链（reasoning/思考过程）、工具调用的参数与命名解释、自我对话（自言自语），全部用{lang}。'
+      + '绝对不要夹杂任何其他语言的词汇或句子。只有代码、标识符（变量名/文件名/命令）与专有名词可以例外。'
+      + '如果你发现自己在用其他语言思考，立即切换回{lang}。'
+    ).replace(/\{lang\}/g, yuMing);
+  } catch { return ''; /* 配置坏了就不加约束 */ }
+}
 
 let win: BrowserWindow | null = null;
 let p1: Awaited<ReturnType<typeof chuangJianP1YunXingShi>> | null = null;
@@ -5779,10 +5806,19 @@ async function yunXingLiaoTianXunHuan(
                */
               const baoHuWhy = protectedPathReason(abs, baseH);
               if (baoHuWhy) {
+                /* R154: 授权卡明确写清访问目标 */
+                let muBiao = '';
+                if (/程序安装目录/.test(baoHuWhy)) muBiao = '读取程序本身的代码（安装目录）';
+                else if (/其他会话/.test(baoHuWhy)) {
+                  const sidMatch = abs.match(/inst-[a-z0-9-]+/i);
+                  muBiao = sidMatch ? `读取会话 ${sidMatch[0]} 的数据` : '读取其他会话的数据';
+                }
+                else if (/历史|记忆|账号/.test(baoHuWhy)) muBiao = '读取会话历史/记忆/账号数据';
+                else muBiao = '访问受保护区域';
                 const da = await qingQiuKaPian(
                   sessionId,
-                  'AI 请求打开受保护的目录',
-                  `路径：${abs}\n原因：${baoHuWhy}\n（即使完全授权也默认禁止；同意 = 仅这一次放行）`,
+                  '请求访问受保护区域',
+                  `${muBiao}\n路径：${abs}\n原因：${baoHuWhy}\n（即使完全授权，受保护区域仍需单独确认。同意 = 仅这一次放行）`,
                   [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }],
                 );
                 if (!/^同意|允许/.test(da)) {
@@ -5929,6 +5965,7 @@ async function yunXingLiaoTianXunHuan(
              * cwd 落在本会话工作区之外但不在禁止区（例如临时目录、用户自己的项目目录）时，
              * 完全授权必须放行；以前 cwdWhy 无条件拼进来，导致每条越出工作区的命令都弹卡。
              * 禁止区本身已由 protectedCommandReason 内部的 protectedPathReason(cwd) 覆盖。 */
+            /* R154 项2 修正: 完全授权下程序代码和其他会话数据仍需授权，但非保护区域（临时目录/用户项目）直接放行 */
             const cmdWhy = protectedCommandReason(cmd, cwdAbs, baseAbs) || (dang === 'full' ? '' : cwdWhy);
             if (cmdWhy) {
               /**
@@ -5938,10 +5975,19 @@ async function yunXingLiaoTianXunHuan(
                */
               const keWen = dang === 'full' || yaoWen2;
               if (keWen) {
+                /* R154: 授权卡明确写清访问目标 */
+                let muBiao = '';
+                if (/程序安装目录/.test(cmdWhy)) muBiao = '读取程序本身的代码（安装目录）';
+                else if (/其他会话/.test(cmdWhy)) {
+                  const sidMatch = (cwdAbs + ' ' + cmd).match(/inst-[a-z0-9-]+/i);
+                  muBiao = sidMatch ? `读取会话 ${sidMatch[0]} 的数据` : '读取其他会话的数据';
+                }
+                else if (/历史|记忆|账号/.test(cmdWhy)) muBiao = '读取会话历史/记忆/账号数据';
+                else muBiao = '访问受保护区域';
                 const da = await qingQiuKaPian(
                   sessionId,
-                  dang === 'full' ? '【保护目录确认】此命令涉及受保护区域' : 'AI 请求执行会改动项目/其他会话的命令',
-                  `命令：${cmd}\n原因：${cmdWhy}\n${dang === 'full' ? '（完全授权模式下，受保护目录仍需单独确认——这是一次性保护，不是授权问题。同意 = 仅这一次放行）' : '（这是项目程序目录或其他会话的工作区/历史；同意 = 仅这一次放行）'}`,
+                  '请求访问受保护区域',
+                  `${muBiao}\n命令：${cmd}\n原因：${cmdWhy}\n（完全授权模式下，受保护区域仍需单独确认。同意 = 仅这一次放行）`,
                   [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }],
                 );
                 if (/^同意/.test(da)) {
@@ -5981,8 +6027,14 @@ async function yunXingLiaoTianXunHuan(
                 '这是**授权拒绝**，不是命令出错：请**不要再调用 run_shell**，改用别的工具（read_file/write_file/open_path 等）完成，或如实告诉用户「需要把授权改成完全授权/勾上超出权限询问」');
             }
             else if (!pan.allow) {
-                const da = await qingQiuKaPian(sessionId, 'AI 请求执行命令',
-                  `命令：${cmd}\n风险：${jian.summary}\n（拒绝 = 不执行）`,
+                /**
+                 * 用途行 = 模型给出的「这条命令是干什么的」（run_shell 的 purpose 参数），
+                 * 一眼可见、不进折叠区；风险单独一行。模型没填时不拿风险摘要冒充用途。
+                 */
+                const yongTuShuo = String(argsH.purpose || '').trim().slice(0, 120);
+                const mingLingYongTu = yongTuShuo ? `用途：${yongTuShuo}` : '用途：（模型未说明，请看下面的命令自行判断）';
+                const da = await qingQiuKaPian(sessionId, '请求执行命令',
+                  `${mingLingYongTu}\n命令全文：\n${cmd}\n风险：${jian.risk || '未知'}\n（拒绝 = 不执行）`,
                   [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
                 if (da === 'yes' || /^同意/.test(String(da)) || /^允许/.test(String(da))) {
                   const r2 = await yunXingMingLing(cmd, { cwd: cwdAbs, timeoutMs: Number(argsH.timeoutMs) || 60000 });
@@ -6905,10 +6957,21 @@ async function yunXingLiaoTianXunHuan(
               } catch { return false; }
             })();
             const kaBiaoTi = baoHu
-              ? 'AI 请求访问受保护的目录'
-              : zhiDuYou ? 'AI 请求**修改**你给它的这个文件' : 'AI 请求访问工作区外的文件';
+              ? '请求访问受保护区域'
+              : zhiDuYou ? '请求**修改**你给它的这个文件' : '请求访问工作区外的文件';
+            /* R154: 授权卡明确写清访问目标 */
+            const baoHuMuBiao = baoHu ? (() => {
+              const why = errWr.replace(/^protected-path:\s*/, '');
+              if (/程序安装目录/.test(why)) return '读取程序本身的代码（安装目录）';
+              if (/其他会话/.test(why)) {
+                const sidMatch = luJing.match(/inst-[a-z0-9-]+/i);
+                return sidMatch ? `读取会话 ${sidMatch[0]} 的数据` : '读取其他会话的数据';
+              }
+              if (/历史|记忆|账号/.test(why)) return '读取会话历史/记忆/账号数据';
+              return '访问受保护区域';
+            })() : '';
             const kaXiangQing = baoHu
-              ? `操作：${gongJuMing}\n路径：${luJing}\n原因：${errWr.replace(/^protected-path:\s*/, '')}\n（这是其他会话的工作区/历史，或程序安装目录；即使完全授权也默认禁止。同意 = 仅这一次放行）`
+              ? `${baoHuMuBiao}\n操作：${gongJuMing}\n路径：${luJing}\n原因：${errWr.replace(/^protected-path:\s*/, '')}\n（即使完全授权，受保护区域仍需单独确认。同意 = 仅这一次放行）`
               : zhiDuYou
                 ? `操作：${gongJuMing}\n路径：${luJing}\n（你只授权了「读取」；这次要**改/写**，属于另一件事）\n（拒绝 = 只让它读，不许改）`
                 : `操作：${gongJuMing}\n路径：${luJing}\n（拒绝 = 改用工作区内路径）`;
@@ -14686,22 +14749,13 @@ async function zhenZhengFaSongBen(
           /**
            * **加强 AI 语言约束**（设置 → 语言里那个勾）：思考过程与回复都严格用界面语言。
            * 不勾时不加这段（不干涉模型自己选语言）。
+           * T18-4：约束句收口到 `yuYanYueShuJu()`（子代理链也用同一句），这里只管注入与审计。
            */
           try {
-            const yueGe = (settingsStore?.load() as { strictAiLanguage?: boolean } | undefined)?.strictAiLanguage;
-            if (yueGe) {
-              const muBiaoYuYan = (settingsStore?.load() as { yuYan?: string } | undefined)?.yuYan || app.getLocale();
-              const yuMing = {
-                'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en-US': 'English', 'ja': '日本語',
-                'ko': '한국어', 'fr': 'français', 'es': 'español', 'pt': 'português', 'ru': 'русский', 'eo': 'Esperanto',
-                'de': 'Deutsch', 'it': 'italiano', 'nl': 'Nederlands', 'pl': 'polski', 'sv': 'svenska',
-                'cs': 'čeština', 'hu': 'magyar', 'da': 'dansk', 'nb': 'norsk', 'tr': 'Türkçe',
-                'uk': 'українська', 'id': 'Bahasa Indonesia', 'vi': 'Tiếng Việt', 'th': 'ไทย',
-                'hi': 'हिन्दी', 'ar': 'العربية', 'fa': 'فارسی',
-              }[muBiaoYuYan] || muBiaoYuYan;
-              /* R149 项2：加强约束——思考链与正文都必须用目标语言，措辞更强制 */
-              const yueGeJu = tMain('llm.strictLanguage', '【语言约束 · 强制】你的**所有输出**必须使用{lang}：包括思考链（reasoning）、工具调用的说明、中间回复、最终正文，全部用{lang}。绝对不要夹杂任何其他语言的词汇或句子。如果你发现自己在用其他语言思考，立即切换回{lang}。').replace(/\{lang\}/g, yuMing);
+            const yueGeJu = yuYanYueShuJu();
+            if (yueGeJu) {
               ju.push(yueGeJu);
+              const muBiaoYuYan = (settingsStore?.load() as { yuYan?: string } | undefined)?.yuYan || app.getLocale();
               /**
                * 审计留痕（"这个勾到底有没有生效"必须可查 —— 真机反馈里用户就是这么问的）。
                * 只记"开没开 + 目标语言 + 注入了几字符"，不记正文。
@@ -31918,7 +31972,13 @@ async function paoXiaoDiRenWu(zhi: {
     });
     try { audit?.log('chat.tonghu-dispatch', { sessionId: sid, idem: xinFeng.idem_key, yanZheng: yanZheng(xinFeng).ok, shuoMing: jiao.shuoMing }); } catch { /* noop */ }
     const xieyiTou = `【互通协议 v1】${xinFeng.from.id} → ${xinFeng.to.id} · intent=${xinFeng.intent} · idem=${xinFeng.idem_key}\n【认知】${jiao.geiDuiFangDeRenZhi || '（无）'}\n【印象】${jiao.woDeDaoDeYinXiang ? jiao.woDeDaoDeYinXiang.slice(0, 600) : '（对方未开启交换，不传）'}`;
-    const ziRenWu = `你是子代理「${lu.ming}」，由「${lu.fuMing}」派出。请独立完成下面这一件具体的事，需要写文件就直接写（路径用工作区相对路径），并在最后给出可交付的结论。\n\n${xieyiTou}\n\n【子任务】${String(lu.task || '').slice(0, 2000)}\n\n【增量交付协议（必须遵守）】\n① 写多少交多少：每完成 5 个交付单元就把结果落盘一次（JSON/文本自检通过再继续），不许攒到最后一次性写（大单次写容易被截断成半成品）。\n② 单次 write_file 不超过 1500 字，长内容用 append:true 分段续写。\n③ 遇到内容过滤拦截/报错：换中性措辞重试一次；仍失败就跳过该单元继续下一个，最后如实报告哪些没做成。\n④ 文件落盘用 Node 脚本执行（写 .cjs 再跑），不要用内联复杂命令（引号/多行/中文极易被解析吃掉）。`;
+    /**
+     * T18-4：**加强 AI 语言约束也要落到子代理** —— 只在主链注入时，小弟会用别的语言
+     * 思考与交付，主链那句根本管不到它的 reasoning/工具调用。勾上就跟主链同一句。
+     */
+    const xiaoDiYueGeJu = yuYanYueShuJu();
+    const ziRenWu = `你是子代理「${lu.ming}」，由「${lu.fuMing}」派出。请独立完成下面这一件具体的事，需要写文件就直接写（路径用工作区相对路径），并在最后给出可交付的结论。\n\n${xieyiTou}\n\n【子任务】${String(lu.task || '').slice(0, 2000)}\n\n【增量交付协议（必须遵守）】\n① 写多少交多少：每完成 5 个交付单元就把结果落盘一次（JSON/文本自检通过再继续），不许攒到最后一次性写（大单次写容易被截断成半成品）。\n② 单次 write_file 不超过 1500 字，长内容用 append:true 分段续写。\n③ 遇到内容过滤拦截/报错：换中性措辞重试一次；仍失败就跳过该单元继续下一个，最后如实报告哪些没做成。\n④ 文件落盘用 Node 脚本执行（写 .cjs 再跑），不要用内联复杂命令（引号/多行/中文极易被解析吃掉）。`
+      + (xiaoDiYueGeJu ? '\n\n' + xiaoDiYueGeJu : '');
     const subBase = workspaceDirOf(app.getPath('userData'), sid);
     try { fs.mkdirSync(subBase, { recursive: true }); } catch { /* noop */ }
     const subLoop = await liaoTianDaiGongJu(

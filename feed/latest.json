@@ -1,12 +1,12 @@
 {
-  "version": "0.4.2",
-  "notes": "WArmy 0.4.2: the continue/retry action row is now truly centered in the chat area; running conversation avatars show a flowing theme-color gradient overlay; mobile preview fixes (board tasks render, and the English UI no longer falls back to Chinese); five previously-red gates repaired (e2e, history-persist, tool-call-e2e, live-ui, mobile-ui); PRIVACY and TERMS are now published in the repository.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.2/WArmy-Setup-0.4.2.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.2/WArmy-Setup-0.4.2.exe",
-  "sha256": "4cff23baa4b518ba1c59dfa8d9066e9fda8cbd5fdec5ecf8eca6cec05bf901af",
-  "size": 234238088,
+  "version": "0.4.3",
+  "notes": "WArmy 0.4.3: the security level picked in the chat bar now reaches the authorization engine (full authorization no longer prompts for ordinary task files); command execution restores standard system environment variables on machines where they are missing so dotnet/NuGet builds work again; PowerShell-syntax commands are no longer misrouted through cmd; the continue/retry button is anchored to the message where the latest interruption happened; the running small-text bar shows in independent windows and no longer double-prints the ellipsis; all 1000 Chinese busy phrases and 27 languages of status lines were rewritten as fluent complete sentences; the strict-language constraint now really applies (including chain-of-thought and tool arguments) and is also injected for subagent tasks; authorization cards show what a command is for and collapse the full command text; model capability detection fixes (embed context cap, bare bark TTS).",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.3/WArmy-Setup-0.4.3.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.3/WArmy-Setup-0.4.3.exe",
+  "sha256": "8e5949e1575a7126205d233f694e325bc858aeb2b939aea8152dc9471c0e1c2a",
+  "size": 234247985,
   "mandatory": false,
-  "publishedAt": "2026-11-09T13:40:54.652Z",
+  "publishedAt": "2026-11-10T02:31:09.511Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.2"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.3"
 }

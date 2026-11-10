@@ -636,7 +636,13 @@ export class OllamaGongYing extends JichuGongYing {
           const mn = can.match(/^\s*num_ctx\s+(\d+)\s*$/im);
           if (mn) {
             const nn = Number(mn[1]);
-            if (Number.isFinite(nn) && nn >= 1024) contextLen = Math.floor(nn);
+            if (Number.isFinite(nn) && nn >= 1024) {
+              const yunXing = Math.floor(nn);
+              // num_ctx 不许越过架构上限：真机 nomic-embed-text 的 Modelfile 写 num_ctx 8192，
+              // 但 GGUF 是 context_length=2048 —— 实跑 /api/embed 超长输入被截到 2048
+              // （prompt_eval_count=2048）。照抄 8192 会把预算/分块虚大 4 倍，取两者较小。
+              contextLen = contextLen > 0 ? Math.min(yunXing, contextLen) : yunXing;
+            }
           }
           if (supportsThinking) thinkLevels = ['low', 'medium', 'high'];
         }

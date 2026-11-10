@@ -597,11 +597,8 @@
   align-items: stretch;
   width: min(360px, 92vw);
   gap: 10px;
-  /*
-   * 光学居中：上面重（27 个语言瓦片），下面轻（1 个「开始」按钮），
-   * 纯几何居中时眼睛会觉得整体在往下掉。整块向上抬一点抵消错觉。
-   * 用 transform 而不是 margin：不影响父级 flex 居中与滚动区的尺寸计算。
-   */
+  /* R154 项1: 加高顶部拖动区 */
+  padding-top: 16px;
   transform: translateY(-14px);
 }
 .warmyAuthLangGrid {
@@ -796,7 +793,7 @@
   .woBrandR68 .pinPailogo { width: 96px; }
 }
 
-/* 首启右上角关闭：平时隐藏，鼠标进入右上角**大热区**才出现（产品要求：触发范围更大） */
+/* 首启右上角关闭：常显（R154 项1）；热区放大到 180×160 便于点中 */
 .warmyAuthCloseHot {
   position: fixed;
   top: 0;
@@ -821,8 +818,8 @@
   background: rgba(255, 253, 248, .94);
   color: #b86a3c;
   cursor: pointer;
-  opacity: 0;
-  transform: scale(.92);
+  opacity: 1;
+  transform: scale(1);
   transition: opacity .15s ease, transform .15s ease, background .15s ease;
 }
 .warmyAuthCloseX svg { width: 18px; height: 18px; display: block; }
@@ -978,21 +975,16 @@
 /* 语言列表是 overflow-y:auto 滚动容器：drag 落在滚动容器上会与滚动冲突形成死区，
    明确 no-drag，让列表只管点选/滚动，拖窗交给背景与顶部握把。 */
 .warmyAuthFirstCard.warmyAuthLangCard .warmyAuthLangGrid { -webkit-app-region: no-drag; }
-/* R153：首启语言卡顶部加高拖动区——旧版顶部只有 12px padding，难以抓握。
-   这里给一条明确的握把（细横条提示可拖），整块继承卡片的 drag。 */
+/* R153/R154: 首启语言卡顶部拖动区——去掉横线指示器，减小高度，加高拖动区域 */
 .warmyAuthLangGrip {
-  height: 40px;
-  margin: -2px 0 2px;
+  height: 24px;
+  margin: -2px 0 0;
   display: flex;
   align-items: center;
   justify-content: center;
   -webkit-app-region: drag;
 }
+/* R154 项1: 去掉横线指示器 */
 .warmyAuthLangGrip::before {
-  content: '';
-  width: 42px;
-  height: 4px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: .22;
+  display: none;
 }

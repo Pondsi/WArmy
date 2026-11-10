@@ -1706,6 +1706,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
           type: 'object',
           properties: {
             command: { type: 'string', description: '要执行的命令，如 git status 或 python -c "print(1)"' },
+            purpose: { type: 'string', description: '这条命令是干什么的：一句话说明（会直接展示在用户授权卡上，请用用户界面语言写，例如「编译项目并输出 exe」）' },
             cwd: { type: 'string', description: '工作目录（可选；默认本会话工作区）' },
             timeoutMs: { type: 'number', description: '超时毫秒（默认 60000，上限 10 分钟）' },
           },
