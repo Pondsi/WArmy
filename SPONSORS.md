@@ -28,7 +28,6 @@ donate, you always have full use of everything in this project. A donation is si
 
 ## Ways to donate · 赞助方式
 
-Every option is labelled in **English and Chinese**, so it can be understood in any locale.
 
 ### WeChat Pay · 微信支付
 

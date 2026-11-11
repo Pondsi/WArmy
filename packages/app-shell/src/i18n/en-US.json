@@ -273,7 +273,7 @@
   "chat.openWindow": "Open in separate window",
   "chat.openWindowTip": "Open this chat in a new window",
   "chat.p1": "Urgent",
-  "chat.p1ConfirmBody": "Urgent may interrupt or jump the queue:\n• Current steps may be aborted\n• Resources may be preempted\n• Queue will be reordered\n\nConfirm after 5 seconds.",
+  "chat.p1ConfirmBody": "Urgent interrupts the current task and preempts resources. Continue?",
   "chat.p1ConfirmOk": "I understand, use urgent",
   "chat.p1ConfirmTitle": "Use urgent mode?",
   "chat.p1Countdown": "Wait {n}s",

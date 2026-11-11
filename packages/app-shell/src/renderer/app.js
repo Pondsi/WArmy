@@ -3619,14 +3619,20 @@ async function langDuWenBen(text, btnEl) {
     hangYuanSu.querySelector('.renWuZhongDuanMark')?.remove();
     hangYuanSu.querySelectorAll('.hangJiaoBiao:not(.tingYong), .weiDuZi').forEach((x) => x.remove());
     const n = Number(state.unread[sid] || 0);
-    // 第二行：把"新回复数"作为前缀插到最新回复内容前面
+    /**
+     * R160 项7+8：第二行 = 最新消息的纯文本预览（不分牛马/用户），超出截断。
+     * 旧实现会在文本前加 `[n]` 或 `[无]` 前缀：前者已被头像右上角的红色角标取代，
+     * 后者在没有回复时把整行写成「无」（用户报：授权卡等待时第二行全是「无」）。
+     * 现在只保留文本本身；空内容就不画前缀、不画占位。
+     */
     const fu = hangYuanSu.querySelector('.fu');
     if (fu) {
       const wenBen = String(fu.textContent || '').trim();
-      const qianZhui = n > 0
-        ? '<span class="weiDuQianZhui">[' + (n > 99 ? '99+' : String(n)) + ']</span>'
-        : '<span class="weiDuQianZhui wu">[' + escapeHtml(tOr('list.none', '无')) + ']</span>';
-      fu.innerHTML = qianZhui + '<span class="fuWenBen" title="' + escapeHtml(wenBen) + '">' + escapeHtml(wenBen) + '</span>';
+      if (wenBen) {
+        fu.innerHTML = '<span class="fuWenBen" title="' + escapeHtml(wenBen) + '">' + escapeHtml(wenBen) + '</span>';
+      } else {
+        fu.innerHTML = '';
+      }
     }
     /**
      * **右上角圆形强调色角标**（产品要求）：
@@ -7532,6 +7538,23 @@ async function langDuWenBen(text, btnEl) {
       yuanYou.push({ role, text, ts: Number(opts && opts.ts) || Date.now(), reasoning: (opts && opts.reasoning) || '', reasoningDuan: duan, zhongJian: (opts && Array.isArray(opts.zhongJian)) ? opts.zhongJian : [], system: !!(opts && opts.system), stopped: !!(opts && opts.stopped), moXing: (opts && opts.moXing) || '', moXingJiangJi: (opts && opts.moXingJiangJi) || null, artifacts: (opts && opts.artifacts) || [], promptTokens: uYong && uYong.promptTokens || 0, completionTokens: uYong && uYong.completionTokens || 0 });
       /** 多条回复按时间排；同一毫秒保持到达顺序（稳定排序） */
       yuanYou.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
+      /**
+       * R160 项8：列表第二行预览跟随**最新消息**（不分牛马/用户），
+       * 旧实现只在 them 回复成功时更新，用户发完消息第二行仍是上一条牛马回复。
+       * 系统小字、已停止现场、纯标点都不算「最新消息」，跳过。
+       */
+      if (!(opts && (opts.system || opts.stopped)) && text && youShiZhiWenBen(text)) {
+        try {
+          const c = state.chats.find((x) => x.id === chatId);
+          if (c) {
+            c.lastPreview = String(text).slice(0, 30);
+            const g0 = state.groups && state.groups.find((x) => x.id === chatId);
+            if (g0) g0.lastPreview = c.lastPreview;
+            const i0 = state.instances && state.instances.find((x) => x.id === chatId);
+            if (i0) i0.lastPreview = c.lastPreview;
+          }
+        } catch { /* noop */ }
+      }
       // 正式回复/停止现场落地 = 这一轮收尾：之前暂缓的中断按钮现在才亮（不许半路弹）
       if (role === 'them' && !(opts && opts.system)) {
         try { shiFangDaiChuLiZhongDuan(chatId); } catch { /* noop */ }

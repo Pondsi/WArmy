@@ -1,12 +1,12 @@
 {
-  "version": "0.4.7",
-  "notes": "WArmy 0.4.7: fixes the authorization label reverting to Normal after a reply, and a pending-queue deadlock that left every later message queued forever when a long task ended through the continuation broadcast. Reply right-click menu is now Copy/Quote/Translate/Translate selection (selection-gated), and link menus no longer overlap. nm viewer: run executables via Ctrl+Enter or the context menu; fixed panels being covered, blank pages and split-toolbar height; address-bar buttons can be reordered, collapsed into the overflow menu and dragged back out; incognito tabs use neutral styling and an icon; in-page search and four new toolbar icons. Localized brand names for 23 locales (WArmy / local brand / local tagline); Simplified Chinese, Traditional Chinese and Japanese unchanged.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.7/WArmy-Setup-0.4.7.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.7/WArmy-Setup-0.4.7.exe",
-  "sha256": "82a887f711fbda9d1f01da206f8c7743bb80a14b3d77db1cc597642c5442667e",
-  "size": 234263128,
+  "version": "0.4.8",
+  "notes": "WArmy 0.4.8 — UI polish: P1 confirm dialog shortened, preset avatar picker enlarged to match the My-page avatar, sponsors sentence removed, top status icons shifted right, running-avatar animation retuned (slower sweep, deeper colour), unread badge moved to top-right alongside ?/!, second-row preview shows the latest message (any role) without a bracket prefix, chat bubbles narrowed.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.8/WArmy-Setup-0.4.8.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.8/WArmy-Setup-0.4.8.exe",
+  "sha256": "edb87a08cfecd5487e4cca2306bdfc57c697ac4e281d4019b19442760b55af37",
+  "size": 234263521,
   "mandatory": false,
-  "publishedAt": "2026-11-11T02:01:44.870Z",
+  "publishedAt": "2026-11-11T03:21:28.129Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.7"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.8"
 }

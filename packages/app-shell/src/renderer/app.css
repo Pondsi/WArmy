@@ -186,7 +186,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   display: flex;
   align-items: center;
   height: 100%;
-  margin: 0 auto;
+  /* R160 项4：四个状态图标对齐聊天区中心偏右（以前 margin:0 auto 把它们钉在窗口正中，
+     但窗口左侧是导航，看起来偏左）。向右推一段让图标落在聊天区的视觉中心。 */
+  margin: 0 16% 0 auto;
   -webkit-app-region: no-drag;
 }
 .biaoTiLanZhongJian button {
@@ -446,25 +448,27 @@ body.liaoTianChuangKou .liaoTianBuJu {
   position: relative; display: block;
   width: 40px; height: 40px; flex-shrink: 0;
 }
-/* R149：执行中头像动画——淡主题色渐变流动覆盖层 */
+/* R160 项5：执行中头像动画 —— 一条主题色亮带从左下扫到右上，
+ * 比原来纯位置/透明度变化更有「流动」感，颜色也加深到 45%/28% 不再发灰。 */
 .lieBiaoTiaoMu .av, .lieBiaoTiaoMu .avTuPian { position: relative; }
 .lieBiaoTiaoMu .avKuang.yunXingZhong::after {
   content: '';
-  position: absolute; inset: 0; border-radius: 6px;
-  background: linear-gradient(135deg,
+  position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(120deg,
     transparent 0%,
-    color-mix(in srgb, var(--accent, #e2b28c) 28%, transparent) 25%,
-    transparent 50%,
-    color-mix(in srgb, var(--accent, #e2b28c) 18%, transparent) 75%,
+    transparent 30%,
+    color-mix(in srgb, var(--accent, #e2b28c) 45%, transparent) 45%,
+    color-mix(in srgb, var(--accent, #e2b28c) 28%, transparent) 55%,
+    transparent 70%,
     transparent 100%);
-  background-size: 200% 200%;
-  animation: yunXingLiuDong 2.2s ease-in-out infinite;
+  background-size: 250% 250%;
+  animation: yunXingLiuDong 3.6s linear infinite;
   pointer-events: none;
+  mix-blend-mode: screen;
 }
 @keyframes yunXingLiuDong {
-  0%   { background-position: 200% 200%; opacity: .7; }
-  50%  { background-position: 0% 0%; opacity: 1; }
-  100% { background-position: -200% -200%; opacity: .7; }
+  0%   { background-position: 100% 100%; }
+  100% { background-position: -50% -50%; }
 }
 .lieBiaoTiaoMu .meta { min-width: 0; flex: 1; }
 .lieBiaoTiaoMu .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1742,10 +1746,12 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 }
 
 /* ── 头像选择器 ── */
+/* R160 项2：预设头像放大到与「我的」页用户头像同尺寸（72×72）；
+ * 列数从 5 调到 4，总宽仍在对话框内可放下。 */
 .touXiangGrid {
   display: grid;
-  grid-template-columns: repeat(5, 40px);
-  gap: 8px;
+  grid-template-columns: repeat(4, 72px);
+  gap: 10px;
   margin-bottom: 4px;
 }
 .touXiangChoice {
@@ -3582,8 +3588,10 @@ html { font-weight: var(--fw-ui, 400); }
 /* 微信/QQ 式排版：气泡尽量宽。
  * ⚠️ renderer.css 里也有 `.xiaoXi .bubbleWrap`（更高特异性、且后加载）——
  * 两边必须写同一个 max-width，否则这里改了不生效（真事故：连改三轮用户仍说"太窄"）。 */
-.bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: calc(100% - 84px); max-width: calc(100% - 84px); align-items: flex-start; flex: 0 1 auto; }
-.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: calc(100% - 84px); max-width: calc(100% - 84px); }
+/* R160 项9：气泡整体收窄（用户左侧短一些、牛马右侧短一些），不再几乎撑满整行。
+ * 旧值是 calc(100% - 84px) ≈ 占满，现改成上限 70% 且最大 680px。 */
+.bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: auto; max-width: min(70%, 680px); align-items: flex-start; flex: 0 1 auto; }
+.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: auto; max-width: min(70%, 680px); }
 /* R129 铁律（内容位置不移动）：md 内联图固定 16:9 占位，加载前/后布局一致 */
 .md img { display: block; max-width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--hover, #ececec); border-radius: 6px; }
 /* 主动显示的时间（跨时/跨日）：浅分隔线 + 居中小字 */
@@ -3630,13 +3638,8 @@ html { font-weight: var(--fw-ui, 400); }
   font-variant-numeric: tabular-nums;
 }
 
-/* ── 第二列：第二行「[N] 最新回复」 ── */
+/* ── 第二列：第二行（最新消息预览，无计数前缀） ── */
 .lieBiaoTiaoMu .fu { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
-.weiDuQianZhui {
-  flex: 0 0 auto; font-size: var(--fs-xs); font-weight: 700;
-  color: var(--danger, #d9534f); font-variant-numeric: tabular-nums;
-}
-.weiDuQianZhui.wu { color: var(--muted); font-weight: 400; }
 .fuWenBen { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lieBiaoTiaoMu { position: relative; }
 .renWuZhongDuanMark {
@@ -3658,9 +3661,9 @@ html { font-weight: var(--fw-ui, 400); }
 }
 .hangJiaoBiao.wen { background: var(--accent); }
 .hangJiaoBiao.tan { background: var(--danger, #d9534f); }
-/* R147 项7：未读 ⇒ 头像右下角红色未读字数（与右上角 ?/! 互不遮挡，可同时出现） */
+/* R160 项6：未读角标移到右上角，与问号/感叹号并排（以前在右下角，用户要求在右上角） */
 .weiDuZi {
-  position: absolute; right: -5px; bottom: -5px;
+  position: absolute; right: -5px; top: -5px;
   min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
   background: var(--danger, #d9534f); color: #fff;
   font-size: 10px; line-height: 16px; text-align: center; font-weight: 700;
@@ -3668,6 +3671,8 @@ html { font-weight: var(--fw-ui, 400); }
   box-shadow: 0 0 0 2px var(--card, #fff);
   pointer-events: none; z-index: 2;
 }
+/* 当未读与 ?/! 同时存在时，把 ?/! 往左挪一格，避免重叠 */
+.avKuang:has(.weiDuZi) > .hangJiaoBiao { right: 16px; }
 /* 停用会话：头像右上角圆形灰色停用图标（用户要求；与 ?/! 同位） */
 .hangJiaoBiao.tingYong {
   background: #cfd4d8; color: #5f6368;

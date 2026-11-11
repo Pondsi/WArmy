@@ -273,7 +273,7 @@
   "chat.openWindow": "独立窗口",
   "chat.openWindowTip": "在新窗口打开此会话",
   "chat.p1": "加急",
-  "chat.p1ConfirmBody": "加急会尽量打断/插队当前任务，可能造成：\n• 正在执行的步骤被中断或回滚风险升高\n• 多实例资源被抢占，响应更耗电/耗时\n• 队列被清空重排\n\n请确认你了解风险。5 秒后才能确认。",
+  "chat.p1ConfirmBody": "加急会打断当前任务并抢占资源，确定要继续吗？",
   "chat.p1ConfirmOk": "我已了解，确认加急",
   "chat.p1ConfirmTitle": "确认使用加急？",
   "chat.p1Countdown": "请等待 {n} 秒",
