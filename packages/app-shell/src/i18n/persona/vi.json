@@ -2993,7 +2993,7 @@
   },
   "code-053": {
     "name": "Phát triển phần mềm·Điểm chuyên đề 53",
-    "sub": "Chuyên đề 53"
+    "sub": "Điểm chuyên đề"
   },
   "code-9101": {
     "name": "Kỹ sư phần mềm·Lập trình hỗ trợ bởi AI",
@@ -3601,7 +3601,7 @@
   },
   "edu-052": {
     "name": "Giảng dạy·Điểm chuyên đề 52",
-    "sub": "Chuyên đề 52"
+    "sub": "Điểm chuyên đề"
   },
   "edu-9101": {
     "name": "Giáo viên·Công cụ giảng dạy AI",
@@ -4137,7 +4137,7 @@
   },
   "res-051": {
     "name": "Nghiên cứu học thuật·Điểm chuyên đề 51",
-    "sub": "Chuyên đề 51"
+    "sub": "Điểm chuyên đề"
   },
   "res-9301": {
     "name": "Nhà nghiên cứu·Xây dựng truy vấn tài liệu",
@@ -4753,7 +4753,7 @@
   },
   "legal-089": {
     "name": "Thực hành pháp lý·Điểm trọng tâm 89",
-    "sub": "Chuyên đề 89"
+    "sub": "Điểm trọng tâm"
   },
   "legal-9601": {
     "name": "Cố vấn pháp lý·Quy chuẩn giấy vay nợ",
@@ -5137,7 +5137,7 @@
   },
   "med-089": {
     "name": "Y tế & Sức khỏe·Điểm trọng tâm 89",
-    "sub": "Chuyên đề 89"
+    "sub": "Điểm trọng tâm"
   },
   "med-9301": {
     "name": "Người phổ biến sức khỏe·Chuẩn bị trước khám sức khỏe",
@@ -5685,7 +5685,7 @@
   },
   "agri-081": {
     "name": "Công nghệ nông nghiệp·Điểm trọng tâm 81",
-    "sub": "Chuyên đề 81"
+    "sub": "Điểm trọng tâm"
   },
   "agri-9301": {
     "name": "Kỹ sư nông học·Quản lý thụ phấn ong",
@@ -6313,7 +6313,7 @@
   },
   "home-089": {
     "name": "Đời sống gia đình·Điểm trọng tâm 89",
-    "sub": "Chuyên đề 89"
+    "sub": "Điểm trọng tâm"
   },
   "home-9301": {
     "name": "Tư vấn đời sống·Kiểm nghiệm nước gia đình",
@@ -6877,7 +6877,7 @@
   },
   "pol-081": {
     "name": "Chính trị & Công vụ·Điểm trọng tâm 81",
-    "sub": "Chuyên đề 81"
+    "sub": "Điểm trọng tâm"
   },
   "pol-9601": {
     "name": "Thảo luận cộng đồng·Chủ trì & chương trình họp",
@@ -7209,7 +7209,7 @@
   },
   "soc-081": {
     "name": "Nghiên cứu xã hội học·Điểm trọng tâm 81",
-    "sub": "Chuyên đề 81"
+    "sub": "Điểm trọng tâm"
   },
   "soc-9301": {
     "name": "Nhà nghiên cứu·Phương pháp xã hội học lịch sử",
@@ -7793,7 +7793,7 @@
   },
   "lit-081": {
     "name": "Sáng tác văn học·Điểm trọng tâm 81",
-    "sub": "Chuyên đề 81"
+    "sub": "Điểm trọng tâm"
   },
   "lit-9301": {
     "name": "Người viết·Sáng tác truyện ngắn",
@@ -8709,19 +8709,19 @@
   },
   "friend-016": {
     "name": "Bạn bè·Hay trêu chọc 1",
-    "sub": "Bạn thân mỉa mai"
+    "sub": "Hay trêu chọc"
   },
   "friend-021": {
     "name": "Bạn bè·Nhút nhát & yên tĩnh 1",
-    "sub": "Nhút nhát trầm lặng"
+    "sub": "Nhút nhát & yên tĩnh"
   },
   "friend-026": {
     "name": "Bạn bè·Hòa đồng & hay nói 1",
-    "sub": "Hòa đồng hoạt ngôn"
+    "sub": "Hòa đồng & hay nói"
   },
   "friend-031": {
     "name": "Bạn bè·Học giỏi & nghiêm túc 1",
-    "sub": "Học giỏi nghiêm túc"
+    "sub": "Học giỏi & nghiêm túc"
   },
   "friend-036": {
     "name": "Bạn bè·Nghệ sĩ lãng mạn 1",
@@ -8729,15 +8729,15 @@
   },
   "friend-041": {
     "name": "Bạn bè·Nhiệt huyết thể thao 1",
-    "sub": "Yêu thể thao cuồng nhiệt"
+    "sub": "Nhiệt huyết thể thao"
   },
   "friend-046": {
     "name": "Bạn bè·Mê ăn & chữa lành 1",
-    "sub": "Mê ăn chữa lành"
+    "sub": "Mê ăn & chữa lành"
   },
   "friend-051": {
     "name": "Bạn bè·Tối giản & thực tế 1",
-    "sub": "Tối giản thực tế"
+    "sub": "Tối giản & thực tế"
   },
   "friend-056": {
     "name": "Bạn bè·Hoài cổ 1",
@@ -8769,11 +8769,11 @@
   },
   "friend-091": {
     "name": "Bạn bè·Lang thang triết học 1",
-    "sub": "Kẻ du hành triết học"
+    "sub": "Lang thang triết học"
   },
   "friend-096": {
     "name": "Bạn bè·Kẻ kể chuyện cười 1",
-    "sub": "Kẻ kể chuyện hài"
+    "sub": "Kẻ kể chuyện cười"
   },
   "friend-9601": {
     "name": "Bạn đọc sách·Đồng hành điểm danh đọc chung",

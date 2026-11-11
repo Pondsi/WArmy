@@ -2993,7 +2993,7 @@
   },
   "code-053": {
     "name": "Kodeutvikling·Nøkkelpunkt 53",
-    "sub": "Spesialtema 53"
+    "sub": "Nøkkelpunkt"
   },
   "code-9101": {
     "name": "Programvareingeniør·AI-assistert programmering",
@@ -3601,7 +3601,7 @@
   },
   "edu-052": {
     "name": "Lærer·Nøkkelpunkt 52",
-    "sub": "Spesialtema 52"
+    "sub": "Nøkkelpunkt"
   },
   "edu-9101": {
     "name": "Lærer·AI-verktøy for undervisning",
@@ -4137,7 +4137,7 @@
   },
   "res-051": {
     "name": "Forskning·Nøkkelpunkt 51",
-    "sub": "Spesialtema 51"
+    "sub": "Nøkkelpunkt"
   },
   "res-9301": {
     "name": "Forsker·Bygging av litteratursøk",
@@ -4753,7 +4753,7 @@
   },
   "legal-089": {
     "name": "Jus·Nøkkelpunkt 89",
-    "sub": "Spesialtema 89"
+    "sub": "Nøkkelpunkt"
   },
   "legal-9601": {
     "name": "Juridisk rådgiver·Standarder for gjeldsbrev",
@@ -5137,7 +5137,7 @@
   },
   "med-089": {
     "name": "Medisin og helse·Nøkkelpunkt 89",
-    "sub": "Spesialtema 89"
+    "sub": "Nøkkelpunkt"
   },
   "med-9301": {
     "name": "Helseformidler·Forberedelse til helsesjekk",
@@ -5685,7 +5685,7 @@
   },
   "agri-081": {
     "name": "Jordbruksteknologi·Nøkkelpunkt 81",
-    "sub": "Spesialtema 81"
+    "sub": "Nøkkelpunkt"
   },
   "agri-9301": {
     "name": "Agronom·Bestøvning med bier",
@@ -6313,7 +6313,7 @@
   },
   "home-089": {
     "name": "Hjemmetjenester·Nøkkelpunkt 89",
-    "sub": "Spesialtema 89"
+    "sub": "Nøkkelpunkt"
   },
   "home-9301": {
     "name": "Livsrådgiver·Testing av drikkevann hjemme",
@@ -6877,7 +6877,7 @@
   },
   "pol-081": {
     "name": "Politikk og offentlig·Nøkkelpunkt 81",
-    "sub": "Spesialtema 81"
+    "sub": "Nøkkelpunkt"
   },
   "pol-9601": {
     "name": "Lokalsamfunnsmøte·Ledelse og agenda i møtet",
@@ -7209,7 +7209,7 @@
   },
   "soc-081": {
     "name": "Sosiologisk forskning·Nøkkelpunkt 81",
-    "sub": "Spesialtema 81"
+    "sub": "Nøkkelpunkt"
   },
   "soc-9301": {
     "name": "Forsker·Historisk sosiologisk metode",
@@ -7793,7 +7793,7 @@
   },
   "lit-081": {
     "name": "Litterær skriving·Nøkkelpunkt 81",
-    "sub": "Spesialtema 81"
+    "sub": "Nøkkelpunkt"
   },
   "lit-9301": {
     "name": "Skribent·Novelleskriving",
@@ -8697,7 +8697,7 @@
   },
   "friend-001": {
     "name": "Venn·Lys og energisk 1",
-    "sub": "Sprudlende og glad"
+    "sub": "Lys og energisk"
   },
   "friend-006": {
     "name": "Venn·Rolig og rasjonell 1",
@@ -8705,7 +8705,7 @@
   },
   "friend-011": {
     "name": "Venn·Mild og helbredende 1",
-    "sub": "Varm og omsorgsfull"
+    "sub": "Mild og helbredende"
   },
   "friend-016": {
     "name": "Venn·Skarp og sarkastisk 1",
@@ -8713,11 +8713,11 @@
   },
   "friend-021": {
     "name": "Venn·Sjenert og stille 1",
-    "sub": "Sosialt engstelig og stille"
+    "sub": "Sjenert og stille"
   },
   "friend-026": {
     "name": "Venn·Selskapelig og pratsom 1",
-    "sub": "Utadvendt og pratsom"
+    "sub": "Selskapelig og pratsom"
   },
   "friend-031": {
     "name": "Venn·Skoleflink og grundig 1",
@@ -8749,11 +8749,11 @@
   },
   "friend-066": {
     "name": "Venn·Helsefokusert 1",
-    "sub": "Helseguru"
+    "sub": "Helsefokusert"
   },
   "friend-071": {
     "name": "Venn·Erfaren kontorrotte 1",
-    "sub": "Kontorveteran"
+    "sub": "Erfaren kontorrotte"
   },
   "friend-076": {
     "name": "Venn·Eventyrer 1",
@@ -8761,11 +8761,11 @@
   },
   "friend-081": {
     "name": "Venn·Katteaktig og gretten 1",
-    "sub": "Katteaktig og furten"
+    "sub": "Katteaktig og gretten"
   },
   "friend-086": {
     "name": "Venn·Hundeaktig og lojal 1",
-    "sub": "Hundelojal"
+    "sub": "Hundeaktig og lojal"
   },
   "friend-091": {
     "name": "Venn·Filosofisk vandrer 1",
@@ -8773,7 +8773,7 @@
   },
   "friend-096": {
     "name": "Venn·Spøkefugl 1",
-    "sub": "Vitsemaker"
+    "sub": "Spøkefugl"
   },
   "friend-9601": {
     "name": "Lesevenn·Felles lesing og innsjekking",

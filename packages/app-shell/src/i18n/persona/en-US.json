@@ -2537,7 +2537,7 @@
   },
   "res-051": {
     "name": "Research & Academia·Key Point 51",
-    "sub": "Key Item 51"
+    "sub": "Key Point"
   },
   "legal-001": {
     "name": "Legal Practice·Contract Review",
@@ -2797,7 +2797,7 @@
   },
   "legal-089": {
     "name": "Legal Practice·Key Points 89",
-    "sub": "Special 89"
+    "sub": "Key Points"
   },
   "legal-034": {
     "name": "Legal Practice·Patent Invalidation",
@@ -3121,7 +3121,7 @@
   },
   "med-089": {
     "name": "Medical Health·Key Points 89",
-    "sub": "Special 89"
+    "sub": "Key Points"
   },
   "med-054": {
     "name": "Medical Health·Guideline Interpretation",
@@ -3765,7 +3765,7 @@
   },
   "home-089": {
     "name": "Household Life·Key Points 89",
-    "sub": "Special 89"
+    "sub": "Key Points"
   },
   "home-034": {
     "name": "Household Life·Insurance Planning",

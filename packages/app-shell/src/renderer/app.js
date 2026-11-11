@@ -3484,7 +3484,14 @@ async function langDuWenBen(text, btnEl) {
     const yuanSu = document.createElement('div');
     yuanSu.className = 'lieBiaoTiaoMu' + (jiHuo ? ' jiHuo' : '');
     if (avatarSrc) yuanSu.dataset.av = '1';
-    yuanSu.innerHTML = `${avatarSrc ? `<img class="avTuPian" src="${escapeHtml(avatarSrc)}" alt=""/>` : `<div class="av">${escapeHtml(ch || '?')}</div>`}<div class="meta"><div class="name">${escapeHtml(ming)}</div><div class="fu">${escapeHtml(fu)}</div></div>`;
+    /**
+     * R160：头像必须包一层**真实容器** `.avKuang`。
+     * 真因：有头像图片时这里是 `<img class="avTuPian">`，而 img 是**空元素（replaced element）**——
+     * `::after` 伪元素在它上面不渲染，`appendChild` 进去的角标也永远不显示。
+     * 于是「执行中流动特效」和「未读字数 / 问号 / 感叹号」在有图片头像的会话上全部看不见
+     * （只有纯字母头像的 div 才有效）。角标与动画一律挂到这层容器上。
+     */
+    yuanSu.innerHTML = `<span class="avKuang">${avatarSrc ? `<img class="avTuPian" src="${escapeHtml(avatarSrc)}" alt=""/>` : `<div class="av">${escapeHtml(ch || '?')}</div>`}</span><div class="meta"><div class="name">${escapeHtml(ming)}</div><div class="fu">${escapeHtml(fu)}</div></div>`;
     yuanSu.title = `${ming}\n${fu}`;
     yuanSu.onclick = onClick;
     return yuanSu;
@@ -3638,7 +3645,7 @@ async function langDuWenBen(text, btnEl) {
      */
     try {
       const st = hangJiaoBiaoZhuangTai(sid);
-      const av = hangYuanSu.querySelector('.av,.avTuPian');
+      const av = hangYuanSu.querySelector('.avKuang') || hangYuanSu.querySelector('.av,.avTuPian');
       /* R149 主人定稿：执行中会话的头像叠加流动主题色动画 */
       const yunXing = !!(state.sessionRuns && state.sessionRuns[String(sid)] && state.sessionRuns[String(sid)].running);
       if (av) av.classList.toggle('yunXingZhong', yunXing);
@@ -3671,7 +3678,7 @@ async function langDuWenBen(text, btnEl) {
   function applyStoppedRow(hangYuanSu) {
     if (!hangYuanSu || hangYuanSu.classList.contains('isTingYong')) return hangYuanSu;
     hangYuanSu.classList.add('isTingYong');
-    const av = hangYuanSu.querySelector('.av,.avTuPian');
+    const av = hangYuanSu.querySelector('.avKuang') || hangYuanSu.querySelector('.av,.avTuPian');
     if (av) {
       av.classList.add('avTingYong');
       if (!av.querySelector('.hangJiaoBiao.tingYong')) {
@@ -3751,7 +3758,7 @@ async function langDuWenBen(text, btnEl) {
     const yunXing = !!(state.sessionRuns && state.sessionRuns[sid] && state.sessionRuns[sid].running);
     document.querySelectorAll('.lieBiaoTiaoMu').forEach((row) => {
       if (String(row.dataset.sid || '') !== sid) return;
-      const av = row.querySelector('.av,.avTuPian');
+      const av = row.querySelector('.avKuang') || row.querySelector('.av,.avTuPian');
       if (av) av.classList.toggle('yunXingZhong', yunXing);
     });
   }

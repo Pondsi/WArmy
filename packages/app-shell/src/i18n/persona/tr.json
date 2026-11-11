@@ -2993,7 +2993,7 @@
   },
   "code-053": {
     "name": "Kod Geliştirme·Özel Noktalar 53",
-    "sub": "Özel Konu 53"
+    "sub": "Özel Noktalar"
   },
   "code-9101": {
     "name": "Yazılım Mühendisi·AI Destekli Programlama",
@@ -3601,7 +3601,7 @@
   },
   "edu-052": {
     "name": "Öğretim·Özel Noktalar 52",
-    "sub": "Özel Konu 52"
+    "sub": "Özel Noktalar"
   },
   "edu-9101": {
     "name": "Öğretmen·AI Öğretim Araçları",
@@ -4137,7 +4137,7 @@
   },
   "res-051": {
     "name": "Araştırma ve Akademi·Özel Noktalar 51",
-    "sub": "Özel Konu 51"
+    "sub": "Özel Noktalar"
   },
   "res-9301": {
     "name": "Araştırmacı·Literatür Arama İfadesi Oluşturma",
@@ -4753,7 +4753,7 @@
   },
   "legal-089": {
     "name": "Hukuk Uygulaması·Özel Noktalar 89",
-    "sub": "Özel Konu 89"
+    "sub": "Özel Noktalar"
   },
   "legal-9601": {
     "name": "Hukuk Danışmanı·Borç Senedi Standartları",
@@ -5137,7 +5137,7 @@
   },
   "med-089": {
     "name": "Tıp ve Sağlık·Özel Noktalar 89",
-    "sub": "Özel Konu 89"
+    "sub": "Özel Noktalar"
   },
   "med-9301": {
     "name": "Sağlık Eğitimcisi·Check-up Öncesi Hazırlık",
@@ -5685,7 +5685,7 @@
   },
   "agri-081": {
     "name": "Tarım Teknolojisi·Özel Nokta 81",
-    "sub": "Özel Konu 81"
+    "sub": "Özel Nokta"
   },
   "agri-9301": {
     "name": "Ziraat Mühendisi·Arı Tozlaşma Yönetimi",
@@ -6313,7 +6313,7 @@
   },
   "home-089": {
     "name": "Ev Hizmetleri·Özel Noktalar 89",
-    "sub": "Özel Konu 89"
+    "sub": "Özel Noktalar"
   },
   "home-9301": {
     "name": "Yaşam Danışmanı·Ev Su Kalitesi Testi",
@@ -6877,7 +6877,7 @@
   },
   "pol-081": {
     "name": "Siyaset ve Kamu·Özel Nokta 81",
-    "sub": "Özel Konu 81"
+    "sub": "Özel Nokta"
   },
   "pol-9601": {
     "name": "Topluluk Tartışması·Toplantı Yönetimi ve Gündem",
@@ -7209,7 +7209,7 @@
   },
   "soc-081": {
     "name": "Sosyoloji Araştırması·Özel Nokta 81",
-    "sub": "Özel Konu 81"
+    "sub": "Özel Nokta"
   },
   "soc-9301": {
     "name": "Araştırmacı·Tarihsel Sosyoloji Yöntemi",
@@ -7793,7 +7793,7 @@
   },
   "lit-081": {
     "name": "Edebi Yaratım·Özel Nokta 81",
-    "sub": "Özel Konu 81"
+    "sub": "Özel Nokta"
   },
   "lit-9301": {
     "name": "Yazar·Kısa Öykü Yazımı",
@@ -8701,7 +8701,7 @@
   },
   "friend-006": {
     "name": "Arkadaş·Sakin ve Mantıklı 1",
-    "sub": "Sakin ve Rasyonel"
+    "sub": "Sakin ve Mantıklı"
   },
   "friend-011": {
     "name": "Arkadaş·Şefkatli ve Şifalı 1",
@@ -8709,7 +8709,7 @@
   },
   "friend-016": {
     "name": "Arkadaş·Dilli ve Alaycı 1",
-    "sub": "Keskin Dilli Dost-Düşman"
+    "sub": "Dilli ve Alaycı"
   },
   "friend-021": {
     "name": "Arkadaş·Sosyal Kaygılı ve Sessiz 1",
@@ -8721,7 +8721,7 @@
   },
   "friend-031": {
     "name": "Arkadaş·Çalışkan ve Titiz Öğrenci 1",
-    "sub": "Başarılı Öğrenci ve Titiz"
+    "sub": "Çalışkan ve Titiz Öğrenci"
   },
   "friend-036": {
     "name": "Arkadaş·Sanatçı ve Romantik 1",
@@ -8733,39 +8733,39 @@
   },
   "friend-046": {
     "name": "Arkadaş·Yemeksever ve Şifalı 1",
-    "sub": "Yemek Tutkunu ve Şifalı"
+    "sub": "Yemeksever ve Şifalı"
   },
   "friend-051": {
     "name": "Arkadaş·Minimalist ve Pratik 1",
-    "sub": "Minimalist ve Pragmatik"
+    "sub": "Minimalist ve Pratik"
   },
   "friend-056": {
     "name": "Arkadaş·Nostaljik ve Retro 1",
-    "sub": "Retro ve Nostaljik"
+    "sub": "Nostaljik ve Retro"
   },
   "friend-061": {
     "name": "Arkadaş·Teknoloji Meraklısı 1",
-    "sub": "Teknoloji Tutkunu"
+    "sub": "Teknoloji Meraklısı"
   },
   "friend-066": {
     "name": "Arkadaş·Sağlık Uzmanı 1",
-    "sub": "Sağlıklı Yaşam Gurusu"
+    "sub": "Sağlık Uzmanı"
   },
   "friend-071": {
     "name": "Arkadaş·İş Hayatı Kıdemlisi 1",
-    "sub": "İş Yaşamı Kurdu"
+    "sub": "İş Hayatı Kıdemlisi"
   },
   "friend-076": {
     "name": "Arkadaş·Maceracı 1",
-    "sub": "Maceraperest"
+    "sub": "Maceracı"
   },
   "friend-081": {
     "name": "Arkadaş·Kedi Gibi Gururlu 1",
-    "sub": "Kedimsi Tsundere"
+    "sub": "Kedi Gibi Gururlu"
   },
   "friend-086": {
     "name": "Arkadaş·Köpek Gibi Sadık 1",
-    "sub": "Köpeksi Sadık"
+    "sub": "Köpek Gibi Sadık"
   },
   "friend-091": {
     "name": "Arkadaş·Felsefe Gezgini 1",
@@ -8773,7 +8773,7 @@
   },
   "friend-096": {
     "name": "Arkadaş·Fıkra Ustası 1",
-    "sub": "Şakacı"
+    "sub": "Fıkra Ustası"
   },
   "friend-9601": {
     "name": "Kitap Arkadaşı·Birlikte Okuma Takip Eşliği",

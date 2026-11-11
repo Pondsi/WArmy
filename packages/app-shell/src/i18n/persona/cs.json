@@ -2993,7 +2993,7 @@
   },
   "code-053": {
     "name": "Vývoj kódu·Klíčové body 53",
-    "sub": "Speciální bod 53"
+    "sub": "Klíčové body"
   },
   "code-9101": {
     "name": "Softwarový inženýr·Programování s podporou AI",
@@ -3601,7 +3601,7 @@
   },
   "edu-052": {
     "name": "Výuka·Klíčové body 52",
-    "sub": "Speciální bod 52"
+    "sub": "Klíčové body"
   },
   "edu-9101": {
     "name": "Učitel·AI výukové nástroje",
@@ -4137,7 +4137,7 @@
   },
   "res-051": {
     "name": "Výzkum a akademická práce·Klíčové body 51",
-    "sub": "Speciální bod 51"
+    "sub": "Klíčové body"
   },
   "res-9301": {
     "name": "Výzkumník·Sestavení vyhledávacího dotazu literatury",
@@ -4753,7 +4753,7 @@
   },
   "legal-089": {
     "name": "Právní praxe·Speciální body 89",
-    "sub": "Speciální bod 89"
+    "sub": "Speciální body"
   },
   "legal-9601": {
     "name": "Právní poradce·Standardy dlužních úpisů",
@@ -5137,7 +5137,7 @@
   },
   "med-089": {
     "name": "Lékařství a zdraví·Speciální body 89",
-    "sub": "Speciální bod 89"
+    "sub": "Speciální body"
   },
   "med-9301": {
     "name": "Popularizátor zdraví·Příprava na preventivní prohlídku",
@@ -5685,7 +5685,7 @@
   },
   "agri-081": {
     "name": "Zemědělské technologie·Speciální body 81",
-    "sub": "Speciální bod 81"
+    "sub": "Speciální body"
   },
   "agri-9301": {
     "name": "Agronom·Opylování včelami",
@@ -6313,7 +6313,7 @@
   },
   "home-089": {
     "name": "Domácnost·Speciální body 89",
-    "sub": "Speciální bod 89"
+    "sub": "Speciální body"
   },
   "home-9301": {
     "name": "Poradce pro domácnost·Rozbor kvality vody doma",
@@ -6877,7 +6877,7 @@
   },
   "pol-081": {
     "name": "Politika a veřejná správa·Speciální body 81",
-    "sub": "Speciální bod 81"
+    "sub": "Speciální body"
   },
   "pol-9601": {
     "name": "Komunitní diskuse·Vedení a program schůze",
@@ -7209,7 +7209,7 @@
   },
   "soc-081": {
     "name": "Sociologický výzkum·Speciální body 81",
-    "sub": "Speciální bod 81"
+    "sub": "Speciální body"
   },
   "soc-9301": {
     "name": "Výzkumník·Metody historické sociologie",
@@ -7793,7 +7793,7 @@
   },
   "lit-081": {
     "name": "Literární tvorba·Speciální body 81",
-    "sub": "Speciální bod 81"
+    "sub": "Speciální body"
   },
   "lit-9301": {
     "name": "Autor·Psaní povídek",
@@ -8697,7 +8697,7 @@
   },
   "friend-001": {
     "name": "Přítel·Veselý a plný energie 1",
-    "sub": "Veselý a energický"
+    "sub": "Veselý a plný energie"
   },
   "friend-006": {
     "name": "Přítel·Klidný a racionální 1",
@@ -8709,19 +8709,19 @@
   },
   "friend-016": {
     "name": "Přítel·Jedovatý kamarád 1",
-    "sub": "Jízlivý kamarád"
+    "sub": "Jedovatý kamarád"
   },
   "friend-021": {
     "name": "Přítel·Společensky nejistý a tichý 1",
-    "sub": "Tichý a společensky úzkostný"
+    "sub": "Společensky nejistý a tichý"
   },
   "friend-026": {
     "name": "Přítel·Společenský motýl 1",
-    "sub": "Společenský a upovídaný"
+    "sub": "Společenský motýl"
   },
   "friend-031": {
     "name": "Přítel·Vzorný student 1",
-    "sub": "Pečlivý student"
+    "sub": "Vzorný student"
   },
   "friend-036": {
     "name": "Přítel·Romantický umělec 1",
@@ -8733,11 +8733,11 @@
   },
   "friend-046": {
     "name": "Přítel·Labužník 1",
-    "sub": "Uklidňující labužník"
+    "sub": "Labužník"
   },
   "friend-051": {
     "name": "Přítel·Minimalista a praktik 1",
-    "sub": "Minimalistický a praktický"
+    "sub": "Minimalista a praktik"
   },
   "friend-056": {
     "name": "Přítel·Retro a nostalgický 1",
@@ -8753,7 +8753,7 @@
   },
   "friend-071": {
     "name": "Přítel·Ostřílený profesionál 1",
-    "sub": "Zkušený matador"
+    "sub": "Ostřílený profesionál"
   },
   "friend-076": {
     "name": "Přítel·Dobrodruh 1",
@@ -8761,19 +8761,19 @@
   },
   "friend-081": {
     "name": "Přítel·Typ rozmazlené kočky 1",
-    "sub": "Náladový jako kočka"
+    "sub": "Typ rozmazlené kočky"
   },
   "friend-086": {
     "name": "Přítel·Typ věrného psa 1",
-    "sub": "Věrný jako pes"
+    "sub": "Typ věrného psa"
   },
   "friend-091": {
     "name": "Přítel·Filosofický tulák 1",
-    "sub": "Filozofický tulák"
+    "sub": "Filosofický tulák"
   },
   "friend-096": {
     "name": "Přítel·Vtipálek 1",
-    "sub": "Bavič"
+    "sub": "Vtipálek"
   },
   "friend-9601": {
     "name": "Čtenářský parťák·Společné čtení a zapisování pokroku",

@@ -4753,7 +4753,7 @@
   },
   "legal-089": {
     "name": "Juridische Praktijk·Kernpunten 89",
-    "sub": "Kernpunt 89"
+    "sub": "Kernpunten"
   },
   "legal-9601": {
     "name": "Juridisch Adviseur·Leningbewijs Richtlijnen",
@@ -5137,7 +5137,7 @@
   },
   "med-089": {
     "name": "Medische Gezondheid·Kernpunten 89",
-    "sub": "Kernpunt 89"
+    "sub": "Kernpunten"
   },
   "med-9301": {
     "name": "Gezondheidsvoorlichter·Voorbereiding op Medisch Onderzoek",
@@ -5685,7 +5685,7 @@
   },
   "agri-081": {
     "name": "Landbouwtechnologie·Kernpunten 81",
-    "sub": "Kernpunt 81"
+    "sub": "Kernpunten"
   },
   "agri-9301": {
     "name": "Agronoom·Beheer van Bijenbestuiving",
@@ -6313,7 +6313,7 @@
   },
   "home-089": {
     "name": "Huishoudelijk Leven·Kernpunten 89",
-    "sub": "Kernpunt 89"
+    "sub": "Kernpunten"
   },
   "home-9301": {
     "name": "Levensadviseur·Waterkwaliteitstest Thuis",
@@ -6877,7 +6877,7 @@
   },
   "pol-081": {
     "name": "Politiek & Openbare Zaken·Kernpunten 81",
-    "sub": "Kernpunt 81"
+    "sub": "Kernpunten"
   },
   "pol-9601": {
     "name": "Buurtberaad·Voorzitterschap en Agenda",
@@ -7209,7 +7209,7 @@
   },
   "soc-081": {
     "name": "Sociologisch Onderzoek·Kernpunten 81",
-    "sub": "Kernpunt 81"
+    "sub": "Kernpunten"
   },
   "soc-9301": {
     "name": "Onderzoeker·Historisch-Sociologische Methoden",
@@ -7793,7 +7793,7 @@
   },
   "lit-081": {
     "name": "Literair Schrijven·Kernpunten 81",
-    "sub": "Kernpunt 81"
+    "sub": "Kernpunten"
   },
   "lit-9301": {
     "name": "Schrijver·Kortverhaal Schrijven",
@@ -8041,7 +8041,7 @@
   },
   "lit-9611": {
     "name": "Aanwijzingsontwerp·Ritme van het oprollen van aanwijzingen",
-    "sub": "Clueontwerp"
+    "sub": "Aanwijzingsontwerp"
   },
   "lit-9620": {
     "name": "Schrijver·Briefvertelling",
@@ -8697,11 +8697,11 @@
   },
   "friend-001": {
     "name": "Vriend·Energiek en Vrolijk 1",
-    "sub": "Vrolijk en energiek"
+    "sub": "Energiek en Vrolijk"
   },
   "friend-006": {
     "name": "Vriend·Kalm en Rationeel 1",
-    "sub": "Kalm en rationeel"
+    "sub": "Kalm en Rationeel"
   },
   "friend-011": {
     "name": "Vriend·Zacht en helend 1",
@@ -8709,39 +8709,39 @@
   },
   "friend-016": {
     "name": "Vriend·Scherpe Plagende Vriend 1",
-    "sub": "Scherpe grappenmaker"
+    "sub": "Scherpe Plagende Vriend"
   },
   "friend-021": {
     "name": "Vriend·Sociaal Angstig en Stil 1",
-    "sub": "Sociaal angstig en stil"
+    "sub": "Sociaal Angstig en Stil"
   },
   "friend-026": {
     "name": "Vriend·Sociale Vlinder 1",
-    "sub": "Sociale vlinder"
+    "sub": "Sociale Vlinder"
   },
   "friend-031": {
     "name": "Vriend·Topstudent en Nauwgezet 1",
-    "sub": "Topstudent en nauwkeurig"
+    "sub": "Topstudent en Nauwgezet"
   },
   "friend-036": {
     "name": "Vriend·Kunstzinnig en Romantisch 1",
-    "sub": "Romantische kunstenaar"
+    "sub": "Kunstzinnig en Romantisch"
   },
   "friend-041": {
     "name": "Vriend·Sportief en Enthousiast 1",
-    "sub": "Sportief en gedreven"
+    "sub": "Sportief en Enthousiast"
   },
   "friend-046": {
     "name": "Vriend·Bourgondisch en Troostrijk 1",
-    "sub": "Helende fijnproever"
+    "sub": "Bourgondisch en Troostrijk"
   },
   "friend-051": {
     "name": "Vriend·Minimalistisch en Pragmatisch 1",
-    "sub": "Minimalistisch en pragmatisch"
+    "sub": "Minimalistisch en Pragmatisch"
   },
   "friend-056": {
     "name": "Vriend·Retro en Nostalgisch 1",
-    "sub": "Retro en nostalgisch"
+    "sub": "Retro en Nostalgisch"
   },
   "friend-061": {
     "name": "Vriend·Techneut 1",
@@ -8749,11 +8749,11 @@
   },
   "friend-066": {
     "name": "Vriend·Gezondheidsgoeroe 1",
-    "sub": "Wellnessgoeroe"
+    "sub": "Gezondheidsgoeroe"
   },
   "friend-071": {
     "name": "Vriend·Ervaren Kantoorrot 1",
-    "sub": "Ervaren rot op kantoor"
+    "sub": "Ervaren Kantoorrot"
   },
   "friend-076": {
     "name": "Vriend·Avonturier 1",
@@ -8761,11 +8761,11 @@
   },
   "friend-081": {
     "name": "Vriend·Kattig en Trots 1",
-    "sub": "Katachtige tsundere"
+    "sub": "Kattig en Trots"
   },
   "friend-086": {
     "name": "Vriend·Hondenachtig Loyaal 1",
-    "sub": "Hondachtig loyaal"
+    "sub": "Hondenachtig Loyaal"
   },
   "friend-091": {
     "name": "Vriend·Filosofische zwerver 1",

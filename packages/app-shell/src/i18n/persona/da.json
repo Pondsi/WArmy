@@ -2993,7 +2993,7 @@
   },
   "code-053": {
     "name": "Kodeudvikling·Særlige punkter 53",
-    "sub": "Nøglepunkter 53"
+    "sub": "Særlige punkter"
   },
   "code-9101": {
     "name": "Softwareingeniør·AI-assisteret programmering",
@@ -3601,7 +3601,7 @@
   },
   "edu-052": {
     "name": "Undervisning·Særlige punkter 52",
-    "sub": "Punkt 52"
+    "sub": "Særlige punkter"
   },
   "edu-9101": {
     "name": "Lærer·AI-undervisningsværktøjer",
@@ -4137,7 +4137,7 @@
   },
   "res-051": {
     "name": "Forskning og akademi·Særlige punkter 51",
-    "sub": "Nøglepunkt 51"
+    "sub": "Særlige punkter"
   },
   "res-9301": {
     "name": "Forsker·Konstruktion af litteratursøgninger",
@@ -4753,7 +4753,7 @@
   },
   "legal-089": {
     "name": "Jura i praksis·Særlige punkter 89",
-    "sub": "Særlig 89"
+    "sub": "Særlige punkter"
   },
   "legal-9601": {
     "name": "Juridisk rådgiver·Standard for gældsbrev",
@@ -5137,7 +5137,7 @@
   },
   "med-089": {
     "name": "Medicin & sundhed·Særlige punkter 89",
-    "sub": "Særlig 89"
+    "sub": "Særlige punkter"
   },
   "med-9301": {
     "name": "Sundhedsformidler·Forberedelse til helbredsundersøgelse",
@@ -5685,7 +5685,7 @@
   },
   "agri-081": {
     "name": "Landbrugsteknologi·Særlige punkter 81",
-    "sub": "Nøglepunkt 81"
+    "sub": "Særlige punkter"
   },
   "agri-9301": {
     "name": "Agronom·Bestøvning med bier",
@@ -6313,7 +6313,7 @@
   },
   "home-089": {
     "name": "Hjem & husholdning·Særlige punkter 89",
-    "sub": "Særlig 89"
+    "sub": "Særlige punkter"
   },
   "home-9301": {
     "name": "Livsrådgiver·Test af drikkevand derhjemme",
@@ -6877,7 +6877,7 @@
   },
   "pol-081": {
     "name": "Politik & offentlige anliggender·Særlige punkter 81",
-    "sub": "Nøglepunkt 81"
+    "sub": "Særlige punkter"
   },
   "pol-9601": {
     "name": "Fællesskabsdialog·Ledelse og dagsorden for borgermøder",
@@ -7209,7 +7209,7 @@
   },
   "soc-081": {
     "name": "Sociologisk forskning·Særlige punkter 81",
-    "sub": "Nøglepunkt 81"
+    "sub": "Særlige punkter"
   },
   "soc-9301": {
     "name": "Forsker·Historisk-sociologiske metoder",
@@ -7793,7 +7793,7 @@
   },
   "lit-081": {
     "name": "Litterær skrivning·Særlige punkter 81",
-    "sub": "Nøglepunkt 81"
+    "sub": "Særlige punkter"
   },
   "lit-9301": {
     "name": "Skribent·Novelleskrivning",
@@ -8697,7 +8697,7 @@
   },
   "friend-001": {
     "name": "Ven·Energisk og glad 1",
-    "sub": "Munter og energisk"
+    "sub": "Energisk og glad"
   },
   "friend-006": {
     "name": "Ven·Rolig og rationel 1",
@@ -8709,7 +8709,7 @@
   },
   "friend-016": {
     "name": "Ven·Bidende og drillende 1",
-    "sub": "Bidende ven-uven"
+    "sub": "Bidende og drillende"
   },
   "friend-021": {
     "name": "Ven·Socialt ængstelig og stille 1",
@@ -8717,27 +8717,27 @@
   },
   "friend-026": {
     "name": "Ven·Udadvendt og snaksalig 1",
-    "sub": "Social sommerfugl"
+    "sub": "Udadvendt og snaksalig"
   },
   "friend-031": {
     "name": "Ven·Dygtig og grundig 1",
-    "sub": "Flittig og grundig"
+    "sub": "Dygtig og grundig"
   },
   "friend-036": {
     "name": "Ven·Kunstnerisk og romantisk 1",
-    "sub": "Kunstnerisk romantisk"
+    "sub": "Kunstnerisk og romantisk"
   },
   "friend-041": {
     "name": "Ven·Sportsglad og passioneret 1",
-    "sub": "Sportsengagement"
+    "sub": "Sportsglad og passioneret"
   },
   "friend-046": {
     "name": "Ven·Madglad og hyggelig 1",
-    "sub": "Madglæde og heling"
+    "sub": "Madglad og hyggelig"
   },
   "friend-051": {
     "name": "Ven·Minimalistisk og praktisk 1",
-    "sub": "Minimalistisk og pragmatisk"
+    "sub": "Minimalistisk og praktisk"
   },
   "friend-056": {
     "name": "Ven·Retro og nostalgisk 1",
@@ -8745,15 +8745,15 @@
   },
   "friend-061": {
     "name": "Ven·Tekknørd 1",
-    "sub": "Teknologinørd"
+    "sub": "Tekknørd"
   },
   "friend-066": {
     "name": "Ven·Sundhedsentusiast 1",
-    "sub": "Velværeguru"
+    "sub": "Sundhedsentusiast"
   },
   "friend-071": {
     "name": "Ven·Erfaren kontorrotte 1",
-    "sub": "Kontorveteran"
+    "sub": "Erfaren kontorrotte"
   },
   "friend-076": {
     "name": "Ven·Eventyrer 1",
@@ -8761,11 +8761,11 @@
   },
   "friend-081": {
     "name": "Ven·Katteagtig og tilbageholdende 1",
-    "sub": "Katteagtig tsundere"
+    "sub": "Katteagtig og tilbageholdende"
   },
   "friend-086": {
     "name": "Ven·Hundetro og loyal 1",
-    "sub": "Hundeloyal"
+    "sub": "Hundetro og loyal"
   },
   "friend-091": {
     "name": "Ven·Filosofisk vandrer 1",
@@ -8773,7 +8773,7 @@
   },
   "friend-096": {
     "name": "Ven·Vittighedsfortæller 1",
-    "sub": "Spøgefugl"
+    "sub": "Vittighedsfortæller"
   },
   "friend-9601": {
     "name": "Læsemakker·Fælles læsning og opfølgning",

@@ -439,10 +439,16 @@ body.liaoTianChuangKou .liaoTianBuJu {
   width: 40px; height: 40px; border-radius: 6px; object-fit: cover;
   flex-shrink: 0; background: var(--hover); display: block;
 }
+/* R160：头像容器 —— 角标与执行中动画都挂这层。
+   真因：有图片时头像是 <img>（空元素），::after 不渲染、appendChild 的角标也不显示，
+   所以必须有一个真实的 span 容器来承载它们。 */
+.lieBiaoTiaoMu .avKuang {
+  position: relative; display: block;
+  width: 40px; height: 40px; flex-shrink: 0;
+}
 /* R149：执行中头像动画——淡主题色渐变流动覆盖层 */
 .lieBiaoTiaoMu .av, .lieBiaoTiaoMu .avTuPian { position: relative; }
-.lieBiaoTiaoMu .av.yunXingZhong::after,
-.lieBiaoTiaoMu .avTuPian.yunXingZhong::after {
+.lieBiaoTiaoMu .avKuang.yunXingZhong::after {
   content: '';
   position: absolute; inset: 0; border-radius: 6px;
   background: linear-gradient(135deg,

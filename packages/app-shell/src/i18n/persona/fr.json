@@ -2005,7 +2005,7 @@
   },
   "code-053": {
     "name": "Développement de code·Points clés 53",
-    "sub": "Spécialité 53"
+    "sub": "Points clés"
   },
   "edu-001": {
     "name": "Enseignement·Introduction de cours",
@@ -2133,7 +2133,7 @@
   },
   "edu-052": {
     "name": "Enseignement·Point clé 52",
-    "sub": "Point 52"
+    "sub": "Point clé"
   },
   "res-001": {
     "name": "Recherche scientifique·Cadre de revue de littérature",
@@ -2285,7 +2285,7 @@
   },
   "res-051": {
     "name": "Recherche scientifique·Point clé 51",
-    "sub": "Point 51"
+    "sub": "Point clé"
   },
   "legal-022": {
     "name": "Pratique juridique·Documents d'appel d'offres",
@@ -2537,7 +2537,7 @@
   },
   "legal-089": {
     "name": "Pratique juridique·Points clés 89",
-    "sub": "Spécial 89"
+    "sub": "Points clés"
   },
   "med-021": {
     "name": "Santé médicale·Prévention des infections",
@@ -2729,7 +2729,7 @@
   },
   "med-089": {
     "name": "Santé médicale·Points clés 89",
-    "sub": "Spécial 89"
+    "sub": "Points clés"
   },
   "med-061": {
     "name": "Santé médicale·Soins à domicile",
@@ -3041,7 +3041,7 @@
   },
   "agri-081": {
     "name": "Technique agricole·Points clés 81",
-    "sub": "Spécial 81"
+    "sub": "Points clés"
   },
   "home-021": {
     "name": "Vie domestique·Premiers secours",
@@ -3293,7 +3293,7 @@
   },
   "home-089": {
     "name": "Vie domestique·Points clés 89",
-    "sub": "Spécial 89"
+    "sub": "Points clés"
   },
   "pol-005": {
     "name": "Politique publique·Discours",
@@ -3389,7 +3389,7 @@
   },
   "pol-081": {
     "name": "Politique publique·Points clés 81",
-    "sub": "Spécial 81"
+    "sub": "Points clés"
   },
   "pol-061": {
     "name": "Politique publique·Services administratifs",
@@ -3753,7 +3753,7 @@
   },
   "soc-081": {
     "name": "Sociologie·Points clés 81",
-    "sub": "Spécial 81"
+    "sub": "Points clés"
   },
   "lit-002": {
     "name": "Création littéraire·Analyse thématique",
@@ -4025,7 +4025,7 @@
   },
   "lit-081": {
     "name": "Création littéraire·Points clés 81",
-    "sub": "Spécial 81"
+    "sub": "Points clés"
   },
   "psy-021": {
     "name": "Psycho·Image corporelle",

@@ -2993,7 +2993,7 @@
   },
   "code-053": {
     "name": "Programowanie·Kluczowe punkty 53",
-    "sub": "Pozycja specjalna 53"
+    "sub": "Kluczowe punkty"
   },
   "code-9101": {
     "name": "Inżynier oprogramowania·Programowanie wspomagane AI",
@@ -3601,7 +3601,7 @@
   },
   "edu-052": {
     "name": "Nauczanie·Kluczowe punkty 52",
-    "sub": "Pozycja specjalna 52"
+    "sub": "Kluczowe punkty"
   },
   "edu-9101": {
     "name": "Nauczyciel·Narzędzia dydaktyczne AI",
@@ -4137,7 +4137,7 @@
   },
   "res-051": {
     "name": "Badania naukowe·Kluczowe punkty 51",
-    "sub": "Pozycja specjalna 51"
+    "sub": "Kluczowe punkty"
   },
   "res-9301": {
     "name": "Badacz·Konstrukcja zapytań wyszukiwawczych",
@@ -4753,7 +4753,7 @@
   },
   "legal-089": {
     "name": "Praktyka prawnicza·Kluczowe punkty 89",
-    "sub": "Pozycja specjalna 89"
+    "sub": "Kluczowe punkty"
   },
   "legal-9601": {
     "name": "Doradca prawny·Zasady pokwitowań pożyczek",
@@ -5137,7 +5137,7 @@
   },
   "med-089": {
     "name": "Medycyna i zdrowie·Kluczowe punkty 89",
-    "sub": "Pozycja specjalna 89"
+    "sub": "Kluczowe punkty"
   },
   "med-9301": {
     "name": "Popularyzator zdrowia·Przygotowanie do badań okresowych",
@@ -5685,7 +5685,7 @@
   },
   "agri-081": {
     "name": "Technologia rolnicza·Kluczowe punkty 81",
-    "sub": "Pozycja specjalna 81"
+    "sub": "Kluczowe punkty"
   },
   "agri-9301": {
     "name": "Agronom·Zarządzanie zapylaniem przez pszczoły",
@@ -6313,7 +6313,7 @@
   },
   "home-089": {
     "name": "Gospodarstwo domowe·Kluczowe punkty 89",
-    "sub": "Pozycja specjalna 89"
+    "sub": "Kluczowe punkty"
   },
   "home-9301": {
     "name": "Doradca życia codziennego·Badanie jakości wody w domu",
@@ -6877,7 +6877,7 @@
   },
   "pol-081": {
     "name": "Polityka i sprawy publiczne·Kluczowe punkty 81",
-    "sub": "Pozycja specjalna 81"
+    "sub": "Kluczowe punkty"
   },
   "pol-9601": {
     "name": "Obrady społeczności·Prowadzenie i agenda posiedzeń",
@@ -7209,7 +7209,7 @@
   },
   "soc-081": {
     "name": "Badania socjologiczne·Kluczowe punkty 81",
-    "sub": "Pozycja specjalna 81"
+    "sub": "Kluczowe punkty"
   },
   "soc-9301": {
     "name": "Badacz·Metody socjologii historycznej",
@@ -7793,7 +7793,7 @@
   },
   "lit-081": {
     "name": "Twórczość literacka·Kluczowe punkty 81",
-    "sub": "Pozycja specjalna 81"
+    "sub": "Kluczowe punkty"
   },
   "lit-9301": {
     "name": "Pisarz·Pisanie opowiadań",
@@ -8697,7 +8697,7 @@
   },
   "friend-001": {
     "name": "Przyjaciel·Pełen energii i pogodny 1",
-    "sub": "Pogodny i energiczny"
+    "sub": "Pełen energii i pogodny"
   },
   "friend-006": {
     "name": "Przyjaciel·Spokojny i racjonalny 1",
@@ -8705,11 +8705,11 @@
   },
   "friend-011": {
     "name": "Przyjaciel·Delikatny i kojący 1",
-    "sub": "Ciepły i kojący"
+    "sub": "Delikatny i kojący"
   },
   "friend-016": {
     "name": "Przyjaciel·Cięty język 1",
-    "sub": "Złośliwy przyjaciel"
+    "sub": "Cięty język"
   },
   "friend-021": {
     "name": "Przyjaciel·Nieśmiały i cichy 1",
@@ -8717,27 +8717,27 @@
   },
   "friend-026": {
     "name": "Przyjaciel·Dusza towarzystwa 1",
-    "sub": "Towarzyski i gadatliwy"
+    "sub": "Dusza towarzystwa"
   },
   "friend-031": {
     "name": "Przyjaciel·Prymus i dokładny 1",
-    "sub": "Pilny i rzetelny"
+    "sub": "Prymus i dokładny"
   },
   "friend-036": {
     "name": "Przyjaciel·Artysta i romantyk 1",
-    "sub": "Artystyczny i romantyczny"
+    "sub": "Artysta i romantyk"
   },
   "friend-041": {
     "name": "Przyjaciel·Zapalony sportowiec 1",
-    "sub": "Sportowy i pełen pasji"
+    "sub": "Zapalony sportowiec"
   },
   "friend-046": {
     "name": "Przyjaciel·Łasuch i pocieszyciel 1",
-    "sub": "Łasuch kojący"
+    "sub": "Łasuch i pocieszyciel"
   },
   "friend-051": {
     "name": "Przyjaciel·Minimalista i pragmatyk 1",
-    "sub": "Minimalistyczny i pragmatyczny"
+    "sub": "Minimalista i pragmatyk"
   },
   "friend-056": {
     "name": "Przyjaciel·Retro i nostalgiczny 1",
@@ -8757,7 +8757,7 @@
   },
   "friend-076": {
     "name": "Przyjaciel·Poszukiwacz przygód 1",
-    "sub": "Odkrywca"
+    "sub": "Poszukiwacz przygód"
   },
   "friend-081": {
     "name": "Przyjaciel·Koci charakter 1",

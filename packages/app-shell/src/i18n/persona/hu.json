@@ -2993,7 +2993,7 @@
   },
   "code-053": {
     "name": "Kódfejlesztés·Speciális szempont 53",
-    "sub": "Kiemelt 53"
+    "sub": "Speciális szempont"
   },
   "code-9101": {
     "name": "Szoftvermérnök·AI-támogatott programozás",
@@ -3601,7 +3601,7 @@
   },
   "edu-052": {
     "name": "Oktatás·Speciális szempont 52",
-    "sub": "Kiemelt 52"
+    "sub": "Speciális szempont"
   },
   "edu-9101": {
     "name": "Tanár·AI-oktatási eszközök",
@@ -4137,7 +4137,7 @@
   },
   "res-051": {
     "name": "Tudományos kutatás·Speciális szempont 51",
-    "sub": "Kiemelt 51"
+    "sub": "Speciális szempont"
   },
   "res-9301": {
     "name": "Kutató·Irodalomkeresési lekérdezés összeállítása",
@@ -4753,7 +4753,7 @@
   },
   "legal-089": {
     "name": "Jogi gyakorlat·Kiemelt pontok 89",
-    "sub": "Kiemelt 89"
+    "sub": "Kiemelt pontok"
   },
   "legal-9601": {
     "name": "Jogi tanácsadó·Kölcsönszerződés szabályai",
@@ -5137,7 +5137,7 @@
   },
   "med-089": {
     "name": "Orvosi-egészségügy·Kiemelt pontok 89",
-    "sub": "Kiemelt 89"
+    "sub": "Kiemelt pontok"
   },
   "med-9301": {
     "name": "Egészségnevelő·Szűrővizsgálat előtti előkészületek",
@@ -5685,7 +5685,7 @@
   },
   "agri-081": {
     "name": "Agrártechnológia·Kiemelt pontok 81",
-    "sub": "Kiemelt 81"
+    "sub": "Kiemelt pontok"
   },
   "agri-9301": {
     "name": "Agronómus·Méhporzás kezelése",
@@ -6313,7 +6313,7 @@
   },
   "home-089": {
     "name": "Háztartási élet·Kiemelt pontok 89",
-    "sub": "Kiemelt 89"
+    "sub": "Kiemelt pontok"
   },
   "home-9301": {
     "name": "Életviteli tanácsadó·Vízminőség-vizsgálat otthon",
@@ -6877,7 +6877,7 @@
   },
   "pol-081": {
     "name": "Politika és közügyek·Kiemelt pontok 81",
-    "sub": "Kiemelt 81"
+    "sub": "Kiemelt pontok"
   },
   "pol-9601": {
     "name": "Közösségi tanácskozás·Gyűlés vezetése és napirend",
@@ -7209,7 +7209,7 @@
   },
   "soc-081": {
     "name": "Szociológiai kutatás·Kiemelt pontok 81",
-    "sub": "Kiemelt 81"
+    "sub": "Kiemelt pontok"
   },
   "soc-9301": {
     "name": "Kutató·Történeti szociológiai módszertan",
@@ -7793,7 +7793,7 @@
   },
   "lit-081": {
     "name": "Irodalmi alkotás·Kiemelt pontok 81",
-    "sub": "Kiemelt 81"
+    "sub": "Kiemelt pontok"
   },
   "lit-9301": {
     "name": "Író·Novellaírás",
@@ -8701,31 +8701,31 @@
   },
   "friend-006": {
     "name": "Barát·Nyugodt és racionális 1",
-    "sub": "Higgadt és racionális"
+    "sub": "Nyugodt és racionális"
   },
   "friend-011": {
     "name": "Barát·Gyengéd és megnyugtató 1",
-    "sub": "Gyengéd és gyógyító"
+    "sub": "Gyengéd és megnyugtató"
   },
   "friend-016": {
     "name": "Barát·Csípős nyelvű pajtás 1",
-    "sub": "Csípős nyelvű barát"
+    "sub": "Csípős nyelvű pajtás"
   },
   "friend-021": {
     "name": "Barát·Szorongó és csendes 1",
-    "sub": "Szociálisan szorongó és csendes"
+    "sub": "Szorongó és csendes"
   },
   "friend-026": {
     "name": "Barát·Társaságkedvelő dumagép 1",
-    "sub": "Társasági pillangó"
+    "sub": "Társaságkedvelő dumagép"
   },
   "friend-031": {
     "name": "Barát·Kiváló tanuló és alapos 1",
-    "sub": "Kiváló tanuló és szigorú"
+    "sub": "Kiváló tanuló és alapos"
   },
   "friend-036": {
     "name": "Barát·Művészi és romantikus 1",
-    "sub": "Művészi romantikus"
+    "sub": "Művészi és romantikus"
   },
   "friend-041": {
     "name": "Barát·Sportos és szenvedélyes 1",
@@ -8733,11 +8733,11 @@
   },
   "friend-046": {
     "name": "Barát·Ínyenc és megnyugtató 1",
-    "sub": "Ínyenc és gyógyító"
+    "sub": "Ínyenc és megnyugtató"
   },
   "friend-051": {
     "name": "Barát·Minimalista és gyakorlatias 1",
-    "sub": "Minimalista és pragmatikus"
+    "sub": "Minimalista és gyakorlatias"
   },
   "friend-056": {
     "name": "Barát·Retró és nosztalgikus 1",
@@ -8745,7 +8745,7 @@
   },
   "friend-061": {
     "name": "Barát·Techrajongó 1",
-    "sub": "Tech rajongó"
+    "sub": "Techrajongó"
   },
   "friend-066": {
     "name": "Barát·Egészségtudatos guru 1",
@@ -8753,7 +8753,7 @@
   },
   "friend-071": {
     "name": "Barát·Tapasztalt irodai róka 1",
-    "sub": "Irodai veterán"
+    "sub": "Tapasztalt irodai róka"
   },
   "friend-076": {
     "name": "Barát·Kalandor 1",
@@ -8761,7 +8761,7 @@
   },
   "friend-081": {
     "name": "Barát·Macskamód szeszélyes 1",
-    "sub": "Macskaszerű tsundere"
+    "sub": "Macskamód szeszélyes"
   },
   "friend-086": {
     "name": "Barát·Kutyahűségű 1",
@@ -8769,7 +8769,7 @@
   },
   "friend-091": {
     "name": "Barát·Filozófiai kalandozó 1",
-    "sub": "Filozófiai vándor"
+    "sub": "Filozófiai kalandozó"
   },
   "friend-096": {
     "name": "Barát·Poéngyáros 1",

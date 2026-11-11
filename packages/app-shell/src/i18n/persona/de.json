@@ -2993,7 +2993,7 @@
   },
   "code-053": {
     "name": "Code-Entwicklung·Schwerpunkte 53",
-    "sub": "Schwerpunkt 53"
+    "sub": "Schwerpunkte"
   },
   "code-9101": {
     "name": "Softwareingenieur·AI-gestützte Programmierung",
@@ -3601,7 +3601,7 @@
   },
   "edu-052": {
     "name": "Unterricht·Schwerpunkte 52",
-    "sub": "Schwerpunkt 52"
+    "sub": "Schwerpunkte"
   },
   "edu-9101": {
     "name": "Lehrkraft·AI-Lehrwerkzeuge",
@@ -4137,7 +4137,7 @@
   },
   "res-051": {
     "name": "Forschung und Wissenschaft·Schwerpunkte 51",
-    "sub": "Schwerpunkt 51"
+    "sub": "Schwerpunkte"
   },
   "res-9301": {
     "name": "Forscher·Konstruktion von Literatursuchanfragen",
@@ -4753,7 +4753,7 @@
   },
   "legal-089": {
     "name": "Rechtspraxis·Schwerpunkte 89",
-    "sub": "Schwerpunkt 89"
+    "sub": "Schwerpunkte"
   },
   "legal-9601": {
     "name": "Rechtsberater·Richtlinien für Schuldscheine",
@@ -5137,7 +5137,7 @@
   },
   "med-089": {
     "name": "Medizin & Gesundheit·Schwerpunkte 89",
-    "sub": "Schwerpunkt 89"
+    "sub": "Schwerpunkte"
   },
   "med-9301": {
     "name": "Gesundheitsaufklärer·Vorbereitung auf die Vorsorgeuntersuchung",
@@ -5685,7 +5685,7 @@
   },
   "agri-081": {
     "name": "Agrartechnik·Schwerpunkte 81",
-    "sub": "Schwerpunkt 81"
+    "sub": "Schwerpunkte"
   },
   "agri-9301": {
     "name": "Agronom·Bestäubungsmanagement mit Bienen",
@@ -6313,7 +6313,7 @@
   },
   "home-089": {
     "name": "Hauswirtschaft & Leben·Schwerpunkte 89",
-    "sub": "Schwerpunkt 89"
+    "sub": "Schwerpunkte"
   },
   "home-9301": {
     "name": "Lebensberater·Hauswasserqualität testen",
@@ -6877,7 +6877,7 @@
   },
   "pol-081": {
     "name": "Politik & Öffentlichkeit·Schwerpunkte 81",
-    "sub": "Schwerpunkt 81"
+    "sub": "Schwerpunkte"
   },
   "pol-9601": {
     "name": "Gemeindeversammlung·Moderation & Tagesordnung",
@@ -7209,7 +7209,7 @@
   },
   "soc-081": {
     "name": "Soziologische Forschung·Schwerpunkte 81",
-    "sub": "Schwerpunkt 81"
+    "sub": "Schwerpunkte"
   },
   "soc-9301": {
     "name": "Forscher·Historisch-soziologische Methoden",
@@ -7793,7 +7793,7 @@
   },
   "lit-081": {
     "name": "Literarisches Schreiben·Schwerpunkte 81",
-    "sub": "Schwerpunkt 81"
+    "sub": "Schwerpunkte"
   },
   "lit-9301": {
     "name": "Autor·Kurzgeschichten schreiben",
@@ -8697,51 +8697,51 @@
   },
   "friend-001": {
     "name": "Freund·Fröhlich & energiegeladen 1",
-    "sub": "Fröhlich und energiegeladen"
+    "sub": "Fröhlich & energiegeladen"
   },
   "friend-006": {
     "name": "Freund·Ruhig & rational 1",
-    "sub": "Ruhig und rational"
+    "sub": "Ruhig & rational"
   },
   "friend-011": {
     "name": "Freund·Sanft & heilsam 1",
-    "sub": "Sanft und heilsam"
+    "sub": "Sanft & heilsam"
   },
   "friend-016": {
     "name": "Freund·Scharfzüngiger Stichler 1",
-    "sub": "Bissiger Freund"
+    "sub": "Scharfzüngiger Stichler"
   },
   "friend-021": {
     "name": "Freund·Sozialängstlich & still 1",
-    "sub": "Sozial ängstlich und still"
+    "sub": "Sozialängstlich & still"
   },
   "friend-026": {
     "name": "Freund·Geselliger Schwätzer 1",
-    "sub": "Gesellig und geschwätzig"
+    "sub": "Geselliger Schwätzer"
   },
   "friend-031": {
     "name": "Freund·Strebsamer Musterschüler 1",
-    "sub": "Strebsam und gründlich"
+    "sub": "Strebsamer Musterschüler"
   },
   "friend-036": {
     "name": "Freund·Künstlerisch & romantisch 1",
-    "sub": "Künstlerisch und romantisch"
+    "sub": "Künstlerisch & romantisch"
   },
   "friend-041": {
     "name": "Freund·Sportbegeistert 1",
-    "sub": "Sportlich und leidenschaftlich"
+    "sub": "Sportbegeistert"
   },
   "friend-046": {
     "name": "Freund·Genussmensch mit Heilungspotenzial 1",
-    "sub": "Genießer und heilsam"
+    "sub": "Genussmensch mit Heilungspotenzial"
   },
   "friend-051": {
     "name": "Freund·Minimalistisch & pragmatisch 1",
-    "sub": "Minimalistisch und pragmatisch"
+    "sub": "Minimalistisch & pragmatisch"
   },
   "friend-056": {
     "name": "Freund·Retro & nostalgisch 1",
-    "sub": "Retro und nostalgisch"
+    "sub": "Retro & nostalgisch"
   },
   "friend-061": {
     "name": "Freund·Technik-Nerd 1",
@@ -8753,7 +8753,7 @@
   },
   "friend-071": {
     "name": "Freund·Büro-Hase mit Erfahrung 1",
-    "sub": "Erfahrener Büroprofi"
+    "sub": "Büro-Hase mit Erfahrung"
   },
   "friend-076": {
     "name": "Freund·Abenteurer 1",
@@ -8769,11 +8769,11 @@
   },
   "friend-091": {
     "name": "Freund·Philosophischer Träumer 1",
-    "sub": "Philosophischer Wanderer"
+    "sub": "Philosophischer Träumer"
   },
   "friend-096": {
     "name": "Freund·Witzbold 1",
-    "sub": "Witzemacher"
+    "sub": "Witzbold"
   },
   "friend-9601": {
     "name": "Lesepartner·Gemeinsames Lesen & Check-ins",

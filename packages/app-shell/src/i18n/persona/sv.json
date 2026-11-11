@@ -2993,7 +2993,7 @@
   },
   "code-053": {
     "name": "Kodutveckling·Nyckelpunkter 53",
-    "sub": "Nyckelpunkt 53"
+    "sub": "Nyckelpunkter"
   },
   "code-9101": {
     "name": "Programvaruingenjör·AI-assisterad programmering",
@@ -4753,7 +4753,7 @@
   },
   "legal-089": {
     "name": "Juridik·Särskilda nyckelpunkter 89",
-    "sub": "Nyckelpunkt 89"
+    "sub": "Särskilda nyckelpunkter"
   },
   "legal-9601": {
     "name": "Juridisk rådgivare·Riktlinjer för skuldsedlar",
@@ -5137,7 +5137,7 @@
   },
   "med-089": {
     "name": "Medicin & hälsa·Särskilda nyckelpunkter 89",
-    "sub": "Nyckelpunkt 89"
+    "sub": "Särskilda nyckelpunkter"
   },
   "med-9301": {
     "name": "Hälsupplysare·Förberedelser inför hälsokontroll",
@@ -5685,7 +5685,7 @@
   },
   "agri-081": {
     "name": "Jordbruksteknik·Särskilda nyckelpunkter 81",
-    "sub": "Nyckelpunkt 81"
+    "sub": "Särskilda nyckelpunkter"
   },
   "agri-9301": {
     "name": "Agronom·Hantering av binäring och pollinering",
@@ -6313,7 +6313,7 @@
   },
   "home-089": {
     "name": "Hem & hushåll·Särskilda nyckelpunkter 89",
-    "sub": "Nyckelpunkt 89"
+    "sub": "Särskilda nyckelpunkter"
   },
   "home-9301": {
     "name": "Livsrådgivare·Vattenkvalitet hemma – provtagning",
@@ -6877,7 +6877,7 @@
   },
   "pol-081": {
     "name": "Politik & offentlig sektor·Särskilda nyckelpunkter 81",
-    "sub": "Nyckelpunkt 81"
+    "sub": "Särskilda nyckelpunkter"
   },
   "pol-9601": {
     "name": "Gemenskapsrådslag·Ledning av möten och dagordning",
@@ -7209,7 +7209,7 @@
   },
   "soc-081": {
     "name": "Sociologisk forskning·Särskilda nyckelpunkter 81",
-    "sub": "Nyckelpunkt 81"
+    "sub": "Särskilda nyckelpunkter"
   },
   "soc-9301": {
     "name": "Forskare·Historisk-sociologiska metoder",
@@ -7793,7 +7793,7 @@
   },
   "lit-081": {
     "name": "Litterärt skapande·Särskilda nyckelpunkter 81",
-    "sub": "Nyckelpunkt 81"
+    "sub": "Särskilda nyckelpunkter"
   },
   "lit-9301": {
     "name": "Författare·Novellskrivande",
@@ -8697,7 +8697,7 @@
   },
   "friend-001": {
     "name": "Vän·Glad och energisk 1",
-    "sub": "Pigg och glad"
+    "sub": "Glad och energisk"
   },
   "friend-006": {
     "name": "Vän·Lugn och rationell 1",
@@ -8709,11 +8709,11 @@
   },
   "friend-016": {
     "name": "Vän·Skarp och hånfull kompis 1",
-    "sub": "Sarkastisk kompis"
+    "sub": "Skarp och hånfull kompis"
   },
   "friend-021": {
     "name": "Vän·Socialt ångestladdad och tyst 1",
-    "sub": "Socialt ångestladd och tyst"
+    "sub": "Socialt ångestladdad och tyst"
   },
   "friend-026": {
     "name": "Vän·Social fjäril 1",
@@ -8721,19 +8721,19 @@
   },
   "friend-031": {
     "name": "Vän·Bäst i klassen och noggrann 1",
-    "sub": "Duktig och noggrann"
+    "sub": "Bäst i klassen och noggrann"
   },
   "friend-036": {
     "name": "Vän·Konstnärlig och romantisk 1",
-    "sub": "Romantisk konstnär"
+    "sub": "Konstnärlig och romantisk"
   },
   "friend-041": {
     "name": "Vän·Sportig och passionerad 1",
-    "sub": "Sportig entusiast"
+    "sub": "Sportig och passionerad"
   },
   "friend-046": {
     "name": "Vän·Matälskare som värmer 1",
-    "sub": "Matglad och värmande"
+    "sub": "Matälskare som värmer"
   },
   "friend-051": {
     "name": "Vän·Minimalistisk och pragmatisk 1",
@@ -8753,7 +8753,7 @@
   },
   "friend-071": {
     "name": "Vän·Kontorsveteran 1",
-    "sub": "Arbetsplatsveteran"
+    "sub": "Kontorsveteran"
   },
   "friend-076": {
     "name": "Vän·Äventyrare 1",
@@ -8765,7 +8765,7 @@
   },
   "friend-086": {
     "name": "Vän·Hundlikt trogen 1",
-    "sub": "Hundlik och lojal"
+    "sub": "Hundlikt trogen"
   },
   "friend-091": {
     "name": "Vän·Filosofisk vandrare 1",

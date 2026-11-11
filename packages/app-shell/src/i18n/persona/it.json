@@ -2993,7 +2993,7 @@
   },
   "code-053": {
     "name": "Sviluppo codice·Punti chiave 53",
-    "sub": "Speciale 53"
+    "sub": "Punti chiave"
   },
   "code-9101": {
     "name": "Ingegnere del software·Programmazione assistita da AI",
@@ -3601,7 +3601,7 @@
   },
   "edu-052": {
     "name": "Didattica·Punti chiave 52",
-    "sub": "Speciale 52"
+    "sub": "Punti chiave"
   },
   "edu-9101": {
     "name": "Insegnante·Strumenti didattici AI",
@@ -4137,7 +4137,7 @@
   },
   "res-051": {
     "name": "Ricerca e accademia·Punti chiave 51",
-    "sub": "Speciale 51"
+    "sub": "Punti chiave"
   },
   "res-9301": {
     "name": "Ricercatore·Costruzione stringhe di ricerca bibliografica",
@@ -4753,7 +4753,7 @@
   },
   "legal-089": {
     "name": "Pratica legale·Punti chiave 89",
-    "sub": "Speciale 89"
+    "sub": "Punti chiave"
   },
   "legal-9601": {
     "name": "Consulente legale·Norme per ricevute di prestito",
@@ -5137,7 +5137,7 @@
   },
   "med-089": {
     "name": "Salute e medicina·Punti chiave 89",
-    "sub": "Speciale 89"
+    "sub": "Punti chiave"
   },
   "med-9301": {
     "name": "Divulgazione sanitaria·Preparazione agli esami",
@@ -5685,7 +5685,7 @@
   },
   "agri-081": {
     "name": "Tecnica agricola·Punto chiave 81",
-    "sub": "Speciale 81"
+    "sub": "Punto chiave"
   },
   "agri-9301": {
     "name": "Agronomo·Gestione dell'impollinazione delle api",
@@ -6313,7 +6313,7 @@
   },
   "home-089": {
     "name": "Vita domestica·Punti chiave 89",
-    "sub": "Speciale 89"
+    "sub": "Punti chiave"
   },
   "home-9301": {
     "name": "Consulente di vita quotidiana·Analisi dell'acqua domestica",
@@ -6877,7 +6877,7 @@
   },
   "pol-081": {
     "name": "Politica e affari pubblici·Punto chiave 81",
-    "sub": "Speciale 81"
+    "sub": "Punto chiave"
   },
   "pol-9601": {
     "name": "Assemblea di comunità·Presidenza e ordine del giorno",
@@ -7209,7 +7209,7 @@
   },
   "soc-081": {
     "name": "Ricerca sociologica·Punto chiave 81",
-    "sub": "Speciale 81"
+    "sub": "Punto chiave"
   },
   "soc-9301": {
     "name": "Ricercatore·Metodi di sociologia storica",
@@ -7793,7 +7793,7 @@
   },
   "lit-081": {
     "name": "Creazione letteraria·Punto chiave 81",
-    "sub": "Speciale 81"
+    "sub": "Punto chiave"
   },
   "lit-9301": {
     "name": "Scrittore·Scrittura di racconti",
@@ -8697,7 +8697,7 @@
   },
   "friend-001": {
     "name": "Amico·Energico e allegro 1",
-    "sub": "Allegro ed energico"
+    "sub": "Energico e allegro"
   },
   "friend-006": {
     "name": "Amico·Calmo e razionale 1",
@@ -8705,11 +8705,11 @@
   },
   "friend-011": {
     "name": "Amico·Dolce e confortante 1",
-    "sub": "Dolce e rassicurante"
+    "sub": "Dolce e confortante"
   },
   "friend-016": {
     "name": "Amico·Dalla lingua tagliente 1",
-    "sub": "Amico tagliente"
+    "sub": "Dalla lingua tagliente"
   },
   "friend-021": {
     "name": "Amico·Timido e silenzioso 1",
@@ -8717,7 +8717,7 @@
   },
   "friend-026": {
     "name": "Amico·Socievole e chiacchierone 1",
-    "sub": "Estroverso e chiacchierone"
+    "sub": "Socievole e chiacchierone"
   },
   "friend-031": {
     "name": "Amico·Studente modello e rigoroso 1",
@@ -8733,15 +8733,15 @@
   },
   "friend-046": {
     "name": "Amico·Goloso e confortante 1",
-    "sub": "Buongustaio rassicurante"
+    "sub": "Goloso e confortante"
   },
   "friend-051": {
     "name": "Amico·Minimalista e pratico 1",
-    "sub": "Minimalista e pragmatico"
+    "sub": "Minimalista e pratico"
   },
   "friend-056": {
     "name": "Amico·Retrò e nostalgico 1",
-    "sub": "Retro e nostalgico"
+    "sub": "Retrò e nostalgico"
   },
   "friend-061": {
     "name": "Amico·Nerd della tecnologia 1",
@@ -8765,15 +8765,15 @@
   },
   "friend-086": {
     "name": "Amico·Fedele da cane 1",
-    "sub": "Fedele come un cane"
+    "sub": "Fedele da cane"
   },
   "friend-091": {
     "name": "Amico·Filosofo vagabondo 1",
-    "sub": "Viandante filosofico"
+    "sub": "Filosofo vagabondo"
   },
   "friend-096": {
     "name": "Amico·Battutista 1",
-    "sub": "Burlone"
+    "sub": "Battutista"
   },
   "friend-9601": {
     "name": "Compagno di lettura·Lettura condivisa e presenze",

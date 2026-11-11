@@ -437,19 +437,19 @@
   },
   "office-0225": {
     "name": "Depozadministranto·Protokolo de semajna kunveno",
-    "sub": "Stokadministranto"
+    "sub": "Depozadministranto"
   },
   "office-0226": {
     "name": "Depozadministranto·OKR kongrua tabelo",
-    "sub": "Stokadministranto"
+    "sub": "Depozadministranto"
   },
   "office-0227": {
     "name": "Depozadministranto·Personara revizio",
-    "sub": "Stokadministranto"
+    "sub": "Depozadministranto"
   },
   "office-0228": {
     "name": "Depozadministranto·Riskolisto",
-    "sub": "Stokadministranto"
+    "sub": "Depozadministranto"
   },
   "office-0233": {
     "name": "Aĉetisto·Ekspozicia kontrollisto",
@@ -813,19 +813,19 @@
   },
   "office-0433": {
     "name": "Interna aŭdormanaĝero·Protokolo de semajna kunveno",
-    "sub": "Interna aŭdito-manaĝero"
+    "sub": "Interna aŭdormanaĝero"
   },
   "office-0434": {
     "name": "Interna aŭdormanaĝero·OKR kongrua tabelo",
-    "sub": "Interna aŭdito-manaĝero"
+    "sub": "Interna aŭdormanaĝero"
   },
   "office-0435": {
     "name": "Interna aŭdormanaĝero·Personara revizio",
-    "sub": "Interna aŭdito-manaĝero"
+    "sub": "Interna aŭdormanaĝero"
   },
   "office-0436": {
     "name": "Interna aŭdormanaĝero·Riskolisto",
-    "sub": "Interna aŭdito-manaĝero"
+    "sub": "Interna aŭdormanaĝero"
   },
   "office-0401": {
     "name": "Kontrakta Gvidado·Protokolo de semajna kunveno",
@@ -1657,19 +1657,19 @@
   },
   "office-0841": {
     "name": "Vocĉentro·Bileta ŝablono",
-    "sub": "Vokocentro"
+    "sub": "Vocĉentro"
   },
   "office-0842": {
     "name": "Vocĉentro·Kontenteca revokvoka skripto",
-    "sub": "Vokocentro"
+    "sub": "Vocĉentro"
   },
   "office-0843": {
     "name": "Vocĉentro·Eskalvojo",
-    "sub": "Vokocentro"
+    "sub": "Vocĉentro"
   },
   "office-0844": {
     "name": "Vocĉentro·Artikolo de sciprobazo",
-    "sub": "Vokocentro"
+    "sub": "Vocĉentro"
   },
   "office-0849": {
     "name": "Laborpeta pritrakto·Bileta ŝablono",
@@ -1989,7 +1989,7 @@
   },
   "code-007": {
     "name": "Kodo-evoluo·Kaĉa solvo",
-    "sub": "Kaŝmemora solvo"
+    "sub": "Kaĉa solvo"
   },
   "code-008": {
     "name": "Kodo-evoluo·Datumbazaj indicoj",
@@ -2173,7 +2173,7 @@
   },
   "code-053": {
     "name": "Kodo-evoluo·Speciala punkto 53",
-    "sub": "Speciala53"
+    "sub": "Speciala punkto"
   },
   "edu-001": {
     "name": "Instruista instruado·Enkonduko en la lecionon",
@@ -2341,7 +2341,7 @@
   },
   "edu-052": {
     "name": "Instruista instruado·Speciala punkto 52",
-    "sub": "Specialo 52"
+    "sub": "Speciala punkto"
   },
   "res-021": {
     "name": "Scienca esploro·Recenzrespondo",
@@ -2541,7 +2541,7 @@
   },
   "res-051": {
     "name": "Scienca esploro·Speciala punkto 51",
-    "sub": "Specialaĵo 51"
+    "sub": "Speciala punkto"
   },
   "legal-001": {
     "name": "Jura Praktiko·Kontrakta Revizio",
@@ -2881,7 +2881,7 @@
   },
   "legal-089": {
     "name": "Jura Praktiko·Speciala punkto 89",
-    "sub": "Specialaĵo 89"
+    "sub": "Speciala punkto"
   },
   "med-001": {
     "name": "Medicino kaj Sano·Historiskribo",
@@ -3129,7 +3129,7 @@
   },
   "med-089": {
     "name": "Medicino kaj Sano·Speciala punkto 89",
-    "sub": "Specialaĵo 89"
+    "sub": "Speciala punkto"
   },
   "med-061": {
     "name": "Medicino kaj Sano·Hejma flegado",
@@ -3509,7 +3509,7 @@
   },
   "agri-081": {
     "name": "Agrikultura tekniko·Specialaj punktoj 81",
-    "sub": "Specialaĵo 81"
+    "sub": "Specialaj punktoj"
   },
   "home-001": {
     "name": "Hejma Vivo·Ordenado",
@@ -3757,7 +3757,7 @@
   },
   "home-089": {
     "name": "Hejma Vivo·Speciala punkto 89",
-    "sub": "Specialaĵo 89"
+    "sub": "Speciala punkto"
   },
   "home-061": {
     "name": "Hejma Vivo·Dungado de Hejmservo",
@@ -3917,7 +3917,7 @@
   },
   "pol-027": {
     "name": "Politikaj Publikaj·Audita Kunlaboro",
-    "sub": "Aŭdita Kunlaboro"
+    "sub": "Audita Kunlaboro"
   },
   "pol-028": {
     "name": "Politikaj Publikaj·Kontrola Korektado",
@@ -4041,7 +4041,7 @@
   },
   "pol-081": {
     "name": "Politikaj Publikaj·Specialaj punktoj 81",
-    "sub": "Specialaĵo 81"
+    "sub": "Specialaj punktoj"
   },
   "soc-001": {
     "name": "Sociologia esploro·Esplorplano",
@@ -4353,7 +4353,7 @@
   },
   "soc-081": {
     "name": "Sociologia esploro·Specialaj punktoj 81",
-    "sub": "Specialaĵo 81"
+    "sub": "Specialaj punktoj"
   },
   "soc-061": {
     "name": "Sociologia esploro·Laboro-familia konflikto",
@@ -4733,7 +4733,7 @@
   },
   "lit-078": {
     "name": "Literatura kreado·Retrofada kolekto",
-    "sub": "Retrosciiga kolekto"
+    "sub": "Retrofada kolekto"
   },
   "lit-079": {
     "name": "Literatura kreado·Reciproka samula recenzo",
@@ -4745,7 +4745,7 @@
   },
   "lit-081": {
     "name": "Literatura kreado·Specialaj punktoj 81",
-    "sub": "Specialaĵo 81"
+    "sub": "Specialaj punktoj"
   },
   "psy-001": {
     "name": "Psiko·Enkonduka intervjuo-skizo",
@@ -5105,7 +5105,7 @@
   },
   "psy-093": {
     "name": "Psiko·Traumao-konscia akompano",
-    "sub": "Traŭmato-konscia akompano"
+    "sub": "Traumao-konscia akompano"
   },
   "psy-094": {
     "name": "Psiko·Krizdetektado kaj transdono",
