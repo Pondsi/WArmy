@@ -4,10 +4,10 @@
   "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.9/WArmy-Setup-0.4.9.exe",
   "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.9/WArmy-Setup-0.4.9.exe",
   "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.9/WArmy-Setup-0.4.9.exe.warmyblocks",
-  "sha256": "6704438f4efa95fa78d02e651f70fa30825bc6595d59fe06861bbe7dd71bcdab",
-  "size": 234728324,
+  "sha256": "b3606655d951eaf4ecc83961d81f01281734ffd9b0e69296dbe36c060a6bc42b",
+  "size": 234728743,
   "mandatory": false,
-  "publishedAt": "2026-11-11T06:53:25.326Z",
+  "publishedAt": "2026-11-11T08:29:09.322Z",
   "repo": "https://github.com/Pondsi/WArmy",
   "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.9"
 }

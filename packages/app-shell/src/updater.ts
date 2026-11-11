@@ -392,7 +392,7 @@ export function guiFanHuaGengXinQingDan(
   const pingTaiKuoZhan = process.platform === 'win32' ? ['.exe', '.msi']
     : process.platform === 'darwin' ? ['.dmg', '.pkg']
     : ['.appimage', '.deb', '.rpm'];
-  const houXuan: Array<{ url: string; size?: number; rang: number }> = [];
+  const houXuan: Array<{ url: string; size?: number; rang: number; digest?: string }> = [];
   for (const a of assets) {
     if (!a || typeof a !== 'object') continue;
     const jiLu = a as Record<string, unknown>;
@@ -401,15 +401,28 @@ export function guiFanHuaGengXinQingDan(
     const ming = (zifuchuan(jiLu['name']) || u).toLowerCase();
     const shiAnZhuangBao = pingTaiKuoZhan.some((k) => ming.endsWith(k));
     const shiFuZhuChanWu = /\.(blockmap|warmyblocks|yml|yaml|txt|md|png|jpg|zip|tar\.gz)$/.test(ming);
-    houXuan.push({ url: u, size: shuZhi(jiLu['size']), rang: shiAnZhuangBao ? 0 : (shiFuZhuChanWu ? 2 : 1) });
+    houXuan.push({ url: u, size: shuZhi(jiLu['size']), rang: shiAnZhuangBao ? 0 : (shiFuZhuChanWu ? 2 : 1), digest: zifuchuan(jiLu['digest']) });
   }
   houXuan.sort((x, y) => x.rang - y.rang);
+  let assetDigest: string | undefined;
   if (houXuan.length) {
     assetUrl = houXuan[0]?.url;
     assetSize = houXuan[0]?.size;
+    assetDigest = houXuan[0]?.digest;
   }
+  /**
+   * R162 真机缺陷修复：**GitHub Release 对象的 `url` 是 API 端点，不是文件**。
+   * 旧代码无条件优先 `obj['url']` ⇒ 用默认更新源
+   * `https://api.github.com/repos/<o>/<r>/releases/latest` 时，解析出的下载地址是
+   * `https://api.github.com/repos/<o>/<r>/releases/<id>`（一个 JSON 端点）。
+   * 后果：「检查更新」能报新版本，但「下载更新」永远失败（拉回来的是 JSON，
+   * 且 feed 没声明 sha256 ⇒ 按供应链口径丢弃）。本轮对真实远端实测抓到了这个。
+   * 修法：当 `url` 是 GitHub API 的 releases 端点且已选中资产时，用资产地址。
+   */
+  const dingCengUrl = zifuchuan(obj['url']);
+  const shiApiDuanDian = !!dingCengUrl && /^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/releases(\/|$)/i.test(dingCengUrl);
   const downloadUrl =
-    zifuchuan(obj['url']) ||
+    (shiApiDuanDian && assetUrl ? assetUrl : dingCengUrl) ||
     zifuchuan(obj['downloadUrl']) ||
     zifuchuan(obj['download_url']) ||
     zifuchuan(obj['browser_download_url']) ||
@@ -419,7 +432,12 @@ export function guiFanHuaGengXinQingDan(
     // GitHub 兜底：没有构建产物时退回 release 页面（仅查询可用，下载会判 no-download-url）
     zifuchuan(obj['html_url']);
 
-  const yuanwenSanlie = zifuchuan(obj['sha256']) || zifuchuan(obj['checksum']) || zifuchuan(obj['hash']) || zifuchuan(obj['shasum']);
+  /**
+   * R162：GitHub 的资产带 `digest: "sha256:<hex>"`。不读它的话，GitHub API 形态的 feed
+   * 永远拿不到 sha256 ⇒ 下载会被供应链口径一律丢弃（等于自动更新不可用）。
+   * 顶层显式声明优先；其次用**选中资产**的 digest。
+   */
+  const yuanwenSanlie = zifuchuan(obj['sha256']) || zifuchuan(obj['checksum']) || zifuchuan(obj['hash']) || zifuchuan(obj['shasum']) || assetDigest;
   let sha256: string | undefined;
   if (yuanwenSanlie) {
     const yiQingLi = yuanwenSanlie.replace(/^sha256[-:]/i, '').trim().toLowerCase();
