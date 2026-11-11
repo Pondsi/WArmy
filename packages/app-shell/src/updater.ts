@@ -27,6 +27,13 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { duJsonWenJianGeLi, anQuanYuanZiXieJson } from './atomic-json.js';
+import {
+  suanKuaiZhao,
+  jieMaKuaiZhao,
+  guiHuaZengLiang,
+  zhuangPeiZengLiang,
+  type KuaiZhao,
+} from './update-blocks.js';
 
 export type UpdateStatus =
   | 'not-configured'
@@ -62,6 +69,11 @@ export interface GengXinQingDan {
   /** Ed25519 签名（base64）；配置了公钥时必须有 */
   signature?: string;
   keyId?: string;
+  /**
+   * R162（D3-C）：**增量更新的分块账地址**（`.warmyblocks`，gzip JSON）。
+   * 未声明时由下载地址 + `.warmyblocks` 推导；拉不到就退回整包下载。
+   */
+  blockmapUrl?: string;
 }
 
 export interface GengXinJianChaJieGuo {
@@ -86,6 +98,7 @@ export interface GengXinJianChaJieGuo {
   size?: number;
   mandatory?: boolean;
   publishedAt?: string;
+  blockmapUrl?: string;
   httpStatus?: number;
   /** 机器可读细分原因，如 'bad-json' / 'missing-version' / 'dns-failure' */
   reason?: string;
@@ -114,6 +127,19 @@ export interface GengXinXiaZaiJieGuo {
   installImplemented: false;
   installNotes: string;
   downloadUrlPresent: boolean;
+  /**
+   * R162（D3-C）：本次下载是**整包**还是**增量**。
+   * 增量只是少下载字节，校验口径与整包完全一致（sha256 + size）。
+   */
+  mode: 'full' | 'delta';
+  /** 实际从网络下载的字节数（增量时远小于 bytes） */
+  bytesDownloaded?: number;
+  /** 从本机旧包搬过来的字节数 */
+  bytesReused?: number;
+  blocksTotal?: number;
+  blocksReused?: number;
+  /** 增量没走成的真实原因（走了整包时填；没尝试增量则为 undefined） */
+  deltaFallbackReason?: string;
   checkedAt: number;
   durationMs: number;
 }
@@ -148,6 +174,13 @@ export interface GengxinqiXuanxiang {
   userAgent?: string;
   /** Ed25519 公钥（base64 SPKI DER）；配置后清单必须带有效签名，否则拒绝 */
   manifestPublicKey?: string;
+  /**
+   * R162（D3-C）：额外找「旧安装包基准」的目录（主进程传安装目录）。
+   * 安装器会把自身种到 `<userData>/updates/base/`，开发态没有种子 ⇒ 自动退回整包。
+   */
+  baseDirs?: string[];
+  /** 关掉增量（诊断/门禁用）；默认开 */
+  disableDelta?: boolean;
   log?: (xiaoXi: string) => void;
 }
 
@@ -351,15 +384,29 @@ export function guiFanHuaGengXinQingDan(
   const assets = Array.isArray(obj['assets']) ? (obj['assets'] as unknown[]) : [];
   let assetUrl: string | undefined;
   let assetSize: number | undefined;
+  /**
+   * R162：GitHub Releases 的 assets 里除了安装包还有 README/LICENSE/SPONSORS/blockmap。
+   * 旧代码无条件取第一个带 URL 的资产 ⇒ 上传顺序一变就会把 README 当成「更新包」下载。
+   * 现在**优先选本平台安装包扩展名**的资产，其次才退回第一个。
+   */
+  const pingTaiKuoZhan = process.platform === 'win32' ? ['.exe', '.msi']
+    : process.platform === 'darwin' ? ['.dmg', '.pkg']
+    : ['.appimage', '.deb', '.rpm'];
+  const houXuan: Array<{ url: string; size?: number; rang: number }> = [];
   for (const a of assets) {
     if (!a || typeof a !== 'object') continue;
     const jiLu = a as Record<string, unknown>;
     const u = zifuchuan(jiLu['browser_download_url']) || zifuchuan(jiLu['url']);
-    if (u) {
-      assetUrl = u;
-      assetSize = shuZhi(jiLu['size']);
-      break;
-    }
+    if (!u) continue;
+    const ming = (zifuchuan(jiLu['name']) || u).toLowerCase();
+    const shiAnZhuangBao = pingTaiKuoZhan.some((k) => ming.endsWith(k));
+    const shiFuZhuChanWu = /\.(blockmap|warmyblocks|yml|yaml|txt|md|png|jpg|zip|tar\.gz)$/.test(ming);
+    houXuan.push({ url: u, size: shuZhi(jiLu['size']), rang: shiAnZhuangBao ? 0 : (shiFuZhuChanWu ? 2 : 1) });
+  }
+  houXuan.sort((x, y) => x.rang - y.rang);
+  if (houXuan.length) {
+    assetUrl = houXuan[0]?.url;
+    assetSize = houXuan[0]?.size;
   }
   const downloadUrl =
     zifuchuan(obj['url']) ||
@@ -396,6 +443,16 @@ export function guiFanHuaGengXinQingDan(
   if (signature) manifest.signature = signature;
   const keyId = zifuchuan(obj['keyId']) || zifuchuan(obj['key_id']);
   if (keyId) manifest.keyId = keyId;
+  /**
+   * R162（D3-C）：分块账地址。显式声明优先；否则由下载地址推导。
+   * 推导只在 http(s) 且看起来是安装包时做，避免给「查询-only feed」凭空造地址。
+   */
+  const zhangUrl = zifuchuan(obj['blockmapUrl']) || zifuchuan(obj['blockmap_url']) || zifuchuan(obj['warmyBlocksUrl']);
+  if (zhangUrl) {
+    manifest.blockmapUrl = zhangUrl;
+  } else if (manifest.downloadUrl && /^https?:/i.test(manifest.downloadUrl) && /\.(exe|msi|dmg|pkg|appimage|deb|rpm)$/i.test(manifest.downloadUrl.split('?')[0] ?? '')) {
+    manifest.blockmapUrl = `${manifest.downloadUrl}.warmyblocks`;
+  }
   return { ok: true, manifest };
 }
 
@@ -524,6 +581,8 @@ export class Gengxinqi {
   private readonly maxBytes: number;
   private readonly userAgent: string;
   private readonly manifestPublicKey: string;
+  private readonly baseDirs: string[];
+  private readonly disableDelta: boolean;
   private readonly log: (xiaoXi: string) => void;
 
   constructor(opts: GengxinqiXuanxiang) {
@@ -538,6 +597,8 @@ export class Gengxinqi {
     this.maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
     this.userAgent = opts.userAgent || `WArmy/${this.currentVersion}`;
     this.manifestPublicKey = String(opts.manifestPublicKey || '').trim();
+    this.baseDirs = Array.isArray(opts.baseDirs) ? opts.baseDirs.filter((d) => typeof d === 'string' && d.trim()) : [];
+    this.disableDelta = opts.disableDelta === true;
     this.log = opts.log || (() => {});
   }
 
@@ -634,6 +695,7 @@ export class Gengxinqi {
       installImplemented: false,
       installNotes,
       downloadUrlPresent: false,
+      mode: 'full',
       checkedAt: Date.now(),
       ...extra,
     };
@@ -793,6 +855,7 @@ export class Gengxinqi {
       ...(manifest.size !== undefined ? { size: manifest.size } : {}),
       ...(manifest.mandatory !== undefined ? { mandatory: manifest.mandatory } : {}),
       ...(manifest.publishedAt ? { publishedAt: manifest.publishedAt } : {}),
+      ...(manifest.blockmapUrl ? { blockmapUrl: manifest.blockmapUrl } : {}),
     };
 
     if (cmp > 0) {
@@ -878,6 +941,19 @@ export class Gengxinqi {
 
     const expectedSha256 = chk.sha256 ? chk.sha256.toLowerCase() : undefined;
     const yuqiDaxiao = chk.size;
+
+    /**
+     * R162（D3-C）：**先试增量**。任何一环不具备（无基准包 / 拉不到分块账 /
+     * 服务端不支持 Range / 装配后哈希不对）都**如实退回整包下载**，并把原因记进结果。
+     * 增量不降低任何校验要求：装配产物同样要过 sha256 + size。
+     */
+    let deltaFallbackReason: string | undefined;
+    if (!this.disableDelta) {
+      const zeng = await this.zengLiangChangShi(chk, mubiaoMulu, zuizhongLujing, bufenLujing, started);
+      if (zeng.result) return zeng.result;
+      deltaFallbackReason = zeng.reason;
+      this.log(`update delta fell back to full: ${zeng.reason}`);
+    }
 
     const ac = new AbortController();
     const jiShiQi = setTimeout(() => ac.abort(), this.downloadTimeoutMs);
@@ -1059,12 +1135,243 @@ export class Gengxinqi {
       verification,
       yiYanZheng: true,
       downloadUrlPresent: true,
+      mode: 'full',
+      bytesDownloaded: bytes,
+      bytesReused: 0,
+      ...(deltaFallbackReason ? { deltaFallbackReason } : {}),
       message: `artifact downloaded (${bytes} bytes)`,
       i18nKey: 'update.download.done',
     });
     this.log(`update downloaded ${version} verified=${out.yiYanZheng}`);
+    this.tiShengJiZhun(version, zuizhongLujing, actualSha256, bytes);
     this.persistDownload(out);
     return out;
+  }
+
+  // ── R162（D3-C）：增量更新 ──
+
+  /** 基准包指针文件（只记「用哪个本机文件做底」，不复制字节） */
+  private get jiZhunZhiZhen(): string {
+    return path.join(this.downloadDir, 'base.json');
+  }
+
+  /**
+   * 找一个**比目标版本旧**的本机安装包做增量基准。优先级：
+   *   1. `base.json` 指针（上一次下载成功后提存的）；
+   *   2. `<downloadDir>/base/*.exe`（**安装器种下的自身副本**，首启就能增量）；
+   *   3. `<downloadDir>/<版本>/*.exe`（历史下载产物）；
+   *   4. `baseDirs` 里同名的种子目录（主进程传安装目录，兼容 userData 被重定向的情形）。
+   * 找不到就返回 null（诚实退回整包，不伪造基准）。
+   */
+  private zhaoJiZhun(muBiaoBanBen: string): { file: string; version: string } | null {
+    const congWenJianMing = (f: string): string => {
+      const m = path.basename(f).match(/(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/);
+      return m?.[1] ?? '';
+    };
+    const keYong = (f: string): { file: string; version: string } | null => {
+      try {
+        if (!fs.existsSync(f) || !fs.statSync(f).isFile()) return null;
+        const v = congWenJianMing(f);
+        if (!v) return null;
+        const cmp = bijiaoBanben(v, muBiaoBanBen);
+        if (cmp === null || cmp >= 0) return null; // 只认比目标旧的
+        return { file: f, version: v };
+      } catch { return null; }
+    };
+    try {
+      const zhi = duJsonWenJianGeLi<{ file?: string; version?: string }>(this.jiZhunZhiZhen, {});
+      if (zhi && typeof zhi.file === 'string') {
+        const r = keYong(zhi.file);
+        if (r) return r;
+      }
+    } catch { /* 指针坏了就往下找 */ }
+    const muLuList = [path.join(this.downloadDir, 'base'), ...this.baseDirs.map((d) => path.join(d, 'base'))];
+    for (const mu of muLuList) {
+      try {
+        if (!fs.existsSync(mu)) continue;
+        const houXuan = fs.readdirSync(mu)
+          .filter((f) => /\.(exe|msi|dmg|pkg|appimage|deb|rpm)$/i.test(f))
+          .map((f) => keYong(path.join(mu, f)))
+          .filter((x): x is { file: string; version: string } => !!x)
+          .sort((a, b) => (bijiaoBanben(b.version, a.version) ?? 0));
+        if (houXuan.length) return houXuan[0] ?? null;
+      } catch { /* 下一个目录 */ }
+    }
+    try {
+      const gen = fs.readdirSync(this.downloadDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && /^\d+\.\d+\.\d+/.test(e.name))
+        .map((e) => e.name)
+        .sort((a, b) => (bijiaoBanben(b, a) ?? 0));
+      for (const v of gen) {
+        const mu = path.join(this.downloadDir, v);
+        let files: string[] = [];
+        try { files = fs.readdirSync(mu); } catch { continue; }
+        for (const f of files) {
+          const r = keYong(path.join(mu, f));
+          if (r) return r;
+        }
+      }
+    } catch { /* 没有历史产物 */ }
+    return null;
+  }
+
+  /** 取一段字节（闭区间）；服务端必须真的回 206 且长度对得上，否则抛。 */
+  private async quQuJian(url: string, start: number, end: number, ac: AbortController): Promise<Buffer> {
+    const res = await this.anQuanFetch(url, {
+      method: 'GET',
+      headers: {
+        accept: 'application/octet-stream, */*',
+        'user-agent': this.userAgent,
+        range: `bytes=${start}-${end}`,
+      },
+      signal: ac.signal,
+    });
+    if (res.status !== 206) {
+      // 200 = 服务端无视 Range（把整包发回来）⇒ 增量不成立，立刻判失败
+      throw new Error(`range-not-supported: http ${res.status}`);
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length !== end - start + 1) throw new Error(`range-length-mismatch: got ${buf.length}, want ${end - start + 1}`);
+    return buf;
+  }
+
+  /**
+   * 试一次增量。成功返回完整结果；不具备条件/失败返回原因（调用方接着走整包）。
+   * **半成品一律删干净**，不给整包下载留脏数据。
+   */
+  private async zengLiangChangShi(
+    chk: GengXinJianChaJieGuo,
+    mubiaoMulu: string,
+    zuizhongLujing: string,
+    bufenLujing: string,
+    started: number
+  ): Promise<{ result?: GengXinXiaZaiJieGuo; reason?: string }> {
+    const version = chk.latestVersion || 'latest';
+    const fail = (reason: string): { reason: string } => {
+      try { fs.rmSync(bufenLujing, { force: true }); } catch { /* noop */ }
+      return { reason };
+    };
+    if (!chk.blockmapUrl) return fail('no-blockmap-url');
+    if (!chk.sha256 || chk.size === undefined) return fail('feed-without-checksum');
+    const jiZhun = this.zhaoJiZhun(version);
+    if (!jiZhun) return fail('no-base-installer');
+    const zhangV = jiaoyanGengxinyuanUrl(chk.blockmapUrl);
+    if (!zhangV.ok) return fail('bad-blockmap-url');
+
+    const ac = new AbortController();
+    const jiShiQi = setTimeout(() => ac.abort(), this.downloadTimeoutMs);
+    try {
+      // 1) 拉新包的分块账
+      let zhangBuf: Buffer;
+      try {
+        const res = await this.anQuanFetch(zhangV.url, {
+          method: 'GET',
+          headers: { accept: 'application/octet-stream, */*', 'user-agent': this.userAgent },
+          signal: ac.signal,
+        });
+        if (!res.ok) return fail(`blockmap-http-${res.status}`);
+        zhangBuf = Buffer.from(await res.arrayBuffer());
+      } catch (e) {
+        return fail(`blockmap-fetch-failed:${guileiHuoquCuowu(e).reason}`);
+      }
+      const jie = jieMaKuaiZhao(zhangBuf);
+      if (!jie.ok) return fail(`blockmap-invalid:${jie.reason}`);
+      const xin = jie.zhao;
+      // 账本必须与 feed 声明的 sha256/size 一致，否则账本就是不可信的
+      if (xin.sha256 !== chk.sha256.toLowerCase()) return fail('blockmap-sha-disagrees-with-feed');
+      if (xin.size !== chk.size) return fail('blockmap-size-disagrees-with-feed');
+
+      // 2) 本机算旧包的分块账（同一算法，不需要下载旧账）
+      let jiu: KuaiZhao;
+      try {
+        jiu = suanKuaiZhao(jiZhun.file);
+      } catch (e) {
+        return fail(`base-hash-failed:${e instanceof Error ? e.message.slice(0, 80) : 'unknown'}`);
+      }
+      const ji = guiHuaZengLiang(jiu, xin);
+      if (!ji) return fail('cdc-params-mismatch');
+      if (ji.bytesDownload <= 0) return fail('nothing-to-download');
+      // 增量省不下来就别白忙（阈值 90%：只省一点点时整包更简单可靠）
+      if (ji.bytesDownload > ji.bytesTotal * 0.9) return fail('delta-not-worthwhile');
+
+      // 3) 装配
+      const pei = await zhuangPeiZengLiang({
+        jiuWenJian: jiZhun.file,
+        shuChu: bufenLujing,
+        xin,
+        ji,
+        quQuJian: (s, e) => this.quQuJian(chk.downloadUrl as string, s, e, ac),
+      });
+      if (!pei.ok) return fail(`assemble-failed:${pei.reason}`);
+
+      // 4) 落位（与整包同一条路径）
+      try {
+        fs.renameSync(bufenLujing, zuizhongLujing);
+      } catch {
+        try { fs.rmSync(bufenLujing, { force: true }); } catch { /* noop */ }
+        return fail('cannot-finalize');
+      }
+      void mubiaoMulu;
+      const out: GengXinXiaZaiJieGuo = this.dlResult('downloaded', {
+        durationMs: Date.now() - started,
+        version,
+        filePath: zuizhongLujing,
+        bytes: pei.bytes,
+        sha256: pei.sha256,
+        expectedSha256: chk.sha256.toLowerCase(),
+        yuqiDaxiao: chk.size,
+        verification: 'sha256+size',
+        yiYanZheng: true,
+        downloadUrlPresent: true,
+        mode: 'delta',
+        bytesDownloaded: ji.bytesDownload,
+        bytesReused: ji.bytesReused,
+        blocksTotal: ji.blocksTotal,
+        blocksReused: ji.blocksReused,
+        message: `artifact assembled incrementally (${ji.bytesDownload} of ${pei.bytes} bytes downloaded, base ${jiZhun.version})`,
+        i18nKey: 'update.download.done',
+      });
+      this.log(`update delta ok ${version}: ${ji.bytesDownload}/${pei.bytes} bytes, reused ${ji.blocksReused}/${ji.blocksTotal} blocks, base=${jiZhun.version}`);
+      this.tiShengJiZhun(version, zuizhongLujing, pei.sha256, pei.bytes);
+      this.persistDownload(out);
+      return { result: out };
+    } finally {
+      clearTimeout(jiShiQi);
+    }
+  }
+
+  /**
+   * 把刚校验过的包提存为「下次增量的基准」，并清掉更早的产物。
+   * **只记指针不复制字节**：234 MB 的包复制一份就是白吃 234 MB 磁盘。
+   * 清理只动 `updates/` 里我们自己下的东西，绝不碰用户数据。
+   */
+  private tiShengJiZhun(version: string, file: string, sha256: string, size: number): void {
+    try {
+      anQuanYuanZiXieJson(this.jiZhunZhiZhen, { version: 1, file, appVersion: version, sha256, size, promotedAt: Date.now() });
+    } catch { /* 指针写不进去只影响下次能不能增量，不影响本次安装 */ }
+    try {
+      const baoLiu = path.resolve(file);
+      const gen = fs.readdirSync(this.downloadDir, { withFileTypes: true });
+      for (const e of gen) {
+        if (!e.isDirectory()) continue;
+        if (e.name === 'base') {
+          // 安装器种下的旧种子：已经有新基准了就回收那 234 MB
+          try {
+            for (const f of fs.readdirSync(path.join(this.downloadDir, 'base'))) {
+              const p = path.join(this.downloadDir, 'base', f);
+              if (path.resolve(p) !== baoLiu) fs.rmSync(p, { force: true });
+            }
+          } catch { /* noop */ }
+          continue;
+        }
+        if (!/^\d+\.\d+\.\d+/.test(e.name)) continue;
+        const mu = path.join(this.downloadDir, e.name);
+        let nei: string[] = [];
+        try { nei = fs.readdirSync(mu); } catch { continue; }
+        const youYong = nei.some((f) => path.resolve(path.join(mu, f)) === baoLiu);
+        if (!youYong) fs.rmSync(mu, { recursive: true, force: true });
+      }
+    } catch { /* 清理失败不影响主流程 */ }
   }
 
   // ── 安装（本轮补齐：只装**校验过**的包） ──
@@ -1187,6 +1494,7 @@ export function gengXinqiBuKeYongXiaZai(currentVersion: string): GengXinXiaZaiJi
     installNotes:
       'automatic installation is not implemented: the verified artifact is kept on disk for a manual install',
     downloadUrlPresent: false,
+    mode: 'full',
     checkedAt: Date.now(),
     durationMs: 0,
   };

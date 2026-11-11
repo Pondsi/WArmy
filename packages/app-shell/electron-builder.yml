@@ -2,7 +2,11 @@ appId: com.pondsi.warmy
 productName: WARMY
 copyright: Copyright (c) Pondsi
 directories:
-  output: ../../release
+  # R162：**按版本分目录**。以前 80 多个版本的安装包全平铺在 release/ 里，
+  # 新旧产物混在一起，很容易拿错包发布（R161 就是这么把坏包发出去的）。
+  # electron-builder 对 directories.output 做宏展开（packager.js: expandMacro），
+  # 所以 ${version} 在这里是有效的：产物落到 release/<版本>/。
+  output: ../../release/${version}
   buildResources: build
 files:
   - dist/**
@@ -14,6 +18,22 @@ asar: false
 npmRebuild: false
 nodeGypRebuild: false
 extraResources:
+  # hash-wasm：纯 JS + WASM（无原生 binding），但 ESM 的 dist/auth-core.mjs 运行期
+  # `import { argon2id } from 'hash-wasm'` 必须有真实的 node_modules 解析目标。
+  # 主 files 规则排除了全部 node_modules，这里单独拎出来装到 resources/app/node_modules/。
+  # extraResources 的 `to:` 相对于 resources/，所以 to=node_modules/hash-wasm
+  # 落到 resources/app/node_modules/hash-wasm，正好在 auth-core.mjs 的向上解析链上。
+  - from: node_modules/hash-wasm
+    to: node_modules/hash-wasm
+    filter:
+      - "**/*"
+      - "!**/*.map"
+      - "!**/test/**"
+      - "!**/*.test.*"
+      - "!**/jest.config.*"
+      - "!**/rollup.config.*"
+      - "!**/biome.json"
+      - "!src/**"
   - from: ../memory-os/dist
     to: memory-os/dist
   - from: ../memory-os/package.json
@@ -93,3 +113,14 @@ mac:
   icon: build/icon.png
 linux:
   icon: build/icon.png
+
+# R162（D3-C）：声明发布渠道 ⇒ electron-builder 会额外生成 latest.yml（NSIS 更新清单）。
+# 本仓的自动更新走自己的 Gengxinqi（https-only + 强制 sha256 + 安装前重算哈希），
+# 不依赖 electron-updater；latest.yml 只是给「以后想换 electron-updater」留的兼容产物。
+# 真正的增量更新靠 scripts/make-blocks.mjs 生成的 <安装包>.warmyblocks（固定 64 KiB 分块账）。
+# 注意：这里只声明渠道，**不带 --publish 参数就不会真的上传**。
+publish:
+  provider: github
+  owner: Pondsi
+  repo: WArmy
+  releaseType: release

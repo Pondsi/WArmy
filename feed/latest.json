@@ -1,12 +1,13 @@
 {
-  "version": "0.4.8",
-  "notes": "WArmy 0.4.8 — UI polish: P1 confirm dialog shortened, preset avatar picker enlarged to match the My-page avatar, sponsors sentence removed, top status icons shifted right, running-avatar animation retuned (slower sweep, deeper colour), unread badge moved to top-right alongside ?/!, second-row preview shows the latest message (any role) without a bracket prefix, chat bubbles narrowed.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.8/WArmy-Setup-0.4.8.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.8/WArmy-Setup-0.4.8.exe",
-  "sha256": "edb87a08cfecd5487e4cca2306bdfc57c697ac4e281d4019b19442760b55af37",
-  "size": 234263521,
+  "version": "0.4.9",
+  "notes": "WArmy 0.4.9 — fixes the main-process startup crash (hash-wasm now bundled), first run always starts at the language page and jumps straight to the 24-word mnemonic, setupDone is written only after the account is created, installing over a running app now works, and the in-app updater downloads only changed blocks (measured 1.26 MiB instead of 223.85 MiB for 0.4.8 → 0.4.9) with unchanged SHA-256 verification.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.9/WArmy-Setup-0.4.9.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.9/WArmy-Setup-0.4.9.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.9/WArmy-Setup-0.4.9.exe.warmyblocks",
+  "sha256": "6704438f4efa95fa78d02e651f70fa30825bc6595d59fe06861bbe7dd71bcdab",
+  "size": 234728324,
   "mandatory": false,
-  "publishedAt": "2026-11-11T03:21:28.129Z",
+  "publishedAt": "2026-11-11T06:53:25.326Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.8"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.9"
 }

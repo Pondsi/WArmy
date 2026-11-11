@@ -4051,7 +4051,22 @@
     if (fresh && fresh.bypass === true) { finishAuth(); return; }
     /** 第 104 轮：一次性令牌已在主进程恢复会话（数据仓库已解锁）⇒ 直接进入。 */
     if (fresh && fresh.unlocked === true && fresh.hasAccount === true) { finishAuth(); return; }
-    if (!state.auth || !state.auth.hasAccount) { showLogin(); return; }
+    /**
+     * R160 (0.4.8 hotfix)：首启直接进助记词创建页。
+     *
+     * 昨天的 0.4.7 与今天的 0.4.8 在 auth-gate.js 上**字节一致**（`git diff ca7547a HEAD`
+     * 为空），首启都是落 `showLogin`，账号创建入口是页面底部的次级「注册」按钮。
+     * 主人实测反馈「没有账号系统」——说明这个次级按钮 UX 上不可见。
+     *
+     * 改法：`hasAccount === false` 时**直接触发 register-open**，跳过登录页，让用户
+     * 第一眼看到的就是 24 词助记词创建页；不想建可以点页内返回或关闭窗口。
+     * 「我有账号」（即助记词恢复）仍通过登录页的「恢复」按钮保留——用户从语言页
+     * 的「开始」按钮旁可以走 login-lang-back 路径回到已存在账号场景。
+     */
+    if (!state.auth || !state.auth.hasAccount) {
+      await handleAction('register-open', null);
+      return;
+    }
     /**
      * 第 67 轮 项 4：勾了「自动登录」且本机绑定仍然有效 ⇒ **启动直接进入**，
      * 不再要求再点一次按钮。绑定失效/安全存储不可用时才回落到 PIN/助记词登录页。
@@ -4502,9 +4517,20 @@
     /** 有账号但设置被封存时，settingsGet 读不到；账号本身证明此前已同意过条款，除非有撤销标记。 */
     state.consented = !!(settings && settings.settings && settings.settings.privacyConsent)
       || !!(st.hasAccount && setup && setup.privacyRevoked !== true);
-    state.setupDone = !!(setup && setup.done === true) || !!st.hasAccount;
-    // 首启（无账号且 setup 未完成）：第一屏只有语言下拉 + 开始。
-    if (!st.hasAccount && !state.setupDone) {
+    /**
+     * R160 热修复：setupDone 必须有账号才算数。
+     *
+     * 旧口径：`setup.done === true || hasAccount`。问题在于 `chuShiSheZhiWanCheng`
+     * 在语言页选完语言时就写 `setupDone: true`，但此时账号还没创建。下一次启动
+     * `hasAccount` 仍 false、`setupDone` 已 true ⇒ 条件 `!hasAccount && !setupDone`
+     * 不成立 ⇒ **跳过语言页直奔 enterAuth ⇒ showLogin**。主人看到的就是登录页。
+     *
+     * 新口径：setupDone 必须 `hasAccount` 同时为真才算数。首启永远走语言页；
+     * 账号创建完才有 `hasAccount`，之后重启才可能落到 PIN 登录页。
+     */
+    state.setupDone = !!(st.hasAccount && setup && setup.done === true) || !!st.hasAccount;
+    // 首启（无账号）：第一屏只有语言下拉 + 开始。
+    if (!st.hasAccount) {
       enterLanguage();
       return state.bootPromise;
     }

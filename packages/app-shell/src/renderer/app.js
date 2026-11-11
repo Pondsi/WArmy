@@ -17286,6 +17286,8 @@ async function renderDashboard(host) {
           ['verify-research-pipeline', '调研管线：条目带 URL、抓取摘录、免注册可用、额度用尽如实失败'],
           ['verify-local-search', '统一本地搜索：分区顺序、敏感打码、后台索引与按需扫描、只读、全盘权限'],
           ['verify-search-providers', '联网搜索供应商：默认关闭、Tavily/DeepSeek/自定义映射、429 与回退'],
+          ['verify-packaging-deps', '打包态依赖可解析：每个裸导入都要有 extraResources 覆盖'],
+          ['verify-update-delta', '增量更新完整性：装配产物必须过整文件 sha256，坏基准/坏 Range 退回整包'],
         ];
         const GATES = GATE_UNIVERSAL.map(([id, fb]) => ({
           id, name: id, hard: true, desc: tOr('gate.' + id, fb),

@@ -100,6 +100,9 @@ packages/app-shell/scripts/verify-local-search.mjs
 packages/app-shell/scripts/*
 !packages/app-shell/scripts/check-syntax.mjs
 !packages/app-shell/scripts/copy-assets.mjs
+# R162：增量更新的分块账生成器是**发布产物必需**（.warmyblocks 要随 Release 上传），
+# 与 check-syntax / copy-assets 同类：不入库就无法从公开仓库复现发布产物。
+!packages/app-shell/scripts/make-blocks.mjs
 /_head-app.js
 packages/sync-protocol/scripts/
 

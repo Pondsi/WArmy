@@ -9569,6 +9569,14 @@ async function yindao() {
     userAgent: `WArmy/${yingyongBanben()} (${process.platform}; ${process.arch})`,
     // 签名公钥只从环境变量读（仓库里不放密钥）；配置后清单必须带有效签名
     manifestPublicKey: String(process.env.WARMY_UPDATE_MANIFEST_PUBKEY || '').trim() || undefined,
+    /**
+     * R162（D3-C）：增量更新的**基准包目录**。
+     * 安装器（installer.nsh 的 customInstall）会把安装包自身种到
+     * `<安装目录>/WArmyData/updates/base/WArmy-Setup-<版本>.exe`，
+     * 所以第一次更新就能走增量，而不是先白下载一整包 234 MB。
+     * 安装目录只读时 userData 会退回 %APPDATA%，种子仍在安装目录里 ⇒ 这里显式带上。
+     */
+    baseDirs: app.isPackaged ? [path.join(path.dirname(process.execPath), 'WArmyData', 'updates')] : [],
     log: (xiaoXi) => qidong(`updater: ${xiaoXi}`),
   });
   qingLiLinShiWenJian(path.join(userData, 'updates'));
@@ -30380,6 +30388,8 @@ chuliIpc('warmy:authRegisterCommit', async (_e, payload: { mnemonicConfirmed?: b
   }
   // 注册页还要给用户看助记词：这里不能立刻重启；强制重注册且已有 vault 时留到确认助记词之后。
   if (v.restart) qidong('data-vault: registration unsealed；restart deferred until mnemonic confirmed');
+  /** R162（D4-B）：账号真的建成了，这才写 setupDone（语言页不再提前写）。 */
+  shouQiSetupDone('register-commit');
   return r;
 });
 chuliIpc('warmy:authRegisterCancel', () => yuAuth((s) => s.registerCancel()));
@@ -30414,6 +30424,8 @@ chuliIpc('warmy:authRecoverCommit', async (_e, payload: { pinyin?: boolean; auto
     yuAuth((s) => s.lock());
     return { ok: false, error: `vault-unseal-failed：${v.error || ''}` };
   }
+  /** R162（D4-B）：助记词恢复同样是「账号建成」，setupDone 在此落盘。 */
+  shouQiSetupDone('recover-commit');
   if (v.restart) chongQiYingYong();
   return r;
 });
@@ -31233,6 +31245,7 @@ const MEN_JIN_YING = [
   'verify-updater', 'verify-updater-github', 'verify-runtime-errors',
   'verify-office-doc-suite', 'verify-gate-manifest',
   'verify-audio-first-class', 'verify-research-pipeline', 'verify-local-search', 'verify-search-providers',
+  'verify-packaging-deps', 'verify-update-delta',
 ];
 chuliIpc('warmy:menJinYingJi', () => ({ ok: true, ids: MEN_JIN_YING.slice() }));
 /** 硬门禁清单（含"最坏情况"）：界面与模型都用它回答"是哪一条在拦我" */
@@ -33315,6 +33328,33 @@ chuliIpc('warmy:xianShiWenJianJia', (_e, p0?: { path?: string }) => {  try {
 });
 
 // ── R. 启动引导 ──
+/**
+ * R162（D4-B）：**`setupDone` 的写盘时机**。
+ *
+ * 旧口径：语言页点「开始」→ `chuShiSheZhiWanCheng` 立刻写 `setupDone:true`，
+ * 但此时账号还没创建。用户没走完注册就关窗 ⇒ 落盘留下
+ * 「`setupDone=true` 且 `hasAccount=false`」的**矛盾状态**，下次启动据此跳过语言页。
+ * R161 只在读取侧加固（必须同时有账号），数据本身仍然自相矛盾。
+ *
+ * 新口径：**`setupDone` 只在账号真的建成之后才写**（注册/助记词恢复提交成功）。
+ * 语言页只写 `yuYan`（以及引导标记 / 预填供应商）。
+ * 唯一例外是 `WARMY_AUTH_BYPASS=1` 的自动化门禁：那条路径根本没有账号系统，
+ * 「首启设置完成」就等于「语言选完」，否则每支界面门禁都会被语言对话框挡住。
+ */
+function shouQiSetupDone(why: string): void {
+  try {
+    const cur = settingsStore?.load() as unknown as Record<string, unknown> | undefined;
+    if (cur?.['setupDone'] === true) return;
+    settingsStore?.save({ ...(cur || {}), setupDone: true } as never);
+    qidong(`setupDone committed (${why})`);
+  } catch (e) {
+    console.error('[setup] setupDone write failed:', e);
+  }
+}
+/** 账号是否已存在（bypass 门禁视为「无账号系统」，单独判） */
+function youZhangHaoMa(): boolean {
+  try { return authService?.hasAccount() === true; } catch { return false; }
+}
 chuliIpc('warmy:chuShiSheZhiTai', () => {
   try {
     const s = settingsStore?.load() as Record<string, unknown> | undefined;
@@ -33352,8 +33392,15 @@ chuliIpc('warmy:chuShiSheZhiWanCheng', (_e, payload: { yuYan?: string; provider?
         model: (payload.provider.model as string) || providerCfg.model,
       });
     }
-    const cur = settingsStore?.load() as unknown as Record<string, unknown>;
-    settingsStore?.save({ ...cur, setupDone: true } as never);
+    /**
+     * R162（D4-B）：这里**不再无条件写 `setupDone`**。
+     * 语言页只落 `yuYan`；`setupDone` 由 `authRegisterCommit` / `authRecoverCommit`
+     * 成功后调用 `shouQiSetupDone()` 写。已有账号的老用户走到这里（例如重选语言）
+     * 或 bypass 门禁则当场补写，保持「setupDone=true ⟺ 账号已建成」的语义。
+     */
+    if (youZhangHaoMa() || process.env.WARMY_AUTH_BYPASS === '1') {
+      shouQiSetupDone(youZhangHaoMa() ? 'language-page-with-account' : 'auth-bypass');
+    }
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
