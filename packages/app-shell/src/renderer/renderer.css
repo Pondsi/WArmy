@@ -421,7 +421,9 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 /* 我方消息：与头像同侧（右侧）对齐 —— 文字也右对齐 */
 .xiaoXi.wo { justify-content: flex-start; }
 .xiaoXi.wo .bubble { text-align: start; }   /* 文字左对齐；气泡位置仍随头像（右侧） */
-.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: calc(100% - 84px); max-width: calc(100% - 84px); }
+/* R163 #5：.xiaoXi.wo .bubbleWrap 特异性(0,3,0) 高于 .xiaoXi .bubbleWrap(0,2,0)，
+ * 这份不改的话「我方气泡」仍走旧值 —— 本轮真机 G7 就是这么抓出来的。 */
+.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: auto; max-width: min(70%, 680px); flex: 0 1 auto; }
 /**
  * 深色下我方气泡的文字色。
  *
@@ -1088,8 +1090,9 @@ details.ctgShouQi > .ctgShouQiTi {
 .duiHuaKuangDongZuoJi button { min-width: 72px; }
 /* 牛马设置弹窗：复用原牛马管理局详情内容，放大 + 内部滚动（第 98 轮） */
 .duiHuaKuangGen.niuMaSheZhi .duiHuaKuangKa {
-  width: min(960px, calc(100vw - 48px));
-  max-height: min(88vh, 920px);
+  /* R176：多内容设置窗放大，方便操作 */
+  width: min(1160px, calc(100vw - 48px));
+  max-height: min(92vh, 1000px);
   display: flex;
   flex-direction: column;
 }
@@ -1097,7 +1100,10 @@ details.ctgShouQi > .ctgShouQiTi {
 .duiHuaKuangGen.niuMaSheZhi .duiHuaKuangTi {
   white-space: normal;
   overflow: auto;
-  max-height: calc(88vh - 118px);
+  /* R176：弹性填充剩余高度并滚动，随窗口放大而变高 */
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   margin-bottom: 8px;
   padding-right: 4px;
 }
@@ -2189,10 +2195,16 @@ body.liaoTianChuangKou #appTi {
  * 宽度上限在这条**高特异性**规则上给（它会盖掉 app.css 的 .bubbleWrap） */
 .xiaoXi .bubbleWrap {
   display: flex; flex-direction: column; min-width: 0;
-  /* T150 等宽：牛马头像左 ↔ 用户头像右，两侧各留 头像32+间距10 的空位 */
-  width: calc(100% - 84px);
-  max-width: calc(100% - 84px);
+  /* R163 #5：R160 项9 把 app.css 改成 min(70%,680px) 却**没改这里**，
+   * 而本规则特异性更高且后加载 ⇒ 那次收窄从未生效（用户仍说"外框太长"）。
+   * 现在两边同步：宽度自适应内容、上限 70% 且不超过 680px。 */
+  width: auto;
+  max-width: min(70%, 680px);
+  flex: 0 1 auto;
 }
+/* R163 #5：朝向对方头像的一侧再让出 2 个头像宽（32×2 = 64px） */
+.xiaoXi.wo .bubbleWrap { margin-left: 64px; align-items: flex-end; }
+.xiaoXi:not(.wo) .bubbleWrap { margin-right: 64px; align-items: flex-start; }
 /* T150：气泡随行宽拉满（思考/执行块天然是块级，等宽后与气泡一致） */
 .xiaoXi .bubble { width: 100%; max-width: 100%; }
 /* 任务标题行不参与等宽（强制整行居中） */

@@ -65,11 +65,26 @@ export function protectedPathReason(abs: string, baseDir: string): string | null
   try {
     const p = path.resolve(String(abs || ''));
     if (!p) return null;
-    /** 程序安装目录：永远禁止（即使完全授权） */
-    for (const d of programDirs) if (inside(p, d)) return '程序安装目录';
     const base = path.resolve(String(baseDir || '.'));
     const wsRoot = path.dirname(base);              // userData/workspace
     const userData = path.dirname(wsRoot);          // userData
+    /**
+     * R163 #6 真机缺陷：**打包态 userData 就在安装目录下**（`<安装目录>/WArmyData`，R161 改的）。
+     * 旧实现先无条件拿 `programDirs` 比，于是**应用自己的会话工作区**也被判成「程序安装目录」：
+     *   protectedPathReason('…/WArmy/WArmyData/workspace/inst-x', 同路径) → '程序安装目录'
+     * 后果：打包态下**每一条 run_shell**（连 `echo hello`）都弹受保护区域授权卡。
+     * 实测：一个 3 分钟任务里 6 张卡全是误判，光等用户点「同意」就花了 185 秒，
+     * 直接把用户的 3 分钟时限撑成 7.7 分钟（#8 的直接成因之一）。
+     *
+     * 口径：「程序安装目录」保的是**程序自己的文件**（resources/、exe、dll），
+     * 不包括碰巧住在它里面的用户数据树。userData 内部仍由下面几条管：
+     * 其他会话工作区 / 历史记忆 / 账号文件 —— 那才是真正的禁止区。
+     */
+    const zaiUserData = inside(p, userData);
+    /** 程序安装目录：永远禁止（即使完全授权）—— 但 userData 子树除外 */
+    if (!zaiUserData) {
+      for (const d of programDirs) if (inside(p, d)) return '程序安装目录';
+    }
     /** 其他会话工作区：workspace 根、以及不属于当前 base 的兄弟目录 */
     if (inside(p, wsRoot) && !inside(p, base)) return '其他会话的工作区';
     if (inside(p, path.join(userData, 'workspace'))) {
@@ -134,7 +149,13 @@ export function protectedCommandReason(cmd: string, cwd: string, baseDir: string
     /** cd / Set-Location / pushd：先解析目标，禁止就报；允许就更新 cwd */
     const cd = /^(?:cd|chdir|set-location|pushd|sl)\s+(.+)$/i.exec(seg);
     if (cd) {
-      const target = String(cd[1] || '').trim().replace(/^["']|["']$/g, '');
+      /**
+       * R163：Windows 的 `cd /d "路径"` 带开关。旧实现把 `/d "路径"` 整个当成目标，
+       * 解析出一个不存在的路径 ⇒ 不命中禁止区，而且因为 cd 分支会 continue，
+       * 后面那道逐 token 扫描也被跳过 ⇒ `cd /d "<程序目录>"` 竟然放行。
+       * 现在先剔掉 /d 开关，再解路径；解不出绝对路径时**不跳过 token 扫描**。
+       */
+      const target = String(cd[1] || '').trim().replace(/^\/d\s+/i, '').replace(/^["']|["']$/g, '');
       const abs = path.isAbsolute(env(target)) ? path.resolve(env(target)) : path.resolve(now, env(target));
       const why = protectedPathReason(abs, baseDir);
       if (why) return why;
@@ -146,6 +167,12 @@ export function protectedCommandReason(cmd: string, cwd: string, baseDir: string
     for (let t of toks) {
       t = t.replace(/^["']|["']$/g, '').replace(/^[>|&]+|[>|&]+$/g, '');
       if (!t) continue;
+      /**
+       * R163 #6：命令开关不是路径。`dir /b`、`/S`、`/quiet` 这类单字母/单词开关
+       * 会被 `path.resolve(cwd, '/b')` 解成**盘符根**（`C:\b`），既无意义又容易误判。
+       * Unix 绝对路径（`/etc/hosts`）仍要查，所以只排除「没有第二个分隔符的短开关」。
+       */
+      if (/^\/[A-Za-z][A-Za-z0-9_-]*$/.test(t) && process.platform === 'win32') continue;
       const looks = /^(?:[A-Za-z]:[\\/]|\\\\|\/|\.{1,2}[\\/]|~[\\/]?|%[^%]+%|\$env:|\$HOME)/.test(t)
         || /[\\/]/.test(t);
       if (!looks) continue;

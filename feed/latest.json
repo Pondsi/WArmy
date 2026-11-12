@@ -1,13 +1,13 @@
 {
-  "version": "0.4.9",
-  "notes": "WArmy 0.4.9 — fixes the main-process startup crash (hash-wasm now bundled), first run always starts at the language page and jumps straight to the 24-word mnemonic, setupDone is written only after the account is created, installing over a running app now works, and the in-app updater downloads only changed blocks (measured 1.26 MiB instead of 223.85 MiB for 0.4.8 → 0.4.9) with unchanged SHA-256 verification.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.9/WArmy-Setup-0.4.9.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.9/WArmy-Setup-0.4.9.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.9/WArmy-Setup-0.4.9.exe.warmyblocks",
-  "sha256": "b3606655d951eaf4ecc83961d81f01281734ffd9b0e69296dbe36c060a6bc42b",
-  "size": 234728743,
+  "version": "0.4.10",
+  "notes": "WArmy 0.4.10 — fixes the main-process startup crash (hash-wasm now bundled), first run always starts at the language page and jumps straight to the 24-word mnemonic, setupDone is written only after the account is created, installing over a running app now works, and the in-app updater downloads only changed blocks (measured 1.26 MiB instead of 223.85 MiB for 0.4.8 → 0.4.9) with unchanged SHA-256 verification.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.10/WArmy-Setup-0.4.10.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.10/WArmy-Setup-0.4.10.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.10/WArmy-Setup-0.4.10.exe.warmyblocks",
+  "sha256": "bf82b35b079887103cae6f860fb959f9dceddc8a4e9a41de9fff7d507813a2ac",
+  "size": 234774872,
   "mandatory": false,
-  "publishedAt": "2026-11-11T08:29:09.322Z",
+  "publishedAt": "2026-11-12T11:11:02.519Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.9"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.10"
 }

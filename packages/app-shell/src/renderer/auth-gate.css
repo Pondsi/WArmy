@@ -104,7 +104,9 @@
 .warmyAuthSpin { width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(255,255,255,.18); border-top-color: #a87654; animation: warmyAuthSpin .8s linear infinite; margin: 18px auto; }
 @keyframes warmyAuthSpin { to { transform: rotate(360deg); } }
 .warmyAuthModal { position: fixed; inset: 0; z-index: 2147483001; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.62); }
-.warmyAuthModalCard { width: min(480px, 100%); background: #23262d; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+/* R163 #4：首启的确认 modal 与主界面确认框同一口径 —— 封顶 60vh/460px，超出自己滚，
+   不再让长文案把窗口撑到接近满屏（旧实现这里根本没有 max-height）。 */
+.warmyAuthModalCard { width: min(480px, 100%); max-height: min(60vh, 460px); overflow: auto; background: #23262d; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
 .warmyAuthModalBody { color: #c8c1b7; font-size: 13px; margin-top: 10px; }
 
 /* My page card: reuse the app's .sheZhiKa shell but keep this widget's layout local. */
@@ -793,15 +795,18 @@
   .woBrandR68 .pinPailogo { width: 96px; }
 }
 
-/* 首启右上角关闭：常显（R154 项1）；热区放大到 180×160 便于点中 */
+/* 首启右上角关闭：R163 #1 改回**悬停才显示**（R154 曾改成常显，用户要求不要一直挂着）。
+ * 热区再放大到 240×200：鼠标靠近右上角就浮出来，不用精准瞄那个 48px 的圆。
+ * 热区本身 no-drag —— 它压着顶部拖动条，不能把「靠近就出叉」变成「拖不动窗」。 */
 .warmyAuthCloseHot {
   position: fixed;
   top: 0;
   right: 0;
-  width: 180px;
-  height: 160px;
+  width: 240px;
+  height: 200px;
   z-index: 2147483000;
   pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 .warmyAuthCloseX {
   position: absolute;
@@ -818,8 +823,10 @@
   background: rgba(255, 253, 248, .94);
   color: #b86a3c;
   cursor: pointer;
-  opacity: 1;
-  transform: scale(1);
+  /* R163 #1：默认隐藏，鼠标进入热区（或键盘聚焦）才浮现 */
+  opacity: 0;
+  transform: scale(.92);
+  pointer-events: none;
   transition: opacity .15s ease, transform .15s ease, background .15s ease;
 }
 .warmyAuthCloseX svg { width: 18px; height: 18px; display: block; }
@@ -827,6 +834,7 @@
 .warmyAuthCloseX:focus-visible {
   opacity: 1;
   transform: scale(1);
+  pointer-events: auto;
 }
 .warmyAuthCloseX:hover { background: #fff; color: #9a4f28; }
 .warmyAuthGate.warmyAuthHidden .warmyAuthCloseHot { display: none; }
@@ -952,6 +960,38 @@
 [dir="rtl"] .warmyAuthCloseX { right: auto; left: 10px; }
 [dir="rtl"] .warmyAuthQuitRunner { left: auto; right: 0; }
 
+
+/* ── R163 #2：首启**每一页**都能拖动窗口 ──
+ * 真机反馈：只有语言页能拖，条款/助记词/PIN 页顶部按住拖不动。
+ * 真因：拖动区只挂在「.warmyAuthCardScene:not(.warmyAuthCardOnScene)」上，
+ * 而 :not(...) 恰好把**除语言页以外的所有页**排除掉了（render() 给它们加 warmyAuthCardOnScene）。
+ * 现在改成两条一起给：
+ *   ① 满窗顶部拖动条（所有页共用，最可靠，不随卡片布局变化）；
+ *   ② 场景卡片本身的空白区也可拖（交互元素与滚动容器一律 no-drag）。
+ */
+.warmyAuthTopGrip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  z-index: 2147482999;
+  -webkit-app-region: drag;
+}
+/* 关闭热区压在拖动条右上角，它自己 no-drag（见 .warmyAuthCloseHot），叉才点得到 */
+.warmyAuthCard.warmyAuthCardScene { -webkit-app-region: drag; }
+.warmyAuthCard.warmyAuthCardScene button,
+.warmyAuthCard.warmyAuthCardScene input,
+.warmyAuthCard.warmyAuthCardScene textarea,
+.warmyAuthCard.warmyAuthCardScene select,
+.warmyAuthCard.warmyAuthCardScene a,
+.warmyAuthCard.warmyAuthCardScene label,
+.warmyAuthCard.warmyAuthCardScene .warmyAuthLangTile,
+.warmyAuthCard.warmyAuthCardScene .warmyAuthLangGrid,
+.warmyAuthCard.warmyAuthCardScene .warmyAuthTerms,
+.warmyAuthCard.warmyAuthCardScene .warmyAuthMnemonic,
+.warmyAuthCard.warmyAuthCardScene .warmyAuthRecoveryGrid,
+.warmyAuthCard.warmyAuthCardScene .warmyAuthPinyinToggle { -webkit-app-region: no-drag; }
 
 /* R145 项1：首启语言页禁止框选文字；卡片空白区与上边缘可拖动，交互元素除外 */
 .warmyAuthFirstCard.warmyAuthLangCard,

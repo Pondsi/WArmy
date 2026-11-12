@@ -89,6 +89,7 @@ import { BENG_DAO, cengOf, guiHuaYiLun, YA_SUO_BAN, YA_SUO_ZHEN, type YaSuoDuan 
 import { jingZiShu, chongHeLv, shiChangWenFuBen, fuBenBoHuiWen, type FuBenYueDing } from './chang-wen-fu-zhi.js';
 import { chuangjianXinTiao, XinTiao, type OsShouShiGou } from './xin-tiao.js';
 import { ShenJiRiZhi } from './audit.js';
+import { ZhenDuanRiZhi, yunXingZiJian, yingSheShenJi, type ZiJianXiang } from './zhen-duan-ri-zhi.js';
 import { quMoRen, shiChuChangGao, MO_REN_YU_YAN_KE, YONG_HU_MING_MO_REN, shiMoRenYongHuMing } from './mo-ren-yu-yan/index.js';
 import { NENG_LI_BIAO, panDingCeng, paiShengDuiWaiGaiLao, heBingNengLi, jianChaXinNengLi } from './zhi-shi-fen-ceng.js';
 import { guiYiPanDing, jianChaYouZhengJu, chenJiuFen, shiHuHan } from './zhi-shi-ke-kao.js';
@@ -122,6 +123,10 @@ import { BenDiZhangHuCang, PeizhiCang, shengChengPingzheng, type YingYongPeizhi,
 import { geShiShiJian, guiYiShiQu, isoZaiShiQu, shiJianChuoWen, shiQuHeFa, xiTongShiQu } from './time-utils.js';
 /** 完全授权的禁止区（第 93 轮）：其他会话工作区/历史 + 程序安装目录 */
 import { setProgramDirs, protectedPathReason, protectedCommandReason, grantProtectedOnce } from './protected-paths.js';
+/** R163 #8：用户时限（「3 分钟内做不完就停下来总结」）—— 纯解析/纯计算在独立模块，便于跑真值表 */
+import { jieXiShiXian, shiXianDaoDian, jingGongShi, shiXianShengYu, miaoShu, jieXiKouJing, shiXianYouYiWen, type ShiXianZhuangTai } from './ren-wu-shi-xian.js';
+/** R167 项1：方案分歧硬门禁的纯判定（单一明显可用 / 推荐保底） */
+import { danYiMingXian } from './fang-an-fen-qi.js';
 /**
  * 执行环境探测器（ADR 004）：探测本机**已有**的容器运行时 + 驱动其启停。
  * 纯 node 模块（不依赖 electron），因此可以被 scripts/verify-container-probe.mjs 在真机上直接断言。
@@ -907,6 +912,8 @@ function zhuangXieRuHuiDangGouZi(): void {
 }
 const metrics = new ZhiBiaoCaiJiQi();
 let audit: ShenJiRiZhi | null = null;
+/** R165：可对外诊断日志（构造即脱敏，绝不上传）；与内部审计分离 */
+let zhenDuan: ZhenDuanRiZhi | null = null;
 let secureKeys: AnQuanMiyaoCang | null = null;
 let archiver: ZhiShiGuiDangQi | null = null;
 let cleanup: QingLiGuanLiQi | null = null;
@@ -1061,6 +1068,8 @@ let lastError: { ts: number; message: string; context?: string } | null = null;
 let dengdaiPizhun = new Map<string, { resolve: (d: { allowed: boolean; scope: string }) => void; at: number }>();
 /** 第 121 轮：审批等待总时长（毫秒）；执行时间/看板要从 duration 里扣掉它，不能把“等人点按钮”算成干活 */
 let dengDaiPiZhunMs = 0;
+/** R167 项2：决策/授权卡等待累计（毫秒）。ETA/执行时间要扣掉它；用户时限(墙钟)不扣 */
+let dengDaiKaPianMs = 0;
 let pizhunXulie = 0;
 /**
  * 组网服务（**鉴权通道**）：一台 SecureSyncServer + 出站 SecureSyncClient。
@@ -2923,6 +2932,65 @@ function ziDongXuanZe(): boolean {
   } catch { return false; }
 }
 
+/**
+ * R163 #8：**本次用户任务的时限账**（sessionId → 状态）。
+ *
+ * 真机事故：用户说「3 分钟内无法完成就总结成果 / 列决策点 / 写交接文档」，
+ * 宿主完全没把这句话当约束 —— 模型自己在 461 秒后才收尾，收完又被
+ * `plan.auto-continue why=completion-check` 与 `why=plan-open-keep` 拉起两次继续写代码。
+ *
+ * 现在：时限由**宿主管**，到点进入收尾模式（只再派一轮收尾，之后一律不续派）。
+ * 无时限时这张表是空的 ⇒ 既有行为（ETA 预测、计划续派、完成核对）完全不变。
+ */
+const renWuShiXian = new Map<string, ShiXianZhuangTai>();
+
+/** 记一段「等用户答卡」的时间：时限是给 AI 干活的时间，等人不该算它的工时 */
+function jiShiXianDengDai(sessionId: string, ms: number): void {
+  try {
+    const t = renWuShiXian.get(String(sessionId || ''));
+    if (!t || !(ms > 0)) return;
+    /** R163：闸门已锁 ⇒ 不再累加等待时间（到点后再等卡不该把时钟拨回去，见 ren-wu-shi-xian.ts 的振荡事故） */
+    if (t.daoDianTs) return;
+    t.dengDaiMs += ms;
+  } catch { /* 记账失败不影响卡片 */ }
+}
+
+/**
+ * R167 项2：口径有疑问时弹选择卡，让用户选该任务的准确时间口径。
+ * 选项：物理真实时间(含等卡, 推荐) / 只算干活时间(不含等卡)。答完写回 renWuShiXian.kouJing。
+ */
+async function wenKouJingKa(sessionId: string): Promise<void> {
+  try {
+    const sid = String(sessionId || '');
+    if (!renWuShiXian.has(sid)) return;
+    audit?.log('task.deadline-caliber-ask', { sessionId: sid });
+    const q = aiQuestions.daKai({
+      groupId: sid, sessionId: sid,
+      biaoTi: '时间口径确认',
+      ti: '你说的「几分钟」按哪种口径算？',
+      options: [
+        { biaoQian: '按真实时间（含等卡）', description: '物理世界时间，等待选择卡也算在内', tuiJian: true, keXinDu: 0.9 },
+        { biaoQian: '只算干活时间（不含等卡）', description: '扣除等你点卡的时间', keXinDu: 0.3 },
+      ],
+    });
+    const da = await dengDaiKaPian(q.id, 0, sid);
+    const t = renWuShiXian.get(sid);
+    if (t) t.kouJing = /不含|不算|只算干活/.test(String(da)) ? 'net' : 'wall';
+    audit?.log('task.deadline-caliber-chosen', { sessionId: sid, kouJing: t ? t.kouJing : 'wall' });
+  } catch { /* 口径卡失败不影响任务，默认墙钟 */ }
+}
+
+/**
+ * 到点了没有？到点 ⇒ 一律不许再自动续派（完成核对 / 计划未完成 / 字数 / 只说不做 全部挡住）。
+ * 收尾轮本身也走续派通道，所以这里用 yiShouWei 放行**恰好一次**。
+ */
+function shiXianLanXuPai(sid: string): { lan: boolean; shouWei: boolean } {
+  const t = renWuShiXian.get(String(sid || ''));
+  if (!shiXianDaoDian(t, Date.now())) return { lan: false, shouWei: false };
+  if (!t!.yiShouWei) return { lan: false, shouWei: true };
+  return { lan: true, shouWei: false };
+}
+
 async function qingQiuKaPian(
   sessionId: string,
   biaoTi: string,
@@ -2961,6 +3029,37 @@ async function qingQiuKaPian(
     }
   } catch { /* noop */ }
   /**
+   * R163 #8：**用户时限到点 ⇒ 不再弹授权卡**。
+   *
+   * 端到端实测：到点后模型仍用只读工具探工作区外的路径，每次都弹一张
+   * 「请求访问工作区外的文件」，巡检把它取消 ⇒ 模型换个路径再试 ⇒ 又弹一张，
+   * 形成「弹卡→取消→重试」的小循环（实测多耗 25 秒才收敛）。
+   * 到点就该收尾，不该再拿授权问题打扰用户，所以这里直接按拒绝回给模型，
+   * 并明确告诉它「时间到了，请收尾」。决策卡（ask_user）仍然允许 —— 收尾正要它。
+   */
+  try {
+    const sxD = renWuShiXian.get(String(sessionId || ''));
+    if (shiXianDaoDian(sxD, Date.now()) && shiShouQuanKa) {
+      audit?.log('chat.card-suppressed-by-deadline', { sessionId, biaoTi: String(biaoTi || '').slice(0, 60), jingGongShi: jingGongShi(sxD!, Date.now()) });
+      return tMain('llm.deadlineCardSuppressed', '拒绝（用户给的时限已到，宿主不再就授权问题打扰用户）。请立即收尾：总结成果、用 ask_user 列出需要用户拍板的地方、写交接文档。');
+    }
+  } catch { /* noop */ }
+  /**
+   * R163 #8：**收尾只问一次**。到点后的第一张决策卡放行（收尾正要它让主人拍板），
+   * 第二张起直接回「已经问过了，不要再问」—— 第 5 轮实测模型连弹 7 张确认卡，
+   * 把收尾拖了 90 秒。这里不靠模型自觉，宿主直接掐住。
+   */
+  try {
+    const sxK = renWuShiXian.get(String(sessionId || ''));
+    if (shiXianDaoDian(sxK, Date.now()) && !shiShouQuanKa) {
+      if (sxK!.shouWeiWenGuo) {
+        audit?.log('chat.card-suppressed-by-deadline', { sessionId, biaoTi: String(biaoTi || '').slice(0, 60), why: 'shouWei-only-once', jingGongShi: jingGongShi(sxK!, Date.now()) });
+        return tMain('llm.deadlineAskOnce', '（宿主提示：收尾阶段已经问过主人一次了，**不要再弹任何确认卡**。）现在直接把成果总结写进回复正文、把交接文档写好，然后结束本轮。主人说「继续」才会接着做。');
+      }
+      sxK!.shouWeiWenGuo = true;
+    }
+  } catch { /* noop */ }
+  /**
    * **先查授权卡**（产品要求）：仅对「授权类」卡片生效。
    * 第 29 轮 项 8 硬门禁：**只认精确键**（同一操作 + 同一完整路径）。
    * 旧的「同目录 + 同类操作」宽匹配曾导致：用户只授权 1 个文件，
@@ -2994,6 +3093,23 @@ async function qingQiuKaPian(
     }
   }
   /**
+   * R167 项1④：**单一明显可用** ⇒ 不弹卡。决策卡（非授权）里恰好一个置信度≥0.7、其余都<0.4
+   * ⇒ 直接用那个唯一明显可用的方案（主人定稿：其余置信度很低就无需选择卡）。
+   * 授权卡不走这条（授权必须人来）。
+   */
+  if (!shiShouQuanKa) {
+    const idx = danYiMingXian(options);
+    if (idx !== null) {
+      const yuanX = options[idx]!;
+      const opt = q.options.find((o) => o.biaoQian === String(yuanX.biaoQian || '').trim()) || q.options[idx];
+      if (opt) {
+        aiQuestions.answer(q.id, opt.id);
+        try { audit?.log('aiq.single-dominant', { sessionId, biaoTi, choice: opt.biaoQian }); } catch { /* noop */ }
+        return String(opt.biaoQian || '');
+      }
+    }
+  }
+  /**
    * **弹卡必须记账**（第 62 轮补的可观测性缺口）：以前只有"自动放行/自动选择/被停止抑制"三个分支写审计，
    * 真正"弹卡等人"那一路一条 op 都没有 ⇒ 门禁超时后无法区分"在等一张没人点的卡"和"循环真的悬挂"。
    * 这里只加成对的两条日志（等待 / 得到答案或超时），不改任何行为。
@@ -3004,6 +3120,9 @@ async function qingQiuKaPian(
   // 请求卡出现 ⇒ 播「请求」音效（渲染层在 onAiWenTi 里处理）
   const daiT0 = Date.now();
   const daAnRaw = await dengDaiKaPian(q.id, timeoutMs, sessionId);
+  /** R167 项2：等卡累计供 ETA/执行时间扣除；用户时限默认墙钟不扣（net 口径才扣，见 ren-wu-shi-xian） */
+  try { dengDaiKaPianMs += Math.max(0, Date.now() - daiT0); } catch { /* noop */ }
+  try { jiShiXianDengDai(sessionId, Date.now() - daiT0); } catch { /* noop */ }
   const beiTing = daAnRaw === '__stopped__';
   const beiQuXiao = daAnRaw === '__cancelled__';
   const daAn = beiTing ? '拒绝（用户已停止本轮）' : beiQuXiao ? '拒绝（卡片已取消）' : daAnRaw;
@@ -4827,6 +4946,32 @@ async function yunXingLiaoTianXunHuan(
           try { audit?.log('chat.tool-blocked-after-stop', { sessionId, tool: String((call && call.function && call.function.name) || '') }); } catch { /* noop */ }
           return '[工具未执行] 用户已经停止本轮，宿主没有执行任何操作。';
         }
+        /**
+         * R163 #8：**用户时限到点 ⇒ 轮内立刻停止动手**。
+         *
+         * 端到端实测暴露的缺口：时限原来只在「轮与轮之间」（yingGaiZiDongJiXu）检查，
+         * 而模型可能卡在一张 ask_user 决策卡上几百秒 ⇒ 那一轮根本不结束 ⇒ 永远走不到检查点。
+         * 所以在**每一发工具执行前**也判一次：到点后只放行只读/收尾类工具，
+         * 会改变文件或执行命令的一律拒绝，并把「该收尾了」如实回给模型。
+         * 这样它会自然转入总结，而不是继续写代码。
+         */
+        {
+          const sxT = renWuShiXian.get(String(sessionId || ''));
+          if (shiXianDaoDian(sxT, Date.now())) {
+            const mingSx = String((call && call.function && call.function.name) || '');
+            /** 收尾要用的：只读、计划销账、问用户、写交接文档（write_file 单独放行一次给交接文档） */
+            const shouWeiKeYong = /^(read_|list_|find_|search_|get_time|recall|retrieve|plan_verify|plan_update|ask_user|knowledge_query|local_search)/.test(mingSx);
+            const jiaoJie = mingSx === 'write_file' && /交接|handoff|HANDOFF|README/i.test(JSON.stringify((call && call.function && call.function.arguments) || ''));
+            if (!shouWeiKeYong && !jiaoJie) {
+              try { audit?.log('task.deadline-tool-blocked', { sessionId, tool: mingSx, jingGongShi: jingGongShi(sxT!, Date.now()) }); } catch { /* noop */ }
+              return tMain('llm.deadlineToolBlocked',
+                '[工具未执行] 用户给的时限已经到了（宿主实测净工时 {jing}）。**不要再动手做新东西，也不要重试这个工具**（本轮它已被禁用，重试只会被再次拒绝）：'
+                + '现在只做三件事 —— ① 如实总结已完成的成果；② 用 ask_user 把最需要用户拍板的那一条做成可点选择卡；'
+                + '③ 写一份交接文档（允许为此写一个文件）。做完就收尾，用户说「继续」才会接着做。')
+                .replace('{jing}', () => miaoShu(jingGongShi(sxT!, Date.now())));
+            }
+          }
+        }
         /** 工具开始 ⇒ 当前思考段封口（下一段思考另起，形成"思考/操作"交替） */
         try { zhuSiKaoFeng(sessionId); } catch { /* noop */ }
         /** **停止时保留现场**：工具开始前这段正文 = 中间回复（与渲染层同一口径） */
@@ -5652,6 +5797,24 @@ async function yunXingLiaoTianXunHuan(
              * Windows 上没有 `sleep` ⇒ 秒回"30 秒到了（115 毫秒）"，任务被假完成。
              */
             const miao = Math.max(0.5, Math.min(600, Number(argsH.seconds) || 0));
+            /**
+             * R163 #8：**用户时限钳制 AI 自己的等待**。
+             *
+             * 3 分钟原场景实测：模型调 wait_seconds 一口气睡了 184 秒（31.3s → 215.7s）。
+             * 这段时间里没有工具调用、也没有挂卡 ⇒ 轮内三道拦截全都走不到，
+             * 到点判定只能等它睡醒 ⇒ 实际 229 秒才收尾，超出时限 49 秒。
+             *
+             * 口径：AI **自己主动睡**的时间算它的工时（不是在等用户），
+             * 所以等待时长钳到「剩余净工时」；到点了就一秒都不许再睡。
+             * 无时限时 sxW 为 undefined ⇒ 完全不钳，既有「完成后等待 30 秒」功能逐字不变。
+             */
+            const sxW = renWuShiXian.get(String(sessionId || ''));
+            const shengMiao = sxW ? shiXianShengYu(sxW, Date.now()) / 1000 : Number.POSITIVE_INFINITY;
+            const miaoShiJi = Math.max(0, Math.min(miao, shengMiao));
+            const beiXianShiJia = miaoShiJi < miao;
+            if (beiXianShiJia) {
+              try { audit?.log('task.deadline-wait-clamped', { sessionId, yaoQiuMiao: miao, shiJiMiao: Math.round(miaoShiJi * 10) / 10, shengYuMs: Math.round(shengMiao * 1000) }); } catch { /* noop */ }
+            }
             const kai = Date.now();
             /**
              * **等待改由心跳计时**（第 40 轮，用户口径："运行过程中用到的计时就用心跳完成"）。
@@ -5664,16 +5827,19 @@ async function yunXingLiaoTianXunHuan(
             const xh = gongJuXunHuanQuXiao.get(String(sessionId || ''))?.signal;
             const onAbort = () => { try { keng.dengDaiQuXiao(dengId); } catch { /* noop */ } };
             if (xh) { if (xh.aborted) onAbort(); else xh.addEventListener('abort', onAbort, { once: true }); }
-            const jt = await keng.dengDai(miao, { id: dengId });
+            const jt = await keng.dengDai(miaoShiJi, { id: dengId });
             if (xh) { try { xh.removeEventListener('abort', onAbort); } catch { /* noop */ } }
             const shi = Date.now() - kai;
             const quXiaoLe = jt.cancelled === true || jt.waitedMs === undefined;
             huiBaoH = JSON.stringify({
               waitedMs: shi, requestedSeconds: miao, jiShiYuan: 'xin-tiao', tickMs: jt.tickMs, quXiaoLe,
+              ...(beiXianShiJia ? { shiXianJiaZhi: true, shiJiMiao: Math.round(miaoShiJi * 10) / 10 } : {}),
               local: new Date().toISOString(),
-              note: quXiaoLe
-                ? '本轮已被停止 ⇒ 等待**提前结束**，不要当成等满了。'
-                : '已按请求等待（计时源=心跳）；请用 waitedMs 确认真的等满了。',
+              note: beiXianShiJia
+                ? '用户给的时限已到/快到了 ⇒ 宿主把这次等待**钳制**了（AI 自己睡的时间算它的工时）。**不要再调 wait_seconds**，现在立即收尾：如实总结成果、用 ask_user 列出需要用户拍板的地方（只许一张卡）、写交接文档。'
+                : (quXiaoLe
+                  ? '本轮已被停止 ⇒ 等待**提前结束**，不要当成等满了。'
+                  : '已按请求等待（计时源=心跳）；请用 waitedMs 确认真的等满了。'),
             });
             jiBuZhou(sessionId, 'wait_seconds', rawArgsH, baseH, huiBaoH);
             /**
@@ -6139,6 +6305,7 @@ async function yunXingLiaoTianXunHuan(
                   huiBaoH = `[remote_ssh] 未知动作：${dongZuo}（run|get|put|list|test）`;
                 }
                 try { audit?.log('ssh.exec', { sessionId, target: t.id, action: dongZuo, ok: okH }); } catch { /* noop */ }
+                try { jiXiTongXiaoXi('ssh', '远程 SSH', '目标 ' + String(t.ming || t.id) + ' · ' + String(dongZuo) + ' · ' + (okH ? '成功' : '失败')); } catch { /* noop */ }
               }
             }
           } else if (gongJuMing === 'supervise_worker') {
@@ -7261,6 +7428,62 @@ async function yunXingLiaoTianXunHuan(
   const xunShouPromise = new Promise<never>((_res, rej) => {
     xunShou = setInterval(() => {
       try {
+        /**
+         * R163 #8：到点先把**还挂着的卡**取消掉。
+         * 真机实测：模型调 ask_user 后卡在卡上 245 秒，那一轮不结束 ⇒ 轮间时限检查永远不触发。
+         * 取消卡 ⇒ dengDaiKaPian 立刻返回 __cancelled__ ⇒ 这一发工具结束 ⇒ 上面的到点拦截接住后续工具。
+         * 只取消卡，**不 abort 整轮**：abort 会走错误路径（throw），反而到不了收尾派单。
+         */
+        try {
+          const sxW = renWuShiXian.get(String(sessionId || ''));
+          if (shiXianDaoDian(sxW, Date.now())) {
+            let quXiaoLe = 0;
+            for (const q of aiQuestions.LieBiao(String(sessionId || ''))) {
+              if (q.status !== 'pending') continue;
+              /**
+               * R163：**只取消授权卡，保留决策卡**（第 4 轮端到端实测的缺口）。
+               * 收尾轮模型调 ask_user 弹「需要主人拍板」的决策卡，旧实现无差别取消
+               * ⇒ 用户没机会选，而这张卡正是收尾的核心产出（#7 的目的）。
+               * 授权卡到点后已由 qingQiuKaPian 入口抑制、不再新开，这里只清理到点前挂着的。
+               */
+              const biao = (q.options || []).map((o) => String(o?.biaoQian || ''));
+              const shiShouQuan = biao.some((x) => /拒绝|Reject|否/i.test(x))
+                && biao.some((x) => /同意|允许|通过|Allow|Approve|Yes/i.test(x));
+              if (!shiShouQuan) continue;
+              aiQuestions.cancel(q.id); quXiaoLe++;
+            }
+            if (quXiaoLe) {
+              audit?.log('task.deadline-cards-cancelled', { sessionId, n: quXiaoLe, jingGongShi: jingGongShi(sxW!, Date.now()) });
+            }
+          }
+        } catch { /* 取消卡失败不影响巡检 */ }
+        /**
+         * R163 #8：**到点时若模型正在纯流式生成，必须中断它**。
+         *
+         * 3 分钟原场景实测：67.8s 工具做完后，模型一直在流式写长回复到 289.8s，
+         * 期间没有工具调用、也没有挂卡 ⇒ 轮内三道拦截全都走不到 ⇒ 到点判定永远不触发
+         * （净工时 251.6s 早已超过 180s，审计里却一条 deadline 事件都没有）。
+         *
+         * 这里 abort 当前请求；下面 catch 识别「到点中断」转成降级结果（不报错给用户），
+         * 流程就能正常走到续派判定 ⇒ 派收尾轮。
+         * **只在还没派过收尾轮时中断**（yiShouWei=false），否则收尾轮自己也会被掐死。
+         * 有工具在跑时不中断：wait_seconds 已被钳制，会自己到点返回。
+         */
+        try {
+          const sxI = renWuShiXian.get(String(sessionId || ''));
+          if (sxI && !sxI.yiShouWei && shiXianDaoDian(sxI, Date.now())) {
+            const youKa = aiQuestions.LieBiao(String(sessionId || '')).some((q) => q.status === 'pending');
+            const zaiTuI = zaiTuGongJu.get(String(sessionId || ''));
+            if (!youKa && !zaiTuI) {
+              audit?.log('task.deadline-stream-interrupt', { sessionId, jingGongShi: jingGongShi(sxI, Date.now()) });
+              clearInterval(xunShou as ReturnType<typeof setInterval>);
+              xunShou = null;
+              try { zhengLunQuXiao.abort(); } catch { /* noop */ }
+              rej(new Error('user-deadline-interrupt'));
+              return;
+            }
+          }
+        } catch { /* 中断失败不影响巡检 */ }
         const zong = Date.now() - xunShouKaiShi;
         /**
          * `anJing` 是"距上次真实产出多久"，它是**跨轮/跨尝试**的时钟。
@@ -7456,17 +7679,46 @@ async function yunXingLiaoTianXunHuan(
      * 继而误判"只说不做"→ 越走越偏）。取本轮真实计数。
      */
     const zhenCiShu = benLunGongJuShu.get(sessionId) || 0;
-    audit?.log('chat.tools.done', {
-      sessionId,
-      qingQiuJi: 0,
-      lunShu: 0,
-      gongJuDiaoYongJi: zhenCiShu,
-      toolResultChars: 0,
-      degraded: true,
-      tingZhiYuanYin: 'error',
-      error: xiJingCuoWu(eLoop).slice(0, 160),
-    });
-    throw eLoop;
+    /**
+     * R163 #8：**到点中断不是错误**。转成降级结果让流程继续走到收尾派单。
+     * 若这里照旧 throw，上层会走错误路径（报「模型调用失败」），永远到不了 yingGaiZiDongJiXu。
+     */
+    const sxLoop = renWuShiXian.get(String(sessionId || ''));
+    const cuoWen = xiJingCuoWu(eLoop);
+    if (sxLoop && shiXianDaoDian(sxLoop, Date.now()) && /user-deadline-interrupt|abort/i.test(cuoWen)) {
+      audit?.log('task.deadline-stream-interrupted', { sessionId, jingGongShi: jingGongShi(sxLoop, Date.now()), gongJuDiaoYongJi: zhenCiShu });
+      audit?.log('chat.tools.done', {
+        sessionId, qingQiuJi: 0, lunShu: 0, gongJuDiaoYongJi: zhenCiShu, toolResultChars: 0,
+        degraded: true, tingZhiYuanYin: 'user-deadline',
+      });
+      loop = {
+        xiangYingTi: {
+          id: 'deadline-interrupted',
+          model: String(Qiu.model || providerCfg.model || ''),
+          choices: [{ index: 0, message: { role: 'assistant', content: '' }, finishReason: 'stop' }],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, cacheHitTokens: 0, cacheMissTokens: 0, source: 'none' },
+        },
+        qingQiuJi: 0,
+        lunShu: 0,
+        gongJuDiaoYongJi: zhenCiShu,
+        toolResultChars: 0,
+        tingZhiYuanYin: 'stop',
+        degraded: true,
+        degradedReason: 'user-deadline-interrupt',
+      };
+    } else {
+      audit?.log('chat.tools.done', {
+        sessionId,
+        qingQiuJi: 0,
+        lunShu: 0,
+        gongJuDiaoYongJi: zhenCiShu,
+        toolResultChars: 0,
+        degraded: true,
+        tingZhiYuanYin: 'error',
+        error: cuoWen.slice(0, 160),
+      });
+      throw eLoop;
+    }
   } finally {
     // 巡检必须停掉，否则会一直占着定时器（成功/失败/超时三条路都要走到）
     if (xunShou) { try { clearInterval(xunShou); } catch { /* noop */ } xunShou = null; }
@@ -9605,6 +9857,44 @@ async function yindao() {
   chuShiZiChanGuanLi(path.join(userData, 'assets.json'));
   audit = new ShenJiRiZhi(userData);
   /**
+   * R165：诊断日志实例 + **单一 choke point**：包装 audit.log，把已知故障 op 经纯映射
+   * 转成脱敏诊断事件（不复制自由文本）。boot/自检/崩溃另走显式 jiLu。
+   */
+  zhenDuan = new ZhenDuanRiZhi({
+    userData,
+    huanJing: {
+      appVersion: app.getVersion(),
+      electron: process.versions.electron || '',
+      node: process.versions.node,
+      chrome: process.versions.chrome || '',
+      osFamily: process.platform,
+      osMajor: String(os.release().split('.')[0] || ''),
+      arch: process.arch,
+    },
+  });
+  zhenDuan.jiLu('boot.start', 'info', 'boot');
+  {
+    const yuanLog = audit.log.bind(audit);
+    audit.log = (op: string, detail?: unknown, user?: string): void => {
+      yuanLog(op, detail, user);
+      try {
+        const y = yingSheShenJi(op, detail);
+        if (y) zhenDuan?.jiLu(y.code, y.ji, y.mo, y);
+      } catch { /* 诊断绝不影响业务 */ }
+    };
+  }
+  /** 启动自检：延后 3s 再跑，避免与首启渲染抢资源（R165 认领 firstrun-auth-flow 时序抖动） */
+  setTimeout(() => { void (async () => {
+    try {
+      zhenDuan?.jiLu('selfcheck.start', 'info', 'selfcheck');
+      const jie = await yunXingZiJian(zhenDuanTanZhen());
+      for (const r of jie) zhenDuan?.jiLu(r.ok ? 'selfcheck.pass' : 'selfcheck.fail', r.ok ? 'info' : 'warn', 'selfcheck', { zhi: { ...r.zhi }, dai: r.code });
+      zhenDuan?.jiLu('selfcheck.done', 'info', 'selfcheck', { zhi: { total: jie.length, fail: jie.filter((x) => !x.ok).length } });
+      zhenDuan?.jiLu('boot.ready', 'info', 'boot');
+    } catch { /* 自检失败不影响启动 */ }
+  })();
+  }, 3000);
+  /**
    * 第 111 轮：外部编辑边界。应用工作区里的文件可以**显式**导出明文副本给 Office/IDE，
    * 编辑结束自动回写并删除副本；启动时恢复上次没回写完的副本。
    */
@@ -9972,6 +10262,7 @@ async function yindao() {
                 audit?.log('rc.exec-denied', { peer: fp.slice(0, 12), reason: 'user-denied' });
               } else {
                 const hui = rc().kaiHuiHua(zhun.device.id, 'bei');
+                try { jiXiTongXiaoXi('remote', '被远程控制', '设备 ' + String(duiMing || zhun.device.id) + ' 开始远程控制本机。'); } catch { /* noop */ }
                 rcSanJianTao.kaiQi({
                   duiFangMing: duiMing,
                   kaiShi: hui.kaiShi,
@@ -11269,6 +11560,7 @@ function fachuKongzhitai(Shi: { cat: 'tool' | 'net' | 'error' | 'system' | 'mode
 
 /** 未捕获异常 / 未处理的 Promise 拒绝：如实进控制台。用 Monitor 版本，**不**改变默认崩溃语义。 */
 process.on('uncaughtExceptionMonitor', (err) => {
+  try { zhenDuan?.jiLu('crash.uncaught', 'fatal', 'main', { stack: (err as Error)?.stack }); } catch { /* noop */ }
   try {
     fachuKongzhitai({ cat: 'error', code: 'err.uncaught', data: { message: xiJingCuoWu(err) } });
   } catch {
@@ -11276,6 +11568,7 @@ process.on('uncaughtExceptionMonitor', (err) => {
   }
 });
 process.on('unhandledRejection', (reason) => {
+  try { zhenDuan?.jiLu('crash.unhandled', 'error', 'main', { stack: (reason as Error)?.stack }); } catch { /* noop */ }
   try {
     fachuKongzhitai({ cat: 'error', code: 'err.unhandled-rejection', data: { message: xiJingCuoWu(reason) } });
   } catch {
@@ -11292,6 +11585,7 @@ process.on('unhandledRejection', (reason) => {
  * 注意：这**不**是掩盖问题 —— 错误原文会进控制台与 lastError，便于定位真正的缺陷。
  */
 process.on('uncaughtException', (err) => {
+  try { zhenDuan?.jiLu('crash.uncaught', 'fatal', 'main', { stack: (err as Error)?.stack }); } catch { /* noop */ }
   try {
     fachuKongzhitai({ cat: 'error', code: 'err.uncaught', data: { message: xiJingCuoWu(err) } });
   } catch { /* noop */ }
@@ -12628,7 +12922,8 @@ chuliIpc('warmy:daKaiWaiBuLianJie', async (_e, url?: string) => {
   try {
     const u = String(url || '').trim();
     if (!/^https?:\/\//i.test(u)) return { ok: false, error: 'bad-url' };
-    await shell.openExternal(u);
+    try { const pu = new URL(u); audit?.log('external.open', { host: pu.host, path: pu.pathname + pu.hash }); } catch { /* noop */ }
+    if (process.env.WARMY_TEST_NO_EXTERNAL !== '1') await shell.openExternal(u);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: xiJingCuoWu(err) };
@@ -14396,9 +14691,9 @@ async function zhenZhengFaSongBen(
     }
 
     const qiShiShiJian = Date.now();
-    const piZhun0 = dengDaiPiZhunMs;
-    /** 第 121 轮：真正干活的时间 = 墙钟 − 审批等待（等人点授权按钮不算执行时间） */
-    const benLunHaoShi = (): number => jiSuanGongZuoHaoShi(qiShiShiJian, piZhun0, Date.now(), dengDaiPiZhunMs);
+    const piZhun0 = dengDaiPiZhunMs + dengDaiKaPianMs;
+    /** 第 121 轮 + R167 项2：真正干活/预测的时间 = 墙钟 − 审批等待 − 决策卡等待（等卡不算模型预测时间） */
+    const benLunHaoShi = (): number => jiSuanGongZuoHaoShi(qiShiShiJian, piZhun0, Date.now(), dengDaiPiZhunMs + dengDaiKaPianMs);
     benLunGongJuMing = [];
     benLunChanPin = [];
     try { sheZhiJiLuHuiHua(String(sessionId || '')); } catch { /* noop */ }
@@ -14450,6 +14745,22 @@ async function zhenZhengFaSongBen(
           if (ts.length) kai = Math.min(...ts);
         } else {
           benCiRenWuYuanWen.set(sessionId, String(xiaoXi.content || ''));
+          /**
+           * R163 #8：新用户消息 ⇒ 重新解析时限。
+           * 解析不到就**清掉**上一次的时限（否则新任务会被旧时限掐死）。
+           */
+          try {
+            const sx = jieXiShiXian(String(xiaoXi.content || ''));
+            if (sx) {
+              const kj = jieXiKouJing(String(xiaoXi.content || ''));
+              renWuShiXian.set(sessionId, { kaiShi: kai, ms: sx.ms, dengDaiMs: 0, yiShouWei: false, yuanWen: sx.yuanWen, kouJing: kj === 'net' ? 'net' : 'wall' });
+              audit?.log('task.deadline-set', { sessionId, ms: sx.ms, yuanWen: sx.yuanWen.slice(0, 80), kouJing: kj === 'net' ? 'net' : 'wall' });
+              /** R167 项2：口径有疑问（既像等待又像时限）且用户没明确 ⇒ 弹卡让用户选该任务准确口径 */
+              if (!kj && shiXianYouYiWen(String(xiaoXi.content || ''))) void wenKouJingKa(sessionId);
+            } else {
+              renWuShiXian.delete(sessionId);
+            }
+          } catch { /* 解析失败按无时限处理，行为不变 */ }
         }
         benCiRenWuKaiShi.set(sessionId, kai);
       }
@@ -14882,6 +15193,32 @@ async function zhenZhengFaSongBen(
                 '**必须调用对应工具去完成**，再如实回报做了什么、文件在哪。\n' +
                 '**绝对不要说**「我没有权限 / 我够不着 / 我无法操作 / 我无法计时 / 请你自己在本地做」—— 这是事实错误：' +
                 '这些工具就在你手里。只有当某个工具调用**真的失败**时，才如实说失败原因与替代方案。'
+            ));
+          } catch { /* noop */ }
+          /**
+           * R163 #7：**方案分歧必须弹选择卡**。
+           *
+           * 真机事故（会话 inst-1794395477366-g2zs1）：用户明确要「有哪些需要我决策的地方」，
+           * 模型把 5 个决策点写成 Markdown 表格塞在回复正文里，**一次 ask_user 都没调**
+           * （审计：6 张卡全是 authorization:true 的授权卡，没有一张决策卡）。
+           * 用户看到的是「几乎没有选择框出现」——不是渲染坏了，是模型没调工具。
+           *
+           * 工具一直在（ask_user 在 chat.tools.enabled 里，也在最小干活集里），
+           * 缺的是**提示里的硬要求**：旧提示只把它列成「向用户提问（ask_user）」一句。
+           */
+          try {
+            ju.push(tMain(
+              'llm.askUserRule',
+              '【方案分歧硬门禁】任何一组备选方案**都必须带一个推荐项(tuiJian)和置信度(0~1)**。决策树：\n' +
+                '① 有多个方案时**先自行验证**每个都有效（跑检查/测试/读文档核对），不要拿没验证的方案去问用户；\n' +
+                '② 验证后**都可用且各有利弊**（置信度接近、取舍影响用户可见结果）⇒ **必须调用 ask_user 弹可点选择卡**（2–4 选项+你的推荐），一次问一个最关键的；\n' +
+                '③ 若**只有一个明显可用**（置信度≥0.7）而其余置信度很低(<0.4)⇒ **不弹卡**，直接用该唯一明显可用方案，并在汇报里说明为何排除其余；\n' +
+                '④ 纯技术细节且不影响用户可见结果的，自己定并说明；用户已明确交代过的照做不要反问。\n' +
+                '**禁止**只把选项写进回复正文（Markdown 表格/"A)…B)…"/"请告诉我选哪个"都算违规）；**禁止**没验证就瞎猜一个继续干。\n' +
+                (ziDongXuanZe()
+                  ? '当前【自动选择=开】：按你的推荐自己定即可，**不要弹选择卡**（宿主也会自动按推荐作答）。\n'
+                  : '当前【自动选择=关】：各有利弊时必须弹卡等用户选，不要替用户拍板。\n') +
+                '收尾汇报时如果列出了"需要用户决策的地方"，**其中最重要的那一条必须同时用 ask_user 弹卡**。'
             ));
           } catch { /* noop */ }
           /**
@@ -16603,6 +16940,8 @@ async function zhenZhengFaSongBen(
         }, 250);
       } else if (!shiNeiBu) {
         yanXuZhuangTai.delete(sessionId);
+        // R173 项4：整轮结束权威清半成品，防迟到分片在 clear 之后又落盘留下"假中断"拖尾块
+        try { jiJinXing(sessionId, { clear: true }); } catch { /* noop */ }
         // **整轮真的结束了** ⇒ 把流式"正在进行"的气泡收掉
         try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId, reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
         // 计划步骤的收尾/证据验证已在判续派之前由 `jiHuaAnZhengJuZiDongYanZheng` 完成
@@ -17763,6 +18102,31 @@ function yingGaiZiDongJiXu(
   const sid = String(sessionId || '');
   /** 已经判过异常 ⇒ **一步都不许再往下走**（用户回一句话才会清掉这个标记） */
   if (quEtaYiChang(sid)) return { jiXu: false, liYou: 'eta-anomaly' };
+  /**
+   * R163 #8：**用户时限优先于一切续派理由**。
+   * 到点后只放行恰好一轮收尾（总结成果 / 列决策点 / 写交接文档 —— 用户明确要的），
+   * 之后 completion-check、plan-open-keep、target-length、talk-only 全部挡住。
+   * 这条必须排在最前面：以前模型收尾后被 completion-check 拉起，等于把
+   * 「到点停下」当成「中途停下需要补做」，直接违背用户指令。
+   */
+  {
+    const lan = shiXianLanXuPai(sid);
+    if (lan.lan) {
+      try { audit?.log('task.deadline-block-continue', { sessionId: sid }); } catch { /* noop */ }
+      return { jiXu: false, liYou: 'user-deadline' };
+    }
+    if (lan.shouWei) {
+      const t = renWuShiXian.get(sid)!;
+      t.yiShouWei = true;
+      try {
+        audit?.log('task.deadline-wrapup', {
+          sessionId: sid, ms: t.ms,
+          jingGongShi: jingGongShi(t, Date.now()), dengDaiMs: t.dengDaiMs,
+        });
+      } catch { /* noop */ }
+      return { jiXu: true, liYou: 'user-deadline-wrapup' };
+    }
+  }
   const tingZhi = String(shangLun?.tingZhi || '');
   if (tingZhi === 'unsupported') return { jiXu: false, liYou: 'unsupported' };
   let zhang = xuPaiJinZhan.get(sid);
@@ -18453,7 +18817,35 @@ async function yanXuJiHuaRenWu(
     const yiDaKaiLie = [...(huiHuaYiDaKai.get(sessionId) || [])].slice(-8).join('、');
     const xia = jiHuaWeiWanCheng(sessionId)[0];
     const heDui = pan.liYou === 'completion-check';
-    const zhiLing = pan.liYou === 'target-length'
+    /**
+     * R163 #8：用户时限到点的**收尾轮**（只派一次）。
+     * 用户要的不是「硬杀」，而是「停下来把成果说清楚、把要我决策的地方列出来、写交接文档」。
+     * 所以这一轮**禁止再动手做新东西**，只做汇总与交接。
+     */
+    const zhiLing = pan.liYou === 'user-deadline-wrapup'
+      ? (() => {
+          const t = renWuShiXian.get(String(sessionId || ''));
+          const jing = t ? jingGongShi(t, Date.now()) : 0;
+          const chan = (benCiRenWuChanPin.get(String(sessionId || '')) || []).slice(0, 20)
+            .map((x) => '- ' + x.abs).join('\n') || '（本任务还没有落盘产物）';
+          const bu = (jiHuaRenWuJi.get(String(sessionId || '')) || [])
+            .filter((b) => b.leiXing !== 'info')
+            .map((b) => '- ' + b.id + ' ' + b.title + ' [' + b.status + ']').join('\n') || '（没有显式计划）';
+          return tMain('llm.deadlineWrapUp',
+            '【时间到 · 只收尾，不要再动手】用户给了时限「{yuan}」，宿主实测已用 {jing}（其中等你答卡 {deng}；按物理时间口径），**已经到点**。收尾这几秒视为可接受误差。\n'
+            + '现在**禁止再调用任何会改变文件/执行命令的工具**（write_file / edit_file / run_shell / make_* 一律不许），只做下面三件事，做完就结束：\n'
+            + '① **如实总结目前的成果**：已经真实做出来的（下面列了宿主看到的落盘产物），以及还没做的；不许把没做的说成做完了。\n'
+            + '② **列出需要用户决策的地方**：每条给出可选项与你的建议。**必须调用 ask_user 把最重要的那一个做成可点的选择卡（**整个收尾阶段只许弹这一张卡，之后不许再弹任何确认卡**）**（不要只写在正文里 —— 用户要的是能点的选择框）。\n'
+            + '③ **写一份交接文档**（这是用户明确要的交付物，允许为此写一个文件）：现状、已完成、未完成、决策点、下一步怎么接。\n'
+            + '\n【宿主看到的落盘产物】\n{chan}\n\n【计划与状态】\n{bu}\n'
+            + '\n做完这三件事就收尾，**不要再继续原任务**。用户之后说「继续」才会接着做。')
+            .replace('{yuan}', () => String(t?.yuanWen || '用户给的时限'))
+            .replace('{jing}', () => miaoShu(jing))
+            .replace('{deng}', () => miaoShu(t?.dengDaiMs || 0))
+            .replace('{chan}', () => chan)
+            .replace('{bu}', () => bu);
+        })()
+      : pan.liYou === 'target-length'
       ? (() => {
           const yao = renWuYaoQiuZiShu(sessionId, xiaoXi as { content?: string });
           const xie = renWuZiShu(sessionId);
@@ -19330,6 +19722,19 @@ chuliIpc('warmy:kbRebuild', (_e, p0?: { sessionId?: string; id?: string; text?: 
     return { ok: true, pending: items.length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+/** R174：删除单条知识（取代不物理删，保留审计；不进待整理区，与重构区分） */
+chuliIpc('warmy:kbShanChu', (_e, p0?: { sessionId?: string; id?: string }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    const id = String(p0?.id || '');
+    if (!id) return { ok: false, error: 'bad-id' };
+    const zhao = cengYouShiJian(sid, id);
+    if (!zhao) return { ok: false, error: '找不到这条内容（可能已被整理）' };
+    zhao.kb.supersedeEvent(id);
+    audit?.log('kb.deleted', { sessionId: sid, id, ceng: zhao.ceng });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 /**
  * **合并**：把 ≥2 条合并成一条（保留最新的标题与时间，内容去重拼接），其余取代不删除。
  * 合并是"语义判断"，所以只由用户在界面上勾选 + 二次确认触发；模型不自动合并（除非归档裁决给高置信度）。
@@ -19819,6 +20224,11 @@ chuliIpc('warmy:xingDongLieBiao', (_e, payload?: { sessionId?: string; limit?: n
     if (!sid) return { ok: false, xingDong: [], error: 'no-session' };
     const shang = Math.min(400, Math.max(1, Math.floor(Number(payload?.limit)) || 200));
     const h = chatMetaBen.get(sid);
+    // R173 项4：已有比半成品更新的正式回复 ⇒ 该轮已完成，半成品作废（清历史遗留的假中断）
+    if (h && h.jinXing) {
+      const zuiHouThem = (h.msgs || []).reduce((a, m) => (m && m.role === 'them' ? Math.max(a, Number(m.ts) || 0) : a), 0);
+      if (zuiHouThem >= Number(h.jinXing.ts || 0)) { delete h.jinXing; xieChatMeta(); }
+    }
     return { ok: true, sessionId: sid, xingDong: xingDongDeng(sid).slice(-shang), jinXing: h && h.jinXing ? h.jinXing : null };
   } catch (e) {
     return { ok: false, xingDong: [], error: xiJingCuoWu(e) };
@@ -19853,6 +20263,8 @@ chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string
     if (!sid || !content || (role !== 'user' && role !== 'assistant')) {
       return { ok: false, appended: false, error: 'bad-payload' };
     }
+    // R173 项4：正式助手回复落账 ⇒ 该轮半成品作废（防最终回复后拖尾思考段）
+    if (role === 'assistant') { try { jiJinXing(sid, { clear: true }); } catch { /* noop */ } }
     const shuZu = chatLogs.get(sid) || [];
     const last = shuZu[shuZu.length - 1];
     /**
@@ -29478,7 +29890,7 @@ chuliIpc('warmy:qunXieTiao', async (_e, xiaoXi: { groupId: string; content: stri
       /** 派发决策（并行/接力）留痕（第 51 轮） */
       audit: (op: string, detail?: Record<string, unknown>) => { try { audit?.log(op, detail); } catch { /* noop */ } },
       /** 第 121 轮：审批等待不计入执行时间 */
-      approvalWaitMs: () => dengDaiPiZhunMs,
+      approvalWaitMs: () => dengDaiPiZhunMs + dengDaiKaPianMs,
       /** 项目停止（第 100 轮）：编排器一步都不许再派；在跑的执行者由下面两个钩子登记后中止 */
       isStopped: (groupId: string) => stoppedSessions.has(String(groupId || '')),
       onExecutorStart: (groupId: string, instanceId: string) => {
@@ -30848,12 +31260,17 @@ chuliIpc('warmy:daoChuHuiHua', (_e, payload: { biaoTi?: string; title?: string; 
 });
 
 // ── L. 自动更新（真实查询 + 真实下载校验 + 真实安装） ──
-chuliIpc('warmy:ziDongGengXinJianCha', async () =>
-  anQuanChuLiYiBu<GengXinJianChaJieGuo>(
+chuliIpc('warmy:ziDongGengXinJianCha', async () => {
+  const r = await anQuanChuLiYiBu<GengXinJianChaJieGuo>(
     async () => (updater ? await updater.check() : gengXinqiBuKeYongJianCha(yingyongBanben())),
     gengXinqiBuKeYongJianCha(yingyongBanben())
-  )
-);
+  );
+  try {
+    const st = (r as { status?: string } | null)?.status;
+    if (st === 'update-available') jiXiTongXiaoXi('update', '系统更新', '发现新版本 ' + String((r as { version?: string } | null)?.version || '') + '，可在「设置 → 关于」下载更新。');
+  } catch { /* noop */ }
+  return r;
+});
 chuliIpc('warmy:ziDongGengXinXiaZai', async () =>
   anQuanChuLiYiBu<GengXinXiaZaiJieGuo>(
     async () => (updater ? await updater.download() : gengXinqiBuKeYongXiaZai(yingyongBanben())),
@@ -30871,6 +31288,7 @@ chuliIpc('warmy:ziDongGengXinAnZhuang', async () => anQuanChuLiYiBu(async () => 
   if (!updater) return { ok: false, status: 'unavailable', i18nKey: 'update.install.unavailable', message: 'updater not ready' };
   const r = await updater.install();
   try { audit?.log('update.install', { ok: r.ok, status: r.status, version: r.version || '', file: r.filePath || '' }); } catch { /* noop */ }
+  try { jiXiTongXiaoXi('update', '系统更新', r.ok ? ('更新已准备安装：' + String(r.version || '')) : ('更新安装失败：' + String(r.status || ''))); } catch { /* noop */ }
   if (!r.ok) return r;
   /**
    * 交给系统打开安装包；**打不开就如实报错，不退出应用**
@@ -31245,7 +31663,7 @@ const MEN_JIN_YING = [
   'verify-updater', 'verify-updater-github', 'verify-runtime-errors',
   'verify-office-doc-suite', 'verify-gate-manifest',
   'verify-audio-first-class', 'verify-research-pipeline', 'verify-local-search', 'verify-search-providers',
-  'verify-packaging-deps', 'verify-update-delta',
+  'verify-packaging-deps', 'verify-update-delta', 'verify-task-deadline',
 ];
 chuliIpc('warmy:menJinYingJi', () => ({ ok: true, ids: MEN_JIN_YING.slice() }));
 /** 硬门禁清单（含"最坏情况"）：界面与模型都用它回答"是哪一条在拦我" */
@@ -33832,6 +34250,73 @@ chuliIpc('warmy:shenJiQingChu', () => {
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
+function zhenDuanTanZhen(): Record<string, () => ZiJianXiang | Promise<ZiJianXiang>> {
+  const ud = app.getPath('userData');
+  const keXie = (p: string): boolean => {
+    try { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.accessSync(path.dirname(p), fs.constants.W_OK); return true; } catch { return false; }
+  };
+  return {
+    'userdata.writable': () => ({ code: 'userdata.writable', ok: keXie(path.join(ud, 'x')) }),
+    'audit.writable': () => ({ code: 'audit.writable', ok: keXie(path.join(ud, 'audit', 'x')) }),
+    'diag.writable': () => ({ code: 'diag.writable', ok: keXie(path.join(ud, 'diag', 'x')) }),
+    'disk.free': () => {
+      try { const st = fs.statfsSync(ud); return { code: 'disk.free', ok: st.bavail * st.bsize > 64 * 1024 * 1024, zhi: { freeMb: Math.round((st.bavail * st.bsize) / 1048576) } }; }
+      catch { return { code: 'disk.free', ok: true }; }
+    },
+    'settings.loadable': () => { try { settingsStore?.load(); return { code: 'settings.loadable', ok: !!settingsStore }; } catch { return { code: 'settings.loadable', ok: false }; } },
+    'secure.available': () => ({ code: 'secure.available', ok: !!secureKeys && safeStorage.isEncryptionAvailable() }),
+    'enc.hashwasm': async () => { try { await import('hash-wasm'); return { code: 'enc.hashwasm', ok: true }; } catch { return { code: 'enc.hashwasm', ok: false }; } },
+    'net.loopback': async () => {
+      try {
+        const net = await import('node:net');
+        return await new Promise<ZiJianXiang>((res) => {
+          const sv = net.createServer();
+          sv.once('error', () => res({ code: 'net.loopback', ok: false }));
+          sv.listen(0, '127.0.0.1', () => { const a = sv.address(); sv.close(() => res({ code: 'net.loopback', ok: true, zhi: { port: typeof a === 'object' && a ? a.port : 0 } })); });
+        });
+      } catch { return { code: 'net.loopback', ok: false }; }
+    },
+  };
+}
+
+// ── R165 诊断日志（可对外；构造即脱敏，绝不上传）──
+chuliIpc('warmy:zhenDuanRiZhi', (_e, limit?: number) => ({
+  ok: true,
+  enabled: zhenDuan?.enabled ?? false,
+  entries: zhenDuan?.read(limit || 200) || [],
+}));
+chuliIpc('warmy:zhenDuanZiJian', async () => {
+  try {
+    const jie = await yunXingZiJian(zhenDuanTanZhen());
+    for (const r of jie) zhenDuan?.jiLu(r.ok ? 'selfcheck.pass' : 'selfcheck.fail', r.ok ? 'info' : 'warn', 'selfcheck', { zhi: { ...r.zhi }, dai: r.code });
+    return { ok: true, results: jie };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:zhenDuanQingChu', () => {
+  try { zhenDuan?.clear(); zhenDuan?.jiLu('diag.clear', 'info', 'diag'); return { ok: true }; }
+  catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:zhenDuanKaiGuan', (_e, on?: boolean) => {
+  try {
+    if (zhenDuan) zhenDuan.enabled = on !== false;
+    if (on === false) zhenDuan?.jiLu('diag.disabled', 'info', 'diag');
+    return { ok: true, enabled: zhenDuan?.enabled ?? false };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 导出：再脱敏一次 + manifest；落盘由用户选路径，**不上传** */
+chuliIpc('warmy:zhenDuanDaoChu', async () => {
+  try {
+    if (!zhenDuan) return { ok: false, error: 'diag-unavailable' };
+    const bundle = zhenDuan.daoChu();
+    const moRen = 'warmy-diagnostic-' + new Date().toISOString().slice(0, 10) + '.json';
+    const r = await dialog.showSaveDialog({ title: '导出诊断日志（不含敏感信息）', defaultPath: moRen, filters: [{ name: 'JSON', extensions: ['json'] }] });
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+    fs.writeFileSync(r.filePath, JSON.stringify(bundle, null, 2), 'utf8');
+    zhenDuan.jiLu('diag.export', 'info', 'diag', { zhi: { entries: bundle.entries.length } });
+    return { ok: true, path: r.filePath, entries: bundle.entries.length };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
 // ── SafeStorage 密钥 ──
 chuliIpc('warmy:anQuanMiYaoBaoCun', async (_e, payload: { providerId: string; apiKey: string }) => {
   try {
@@ -34710,3 +35195,66 @@ chuliIpc('warmy:netBangDingShe', (_e, p0?: { sessionId?: string; ids?: unknown[]
     return { ok: true, ids };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+
+
+// ── R166 系统消息 + 加入记录全量（帮助抽屉数据层）──
+interface XiTongXiaoXi {
+  id: string;
+  ts: number;
+  kind: 'update' | 'remote' | 'ssh' | 'system';
+  title: string;
+  body: string;
+  read: boolean;
+}
+const xiTongXiaoXiLu = path.join(app.getPath('userData'), 'system-messages.json');
+let xiTongXiaoXiJi: XiTongXiaoXi[] = [];
+function duXiTongXiaoXi(): void {
+  try {
+    const j = JSON.parse(fs.readFileSync(xiTongXiaoXiLu, 'utf8'));
+    xiTongXiaoXiJi = (Array.isArray(j?.items) ? j.items : [])
+      .filter((x: Partial<XiTongXiaoXi>) => x && typeof x.id === 'string' && typeof x.ts === 'number')
+      .map((x: Partial<XiTongXiaoXi>) => ({
+        id: String(x.id), ts: Number(x.ts), kind: (x.kind === 'update' || x.kind === 'remote' || x.kind === 'ssh' ? x.kind : 'system'),
+        title: String(x.title || '').slice(0, 120), body: String(x.body || '').slice(0, 400), read: !!x.read,
+      }))
+      .slice(-200);
+  } catch { xiTongXiaoXiJi = []; }
+}
+function cunXiTongXiaoXi(): void {
+  try {
+    fs.mkdirSync(path.dirname(xiTongXiaoXiLu), { recursive: true });
+    const tmp = xiTongXiaoXiLu + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ items: xiTongXiaoXiJi.slice(-200) }, null, 2), 'utf8');
+    fs.renameSync(tmp, xiTongXiaoXiLu);
+  } catch { /* 写盘失败不阻断内存态 */ }
+}
+/** 记一条系统消息（产品文案，非用户内容）；有界 200；广播给界面亮徽标 */
+function jiXiTongXiaoXi(kind: XiTongXiaoXi['kind'], title: string, body: string): void {
+  try {
+    xiTongXiaoXiJi.push({ id: 'sys-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: Date.now(), kind, title: String(title).slice(0, 120), body: String(body).slice(0, 400), read: false });
+    if (xiTongXiaoXiJi.length > 200) xiTongXiaoXiJi = xiTongXiaoXiJi.slice(-200);
+    cunXiTongXiaoXi();
+    broadcastToWindows('warmy:xiTongXiaoXiXin', { count: xiTongXiaoXiJi.filter((x) => !x.read).length });
+  } catch { /* 系统消息失败绝不影响业务 */ }
+}
+duXiTongXiaoXi();
+chuliIpc('warmy:xiTongXiaoXiLieBiao', () => ({ ok: true, items: xiTongXiaoXiJi.slice().reverse() }));
+chuliIpc('warmy:xiTongXiaoXiYiDu', (_e, id?: string) => {
+  const m = xiTongXiaoXiJi.find((x) => x.id === String(id || ''));
+  if (m) { m.read = true; cunXiTongXiaoXi(); }
+  return { ok: true, unread: xiTongXiaoXiJi.filter((x) => !x.read).length };
+});
+chuliIpc('warmy:xiTongXiaoXiQuanBuYiDu', () => {
+  for (const m of xiTongXiaoXiJi) m.read = true;
+  cunXiTongXiaoXi();
+  return { ok: true, unread: 0 };
+});
+/** 加入记录全量：只回展示所需字段，剔除 token/公钥/主机/端口/指纹 */
+chuliIpc('warmy:jiaRuJiLuLieBiao', () => ({
+  ok: true,
+  items: joinRequests.map((r) => ({
+    id: r.id, ming: r.ming, kind: r.kind, target: r.target, targetType: r.targetType,
+    ts: r.ts, expireAt: r.expireAt, direction: r.direction, status: r.status,
+    decidedAt: r.decidedAt || 0, reason: r.reason || '', role: r.role || '',
+  })),
+}));

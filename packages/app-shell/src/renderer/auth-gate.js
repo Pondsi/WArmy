@@ -3370,7 +3370,10 @@
     root = document.createElement('div');
     root.id = 'warmyAuthGate';
     root.className = 'warmyAuthGate';
-    root.innerHTML = '<div class="warmyAuthScene warmyAuthSceneEmbed" aria-hidden="true">'
+    /* R163 #2：满窗顶部拖动条 —— 首启每一页（语言/条款/助记词/PIN/用户名）都能按住顶部拖窗。
+       放在卡片之前、关闭热区之下，不随步骤重建。 */
+    root.innerHTML = '<div class="warmyAuthTopGrip" aria-hidden="true"></div>'
+      + '<div class="warmyAuthScene warmyAuthSceneEmbed" aria-hidden="true">'
       + '<iframe src="./firstrun-scenes/index.html?embed=1&scenes=' + BEN_CI_CHANG_JING + '&rotate=0" tabindex="-1" scrolling="no"></iframe>'
       + '</div><div class="warmyAuthCard" id="warmyAuthCard"></div>'
       + '<div class="warmyAuthCloseHot" aria-hidden="false"><button type="button" class="warmyAuthCloseX" id="warmyAuthCloseX" title="' + escapeHtml(t('quitApp')) + '" aria-label="' + escapeHtml(t('quitApp')) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></div>'

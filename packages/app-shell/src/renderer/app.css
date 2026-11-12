@@ -64,6 +64,13 @@
   --danger-line: #e8a8a8;
   /* 通过态正文（深绿）：对 --card 白底与 --chat-bg 都 ≥ 5.0，不用 --accent（亮绿在白底只有 2.4） */
   --ok-fg: #1a7f3c;
+  /* R164 执行中头像特效：浅底上用**深暖色**才看得见（screen 混合会把亮带往白推） */
+  --yunXing-liang: color-mix(in srgb, var(--accent) 42%, #ffffff);
+  --yunXing-shen: color-mix(in srgb, var(--accent) 74%, #2b1a0e);
+  --yunXing-liu-qiang: color-mix(in srgb, var(--accent) 62%, transparent);
+  --yunXing-liu-ruo: color-mix(in srgb, var(--accent) 30%, transparent);
+  --yunXing-yun-qiang: color-mix(in srgb, var(--accent) 52%, transparent);
+  --yunXing-yun-ruo: color-mix(in srgb, var(--accent) 16%, transparent);
   color-scheme: light;
 }
 
@@ -104,6 +111,13 @@
   --ok-fg: #6fd18f;
   --accent: #A87654;
   --danger: #e06060;
+  /* R164 执行中头像特效：深底上用**亮暖色**，扫光才跳得出来 */
+  --yunXing-liang: color-mix(in srgb, var(--accent) 30%, #ffffff);
+  --yunXing-shen: color-mix(in srgb, var(--accent) 82%, #ffffff);
+  --yunXing-liu-qiang: color-mix(in srgb, var(--yunXing-liang) 66%, transparent);
+  --yunXing-liu-ruo: color-mix(in srgb, var(--yunXing-liang) 32%, transparent);
+  --yunXing-yun-qiang: color-mix(in srgb, var(--accent) 72%, transparent);
+  --yunXing-yun-ruo: color-mix(in srgb, var(--accent) 24%, transparent);
   color-scheme: dark;
 }
 
@@ -447,28 +461,91 @@ body.liaoTianChuangKou .liaoTianBuJu {
 .lieBiaoTiaoMu .avKuang {
   position: relative; display: block;
   width: 40px; height: 40px; flex-shrink: 0;
+  /* R164：容器自己必须有圆角，否则子层 border-radius: inherit 会拿到**整行**的 8px，
+     与头像 6px 对不上（旧实现的真因之一）。 */
+  border-radius: 6px;
 }
-/* R160 项5：执行中头像动画 —— 一条主题色亮带从左下扫到右上，
- * 比原来纯位置/透明度变化更有「流动」感，颜色也加深到 45%/28% 不再发灰。 */
+/**
+ * R164：执行中头像 = **常驻旋转光环 + 流动扫光 + 呼吸光晕** 三层。
+ *
+ * 旧版只有一条 45%/28% 透明度的扫光，还叠了 mix-blend-mode: screen。
+ * 真机反证实测（把旧版 CSS 注回去逐像素量）：旧版浅色峰值只有 42，且只有一条窄带、
+ * 扫过去就没了；screen 在浅色底上把主题色往白推，只有深色字母笔画上才有点差。
+ * 现在：常驻光环任何时刻都在，新版**最弱时刻**峰值 181（≥ 旧版最强时刻的 4 倍），
+ * 扫光按主题换深/暖色且不再用 screen，光晕负责余光。色相全部由 --accent 派生，不引入新颜色。
+ */
+@property --yunXingJiao {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
 .lieBiaoTiaoMu .av, .lieBiaoTiaoMu .avTuPian { position: relative; }
+/* A. 常驻旋转光环：2px 圆角方环，紧贴头像外沿（inset -2px + padding 2px ⇒ 内缘正好落在头像边上） */
+.lieBiaoTiaoMu .avKuang.yunXingZhong::before {
+  content: '';
+  position: absolute; inset: -2px;
+  border-radius: 8px;
+  padding: 2px;
+  background: conic-gradient(from var(--yunXingJiao, 0deg),
+    transparent 0deg,
+    var(--yunXing-shen, #8a5a38) 45deg,
+    var(--accent, #A87654) 100deg,
+    var(--yunXing-liang, #d8a878) 165deg,
+    transparent 225deg,
+    transparent 360deg);
+  /* 只留环、挖掉中间：content-box 与 border-box 两层掩码相减 */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: yunXingHuanZhuan 4s linear infinite; /* R173 项3：放慢 */
+  pointer-events: none;
+  z-index: 1;   /* 角标是 2，不能被环盖住 */
+}
+@keyframes yunXingHuanZhuan { to { --yunXingJiao: 360deg; } }
+/* B. 流动扫光：**不用 mix-blend-mode**（浅色主题下 screen 等于隐形），颜色由主题令牌给 */
 .lieBiaoTiaoMu .avKuang.yunXingZhong::after {
   content: '';
   position: absolute; inset: 0; border-radius: inherit;
-  background: linear-gradient(120deg,
+  background: linear-gradient(115deg,
     transparent 0%,
-    transparent 30%,
-    color-mix(in srgb, var(--accent, #e2b28c) 45%, transparent) 45%,
-    color-mix(in srgb, var(--accent, #e2b28c) 28%, transparent) 55%,
-    transparent 70%,
-    transparent 100%);
-  background-size: 250% 250%;
-  animation: yunXingLiuDong 3.6s linear infinite;
+    transparent 18%,
+    var(--yunXing-liu-ruo, rgba(168,118,84,.30)) 34%,
+    var(--yunXing-liu-qiang, rgba(168,118,84,.62)) 50%,
+    var(--yunXing-liu-ruo, rgba(168,118,84,.30)) 66%,
+    transparent 82%,
+    transparent 100%); /* R173 项3：扫光带加宽=更扩散 */
+  background-size: 300% 300%;
+  animation: yunXingLiuDong 4.5s linear infinite; /* R173 项3：放慢 */
   pointer-events: none;
-  mix-blend-mode: screen;
+  z-index: 1;
 }
 @keyframes yunXingLiuDong {
-  0%   { background-position: 100% 100%; }
-  100% { background-position: -50% -50%; }
+  0%   { background-position: 120% 120%; }
+  100% { background-position: -60% -60%; }
+}
+/* C. 呼吸光晕：扫光扫过去之后仍有余光，不至于「一片空白」 */
+.lieBiaoTiaoMu .avKuang.yunXingZhong {
+  animation: yunXingGuangYun 5s ease-in-out infinite; /* R173 项3：放慢 */
+}
+@keyframes yunXingGuangYun {
+  0%, 100% { box-shadow: 0 0 6px 1px var(--yunXing-yun-ruo, rgba(168,118,84,.16)); }
+  50%      { box-shadow: 0 0 18px 6px var(--yunXing-yun-qiang, rgba(168,118,84,.52)); } /* R173 项3：光晕更扩散 */
+}
+/* R164：≥3200px 时 renderer.css 把 .av 放大到 44px，容器与图片必须同步，
+   否则挂在 .avKuang 上的光环/扫光盖不满头像。只写在 app.css：
+   renderer.css 没有 .avKuang/.avTuPian 的大屏规则，不会与它打架（verify-css-consistency 已核）。 */
+@media (min-width: 3200px) {
+  .lieBiaoTiaoMu .avKuang { width: 44px; height: 44px; }
+  .lieBiaoTiaoMu .avTuPian { width: 44px; height: 44px; }
+}
+/* 无障碍：系统开了「减少动态效果」时三层都退成**静态可见**，不是退成没有 */
+@media (prefers-reduced-motion: reduce) {
+  .lieBiaoTiaoMu .avKuang.yunXingZhong::before { --yunXingJiao: 135deg; }
+  .lieBiaoTiaoMu .avKuang.yunXingZhong::after { background-position: 50% 50%; }
+  .lieBiaoTiaoMu .avKuang.yunXingZhong {
+    box-shadow: 0 0 0 2px var(--yunXing-yun-qiang, rgba(168,118,84,.52));
+  }
 }
 .lieBiaoTiaoMu .meta { min-width: 0; flex: 1; }
 .lieBiaoTiaoMu .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -585,7 +662,9 @@ body.liaoTianChuangKou .liaoTianBuJu {
 /* 我方消息：与头像同侧（右侧）对齐 —— 文字也右对齐 */
 .xiaoXi.wo { justify-content: flex-start; }
 .xiaoXi.wo .bubble { text-align: start; }   /* 文字左对齐；气泡位置仍随头像（右侧） */
-.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: calc(100% - 84px); max-width: calc(100% - 84px); }
+/* R163 #5：.xiaoXi.wo .bubbleWrap 特异性(0,3,0) 高于 .xiaoXi .bubbleWrap(0,2,0)，
+ * 这份不改的话「我方气泡」仍走旧值 —— 本轮真机 G7 就是这么抓出来的。 */
+.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: auto; max-width: min(70%, 680px); flex: 0 1 auto; }
 /* 时间分隔点（跨小时 / 跨日插入） */
 .shiJianFenGe {
   display: flex; align-items: center; justify-content: center;
@@ -1474,6 +1553,14 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 .duiHuaKuangKa:has(.woCardBody) { width: min(560px, calc(100vw - 48px)); }
 .duiHuaKuangBiaoTi, .duiHuaKuangDongZuoJi { flex: 0 0 auto; }
 .duiHuaKuangTi { min-height: 0; overflow: auto; padding-right: 4px; }
+/* R163 #4：确认类弹窗（完全授权二次确认等）不该拉到接近满屏。
+ * 旧口径 max-height: calc(100vh - 48px) ⇒ 文案稍长就变成一根很长的条。
+ * 现在给确认框一个正常上限，超出由内容区滚动；数据范围/名片/头像这类内容型弹窗不受影响。 */
+.duiHuaKuangKa:has(.duiHuaKuangTi):not(:has(.daoChuShu)):not(:has(.woCardBody)):not(:has(.touXiangGrid)):not(:has(.tianJiaLianXiGrid)):not(:has(.erHeYiGrid)):not(.niuMaSheZhi *):not(:has(.shiLiHang)) { /* R176：排除设置窗/信息窗等多内容弹窗 */
+  max-height: min(60vh, 460px);
+  /* R170：确认加急这类确认窗左右收窄，不再 420 那么宽 */
+  width: min(360px, calc(100vw - 48px));
+}
 @keyframes modal-in {
   from { opacity: 0; transform: translateY(8px) scale(.98); }
   to { opacity: 1; transform: none; }
@@ -1746,14 +1833,20 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 }
 
 /* ── 头像选择器 ── */
-/* R160 项2：预设头像放大到与「我的」页用户头像同尺寸（72×72）；
- * 列数从 5 调到 4，总宽仍在对话框内可放下。 */
+/* R160 项2：预设头像与「我的」页用户头像同尺寸（72×72）。
+ * R163 #3：列数改回**一行 5 个**（用户要求），并把对话框宽度收到刚好包住网格，
+ * 不再右侧一大片空位。5×72 + 4×10 = 400px，加卡片左右 padding 20×2 = 440px。
+ * 三处入口（我的页 / 牛马 / 项目与群聊）共用 pickAvatar ⇒ 这一条同时生效。 */
 .touXiangGrid {
   display: grid;
-  grid-template-columns: repeat(4, 72px);
-  gap: 10px;
+  /* R170：收小单元格与间距，左右不留空位（5*64+4*8=352） */
+  grid-template-columns: repeat(5, 64px);
+  gap: 8px;
   margin-bottom: 4px;
+  justify-content: center;
 }
+/* R163 #3：头像选择对话框宽度贴合网格（默认 420px 会右侧留白，且放不下 5 列） */
+.duiHuaKuangKa:has(.touXiangGrid) { width: min(392px, calc(100vw - 48px)); }
 .touXiangChoice {
   border: 2px solid transparent;
   background: var(--hover);
@@ -3294,8 +3387,12 @@ body.liaoTianChuangKou #appTi {
   .startGuidePill { left: 10px; }
 }
 
-/* 聊天气泡：名称 + 气泡包一层（群聊/项目显示发言者名称，微信样式） */
-.xiaoXi .bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: calc(100% - 84px); max-width: calc(100% - 84px); }
+/* 聊天气泡：名称 + 气泡包一层（群聊/项目显示发言者名称，微信样式）
+ * R163 #5：这是**第三份**同名规则（app.css 两处 + renderer.css 一处）。
+ * R160 项9 只改了下面那份低特异性的 .bubbleWrap，这两份高特异性的没改
+ * ⇒ 收窄从未生效（用户仍说「外框太长」）。三处现已同步，
+ * 由 verify-css-consistency 的「两份 max-width 一致」硬门禁看住。 */
+.xiaoXi .bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: auto; max-width: min(70%, 680px); flex: 0 1 auto; }
 .xiaoXiMing { font-size: var(--fs-xs); opacity: .65; margin-bottom: 2px; padding-left: 2px; }
 .xiaoXi .touXiangTuPian { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
 /* ── 拉取模型：进行中的动画（至少 1.7s，直到完成/报错）── */
@@ -3592,6 +3689,12 @@ html { font-weight: var(--fw-ui, 400); }
  * 旧值是 calc(100% - 84px) ≈ 占满，现改成上限 70% 且最大 680px。 */
 .bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: auto; max-width: min(70%, 680px); align-items: flex-start; flex: 0 1 auto; }
 .xiaoXi.wo .bubbleWrap { align-items: flex-end; width: auto; max-width: min(70%, 680px); }
+/* R163 #5：气泡朝向**对方头像**的那一侧再让出 2 个头像宽（32×2 = 64px）。
+ * 我的消息靠右 ⇒ 左侧留白；对方消息靠左 ⇒ 右侧留白。
+ * ⚠️ renderer.css 的「.xiaoXi .bubbleWrap」特异性更高且后加载，那边必须同步改，
+ *    否则这里改了不生效（R160 项9 就是这么失效的：只改了 app.css）。 */
+.xiaoXi.wo .bubbleWrap { margin-left: 64px; }
+.xiaoXi:not(.wo) .bubbleWrap { margin-right: 64px; }
 /* R129 铁律（内容位置不移动）：md 内联图固定 16:9 占位，加载前/后布局一致 */
 .md img { display: block; max-width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--hover, #ececec); border-radius: 6px; }
 /* 主动显示的时间（跨时/跨日）：浅分隔线 + 居中小字 */
@@ -5095,3 +5198,101 @@ html { font-weight: var(--fw-ui, 400); }
 .aiqCmdFold summary { cursor: pointer; font-size: 12px; color: var(--accent, #4a9eff); user-select: none; }
 .aiqCmdFold summary:hover { text-decoration: underline; }
 .aiqCmdText { max-height: 120px; overflow-y: auto; font-size: 11px; background: var(--bg2, #f5f5f5); border: 1px solid var(--line, #ddd); border-radius: 6px; padding: 6px 8px; margin: 4px 0; white-space: pre-wrap; word-break: break-all; font-family: Consolas, monospace; }
+
+
+/* ── R166 帮助抽屉：左下角帮助图标 + 滑入抽屉（申请记录/系统消息/帮助/诊断/反馈） ── */
+#bangZhuAnNiu { position: relative; }
+#ceLan #bangZhuAnNiu svg { width: 18px; height: 18px; } /* R175：视觉缩小（压过 renderer.css 的 #ceLan .ceLanTiaoMu svg） */
+.bz-huiZhang {
+  position: absolute; top: 4px; right: 4px; min-width: 15px; height: 15px; padding: 0 4px;
+  border-radius: 999px; background: var(--danger, #fa5151); color: #fff;
+  font-size: 10px; line-height: 15px; text-align: center; font-weight: 600;
+  box-shadow: 0 0 0 2px var(--rail-bg, #ebebeb);
+}
+.bz-zhezhao { display: none; } /* R175：纯叠加抽屉，不再全屏遮罩/模糊，底层内容保持可见可点 */
+.bz-zhezhao.kai { opacity: 1; }
+.bz-chouti {
+  /* R175：从第一列(64px rail)右边弹出；底部对齐；顶部不到顶、高度够放菜单即可 */
+  position: fixed; left: 64px; bottom: 0; top: auto; z-index: 9001;
+  width: min(320px, calc(100vw - 76px)); max-height: calc(100vh - var(--titlebar-h, 40px) - 12px);
+  display: flex; flex-direction: column;
+  background: var(--card, #fff); border: 1px solid var(--line, #e5e5e5); border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 12px 40px rgba(0,0,0,.18);
+  /* R179：左缘钉在交界(left:64)不动；clip-path 自交界向右揭示（负 inset 保留外阴影）。
+     收起=右侧裁掉100% + visibility:hidden ⇒ 完全看不见、不露边、不挡点击。 */
+  clip-path: inset(-40px 100% -40px 0);
+  visibility: hidden; pointer-events: none;
+  transition: clip-path .26s cubic-bezier(.22,.9,.3,1), visibility 0s linear .26s;
+}
+/* R179：打开=自第一/二列交界向右展开到全宽 */
+.bz-chouti.kai {
+  clip-path: inset(-40px -40px -40px 0);
+  visibility: visible; pointer-events: auto;
+  transition: clip-path .26s cubic-bezier(.22,.9,.3,1), visibility 0s;
+}
+.bz-tou {
+  display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+  border-bottom: 1px solid var(--line, #e5e5e5); flex: 0 0 auto;
+}
+.bz-tou h2 { margin: 0; font-size: var(--fs-md, 14px); font-weight: 600; color: var(--ink, #191919); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bz-fanHui, .bz-guanBi {
+  width: 28px; height: 28px; flex: 0 0 auto; display: grid; place-items: center;
+  border: none; background: transparent; border-radius: 8px; cursor: pointer; color: var(--muted, #888);
+  transition: background .15s, color .15s;
+}
+.bz-fanHui:hover, .bz-guanBi:hover { background: var(--hover, #ececec); color: var(--ink, #191919); }
+.bz-fanHui svg, .bz-guanBi svg { width: 15px; height: 15px; }
+.bz-shen { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.bz-caiDan { padding: 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.bz-xiang {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px;
+  border: none; background: transparent; border-radius: 10px; cursor: pointer; text-align: left;
+  color: var(--ink, #191919); font-size: var(--fs-base, 13px); transition: background .15s;
+}
+.bz-xiang:hover { background: var(--hover, #ececec); }
+.bz-xiang .bz-tu { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 8px; background: color-mix(in srgb, var(--accent, #A87654) 12%, transparent); color: var(--accent, #A87654); }
+.bz-xiang .bz-tu svg { width: 16px; height: 16px; }
+.bz-xiang .bz-zi { flex: 1; min-width: 0; }
+.bz-dian { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; background: var(--danger, #fa5151); color: #fff; font-size: 10px; line-height: 16px; text-align: center; font-weight: 600; }
+.bz-xiangQing { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 16px; }
+/* 分组 + 记录 */
+.bz-zu { margin-bottom: 14px; }
+.bz-zuTou {
+  position: sticky; top: -10px; z-index: 1; display: flex; align-items: center; gap: 6px;
+  padding: 6px 2px; background: var(--card, #fff);
+  font-size: var(--fs-sm, 12px); font-weight: 600; color: var(--muted, #888);
+  letter-spacing: .02em;
+}
+.bz-zuShu { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; background: var(--hover, #ececec); color: var(--muted, #888); font-size: 10px; line-height: 16px; text-align: center; }
+.bz-jiLu { padding: 9px 10px; border: 1px solid var(--line, #e5e5e5); border-radius: 10px; margin-bottom: 6px; background: color-mix(in srgb, var(--card, #fff) 60%, var(--hover, #ececec)); }
+.bz-jiLuTou { display: flex; align-items: center; gap: 8px; }
+.bz-ming { flex: 1; min-width: 0; font-weight: 600; font-size: var(--fs-base, 13px); color: var(--ink, #191919); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bz-jiLuFu { margin-top: 3px; font-size: var(--fs-sm, 12px); color: var(--muted, #888); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bz-jiLuCao { display: flex; gap: 6px; margin-top: 7px; }
+.bz-zhuangTai { flex: 0 0 auto; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.bz-zt-pending { background: color-mix(in srgb, var(--accent, #A87654) 16%, transparent); color: var(--accent, #A87654); }
+.bz-zt-approved { background: color-mix(in srgb, var(--ok-fg, #1a7f3c) 14%, transparent); color: var(--ok-fg, #1a7f3c); }
+.bz-zt-rejected, .bz-zt-blocked { background: color-mix(in srgb, var(--danger, #fa5151) 12%, transparent); color: var(--danger-fg, #8a1f1f); }
+.bz-zt-expired { background: var(--hover, #ececec); color: var(--muted, #888); }
+.bz-kong { padding: 18px 8px; text-align: center; color: var(--muted, #888); font-size: var(--fs-sm, 12px); }
+.bz-jiaZai { padding: 24px; text-align: center; color: var(--muted, #888); }
+.bz-gongJuTiao { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+/* 系统消息 */
+.bz-xiaoXi { padding: 9px 10px; border: 1px solid var(--line, #e5e5e5); border-radius: 10px; margin-bottom: 6px; }
+.bz-xiaoXi.weiDu { border-left: 3px solid var(--accent, #A87654); }
+.bz-xiaoXiTou { display: flex; align-items: center; gap: 8px; }
+.bz-xiaoXiBiao { flex: 1; min-width: 0; font-weight: 600; font-size: var(--fs-base, 13px); color: var(--ink, #191919); }
+.bz-xiaoXiShi { font-size: 11px; color: var(--muted, #888); flex: 0 0 auto; }
+.bz-xiaoXiShen { margin-top: 3px; font-size: var(--fs-sm, 12px); color: var(--muted, #888); white-space: pre-wrap; word-break: break-word; }
+.bz-leiBie { flex: 0 0 auto; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--hover, #ececec); color: var(--muted, #888); }
+/* 抽屉内滚动条：细、贴主题 */
+.bz-caiDan::-webkit-scrollbar, .bz-xiangQing::-webkit-scrollbar { width: 8px; }
+.bz-caiDan::-webkit-scrollbar-thumb, .bz-xiangQing::-webkit-scrollbar-thumb { background: var(--scroll, #c1c1c1); border-radius: 8px; border: 2px solid var(--card, #fff); }
+.bz-caiDan::-webkit-scrollbar-track, .bz-xiangQing::-webkit-scrollbar-track { background: transparent; }
+@media (prefers-reduced-motion: reduce) {
+  .bz-chouti, .bz-zhezhao { transition: none; }
+}
+
+/* R174：知识库搜索结果限高 + 超出滚动 */
+.kbJieGuoQu { max-height: 240px; overflow-y: auto; margin-top: 4px; }
