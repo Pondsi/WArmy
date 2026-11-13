@@ -3820,14 +3820,7 @@ async function langDuWenBen(text, btnEl) {
         : state.instances.map((i) => ({ id: i.id, ming: xianShiMing(i), name: xianShiMing(i), kind: 'single', lastPreview: t('list.noReply') }));
       if (!source.length) {
         // 一个实例都没有 → 直接给「创建牛马」按钮
-        heZi.innerHTML = `<div class="enterHqBaoGuo">
-          <div class="jingYin">${escapeHtml(t('list.empty'))}</div>
-          <button class="enterHqAnNiu" id="anNiuEnterHq">
-            <svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M30,38 C18,32 12,20 16,10"/><path d="M70,38 C82,32 88,20 84,10"/><path d="M28,38 L72,38 L62,68 L50,80 L38,68 Z"/><line x1="40" y1="52" x2="48" y2="52"/><line x1="52" y1="52" x2="60" y2="52"/></g><rect x="36" y="46" width="8" height="8" fill="currentColor"/><rect x="56" y="46" width="8" height="8" fill="currentColor"/></svg>
-            <span>${escapeHtml(t('startGuide.step.niuma.action'))}</span>
-          </button>
-        </div>`;
-        $('anNiuEnterHq')?.addEventListener('click', () => addInstanceFlow());
+        heZi.innerHTML = `<div class="lieBiaoKong">${escapeHtml(t('list.empty'))}</div>`; // R183 项1：去掉「指给我看」按钮
         return;
       }
       source.forEach((c) => {
@@ -5675,6 +5668,14 @@ async function langDuWenBen(text, btnEl) {
    *   失败 ·2026/10/18 01:03:12 · 耗时 2秒
    * 也就是：**状态写在前面**、写明**是什么操作**、**删掉那条重复的「更新 …」**。
    */
+  /** R183 项9：操作名本地化（wait_seconds 等工具名 → 当前语言）。未知操作回退为去下划线可读形。 */
+  function caoMingLocal(op) {
+    const k = String(op || '').trim();
+    if (!k) return '';
+    const yi = tOr('op.' + k, '');
+    if (yi) return yi;
+    return k.replace(/[_-]+/g, ' ');
+  }
   function xingDongHangNode(m) {
     const shiFen = (ts) => TZ.hm(ts);
     const quan = (ts) => TZ.loc(ts, 'zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
@@ -5697,7 +5698,7 @@ async function langDuWenBen(text, btnEl) {
      */
     hang.innerHTML = '<span class="xdIco" aria-hidden="true"></span>'
       + '<span class="xdShi">' + escapeHtml(shiFen(m.ts)) + '</span>'
-      + '<span class="xdCao">' + escapeHtml(m.op || m.raw || '') + '</span>'
+      + '<span class="xdCao">' + escapeHtml(caoMingLocal(m.op || m.raw)) + '</span>'
       + '<span class="xdZhuang ' + ztCls + '">' + escapeHtml(ztWen(m.status)) + '</span>';
     // ── 点开：开始 → 操作+内容 → 最终状态/时间/耗时 ──
     const det = document.createElement('div');
@@ -5713,7 +5714,7 @@ async function langDuWenBen(text, btnEl) {
     xian2.className = 'xdXian xdXian2';
     const juTi = String(m.detail || '');
     /** 操作类型写在前面（创建/修改/读取/运行命令…），后面跟具体内容 */
-    const caoWen = String(m.op || m.raw || '');
+    const caoWen = caoMingLocal(m.op || m.raw);
     const sp = document.createElement('span');
     sp.className = 'xdJuTi';
     if (juTi) {
@@ -6231,7 +6232,7 @@ async function langDuWenBen(text, btnEl) {
    * 主进程日志与模型收到的原文**不变**（路径仍随正文带给模型，它可用 read_file 读）。
    */
   function boLiFuJianWenZi(wenBen) {
-    return String(wenBen || '').replace(/\n?\[[^\n[\]]*\](\n\[附件路径\][^\n]*)?\s*$/, '');
+    return String(wenBen || '').replace(/\x0a?\[[^\x0a[\]]*\](\x0a\[附件路径\][^\x0a]*)?\s*$/, '');
   }
   /**
    * 第 81 轮 #17：微信（ilink）入站消息的展示。
@@ -6842,8 +6843,8 @@ async function langDuWenBen(text, btnEl) {
           // 悬停显示**降级信息**（模型调用失败后改用了谁）
           /** 第 66 轮 项 34：模型这一行也必须有完整悬停内容（以前只有降级时才挂 title） */
           + '<div class="xiaoXiMoXing" title="' + escapeHtml(xiaoXiTip) + '">' +
-            escapeHtml(String(m.moXing || '').replace(/^本轮模型[：:]\s*/, '')) +
-            (m.moXingJiangJi ? ' <span class="moXingJiangJiKuo">(' + escapeHtml(jiangJiDuan(m.moXingJiangJi)) + ')</span>' : '') +
+            '<span class="moXingWen">' + escapeHtml(String(m.moXing || '').replace(/^本轮模型[：:]\s*/, '')) +
+            (m.moXingJiangJi ? ' <span class="moXingJiangJiKuo">(' + escapeHtml(jiangJiDuan(m.moXingJiangJi)) + ')</span>' : '') + '</span>' +
             '<span class="zanCaiJi" style="margin-left:24px">' +
             (m.role === 'wo' ? '' :
               '<button type="button" class="zanCaiBtn' + ((state.votes && state.votes[maoYao(m)] === 'up') ? ' qiYong' : '') + '" data-zan="1" data-mkey="' + escapeHtml(maoYao(m)) + '" title="' + escapeHtml(tOr('chat.voteUp', '赞')) + '">' +
@@ -8388,50 +8389,8 @@ async function langDuWenBen(text, btnEl) {
       return { ...x, showHao: y.haoChi.get(x.id) || x.id, retired: wan };
     });
   }
-  /**
-   * R165：可对外诊断日志面板。document 级委托，不依赖设置初始化时机。
-   * 查看/自检只读；导出走主进程保存对话框（再脱敏一次）；清空需确认；开关即时生效。
-   */
-  function zhenDuanYuLanXianShi(rows) {
-    const he = document.getElementById('zhenDuanYuLan');
-    if (!he) return;
-    if (!rows || !rows.length) { he.textContent = tOr('diag.empty', '（暂无记录）'); return; }
-    he.textContent = rows.map((r) => {
-      const wei = [r.ts, r.ji, r.mo, r.code].filter(Boolean).join('  ');
-      const gu = [r.lei, r.dai].filter(Boolean).join('/');
-      const shu = [r.miao != null ? r.miao + 'ms' : '', r.ci != null ? 'x' + r.ci : '', r.zhuang != null ? 'HTTP' + r.zhuang : ''].filter(Boolean).join(' ');
-      const zhan = (r.zhan || []).join(' <- ');
-      return wei + (gu ? '  [' + gu + ']' : '') + (shu ? '  ' + shu : '') + (zhan ? '\n    ' + zhan : '');
-    }).join('\n');
-  }
-  async function zhenDuanShuaXin() {
-    try { const r = await window.warmy.diagLog(120); zhenDuanYuLanXianShi(r && r.entries); return r; } catch { return null; }
-  }
-  document.addEventListener('click', async (ev) => {
-    const b = ev.target && ev.target.closest ? ev.target.closest('[data-zd]') : null;
-    if (!b) return;
-    const dong = b.getAttribute('data-zd');
-    try {
-      if (dong === 'view') { await zhenDuanShuaXin(); }
-      else if (dong === 'selfcheck') {
-        const r = await window.warmy.diagSelfCheck();
-        zhenDuanYuLanXianShi(((r && r.results) || []).map((x) => ({ ts: '', ji: x.ok ? 'info' : 'warn', mo: 'selfcheck', code: x.code, zhi: x.zhi })));
-        showToast(tOr('diag.selfcheckDone', '自检完成'));
-      } else if (dong === 'export') {
-        const r = await window.warmy.diagExport();
-        if (r && r.ok) showToast(tOr('diag.exported', '已导出（不含敏感信息）'));
-      } else if (dong === 'clear') {
-        const ok = await uiConfirm(tOr('diag.confirmClear', '清空诊断日志？此操作不可恢复。'));
-        if (ok) { await window.warmy.diagClear(); await zhenDuanShuaXin(); showToast(tOr('diag.cleared', '已清空')); }
-      } else if (dong === 'toggle') {
-        const cur = await window.warmy.diagLog(1);
-        const on = !(cur && cur.enabled);
-        const r = await window.warmy.diagToggle(on);
-        b.textContent = tOr('diag.enable', '记录：开') + (r && r.enabled ? '' : '（关）');
-        await zhenDuanShuaXin();
-      }
-    } catch { /* 面板失败不影响其它设置 */ }
-  });
+  // R184：诊断日志已移到独立窗口（消息抽屉 → 诊断日志 → daKaiZhenDuanChuang / diag.html）。
+  // 设置 → 功能 不再保留日志/诊断面板；旧 R165 内嵌面板的 data-zd 委托（指向已删除的 #zhenDuanYuLan）随之移除。
   // ── R166 帮助抽屉控制器 ──
   var BZ_REPO = 'https://github.com/Pondsi/WArmy';
   function bzEl(id) { return document.getElementById(id); }
@@ -8450,12 +8409,14 @@ async function langDuWenBen(text, btnEl) {
     var an = bzEl('bangZhuAnNiu'); if (an) an.classList.remove('jiHuo'); // R175：取消附加选中，按钮回正常色
   }
   function bzCaiDanView() {
+    bzEl('bangZhuChouTi').classList.remove('xiangQing'); // R184：菜单视图隐藏顶栏（去顶部线）
     bzEl('bzCaiDan').classList.remove('yinCang');
     bzEl('bzXiangQing').classList.add('yinCang');
     bzEl('bzFanHui').classList.add('yinCang');
     bzEl('bzBiaoTi').textContent = tOr('help.title', '帮助');
   }
   function bzXiangQingView(title) {
+    bzEl('bangZhuChouTi').classList.add('xiangQing'); // R184：详情视图显示顶栏（返回按钮）
     bzEl('bzCaiDan').classList.add('yinCang');
     var x = bzEl('bzXiangQing'); x.classList.remove('yinCang');
     bzEl('bzFanHui').classList.remove('yinCang');
@@ -8532,16 +8493,7 @@ async function langDuWenBen(text, btnEl) {
   }
   function bzDaKaiZhenDuan() {
     bzGuan();
-    try { setNav('settings'); } catch (e) { /* noop */ }
-    setTimeout(function () {
-      try { var tab = document.querySelector('button[data-sec="func"]'); if (tab) tab.click(); } catch (e) { /* noop */ }
-      setTimeout(function () {
-        try {
-          var ka = document.getElementById('zhenDuanRiZhiKa');
-          if (ka) { ka.scrollIntoView({ block: 'center' }); var v = ka.querySelector('[data-zd="view"]'); if (v) v.click(); }
-        } catch (e) { /* noop */ }
-      }, 250);
-    }, 150);
+    try { window.warmy.daKaiZhenDuanChuang(); } catch (e) { /* noop */ } // R184：独立窗口
   }
   document.addEventListener('click', async function (ev) {
     var mb = ev.target;
@@ -8567,7 +8519,7 @@ async function langDuWenBen(text, btnEl) {
     var dong = xiang.getAttribute('data-bz');
     if (dong === 'requests') bzXuanRanRequests();
     else if (dong === 'system') bzXuanRanSystem();
-    else if (dong === 'docs') { bzGuan(); try { window.warmy.openExternal(BZ_REPO + '#readme'); } catch (e) { /* noop */ } }
+    else if (dong === 'docs') { bzGuan(); try { window.warmy.daKaiBangZhuWenDang(); } catch (e) { /* noop */ } } // R183 项12：本地帮助文档
     else if (dong === 'feedback') { bzGuan(); try { window.warmy.openExternal(BZ_REPO + '/discussions'); } catch (e) { /* noop */ } }
     else if (dong === 'diag') bzDaKaiZhenDuan();
   });
@@ -11792,6 +11744,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
            * 现在：写进牛马的 `currentModel`，主进程下一轮直接把它当显式模型用，
            * 预算按它的真实窗口算；用户点 ❌ 或改调用链就清掉（见 modelMgrCard）。
            */
+          try { void ctxLoad(); } catch { /* noop */ } // R183 项6：派发后按实际模型重算预算
           try {
             const jiang = r.moXingJiangJi;
             const yong = String(r.moXing || '').trim();
@@ -15380,19 +15333,6 @@ async function renderDashboard(host) {
           <p class="jingYin">${escapeHtml(tOr('settings.nengLiWaiHint', '模型可以提案新的能力类别；宿主校验后自动生效。下面是自动加入的条目，发现问题可一键撤销。'))}</p>
           <p class="jingYin" id="nengLiWaiJiShu" style="font-size:11px;margin:4px 0"></p>
           <div id="nengLiWaiLieBiao"></div>
-        </div>
-        <!-- R165：可对外诊断日志（构造即脱敏、绝不上传）。查看/自检/导出/清空/开关。 -->
-        <div class="sheZhiSection sheZhiKa" id="zhenDuanRiZhiKa" data-sec="func">
-          <h2>${escapeHtml(tOr('diag.title', '日志 / 诊断'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('diag.privacyHint', '这本账只记枚举事件码、模块、错误类别、耗时与脱敏栈帧（文件名:行号），不含路径、用户名、会话内容、密钥、URL、IP；绝不自动上传。导出需你手动确认，可用于报障；本地排障也可看它。'))}</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0">
-            <button class="anNiuXiao" data-zd="view">${escapeHtml(tOr('diag.view', '查看'))}</button>
-            <button class="anNiuXiao" data-zd="selfcheck">${escapeHtml(tOr('diag.selfcheck', '立即自检'))}</button>
-            <button class="anNiuXiao" data-zd="export">${escapeHtml(tOr('diag.export', '导出（可对外）'))}</button>
-            <button class="anNiuXiao" data-zd="clear">${escapeHtml(tOr('diag.clear', '清空'))}</button>
-            <button class="anNiuXiao" data-zd="toggle">${escapeHtml(tOr('diag.enable', '记录：开'))}</button>
-          </div>
-          <pre id="zhenDuanYuLan" class="jingYin" style="max-height:220px;overflow:auto;font-size:11px;white-space:pre-wrap;background:var(--hover);border-radius:6px;padding:8px;margin:0"></pre>
         </div>
         <!-- 第 34 轮 项 4：信任文件夹独立成块，排在 音频设备 → 本地语音与文字互转 之后 -->
         <div class="sheZhiSection sheZhiKa" id="xinRenWenJianJiaKa" data-sec="func">
@@ -22692,6 +22632,174 @@ async function renderDashboard(host) {
     }
   }
 
+  // ── R185 中继站 TLS 信任 UI（FWArmy RELAY-TLS-TRUST §2：首次核对/固定徽标/证书更换重新核对）──
+  function zhongJiTlsJieXiDiZhi(addr) {
+    const s = String(addr || '').trim();
+    if (!s) return null;
+    if (s.startsWith('[')) {
+      const e = s.indexOf(']');
+      if (e < 0) return null;
+      const host = s.slice(1, e);
+      const rest = s.slice(e + 1);
+      const port = rest.startsWith(':') ? Number(rest.slice(1)) : 59599;
+      return host && Number.isInteger(port) && port > 0 && port <= 65535 ? { host, port } : null;
+    }
+    const parts = s.split(':');
+    if (parts.length > 2) return { host: s, port: 59599 };
+    const host = parts[0] || '';
+    const port = parts.length === 2 ? Number(parts[1]) : 59599;
+    return host && Number.isInteger(port) && port > 0 && port <= 65535 ? { host, port } : null;
+  }
+  function zhongJiTlsFenDuan(fp) {
+    const g = String(fp || '').trim().toLowerCase().replace(/[\s:-]/g, '');
+    if (!/^[0-9a-f]{64}$/.test(g)) return '';
+    const zu = [];
+    for (let i = 0; i < 64; i += 4) zu.push(g.slice(i, i + 4));
+    return zu.join(' ');
+  }
+  function zhongJiTlsBadge(pid) {
+    const probe = (netState.tlsProbe || {})[pid];
+    if (probe === 'mismatch') return { state: 'changed', key: 'relayTls.badge.changed' };
+    const pin = (netState.tlsPins || {})[pid];
+    if (pin) return { state: 'pinned', key: 'relayTls.badge.pinned' };
+    return { state: 'unverified', key: 'relayTls.badge.unverified' };
+  }
+  function zhongJiTlsShuaXinPins() {
+    try {
+      void window.warmy.zhongJiTlsLieBiao().then((r) => {
+        const m = {};
+        ((r && r.items) || []).forEach((it) => { m[it.relayId] = it.fingerprint; });
+        netState.tlsPins = m;
+        renderNetProviders();
+      }).catch(() => {});
+    } catch { /* noop */ }
+  }
+  function zhongJiTlsGuanKuang() {
+    const root = document.getElementById('zhongJiTlsHeDuiKuang');
+    if (root) root.classList.add('yinCang');
+  }
+  function zhongJiTlsEnsureKuang() {
+    let root = document.getElementById('zhongJiTlsHeDuiKuang');
+    if (root) return root;
+    root = document.createElement('div');
+    root.id = 'zhongJiTlsHeDuiKuang';
+    root.className = 'zjtls-zhezhao yinCang';
+    root.innerHTML = '<div class="zjtls-ka" role="dialog" aria-modal="true">'
+      + '<h3 class="zjtls-ti" id="zjtlsTi"></h3>'
+      + '<div class="zjtls-hang jingYin" id="zjtlsHost"></div>'
+      + '<div class="zjtls-tiShi" id="zjtlsTiShi"></div>'
+      + '<div class="zjtls-zhiWenQu" id="zjtlsZhiWenQu"></div>'
+      + '<div class="zjtls-dongZuoJi" id="zjtlsDongZuoJi"></div>'
+      + '</div>';
+    document.body.appendChild(root);
+    root.addEventListener('click', (ev) => { if (ev.target === root) zhongJiTlsGuanKuang(); });
+    return root;
+  }
+  function zhongJiTlsFuZhi(fp) {
+    const g = String(fp || '').trim().toLowerCase().replace(/[\s:-]/g, '');
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        void navigator.clipboard.writeText(g).then(() => showToast(t('relayTls.copied'))).catch(() => {});
+        return;
+      }
+    } catch { /* noop */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = g; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+      showToast(t('relayTls.copied'));
+    } catch { /* noop */ }
+  }
+  function zhongJiTlsXuanRanKuang(pid, addr, r) {
+    const root = zhongJiTlsEnsureKuang();
+    const ti = root.querySelector('#zjtlsTi');
+    const host = root.querySelector('#zjtlsHost');
+    const tiShi = root.querySelector('#zjtlsTiShi');
+    const zwQu = root.querySelector('#zjtlsZhiWenQu');
+    const dz = root.querySelector('#zjtlsDongZuoJi');
+    const zt = r && r.zhuangTai;
+    host.textContent = t('relayTls.host') + ': ' + addr.host + ':' + addr.port;
+    zwQu.innerHTML = ''; dz.innerHTML = '';
+    const anNiu = (label, cls, fn) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = cls; b.textContent = label;
+      b.onclick = fn; dz.appendChild(b); return b;
+    };
+    const zhiWenKuai = (label, fp) => {
+      const wrap = document.createElement('div'); wrap.className = 'zjtls-zhiWenKuai';
+      const lab = document.createElement('div'); lab.className = 'zjtls-zhiWenBiao jingYin'; lab.textContent = label;
+      const code = document.createElement('code'); code.className = 'zjtls-zhiWenMa'; code.textContent = zhongJiTlsFenDuan(fp) || String(fp || '');
+      const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'anNiuXiao zjtls-fuZhi'; copy.textContent = t('relayTls.copy');
+      copy.onclick = () => zhongJiTlsFuZhi(fp);
+      wrap.appendChild(lab); wrap.appendChild(code); wrap.appendChild(copy); zwQu.appendChild(wrap);
+    };
+    if (zt === 'first-see') {
+      ti.textContent = t('relayTls.title');
+      tiShi.textContent = t('relayTls.firstSee') + ' ' + t('relayTls.hint'); tiShi.className = 'zjtls-tiShi';
+      zhiWenKuai(t('relayTls.actual'), r.fingerprint);
+      anNiu(t('relayTls.trust'), 'anNiuZhuYao', () => void zhongJiTlsXinRen(pid, addr, r.fingerprint));
+      anNiu(t('relayTls.reject'), 'anNiuXiao', () => void zhongJiTlsJuJue(pid, addr));
+    } else if (zt === 'mismatch') {
+      ti.textContent = t('relayTls.title');
+      tiShi.textContent = t('relayTls.mismatch'); tiShi.className = 'zjtls-tiShi zjtls-jingGao';
+      zhiWenKuai(t('relayTls.expected'), r.expected);
+      zhiWenKuai(t('relayTls.actual'), r.fingerprint);
+      anNiu(t('relayTls.trustNew'), 'anNiuZhuYao', () => void zhongJiTlsXinRen(pid, addr, r.fingerprint));
+      anNiu(t('relayTls.reject'), 'anNiuXiao', () => void zhongJiTlsJuJue(pid, addr));
+    } else if (zt === 'match') {
+      ti.textContent = t('relayTls.title');
+      tiShi.textContent = t('relayTls.matched'); tiShi.className = 'zjtls-tiShi zjtls-chengGong';
+      zhiWenKuai(t('relayTls.expected'), r.fingerprint);
+      anNiu(t('relayTls.recheck'), 'anNiuXiao', () => void zhongJiTlsChongXinHeDui(pid));
+      anNiu(t('relayTls.close'), 'anNiuZhuYao', () => zhongJiTlsGuanKuang());
+    } else if (zt === 'ca-ok') {
+      ti.textContent = t('relayTls.title');
+      tiShi.textContent = t('relayTls.caOk'); tiShi.className = 'zjtls-tiShi zjtls-chengGong';
+      anNiu(t('relayTls.close'), 'anNiuZhuYao', () => zhongJiTlsGuanKuang());
+    } else if (zt === 'ca-fail') {
+      ti.textContent = t('relayTls.title');
+      tiShi.textContent = t('relayTls.caFail'); tiShi.className = 'zjtls-tiShi zjtls-jingGao';
+      anNiu(t('relayTls.close'), 'anNiuXiao', () => zhongJiTlsGuanKuang());
+    } else {
+      ti.textContent = t('relayTls.title');
+      tiShi.textContent = t('relayTls.netError') + (r && r.error ? ' (' + r.error + ')' : ''); tiShi.className = 'zjtls-tiShi zjtls-jingGao';
+      anNiu(t('relayTls.close'), 'anNiuXiao', () => zhongJiTlsGuanKuang());
+    }
+    root.classList.remove('yinCang');
+  }
+  async function zhongJiTlsHeDui(pid) {
+    const p = (netState.providers || []).find((x) => String(x.id) === String(pid));
+    if (!p) return;
+    const addr = zhongJiTlsJieXiDiZhi(p.address);
+    if (!addr) { showToast(t('relayTls.netError')); return; }
+    let r = null;
+    try { r = await window.warmy.zhongJiTlsTanZhen({ host: addr.host, port: addr.port, relayId: String(pid) }); } catch { r = { zhuangTai: 'net-error' }; }
+    netState.tlsProbe = netState.tlsProbe || {};
+    netState.tlsProbe[pid] = r && r.zhuangTai;
+    if (r && r.zhuangTai === 'match') { netState.tlsPins = netState.tlsPins || {}; netState.tlsPins[pid] = r.fingerprint; }
+    zhongJiTlsXuanRanKuang(String(pid), addr, r || { zhuangTai: 'net-error' });
+    renderNetProviders();
+  }
+  async function zhongJiTlsXinRen(pid, addr, fp) {
+    try {
+      const r = await window.warmy.zhongJiTlsXinRen({ relayId: String(pid), host: addr.host, port: addr.port, fingerprint: fp });
+      if (r && r.ok) {
+        netState.tlsPins = netState.tlsPins || {}; netState.tlsPins[pid] = r.fingerprint;
+        netState.tlsProbe = netState.tlsProbe || {}; netState.tlsProbe[pid] = 'match';
+        showToast(t('relayTls.trusted')); zhongJiTlsGuanKuang(); renderNetProviders();
+      } else { showToast(t('relayTls.mismatch')); void zhongJiTlsHeDui(pid); }
+    } catch { showToast(t('relayTls.netError')); }
+  }
+  async function zhongJiTlsJuJue(pid, addr) {
+    try { await window.warmy.zhongJiTlsJuJue({ relayId: String(pid), host: addr.host, port: addr.port }); } catch { /* noop */ }
+    showToast(t('relayTls.rejected')); zhongJiTlsGuanKuang();
+  }
+  async function zhongJiTlsChongXinHeDui(pid) {
+    try { await window.warmy.zhongJiTlsGengXin({ relayId: String(pid) }); } catch { /* noop */ }
+    if (netState.tlsPins) delete netState.tlsPins[pid];
+    if (netState.tlsProbe) delete netState.tlsProbe[pid];
+    zhongJiTlsGuanKuang(); void zhongJiTlsHeDui(pid); renderNetProviders();
+  }
   function renderNetProviders() {
     if (!$('wangLuoProviderMode')) return;
     const list = $('wangLuoProviderList');
@@ -22713,7 +22821,9 @@ async function renderDashboard(host) {
             '<div class="wangLuoProviderAddr" title="' + escapeHtml(p.address || '') + '">' + escapeHtml(p.address || '—') + '</div>' +
             '</div>' +
             '<span class="wangLuoCredBadge" data-state="' + credState + '">' + escapeHtml(t(credKey)) + '</span>' +
+            '<span class="wangLuoTlsBadge" data-tls="' + zhongJiTlsBadge(String(p.id || '')).state + '">' + escapeHtml(t(zhongJiTlsBadge(String(p.id || '')).key)) + '</span>' +
             '<div class="wangLuoProviderActions">' +
+            '<button type="button" class="anNiuXiao" data-ptls="' + escapeHtml(String(p.id || '')) + '">' + escapeHtml(t('relayTls.verifyBtn')) + '</button>' +
             '<button type="button" class="anNiuXiao" data-pedit="' + escapeHtml(String(p.id || '')) + '">' + escapeHtml(t('common.edit')) + '</button>' +
             '<button type="button" class="anNiuXiao" data-pdel="' + escapeHtml(String(p.id || '')) + '">' + escapeHtml(t('common.delete')) + '</button>' +
             '</div></div>';
@@ -22725,6 +22835,10 @@ async function renderDashboard(host) {
     list.querySelectorAll('[data-pdel]').forEach((b) => {
       b.onclick = () => void netProviderDelete(b.dataset.pdel);
     });
+    list.querySelectorAll('[data-ptls]').forEach((b) => {
+      b.onclick = () => void zhongJiTlsHeDui(b.dataset.ptls);
+    });
+    if (!netState.tlsPinsLoaded) { netState.tlsPinsLoaded = true; zhongJiTlsShuaXinPins(); }
     const msg = $('wangLuoProviderMsg');
     if (msg) {
       msg.textContent = netState.providerForm.msg || '';
@@ -27665,16 +27779,6 @@ async function renderDashboard(host) {
         onClick: () => openNiuMaSettings(inst),
       },
       {
-        biaoQian: t('ctx.rename'),
-        onClick: async () => {
-          const ming = await uiPrompt(t('ctx.renamePrompt'), inst.name);
-          if (!ming) return;
-          inst.name = ming; inst.ming = ming;
-          renderList();
-          if (state.selectedInstance?.id === inst.id) renderInstanceDetail();
-        },
-      },
-      {
         /**
          * 「自动归档」：**勾选项**，默认勾选。
          * 样式跟「提醒」一样 —— 文字后面跟一个 ✓，**不用强调色高亮**（用户反馈：那样像被选中/激活了，
@@ -27696,6 +27800,19 @@ async function renderDashboard(host) {
         },
       },
       {
+        // R183 项2：清除＝清空本会话全部内容（含未复盘），不可恢复；二次确认
+        biaoQian: tOr('ctx.clear', '清除'),
+        onClick: async () => {
+          if (!(await uiConfirm(tOr('ctx.clearConfirm', '这将清除本会话中所有的内容，没有复盘的内容也将被清除，不可恢复。确定清除吗？')))) return;
+          const r = await window.warmy.qingChuHuiHuaNeiRong?.({ sessionId: inst.id }).catch(() => null);
+          if (r && r.ok === false) { uiAlert(String(r.error || t('common.error'))); return; }
+          window.__msgs = window.__msgs || {}; delete window.__msgs[inst.id];
+          state.queues[inst.id] = [];
+          renderList(); if (state.selectedChat?.id === inst.id) renderChat();
+          showToast(tOr('ctx.cleared', '已清除本会话内容'));
+        },
+      },
+      {
         /**
          * **删除**（产品要求：放在菜单**最底部**）。
          * 二次确认是**三按钮**：入库 / 清除 / 取消。
@@ -27703,7 +27820,7 @@ async function renderDashboard(host) {
          *   清除 = 马上彻底删除、不进知识库（还要再确认一次）
          */
         biaoQian: t('ctx.delete'),
-        weixian: true,
+        weixian: false, // R183 项2：删除改主题色
         onClick: async () => {
           /**
            * **右击删除不再二次确认**（第 41 轮，用户明确要求）：
@@ -27887,7 +28004,7 @@ async function renderDashboard(host) {
         <div class="jingYin" style="font-size:10px">${escapeHtml(isProject ? tOr('info.project', '项目') : tOr('info.group', '群聊'))}</div>
       </div>
     </div>`;
-    const duiHua = '<div style="max-height:48vh;overflow:auto">'
+    const duiHua = '<div class="xinXiKuangNei">'
       + touXiangHtml
       + membersHtml
       + (localIsAdmin && invLink
@@ -28064,7 +28181,7 @@ async function renderDashboard(host) {
     }
   }
   async function kanLianXiRenKuang(c) {
-    const duiHua = '<div style="max-height:48vh;overflow:auto">'
+    const duiHua = '<div class="xinXiKuangNei">'
       + xinXiHang(tOr('info.note', '备注'), c.note || '—')
       + xinXiHang(tOr('info.name', '名称'), c.name || c.ming || c.id)
       + xinXiHang(tOr('info.email', '邮箱'), c.email || '—')
@@ -28116,19 +28233,6 @@ async function renderDashboard(host) {
         checked: shiZhiDing(g.id),
         onClick: () => sheZhiDing(g.id, !shiZhiDing(g.id)),
       },
-      {
-        // R177：群/项目也可改名（与牛马/联系人同位次；非管理者由主进程如实拒绝）
-        biaoQian: t('ctx.rename'),
-        onClick: async () => {
-          const ming = await uiPrompt(t('ctx.renamePrompt'), g.name || g.ming || '');
-          if (!ming) return;
-          const r = await window.warmy.qunGaiMing?.({ groupId: g.id, ming }).catch(() => null);
-          if (r && r.ok === false) { uiAlert(String(r.error || t('common.error'))); return; }
-          g.name = ming; g.ming = ming;
-          try { await syncGroupsFromStore(); } catch { /* noop */ }
-          renderList();
-        },
-      },
       g.legacy ? {
         biaoQian: tOr('ctx.rebuildLegacy', '重建并重新邀请（旧群无指纹）'),
         onClick: async () => {
@@ -28154,6 +28258,11 @@ async function renderDashboard(host) {
             },
           }
         : null,
+      (g.type === 'internal' ? null : {
+        // R183 项4：复盘勾选，勾选后该会话也被复盘
+        biaoQian: tOr('ctx.review', '复盘') + ((g.review !== false) ? ' ✓' : ''),
+        onClick: () => { g.review = (g.review === false); saveState(); renderList(); },
+      }),
       {
         biaoQian: t('ctx.notify') + ((g.notify !== false) ? ' ✓' : ''),
         onClick: () => {
@@ -28165,7 +28274,7 @@ async function renderDashboard(host) {
       yiJiaRu
         ? {
             biaoQian: t('ctx.delete'),
-            weixian: true,
+            weixian: false, // R183
             onClick: async () => {
               if (blocked) {
                 uiAlert(t('ctx.taskRunning'));
@@ -28199,7 +28308,7 @@ async function renderDashboard(host) {
           }
         : {
             biaoQian: t('ctx.leave'),
-            weixian: true,
+            weixian: false, // R183
             onClick: async () => {
               if (blocked) { uiAlert(t('ctx.taskRunning')); return; }
               if (!(await uiConfirm(tOr('ctx.exitConfirm2', '退出后需要重新加入才能继续访问，确定退出吗？')))) return;
@@ -28237,17 +28346,6 @@ async function renderDashboard(host) {
         onClick: () => void kanLianXiRenKuang(c),
       },
       {
-        biaoQian: t('ctx.rename'),
-        onClick: async () => {
-          const ming = await uiPrompt(t('ctx.renamePrompt'), c.name || c.ming || '');
-          if (!ming) return;
-          c.name = ming;
-          c.ming = ming;
-          try { window.__saveState?.(); } catch { /* noop */ }
-          renderList();
-        },
-      },
-      {
         biaoQian: tOr('ctx.note', '备注'),
         onClick: async () => {
           const zhu = await uiPrompt(tOr('ctx.notePrompt', '备注（只保存在本机，不会发给对方）'), String(c.note || ''));
@@ -28275,7 +28373,7 @@ async function renderDashboard(host) {
       },
       {
         biaoQian: t('ctx.delete'),
-        weixian: true,
+        weixian: false, // R183
         onClick: async () => {
           const r = await window.warmy.sessionDelete?.({
             id: c.id, kind: 'contact', mode: 'purge',

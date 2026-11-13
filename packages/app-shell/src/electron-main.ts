@@ -76,6 +76,7 @@ import { fenDangJieWei, dianMingGongJu } from './gong-ju-fen-dang.js';
 import { gongJuZhiWen as suanGongJuZhiWen } from './gong-ju-zhi-wen.js';
 /** 错误分类表的唯一实现（契约 CuowuLeibie/GuileiCuowu）：收缩重试、异常卡片、审计都按同一张表判 */
 import { fenLeiCuoWu, shiShangXiaWenChaoXian, LEI_BIE_MING } from './cuowu-fenlei.js';
+import { ZhongJiTlsPinCang, zhongJiTlsTanZhen, guiYiZhiWen as tlsGuiYiZhiWen, type ZhongJiTlsMoShi } from './zhong-ji-tls-xin-ren.js';
 /** 归档证据锚点的唯一构造口径（宁缺不假）：纯函数，门禁直接跑真值表，不用去主进程里搜字面 */
 import { maidianCongRiZhi, maidianCongWaiBu, maidianWeiFan, maidianZhenBi, type GuiDangMaidian } from './guiDang-maidian.js';
 /** 产物审计（“已写入 X”必须真有 X）：纯函数判据，门禁可直接测 */
@@ -27917,6 +27918,41 @@ chuliIpc('warmy:webgpuKaiGuanSheZhi', (_e, p0?: { enabled?: boolean }) => {
 
 // ── dsh 实例入口（可选） ──
 
+/** R186：Windows 上 Node>=18.20 直接 spawnSync(npm.cmd) 抛 EINVAL（CVE-2024-27980 后 .cmd/.bat 须经 shell）。
+ * 这是 dsh「检查更新/一键安装」一直失败的根因。优先解析 npm-cli.js 用真 node 直跑（无 shell、无注入面、无 DEP0190 告警）；
+ * 解析不到再退回 shell:true（参数全是固定常量，无用户输入）。 */
+async function npmSpawnSync(args: string[], opts: { cwd?: string; timeout?: number }): Promise<{ status: number | null; stdout: string; stderr: string; error?: string }> {
+  const { spawn, spawnSync } = await import('node:child_process');
+  const isWin = process.platform === 'win32';
+  const env = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+  /** 异步跑 npm（不阻塞主进程事件循环）：收集 stdout/stderr，超时杀进程，错误/关闭都只结算一次。 */
+  const paoNpm = (cmd: string, cmdArgs: string[], yongShell: boolean): Promise<{ status: number | null; stdout: string; stderr: string; error?: string }> => new Promise((resolve) => {
+    let out = '', err = '', yiJie = false;
+    const wan = (r: { status: number | null; stdout: string; stderr: string; error?: string }) => { if (!yiJie) { yiJie = true; clearTimeout(timer); resolve(r); } };
+    const zi = spawn(cmd, cmdArgs, { cwd: opts.cwd, env, windowsHide: true, shell: yongShell });
+    const timer = setTimeout(() => { try { zi.kill('SIGKILL'); } catch { /* noop */ } wan({ status: null, stdout: out, stderr: err, error: 'npm-timeout' }); }, opts.timeout || 60000);
+    zi.stdout?.on('data', (d: Buffer) => { out += d.toString('utf8'); if (out.length > 2000000) out = out.slice(-1000000); });
+    zi.stderr?.on('data', (d: Buffer) => { err += d.toString('utf8'); if (err.length > 2000000) err = err.slice(-1000000); });
+    zi.on('error', (e: Error) => wan({ status: null, stdout: out, stderr: err, error: String(e.message || e) }));
+    zi.on('close', (code: number | null) => wan({ status: code, stdout: out, stderr: err }));
+  });
+  try {
+    const w = spawnSync(isWin ? 'where.exe' : 'which', ['npm'], { encoding: 'utf8', timeout: 8000, windowsHide: true });
+    const lines = String(w.stdout || '').split(String.fromCharCode(10)).map((x) => x.trim()).filter(Boolean);
+    const entry = lines.find((l) => (isWin ? l.toLowerCase().endsWith('npm.cmd') : l.endsWith('/npm'))) || lines[0];
+    if (entry) {
+      const dir = path.dirname(entry);
+      const cli = path.join(dir, 'node_modules', 'npm', 'bin', 'npm-cli.js');
+      if (fs.existsSync(cli)) {
+        const nodeExe = path.join(dir, isWin ? 'node.exe' : 'node');
+        const exe = fs.existsSync(nodeExe) ? nodeExe : process.execPath;
+        const r = await paoNpm(exe, [cli, ...args], false);
+        if (!r.error) return r;
+      }
+    }
+  } catch { /* 解析失败退回 shell */ }
+  return await paoNpm(isWin ? 'npm.cmd' : 'npm', args, isWin);
+}
 /** dsh 安装目标目录（用户数据下，不污染系统全局） */
 function dshAnZhuangMuLu(): string {
   return path.join(app.getPath('userData'), 'dsh-packages');
@@ -27957,15 +27993,7 @@ async function dshZhiXingAnZhuang(_opts?: { force?: boolean }): Promise<{ ok: bo
       fs.writeFileSync(BaoJson, JSON.stringify({ name: 'warmy-dsh-packages', private: true, dependencies: {} }, null, 2));
     }
     const spec = ' @deepseek-ai/dsh@0.1.5-rc.1 ';
-    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    const { spawnSync } = await import('node:child_process');
-    const r = spawnSync(npmCmd, ['install', '--no-fund', '--no-audit', spec.trim()], {
-      cwd: dest,
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: 10 * 60 * 1000,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-    });
+    const r = await npmSpawnSync(['install', '--no-fund', '--no-audit', spec.trim()], { cwd: dest, timeout: 10 * 60 * 1000 });
     const dir = findDshPackageDir(dshHouXuanLuJing());
     if (!dir) {
       return {
@@ -28001,12 +28029,7 @@ chuliIpc('warmy:dshGengXinJianCha', async () => {
     let latest: string | null = null;
     let registryError = '';
     try {
-      const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-      const { spawnSync } = await import('node:child_process');
-      const r = spawnSync(npmCmd, ['view', '@deepseek-ai/dsh', 'version', '--json'], {
-        encoding: 'utf8', windowsHide: true, timeout: 30000,
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-      });
+      const r = await npmSpawnSync(['view', '@deepseek-ai/dsh', 'version', '--json'], { timeout: 30000 });
       const out = String(r.stdout || '').trim();
       try {
         const j = out ? JSON.parse(out) : null;
@@ -28356,9 +28379,12 @@ async function qiDongAnQuanWangZhuang(port: number, opts: { discovery?: boolean;
   return r;
 }
 
-/** 默认锚点（稳定引导节点，供新节点入网）；域名待定——定后填入 host:port 列表，用户可在设置里修改 */
+/** 默认锚点（稳定引导节点，供新节点入网）；R135 与 FWArmy 对齐：DHT/DHT2 × 443/62666（DHT.pondsi.com / DHT2.pondsi.com）。用户可在设置里修改 */
 const MO_REN_MAO_DIAN: string[] = [
-  // 'anchor.warmy.net:7800',  // TODO(anchor): 域名待定
+  'DHT.pondsi.com:443',
+  'DHT.pondsi.com:62666',
+  'DHT2.pondsi.com:443',
+  'DHT2.pondsi.com:62666',
 ];
 
 /** 公开可发现：当前配置（只读，绝不回显密钥/凭证） */
@@ -34280,6 +34306,39 @@ function zhenDuanTanZhen(): Record<string, () => ZiJianXiang | Promise<ZiJianXia
 }
 
 // ── R165 诊断日志（可对外；构造即脱敏，绝不上传）──
+/** R183 项2：清除本会话全部内容（含未复盘），不可恢复。清 chat-meta 消息/操作/半成品 + 待整理区该会话条目。 */
+chuliIpc('warmy:qingChuHuiHuaNeiRong', (_e, p0?: { sessionId?: string }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    if (!sid) return { ok: false, error: 'bad-session' };
+    const h = chatMetaBen.get(sid);
+    if (h) { h.msgs = []; h.xingDong = []; delete h.jinXing; xieChatMeta(); }
+    // 待整理区条目不带会话 id，清除不动它（避免误清他会话）
+    audit?.log('chat.cleared', { sessionId: sid });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R183 项12：帮助文档做到程序里；nm 查看器启用则用 nm，否则系统默认打开。 */
+/** R184：诊断日志独立窗口。复用 preload（暴露 diag*），加载 renderer/diag.html。 */
+let zhenDuanChuang: BrowserWindow | null = null;
+chuliIpc('warmy:daKaiZhenDuanChuang', () => {
+  try {
+    if (zhenDuanChuang && !zhenDuanChuang.isDestroyed()) { zhenDuanChuang.focus(); return { ok: true }; }
+    zhenDuanChuang = new BrowserWindow({ width: 960, height: 700, title: '诊断日志', backgroundColor: '#f5f5f5', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false } });
+    zhenDuanChuang.on('closed', () => { zhenDuanChuang = null; });
+    void zhenDuanChuang.loadFile(path.join(__dirname, 'renderer', 'diag.html'));
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:daKaiBangZhuWenDang', async () => {
+  try {
+    const lu = path.join(__dirname, 'renderer', 'help.md');
+    if (!fs.existsSync(lu)) return { ok: false, error: 'help-missing' };
+    if (nmKaiWenJianKai() && nmChaJianQiYong()) { try { nmShiTuKai({ luJing: lu, zhuTi: nmShiTuZhuTi() }); return { ok: true, via: 'nm' }; } catch { /* 回落系统 */ } }
+    await shell.openPath(lu);
+    return { ok: true, via: 'system' };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 chuliIpc('warmy:zhenDuanRiZhi', (_e, limit?: number) => ({
   ok: true,
   enabled: zhenDuan?.enabled ?? false,
@@ -34317,6 +34376,57 @@ chuliIpc('warmy:zhenDuanDaoChu', async () => {
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
+// ── R185 中继站 TLS 信任（FWArmy RELAY-TLS-TRUST §2 五项；pin=自签指纹固定，verify=系统 CA+域名）──
+let zhongJiTlsCangShiLi: ZhongJiTlsPinCang | null = null;
+function zhongJiTlsPinCang(): ZhongJiTlsPinCang {
+  if (!zhongJiTlsCangShiLi) zhongJiTlsCangShiLi = new ZhongJiTlsPinCang(path.join(app.getPath('userData'), 'net', 'relay-tls-pins.json'));
+  return zhongJiTlsCangShiLi;
+}
+function zhongJiTlsCanShuGuiYi(p0?: { host?: string; port?: number; relayId?: string; mode?: string }): { host: string; port: number; relayId: string; mode: ZhongJiTlsMoShi } {
+  const host = String(p0?.host || '').trim();
+  const port = Number.isInteger(Number(p0?.port)) && Number(p0?.port) > 0 ? Number(p0?.port) : 59599;
+  const relayId = String(p0?.relayId || (host ? host + ':' + port : ''));
+  const mode: ZhongJiTlsMoShi = p0?.mode === 'verify' ? 'verify' : 'pin';
+  return { host, port, relayId, mode };
+}
+/** 探针：只取指纹/判定，不发送任何数据；first-see/mismatch/ca-fail 一律销毁连接。 */
+chuliIpc('warmy:zhongJiTlsTanZhen', async (_e, p0?: { host?: string; port?: number; relayId?: string; mode?: string }) => {
+  try {
+    const { host, port, relayId, mode } = zhongJiTlsCanShuGuiYi(p0);
+    if (!host) return { ok: false, error: 'bad-host' };
+    const pin = zhongJiTlsPinCang().du(relayId);
+    const r = await zhongJiTlsTanZhen({ host, port, mode, pinnedFingerprint: pin?.fingerprint ?? null });
+    if (r.zhuangTai === 'mismatch') { try { audit?.log('relay-tls.mismatch', { relayId, host, port }); } catch { /* noop */ } }
+    return { ...r, relayId, mode, pinned: pin?.fingerprint ?? '' };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 信任并固定：信任前再探一次，活证书指纹必须与用户确认的一致（TOCTOU 闸），再原子落盘。 */
+chuliIpc('warmy:zhongJiTlsXinRen', async (_e, p0?: { relayId?: string; host?: string; port?: number; fingerprint?: string; mode?: string }) => {
+  try {
+    const { host, port, relayId, mode } = zhongJiTlsCanShuGuiYi(p0);
+    const fp = tlsGuiYiZhiWen(p0?.fingerprint);
+    if (!host || !fp || !relayId) return { ok: false, error: 'bad-input' };
+    const r = await zhongJiTlsTanZhen({ host, port, mode, pinnedFingerprint: fp });
+    if (!r.ok || (r.zhuangTai !== 'match' && r.zhuangTai !== 'ca-ok')) return { ok: false, error: 'fingerprint-changed', zhuangTai: r.zhuangTai, fingerprint: r.fingerprint || '' };
+    zhongJiTlsPinCang().xie(relayId, { fingerprint: fp, trustedAt: Date.now(), host, port });
+    try { audit?.log('relay-tls.trust', { relayId, host, port }); } catch { /* noop */ }
+    return { ok: true, fingerprint: fp };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 拒绝：不固定任何指纹、不建立连接、不发送凭据/消息（只留审计）。 */
+chuliIpc('warmy:zhongJiTlsJuJue', (_e, p0?: { relayId?: string; host?: string; port?: number }) => {
+  const { relayId, host, port } = zhongJiTlsCanShuGuiYi(p0);
+  try { audit?.log('relay-tls.reject', { relayId, host, port }); } catch { /* noop */ }
+  return { ok: true };
+});
+/** 重新核对/更新指纹：清除固定 ⇒ 下次探针回到 first-see，重新走人工核对。 */
+chuliIpc('warmy:zhongJiTlsGengXin', (_e, p0?: { relayId?: string }) => {
+  const { relayId } = zhongJiTlsCanShuGuiYi(p0);
+  const removed = zhongJiTlsPinCang().shan(relayId);
+  try { audit?.log('relay-tls.reset', { relayId }); } catch { /* noop */ }
+  return { ok: true, removed };
+});
+chuliIpc('warmy:zhongJiTlsLieBiao', () => ({ ok: true, items: zhongJiTlsPinCang().lieBiao() }));
 // ── SafeStorage 密钥 ──
 chuliIpc('warmy:anQuanMiYaoBaoCun', async (_e, payload: { providerId: string; apiKey: string }) => {
   try {

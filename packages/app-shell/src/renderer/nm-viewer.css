@@ -1261,9 +1261,9 @@ body.tuoYaSuoFenGe { cursor: col-resize; user-select: none; }
 
 /* 网站模式正文：4 态分栏（0 只网页 / 1 网页左源码右 / 2 源码左网页右 / 3 网页上源码下）
    分隔条可左右/上下拖动；比例存在**每个标签页自己**身上（切换标签不会串）。 */
-#wangYeLie { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; background: #fff; }
+#wangYeLie { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; background: var(--card); } /* R183 项11：隐藏原生视图时不露白 */
 #wangYeKuangHe { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; order: 0; }
-#wangYeKuang { flex: 1 1 auto; width: 100%; height: 100%; border: 0; background: #fff; }
+#wangYeKuang { flex: 1 1 auto; width: 100%; height: 100%; border: 0; background: var(--card); } /* R183 项11 */
 #wangYeFenGe {
   flex: 0 0 7px;
   align-self: stretch;
@@ -1310,7 +1310,7 @@ body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
 #wangYeLie.fen3 #wangYeFenGe::after { width: 34px; height: 3px; }
 #wangYeYuan .yuanHang {
   flex: 0 0 auto;
-  padding: 4px 6px;
+  padding: 2px 6px; /* R183 项11：源码栏工具栏降高 */
   background: var(--gongJu-bg);
   border-bottom: 1px solid var(--line);
 }
@@ -1603,3 +1603,7 @@ body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
 #wangYeYuanWen { order: 1; flex: 1 1 300px; min-width: 180px; }
 #yuanDevFenGe { order: 2; }
 #yuanDevLan { order: 3; flex: 0 0 32%; }
+
+/* R183 项11：菜单内图标统一尺寸（搜索图标不再偏小）；浮层用主题卡色不露白 */
+.gongJuCaiDan button svg, .gongJuCaiDan label svg { width:14px !important; height:14px !important; }
+.gongJuCaiDan { background: var(--card); }

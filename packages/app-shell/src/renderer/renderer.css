@@ -2203,8 +2203,8 @@ body.liaoTianChuangKou #appTi {
   flex: 0 1 auto;
 }
 /* R163 #5：朝向对方头像的一侧再让出 2 个头像宽（32×2 = 64px） */
-.xiaoXi.wo .bubbleWrap { margin-left: 64px; align-items: flex-end; }
-.xiaoXi:not(.wo) .bubbleWrap { margin-right: 64px; align-items: flex-start; }
+.xiaoXi.wo .bubbleWrap { margin-left: 32px; align-items: flex-end; } /* R183 项8 */
+.xiaoXi:not(.wo) .bubbleWrap { margin-right: 32px; align-items: flex-start; } /* R183 项8 */
 /* T150：气泡随行宽拉满（思考/执行块天然是块级，等宽后与气泡一致） */
 .xiaoXi .bubble { width: 100%; max-width: 100%; }
 /* 任务标题行不参与等宽（强制整行居中） */

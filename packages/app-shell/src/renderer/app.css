@@ -510,13 +510,13 @@ body.liaoTianChuangKou .liaoTianBuJu {
   background: linear-gradient(115deg,
     transparent 0%,
     transparent 18%,
-    var(--yunXing-liu-ruo, rgba(168,118,84,.30)) 34%,
-    var(--yunXing-liu-qiang, rgba(168,118,84,.62)) 50%,
-    var(--yunXing-liu-ruo, rgba(168,118,84,.30)) 66%,
+    rgba(255,255,255,.45) 30%,
+    rgba(255,255,255,.9) 46%,
+    rgba(0,0,0,.45) 60%, /* R183 项7：白正/黑负宽波带=水波 */
     transparent 82%,
     transparent 100%); /* R173 项3：扫光带加宽=更扩散 */
   background-size: 300% 300%;
-  animation: yunXingLiuDong 4.5s linear infinite; /* R173 项3：放慢 */
+  animation: yunXingLiuDong 4.5s linear infinite;
   pointer-events: none;
   z-index: 1;
 }
@@ -1551,6 +1551,10 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 .duiHuaKuangKa:has(.daoChuShu) { width: min(780px, calc(100vw - 48px)); }
 /* 我的名片：卡片宽度跟随内容，但不超过主界面；内容超出高度时才由 .duiHuaKuangTi 滚动 */
 .duiHuaKuangKa:has(.woCardBody) { width: min(560px, calc(100vw - 48px)); }
+/* R183 项3/4：项目/群设置信息窗加大、内容自适应、仅一条滚动条 */
+.duiHuaKuangKa:has(.xinXiKuangNei) { width: min(720px, calc(100vw - 48px)); max-height: min(86vh, 860px); }
+.xinXiKuangNei { overflow: visible; }
+.xinXiKuangNei .neiGunDong { overflow: visible; max-height: none; }
 .duiHuaKuangBiaoTi, .duiHuaKuangDongZuoJi { flex: 0 0 auto; }
 .duiHuaKuangTi { min-height: 0; overflow: auto; padding-right: 4px; }
 /* R163 #4：确认类弹窗（完全授权二次确认等）不该拉到接近满屏。
@@ -1671,8 +1675,8 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
   cursor: pointer;
 }
 .shangXiaWenCaiDan button:hover { background: var(--hover); }
-.shangXiaWenCaiDan button.danger { color: var(--danger); }
-.shangXiaWenCaiDan button.danger:hover { background: rgba(250,81,81,.12); }
+.shangXiaWenCaiDan button.danger { color: var(--accent); } /* R183 项2：删除改主题色 */
+.shangXiaWenCaiDan button.danger:hover { background: var(--hover); } /* R183 */
 .shangXiaWenCaiDan button.qiYong { color: var(--accent); }
 /* R159 项1：不可用项灰掉且不给悬停反馈（无选区时的「翻译选中内容」） */
 .shangXiaWenCaiDan button:disabled,
@@ -3693,8 +3697,8 @@ html { font-weight: var(--fw-ui, 400); }
  * 我的消息靠右 ⇒ 左侧留白；对方消息靠左 ⇒ 右侧留白。
  * ⚠️ renderer.css 的「.xiaoXi .bubbleWrap」特异性更高且后加载，那边必须同步改，
  *    否则这里改了不生效（R160 项9 就是这么失效的：只改了 app.css）。 */
-.xiaoXi.wo .bubbleWrap { margin-left: 64px; }
-.xiaoXi:not(.wo) .bubbleWrap { margin-right: 64px; }
+.xiaoXi.wo .bubbleWrap { margin-left: 32px; } /* R183 项8：1 头像 */
+.xiaoXi:not(.wo) .bubbleWrap { margin-right: 32px; } /* R183 项8 */
 /* R129 铁律（内容位置不移动）：md 内联图固定 16:9 占位，加载前/后布局一致 */
 .md img { display: block; max-width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--hover, #ececec); border-radius: 6px; }
 /* 主动显示的时间（跨时/跨日）：浅分隔线 + 居中小字 */
@@ -4000,8 +4004,9 @@ html { font-weight: var(--fw-ui, 400); }
 .xiaoXiMoXing {
   font-size: 10px; color: var(--muted); margin-top: 3px;
   opacity: 0; transition: opacity .15s ease;
-  text-align: start; word-break: break-all;
+  text-align: start; /* R183 项10：单行截断，不再换行 */
 }
+.xiaoXiMoXing .moXingWen { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xiaoXi.wo .xiaoXiMoXing { text-align: end; }
 .xiaoXi:hover .xiaoXiMoXing { opacity: 1; }
 /* T10 翻译折叠块：原文不动，译文灰字；点块收起/再点展开（shouQi = 只留「译文」头） */
@@ -5205,7 +5210,7 @@ html { font-weight: var(--fw-ui, 400); }
 #ceLan #bangZhuAnNiu svg { width: 18px; height: 18px; } /* R175：视觉缩小（压过 renderer.css 的 #ceLan .ceLanTiaoMu svg） */
 .bz-huiZhang {
   position: absolute; top: 4px; right: 4px; min-width: 15px; height: 15px; padding: 0 4px;
-  border-radius: 999px; background: var(--danger, #fa5151); color: #fff;
+  border-radius: 999px; background: var(--accent, #A87654); color: #fff; /* R183 项12：主题色圆点 */
   font-size: 10px; line-height: 15px; text-align: center; font-weight: 600;
   box-shadow: 0 0 0 2px var(--rail-bg, #ebebeb);
 }
@@ -5216,7 +5221,7 @@ html { font-weight: var(--fw-ui, 400); }
   position: fixed; left: 64px; bottom: 0; top: auto; z-index: 9001;
   width: min(320px, calc(100vw - 76px)); max-height: calc(100vh - var(--titlebar-h, 40px) - 12px);
   display: flex; flex-direction: column;
-  background: var(--card, #fff); border: 1px solid var(--line, #e5e5e5); border-bottom: none;
+  background: var(--card, #fff); border: none; /* 去边框：旧 1px 边框在顶部圆角处留下左右边线（看起来像一条顶线）；边缘改由下方阴影勾勒 */
   border-radius: 12px 12px 0 0;
   box-shadow: 0 12px 40px rgba(0,0,0,.18);
   /* R179：左缘钉在交界(left:64)不动；clip-path 自交界向右揭示（负 inset 保留外阴影）。
@@ -5235,6 +5240,8 @@ html { font-weight: var(--fw-ui, 400); }
   display: flex; align-items: center; gap: 8px; padding: 12px 14px;
   border-bottom: 1px solid var(--line, #e5e5e5); flex: 0 0 auto;
 }
+/* R184：菜单视图隐藏顶栏（顶部不再有一条线）；详情视图才显示（返回按钮） */
+.bz-chouti:not(.xiangQing) .bz-tou { display: none; }
 .bz-tou h2 { margin: 0; font-size: var(--fs-md, 14px); font-weight: 600; color: var(--ink, #191919); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bz-fanHui, .bz-guanBi {
   width: 28px; height: 28px; flex: 0 0 auto; display: grid; place-items: center;
@@ -5254,7 +5261,7 @@ html { font-weight: var(--fw-ui, 400); }
 .bz-xiang .bz-tu { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 8px; background: color-mix(in srgb, var(--accent, #A87654) 12%, transparent); color: var(--accent, #A87654); }
 .bz-xiang .bz-tu svg { width: 16px; height: 16px; }
 .bz-xiang .bz-zi { flex: 1; min-width: 0; }
-.bz-dian { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; background: var(--danger, #fa5151); color: #fff; font-size: 10px; line-height: 16px; text-align: center; font-weight: 600; }
+.bz-dian { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; background: var(--accent, #A87654); color: #fff; /* R183 项12：主题色圆点 */ font-size: 10px; line-height: 16px; text-align: center; font-weight: 600; }
 .bz-xiangQing { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 16px; }
 /* 分组 + 记录 */
 .bz-zu { margin-bottom: 14px; }
@@ -5296,3 +5303,25 @@ html { font-weight: var(--fw-ui, 400); }
 
 /* R174：知识库搜索结果限高 + 超出滚动 */
 .kbJieGuoQu { max-height: 240px; overflow-y: auto; margin-top: 4px; }
+
+/* ── R185 中继站 TLS 信任核对对话框 + 固定徽标 ── */
+.wangLuoTlsBadge { flex: 0 0 auto; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--hover, #ececec); color: var(--muted, #888); }
+.wangLuoTlsBadge[data-tls="pinned"] { background: color-mix(in srgb, var(--accent, #A87654) 16%, transparent); color: var(--accent, #A87654); }
+.wangLuoTlsBadge[data-tls="changed"] { background: color-mix(in srgb, #c0392b 14%, transparent); color: #c0392b; }
+.zjtls-zhezhao { position: fixed; inset: 0; z-index: 9600; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); }
+.zjtls-zhezhao.yinCang { display: none; }
+.zjtls-ka { width: min(520px, calc(100vw - 48px)); max-height: calc(100vh - 80px); overflow-y: auto; background: var(--card, #fff); color: var(--ink, #191919); border-radius: 12px; padding: 18px 20px; box-shadow: 0 16px 48px rgba(0,0,0,.28); display: flex; flex-direction: column; gap: 10px; }
+.zjtls-ti { margin: 0; font-size: 15px; font-weight: 650; }
+.zjtls-hang { font-size: 12px; word-break: break-all; }
+.zjtls-tiShi { font-size: 12px; line-height: 1.6; color: var(--muted, #888); }
+.zjtls-tiShi.zjtls-jingGao { color: #c0392b; font-weight: 600; }
+.zjtls-tiShi.zjtls-chengGong { color: var(--accent, #A87654); font-weight: 600; }
+.zjtls-zhiWenQu { display: flex; flex-direction: column; gap: 8px; }
+.zjtls-zhiWenKuai { display: flex; flex-direction: column; gap: 4px; }
+.zjtls-zhiWenBiao { font-size: 11px; }
+.zjtls-zhiWenMa { font-family: var(--font-mono, Consolas, monospace); font-size: 12px; line-height: 1.7; word-break: break-all; background: var(--bg2, #f5f5f5); border: 1px solid var(--line, #e5e5e5); border-radius: 8px; padding: 8px 10px; user-select: all; }
+.zjtls-fuZhi { align-self: flex-start; }
+.zjtls-dongZuoJi { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }
+.zjtls-ka::-webkit-scrollbar { width: 8px; }
+.zjtls-ka::-webkit-scrollbar-thumb { background: var(--scroll, #c1c1c1); border-radius: 8px; border: 2px solid var(--card, #fff); }
+.zjtls-ka::-webkit-scrollbar-track { background: transparent; }
