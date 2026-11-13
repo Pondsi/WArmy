@@ -1,13 +1,13 @@
 {
-  "version": "0.4.11",
-  "notes": "WArmy 0.4.11 — relay TLS trust establishment (self-signed certificate fingerprint pinning with first-use manual verification, persistent per-relay pins, automatic mismatch rejection and re-verification, plus CA/domain verification mode); fixes the dsh update check and one-click install on Windows (Node >= 18.20 EINVAL when spawning npm.cmd, now resolved through npm-cli.js with asynchronous spawn so it never blocks the main process); the diagnostic log opens in its own window; the help drawer opens from the rail/list seam and is fully invisible when closed; consistent context-menu ordering across session types; a larger workhorse settings window; knowledge panel rework. Verified by a 160-turn / 24 MB long-context stress test against a local 128K Ollama model: zero failures, zero anomalies, a stable context budget, and correct memory retrieval whenever recall/retrieve is invoked. The in-app updater downloads only changed blocks with unchanged SHA-256 verification.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.11/WArmy-Setup-0.4.11.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.11/WArmy-Setup-0.4.11.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.11/WArmy-Setup-0.4.11.exe.warmyblocks",
-  "sha256": "bde6bbfb30eb3df809215213ea673d31f6dfd5ef1b6abf4c62da5df02580d56a",
-  "size": 234800346,
+  "version": "0.4.12",
+  "notes": "WArmy 0.4.12 — relay TLS trust establishment (self-signed certificate fingerprint pinning with first-use manual verification, persistent per-relay pins, automatic mismatch rejection and re-verification, plus CA/domain verification mode); fixes the dsh update check and one-click install on Windows (Node >= 18.20 EINVAL when spawning npm.cmd, now resolved through npm-cli.js with asynchronous spawn so it never blocks the main process); the diagnostic log opens in its own window; the help drawer opens from the rail/list seam and is fully invisible when closed; consistent context-menu ordering across session types; a larger workhorse settings window; knowledge panel rework. Verified by a 160-turn / 24 MB long-context stress test against a local 128K Ollama model: zero failures, zero anomalies, a stable context budget, and correct memory retrieval whenever recall/retrieve is invoked. The in-app updater downloads only changed blocks with unchanged SHA-256 verification.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.12/WArmy-Setup-0.4.12.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.12/WArmy-Setup-0.4.12.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.12/WArmy-Setup-0.4.12.exe.warmyblocks",
+  "sha256": "edf0f4d50e9c467d96495ef9b5f57e86376877a9462a3f0c90c59f2963ffa62c",
+  "size": 234833482,
   "mandatory": false,
-  "publishedAt": "2026-11-13T07:07:16.522Z",
+  "publishedAt": "2026-11-13T23:34:40.432Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.11"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.12"
 }

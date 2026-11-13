@@ -61,6 +61,8 @@ export class McpGuanWang {
   private peiZhi = new Map<string, McpJianGuanPeiZhi>();
   private chuangKou = new Map<string, number[]>();
   private yiShouQuan = new Set<string>();
+  /** R196：工具规格懒缓存（避免每次调用重过滤；bridge 重启时失效）。 */
+  private guiGeHuanCun: McpGongJuGuiGe[] | null = null;
 
   constructor(
     private opts: {
@@ -92,6 +94,7 @@ export class McpGuanWang {
       const bridge = new mo.McpBridge({ configPath: cfgLu });
       await bridge.start();
       this.bridge = bridge;
+      this.guiGeHuanCun = null; // R196：bridge 启动/重启失效规格缓存
       try {
         this.opts.onShenJi('mcp.start', { config: cfgLu, servers: Object.keys(cfg.servers || {}).length, errors: (bridge.errors || []).length });
       } catch { /* noop */ }
@@ -105,6 +108,7 @@ export class McpGuanWang {
   /** 交给模型的工具清单：过 allow/deny、打第三方信任标签 */
   gongJuGuiGe(): McpGongJuGuiGe[] {
     if (!this.bridge) return [];
+    if (this.guiGeHuanCun) return this.guiGeHuanCun; // R196：懒缓存命中直接返回
     const out: McpGongJuGuiGe[] = [];
     for (const g of this.bridge.toolSpecs()) {
       const ming = String(g?.function?.name || '');
@@ -126,6 +130,7 @@ export class McpGuanWang {
         },
       });
     }
+    this.guiGeHuanCun = out;
     return out;
   }
 

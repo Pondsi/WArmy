@@ -39,6 +39,8 @@ export interface TouDiXuanXiang {
   maxAttempts?: number;
   backoffMs?: (attempts: number) => number;
   compactAfterLines?: number;
+  /** 离线（不可达）时的低频探测间隔，默认 60s；主要靠上线事件续投 */
+  offlineProbeMs?: number;
 }
 
 export interface TouDiAck {
@@ -47,7 +49,7 @@ export interface TouDiAck {
   read?: string[];
 }
 
-export type TouDiSongFa = (jiLu: TouDiJiLu) => Promise<{ ok: boolean; by?: string; error?: string }>;
+export type TouDiSongFa = (jiLu: TouDiJiLu) => Promise<{ ok: boolean; by?: string; error?: string; unreachable?: boolean }>;
 
 export interface TouDiFuWuXuanXiang {
   xiang: WangLuoFaJianXiang;
@@ -97,6 +99,7 @@ export class WangLuoFaJianXiang {
   private readonly maxAttempts: number;
   private readonly backoffMs: (attempts: number) => number;
   private readonly compactAfterLines: number;
+  private readonly offlineProbeMs: number;
   /** key = msgId + NUL + recipientFp（大小写归一） */
   private readonly jiLu = new Map<string, TouDiJiLu>();
   private readonly wenJianHang = new Map<string, number>();
@@ -106,6 +109,7 @@ export class WangLuoFaJianXiang {
     this.maxAttempts = opts.maxAttempts ?? 10;
     this.backoffMs = opts.backoffMs ?? ((n) => Math.min(30_000, 500 * 2 ** Math.max(0, n - 1)));
     this.compactAfterLines = opts.compactAfterLines ?? 400;
+    this.offlineProbeMs = opts.offlineProbeMs ?? 60_000;
     this.reload();
   }
 
@@ -299,6 +303,22 @@ export class WangLuoFaJianXiang {
     });
   }
 
+  /**
+   * 对方离线（不可达）：保持 saved、**不增 attempts、不转 failed**，低频探测排期，主要等上线事件续投。
+   * 与 recordFailure 严格区分：离线是**收件人状态**，不是投递失败（FWArmy RELAY-OFFLINE-DELIVERY §3.2/§5.2，
+   * 不计入会话档案「服务器连续失败」）。对方离线多久都不把消息判死。
+   */
+  markUnreachable(msgId: string, recipientFp: string, error = 'offline'): TouDiJiLu | null {
+    const rec = this.jiLu.get(this.jian(msgId, recipientFp));
+    if (!rec || rec.state === 'persisted' || rec.state === 'read') return null;
+    return this.gengXin(rec, {
+      state: 'saved',
+      attempts: Math.max(0, rec.attempts - 1), // 撤销 markSending 的乐观自增：离线探测不烧次数
+      lastError: String(error || 'offline').slice(0, 300),
+      nextTryAt: this.now() + this.offlineProbeMs,
+    });
+  }
+
   markPersisted(msgId: string, recipientFp: string, by?: string): TouDiJiLu | null {
     const rec = this.jiLu.get(this.jian(msgId, recipientFp));
     if (!rec) return null;
@@ -387,12 +407,13 @@ export class TouDiFuWu {
     return { persisted, read, ignored };
   }
 
-  async flush(recipientFp?: string): Promise<{ attempted: number; ok: number; failed: number }> {
-    if (this.flushing) return { attempted: 0, ok: 0, failed: 0 };
+  async flush(recipientFp?: string): Promise<{ attempted: number; ok: number; failed: number; unreachable: number }> {
+    if (this.flushing) return { attempted: 0, ok: 0, failed: 0, unreachable: 0 };
     this.flushing = true;
     let attempted = 0;
     let ok = 0;
     let failed = 0;
+    let unreachable = 0;
     try {
       const due = this.opts.xiang
         .pending(recipientFp)
@@ -402,7 +423,7 @@ export class TouDiFuWu {
           const sending = this.opts.xiang.markSending(rec.msgId, rec.recipientFp);
           if (!sending) continue;
           attempted += 1;
-          let r: { ok: boolean; by?: string; error?: string };
+          let r: { ok: boolean; by?: string; error?: string; unreachable?: boolean };
           try {
             r = await this.opts.song(sending);
           } catch (e) {
@@ -412,6 +433,11 @@ export class TouDiFuWu {
             const nowJieGuo = this.opts.xiang.recordSent(rec.msgId, rec.recipientFp, r.by);
             ok += 1;
             if (nowJieGuo?.state === 'failed') this.event('toudi-permanent-failed', 'no-ack', { msgId: rec.msgId, peer: rec.recipientFp });
+          } else if (r.unreachable) {
+            // 对方离线＝不可达：保持 saved、不烧 attempts（主要等上线事件续投，不计服务器失败）
+            this.opts.xiang.markUnreachable(rec.msgId, rec.recipientFp, r.error ?? 'offline');
+            unreachable += 1;
+            this.event('toudi-unreachable', r.error ?? 'offline', { msgId: rec.msgId, peer: rec.recipientFp });
           } else {
             const now = this.opts.xiang.recordFailure(rec.msgId, rec.recipientFp, r.error ?? 'send-failed');
             failed += 1;
@@ -426,7 +452,7 @@ export class TouDiFuWu {
     } finally {
       this.flushing = false;
     }
-    return { attempted, ok, failed };
+    return { attempted, ok, failed, unreachable };
   }
 
   start(): void {

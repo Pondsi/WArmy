@@ -2162,7 +2162,7 @@ export async function nmWangYeXuanZhongGaoLiang(id: number, tabKey: string, text
   if (!t) return { ok: false, cuo: '没有选中内容' };
   try {
     const jie = await v.webContents.executeJavaScript(
-      `(() => { const t = ${JSON.stringify(t)}; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const n = w.currentNode; const i = n.nodeValue.indexOf(t); if (i >= 0) { const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + t.length); const s = getSelection(); s.removeAllRanges(); s.addRange(r); try { r.startContainer.parentElement.scrollIntoView({ block: 'center' }); } catch {} return true; } } return false; })()`,
+      `(() => { const t = ${JSON.stringify(t)}; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const n = w.currentNode; const i = n.nodeValue.indexOf(t); if (i >= 0) { const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + t.length); const s = getSelection(); s.removeAllRanges(); s.addRange(r); try { r.startContainer.parentElement.scrollIntoView({ block: 'center' }); } catch { /* noop */ } return true; } } return false; })()`,
       false,
     );
     return { ok: true, found: jie === true };

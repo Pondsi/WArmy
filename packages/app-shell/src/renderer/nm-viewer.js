@@ -3960,7 +3960,50 @@
       }
     } catch { /* noop */ }
   }
+  /** R189 项2：原生 overlay 菜单回调路由（闭包不可序列化，按 id 找回）+ 状态 */
+  const caiDanHuiDiao = new Map();
+  let caiDanYuanShengKai = false;
+  let caiDanYuanShengAnchor = null;
+  let caiDanYuanShengZhongLei = '';
+  let caiDanYuanShengYiGua = false;
+  function guaCaiDanYuanShengShiJian() {
+    if (caiDanYuanShengYiGua) return; caiDanYuanShengYiGua = true;
+    try {
+      window.warmy.nmCaiDanDianJi && window.warmy.nmCaiDanDianJi((d) => {
+        const h = caiDanHuiDiao.get(String((d && d.id) || ''));
+        if (!h) return;
+        try { if (h.check) h.onCheck && h.onCheck(!!d.checked); else h.onClick && h.onClick(); } catch { /* noop */ }
+      });
+      window.warmy.nmCaiDanGuanBi && window.warmy.nmCaiDanGuanBi(() => { caiDanHuiDiao.clear(); caiDanYuanShengKai = false; caiDanYuanShengAnchor = null; caiDanYuanShengZhongLei = ''; });
+    } catch { /* noop */ }
+  }
+  /** 远程网页（原生视图盖在 DOM 上）⇒ 走原生 Menu.popup，不再隐藏网页视图。返回 true 表示已接管。 */
+  function kaiCaiDanYuanSheng(anchor, xiang, zhongLei, dian) {
+    const ka = wangYeDangQian();
+    if (!(ka && !ka.shiBenDi && ka.url && zt.wangYe.kai)) return false;
+    if (!window.warmy || !window.warmy.nmCaiDanTanChu) return false;
+    if (!anchor && !dian) return false;
+    if (caiDanYuanShengKai && !dian && caiDanYuanShengAnchor === anchor && caiDanYuanShengZhongLei === zhongLei) return true;
+    guaCaiDanYuanShengShiJian();
+    caiDanHuiDiao.clear();
+    const items = []; let n = 0;
+    for (const x of xiang) {
+      if (!x) continue;
+      if (x.sep) { items.push({ type: 'separator' }); continue; }
+      const id = 'm' + (n++);
+      if (x.check) { caiDanHuiDiao.set(id, { check: true, onCheck: x.onCheck }); items.push({ id, label: x.label, type: 'checkbox', checked: !!x.checked, enabled: !x.disabled }); }
+      else { caiDanHuiDiao.set(id, { onClick: x.onClick }); items.push({ id, label: x.label, enabled: !x.disabled, hint: x.hint || '' }); }
+    }
+    if (!items.length) return false;
+    let left, top;
+    if (dian) { left = dian.x; top = dian.y; }
+    else { const a = anchor.getBoundingClientRect(); left = a.left; top = a.bottom + 4; }
+    caiDanYuanShengKai = true; caiDanYuanShengAnchor = anchor; caiDanYuanShengZhongLei = zhongLei;
+    try { void window.warmy.nmCaiDanTanChu({ items, x: Math.round(left), y: Math.round(top) }); } catch { /* noop */ }
+    return true;
+  }
   function kaiCaiDan(anchor, xiang, zhongLei, dian) {
+    try { if (kaiCaiDanYuanSheng(anchor, xiang, zhongLei, dian)) return; } catch { /* 原生失败回落 DOM */ }
     try { kaiCaiDanShouShiTu(); } catch { /* noop */ }
     const m = el('gongJuCaiDan');
     if (!m || (!anchor && !dian)) return;

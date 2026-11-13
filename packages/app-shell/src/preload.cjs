@@ -496,6 +496,32 @@ contextBridge.exposeInMainWorld('warmy', {
   nmWangYeXuanZhongGaoLiang: (p) => ipcRenderer.invoke('warmy:nmWangYeXuanZhongGaoLiang', p),
   nmWangYeXuanZeQu: (p) => ipcRenderer.invoke('warmy:nmWangYeXuanZeQu', p),
   nmWangYeCaiDanList: (id) => ipcRenderer.invoke('warmy:nmWangYeCaiDanList', id),
+  /** R189 项2：工具栏菜单原生 overlay（渲染在网页视图之上，开菜单不再让位） */
+  nmCaiDanTanChu: (p) => ipcRenderer.invoke('warmy:nmCaiDanTanChu', p),
+  nmCaiDanDianJi: (cb) => {
+    const fn = (_e, d) => { try { cb(d); } catch { /* noop */ } };
+    ipcRenderer.on('warmy:nmCaiDanDianJi', fn);
+    return () => ipcRenderer.removeListener('warmy:nmCaiDanDianJi', fn);
+  },
+  nmCaiDanGuanBi: (cb) => {
+    const fn = () => { try { cb(); } catch { /* noop */ } };
+    ipcRenderer.on('warmy:nmCaiDanGuanBi', fn);
+    return () => ipcRenderer.removeListener('warmy:nmCaiDanGuanBi', fn);
+  },
+  /** R199：插件安装双模式（pnpm+扫描）+ Config 设置 schema + 加载已装插件 */
+  chaJianSaoMiao2: (p) => ipcRenderer.invoke('warmy:chaJianSaoMiao2', p),
+  chaJianAnZhuangPnpm: (p) => ipcRenderer.invoke('warmy:chaJianAnZhuangPnpm', p),
+  chaJianSheZhiSchema: () => ipcRenderer.invoke('warmy:chaJianSheZhiSchema'),
+  chaJianJiaZaiYiZhuang: (p) => ipcRenderer.invoke('warmy:chaJianJiaZaiYiZhuang', p),
+  chaJianJiaZai: (p) => ipcRenderer.invoke('warmy:chaJianJiaZai', p),
+  /** R199：迪文融合（落点迪文化/用户搜索恒原文/落点清单） */
+  diwenLuoDianHua: (p) => ipcRenderer.invoke('warmy:diwenLuoDianHua', p),
+  diwenYongHuSouSuo: (p) => ipcRenderer.invoke('warmy:diwenYongHuSouSuo', p),
+  diwenLuoDianQingDan: () => ipcRenderer.invoke('warmy:diwenLuoDianQingDan'),
+  /** R199：VM 适配器（探测/执行）+ 进程级隔离执行（默认开不可关） */
+  vmTanCe: () => ipcRenderer.invoke('warmy:vmTanCe'),
+  vmZhiXing: (p) => ipcRenderer.invoke('warmy:vmZhiXing', p),
+  geLiZhiXing: (p) => ipcRenderer.invoke('warmy:geLiZhiXing', p),
   nmWangYePeiZhiDu: () => ipcRenderer.invoke('warmy:nmWangYePeiZhiDu'),
   nmWangYePeiZhiShe: (p) => ipcRenderer.invoke('warmy:nmWangYePeiZhiShe', p),
   nmWangYeShuJuGaiLan: (p) => ipcRenderer.invoke('warmy:nmWangYeShuJuGaiLan', p),

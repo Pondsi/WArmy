@@ -15551,6 +15551,18 @@ async function renderDashboard(host) {
             </div>
             <div class="jingYin" id="plugSaoMiaoXiaoXi"></div>
           </div>
+          <div class="jinengSaoMiaoKuai" style="margin-top:10px">
+            <div class="jinengSaoMiaoBiaoTi">${escapeHtml(tOr('settings.cordisTitle', 'cordis 插件（运行时）'))}</div>
+            <div class="jingYin">${escapeHtml(tOr('settings.cordisHint', '一切皆插件：pnpm 安装或目录扫描发现 → 加载 → Config 设置。插件工具经宿主授权网关执行。'))}</div>
+            <div class="shiLiHang" style="margin-top:6px;align-items:center">
+              <input id="cordisPnpmShuRu" style="flex:1;min-width:120px" placeholder="${escapeHtml(tOr('settings.cordisPnpmPlaceholder', 'pnpm 包名，如 @scope/plugin'))}"/>
+              <button class="anNiuXiao" id="anNiuCordisPnpm">${escapeHtml(tOr('settings.cordisInstallPnpm', 'pnpm 安装'))}</button>
+              <button class="anNiuXiao" id="anNiuCordisSaoMiao">${escapeHtml(tOr('settings.cordisScan', '目录扫描'))}</button>
+            </div>
+            <div id="cordisHouXuan" class="chaJianLieBiao" style="margin-top:6px"></div>
+            <div id="cordisConfig" style="margin-top:6px"></div>
+            <div class="jingYin" id="cordisXiaoXi"></div>
+          </div>
         </div>
         <!-- 门禁：dao 合规检查等开发工具（心跳没有界面：引擎照跑，状态看审计与日志） -->
         <div class="sheZhiSection" data-sec="gate"><h2 style="color:var(--accent)">${escapeHtml(tOr('settings.tabGates', '门禁'))}</h2></div>
@@ -17164,6 +17176,79 @@ async function renderDashboard(host) {
             renderPluginList();
           };
         });
+        try { guaCordisMianBan(); } catch { /* noop */ }
+      }
+      /** R207 x3：cordis 运行时面板（安装双模式 + Config 表单 + 加载），接 window.warmyPlugin。 */
+      function guaCordisMianBan() {
+        const heZi = $('cordisHouXuan');
+        if (!heZi) return;
+        const api = window.warmyPlugin;
+        const xiaoXi = $('cordisXiaoXi');
+        const shuo = (v) => { if (xiaoXi) xiaoXi.textContent = v || ''; };
+        if (!api) { shuo(tOr('settings.cordisNoApi', '插件运行时 IPC 未就绪')); return; }
+        const huaHouXuan = (lie) => {
+          heZi.innerHTML = (lie || []).map((f, i) => '<div class="ctgHang">' +
+            '<div style="font-weight:600">' + escapeHtml(f.name || f.id || '') + '</div>' +
+            '<div class="jingYin">' + escapeHtml(f.desc || f.path || '') + '</div>' +
+            '<div style="margin-top:4px"><button class="anNiuXiao" data-cordis-load="' + i + '">' + escapeHtml(tOr('settings.cordisLoad', '加载')) + '</button></div></div>').join('') || '<div class="jingYin">—</div>';
+          heZi.querySelectorAll('[data-cordis-load]').forEach((el) => {
+            el.onclick = async () => {
+              const f = (lie || [])[Number(el.getAttribute('data-cordis-load'))];
+              if (!f) return;
+              const r = await api.jiaZaiYiZhuang(f.path || f.dir || f.id, {});
+              shuo(r && r.ok ? tOr('settings.cordisLoaded', '已加载') : (r && r.error) || 'load-failed');
+              huaConfig();
+            };
+          });
+        };
+        const huaConfig = async () => {
+          const box = $('cordisConfig');
+          if (!box) return;
+          const r = await api.sheZhiSchema();
+          const schemas = (r && r.schemas) || {};
+          const names = Object.keys(schemas);
+          if (!names.length) { box.innerHTML = ''; return; }
+          box.innerHTML = names.map((n) => {
+            const fields = api.xuanRanSheZhiMianBan(schemas[n] || {});
+            return '<div class="ctgHang"><div style="font-weight:600">' + escapeHtml(n) + '</div>' +
+              fields.map((f) => '<label class="jingYin" style="display:block;margin-top:4px">' + escapeHtml(f.key) + (f.required ? ' *' : '') +
+                '<input data-cordis-cfg="' + escapeHtml(n) + '.' + escapeHtml(f.key) + '" style="width:100%" placeholder="' + escapeHtml(String(f.default ?? '')) + '"/></label>').join('') +
+              '<div style="margin-top:4px"><button class="anNiuXiao" data-cordis-apply="' + escapeHtml(n) + '">' + escapeHtml(tOr('settings.cordisApply', '应用 Config')) + '</button></div></div>';
+          }).join('');
+          box.querySelectorAll('[data-cordis-apply]').forEach((el) => {
+            el.onclick = async () => {
+              const n = el.getAttribute('data-cordis-apply');
+              const cfg = {};
+              box.querySelectorAll('[data-cordis-cfg^="' + n + '."]').forEach((inp) => {
+                const k = inp.getAttribute('data-cordis-cfg').slice(n.length + 1);
+                if (inp.value !== '') cfg[k] = inp.value;
+              });
+              const r2 = await api.jiaZaiYiZhuang(n, cfg);
+              shuo(r2 && r2.ok ? tOr('settings.cordisApplied', 'Config 已应用') : (r2 && r2.error) || 'apply-failed');
+            };
+          });
+        };
+        if (!heZi.dataset.bound) {
+          heZi.dataset.bound = '1';
+          const btnPnpm = $('anNiuCordisPnpm');
+          if (btnPnpm) btnPnpm.onclick = async () => {
+            const inp = $('cordisPnpmShuRu');
+            const pkg = inp && inp.value.trim();
+            if (!pkg) { shuo(tOr('settings.cordisNeedPkg', '先填 pnpm 包名')); return; }
+            shuo(tOr('settings.cordisInstalling', '安装中…'));
+            const r = await api.anZhuangPnpm(pkg);
+            shuo(r && r.ok ? tOr('settings.cordisInstalled', '已安装') : (r && r.error) || 'install-failed');
+          };
+          const btnSao = $('anNiuCordisSaoMiao');
+          if (btnSao) btnSao.onclick = async () => {
+            shuo(tOr('settings.cordisScanning', '扫描中…'));
+            const r = await api.saoMiao();
+            const lie = (r && (r.found || r.plugins || r.candidates)) || [];
+            huaHouXuan(lie);
+            shuo(lie.length ? tOr('settings.cordisFound', '发现候选') + ': ' + lie.length : tOr('settings.cordisNone', '未发现候选'));
+          };
+          huaConfig();
+        }
       }
       /**
        * ── 拟态设置 ──

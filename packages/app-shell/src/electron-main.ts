@@ -6,9 +6,9 @@ import { app, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, Tray, nativeIma
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { execFile, spawn } from 'node:child_process';
+import { execFile, spawn, fork } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chuangJianP1YunXingShi } from './runtime.js';
 import { shiTongYiNeiRong, shiZhanWeiChongFu, zhaoHuChiWeiZhi, shiHuChiTiShiCeng } from './prompt-placement.js';
 import { ceShiLianTong as sheJiaoCeShiLianTong, type SheJiaoPingTai } from './she-jiao-lian-tong.js';
@@ -47,6 +47,7 @@ import {
   type LiaoTianQingQiu,
   type MoxingGongYing,
   type GongJuXunHuanGuo,
+  type GongJuXunHuanXuan,
   type GongJuGuiGe,
   type GongJuDiaoYong as GongJuDiaoYongTi,
 } from '@warmy/providers';
@@ -98,6 +99,7 @@ import { guiHuaZhengLi } from './zhi-shi-zheng-li.js';
 import { jieXiFaShengShiJian, jieXiChaXunChuang, mingZhongZhou, liangShiJianMing, shiJianYiChang } from './shi-jian-shuang.js';
 import { TI_SHI_SHANG_XIAN, TI_SHI_ZONG_HE, chaoShangXian, guiHuaYaSuo, jinCouHua, shangXianOf, yiChuGuiXiang } from './ti-shi-shang-xian.js';
 import { FIND_SKILL_MD } from './skills-default.js';
+import { shiBieHuiYiYiTu, qianZhiZhaoHuiCanShu } from './recall-hard-gate.js';
 import { CHANPIN_MENJIN, ZIZHU_GAIZAO_SKILL } from './builtin-rules.js';
 import { AnQuanMiyaoCang, anQuanCunChu } from './secure-keys.js';
 import * as credentialModule from './credential.js';
@@ -225,6 +227,12 @@ import { BeiKongSanJianTao } from './rc-overlay.js';
 import { jueCeMoXing, jieMoXingMing, qiYongLian, type MoXingJueCeShuRu } from './model-pick.js';
 import { taoTtsChatBody, jieXiTtsChatResponse, taoAsrChatBody, jieXiAsrChatResponse, yingGaiHuanChatShi, guiFanAsrGeShi, jieShouGeShi, yanShouGeShi, jianBieGeShi } from '@warmy/providers';
 import { daKaiZhiNengPeiZhi } from './smart-config.js';
+import { luoDianDiwenHua, yongHuKeJianLuoDian, DIWEN_LUO_DIAN, luoDianTongJi } from './diwen-integration.js';
+import { ChaJianYunXingShi, type ChaJianMoKuai } from './plugin-runtime.js';
+import { VmAdapterManager } from './vm-adapter.js';
+import { scanChaJianMuLu, installViaPnpm, chaJianRuKou } from './plugin-installer.js';
+import { ConversationHost, vmSuiDaoBaoZhuang, type ForkedChild } from './conversation-host.js';
+import { KbConfidenceModel } from './kb-confidence.js';
 import { tiQuWenDang } from './doc-extract.js';
 import {
   nmShiTuKai, nmDuWenJian, nmShiTuBaoCun, nmShiTuLingCunWei, nmShiTuSheZhi,
@@ -5326,6 +5334,15 @@ async function yunXingLiaoTianXunHuan(
         fachuKongzhitai({ cat: 'tool', code: 'tool.finish', data: { tool: gongJuMing, round: ctx.round, sessionId, ok: true, chars: huiBao.length, ms: Date.now() - t1 } });
         return jieGuoShouWei(huiBao, ctx.zuiDaJieGuoZiShu, gongJuMing);
       }
+      // R195 Plan A：cordis 插件工具分流（经运行时；尊重工具启用开关 + 审计）
+      if (chaJianYunXing().youGongJu(gongJuMing)) {
+        if (gongJuQiYongBiao()[gongJuMing] === false) return jieGuoShouWei(`[插件工具已禁用] ${gongJuMing}`, ctx.zuiDaJieGuoZiShu, gongJuMing);
+        const argsP = jieXiGongJuCanShu(call && call.function ? (call.function as { arguments?: unknown }).arguments : undefined);
+        const rP = await chaJianYunXing().diaoYong(gongJuMing, argsP);
+        const txtP = rP.ok ? (rP.blocks || []).map((b) => b.text).join('\n') : `[插件工具失败] ${rP.error}`;
+        try { audit?.log('chat.plugin-tool', { sessionId, tool: gongJuMing, ok: rP.ok }); } catch { /* noop */ }
+        return jieGuoShouWei(txtP, ctx.zuiDaJieGuoZiShu, gongJuMing);
+      }
       if (isHostTool(gongJuMing) || gongJuMing.startsWith('mcp__') || ziDingGongJuJiQu().some((g) => g.name === gongJuMing)) {
         /**
          * 宿主工具：打开文件/网页、登记定时任务。
@@ -6994,6 +7011,8 @@ async function yunXingLiaoTianXunHuan(
         audit?.log('chat.host-tool', { sessionId, tool: gongJuMing, ok: okH, security: quanQuan() ? 'full' : 'normal', ms: Date.now() - t1h });
         metrics.recordToolCall({ ts: Date.now(), sessionId, round: ctx.round, tool: gongJuMing, ok: okH, chars: huiBaoH.length, ms: Date.now() - t1h });
         fachuKongzhitai({ cat: 'tool', code: 'tool.finish', data: { tool: gongJuMing, round: ctx.round, sessionId, ok: okH, chars: huiBaoH.length, ms: Date.now() - t1h } });
+        // R199：迪文化落点 tool-result（工具结果经三态门控；不可用不阻断）
+        void luoDianDiwenHua('tool-result', { text: String(huiBaoH || '') }).then((dw) => { try { audit?.log('tool-result.diwen', { mode: dw.mode, tool: gongJuMing }); } catch { /* noop */ } }).catch(() => { /* noop */ });
         return jieGuoShouWei(huiBaoH, ctx.zuiDaJieGuoZiShu, gongJuMing);
       }
       if (isWorkTool(gongJuMing)) {
@@ -7404,6 +7423,8 @@ async function yunXingLiaoTianXunHuan(
   /** 用户明确「不要调工具 / 只回复文字」时，禁止强制 tool_choice */
   const jinZhiGongJu = /(不要|别|禁止|无需|不用).{0,8}(调用|使用|动用)?工具|只(回复|输出|回答)|不要做别的|do not use tools|no tools/i.test(wenBenAll);
   const yaoDongShouBenLun = Qiu.toolChoice !== 'auto' && !jinZhiGongJu && YAO_DONG_SHOU.test(wenBenAll);
+  // R191 项3：回忆意图硬门禁——回忆轮强制出工具（驱动 recall/retrieve），与动手任务同口径
+  const yaoHuiYiBenLun = shiBieHuiYiYiTu(wenBenAll);
   let loop: Awaited<ReturnType<typeof liaoTianDaiGongJu>>;
   /**
    * **工具循环的时间纪律：按"进展"算，不按"墙上时间"一刀切切**（本轮修「重活任务完不成」）。
@@ -7556,10 +7577,8 @@ async function yunXingLiaoTianXunHuan(
   });
   try {
     loop = await Promise.race([
-      liaoTianDaiGongJu(
-    liuShiProvider,
-    { ...Qiu, tools, toolChoice: yaoDongShouBenLun ? 'required' : (Qiu.toolChoice || 'auto') },
-    async (call, ctx) => {
+      (async () => {
+        const gongJuZhiXingQi = async (call: GongJuDiaoYongTi, ctx: { round: number; zuiDaJieGuoZiShu: number }) => {
       const t1 = Date.now();
       const zaiTuJian = String(sessionId || '');
       zaiTuGongJu.set(zaiTuJian, { ming: String((call as { function?: { name?: string } } | undefined)?.function?.name || 'tool'), kai: t1 });
@@ -7609,8 +7628,8 @@ async function yunXingLiaoTianXunHuan(
         /* 守卫自身出错不许影响工具结果 */
       }
       return out;
-    },
-    {
+    };
+    const xunHuanXuan: GongJuXunHuanXuan = {
       /**
        * 轮数上限：从**预算账本**取（第 39 轮额度重做）。
        * 以前这里是"要求长文就 +8"的一条硬编码补丁；现在基线按任务尺寸算
@@ -7668,8 +7687,21 @@ async function yunXingLiaoTianXunHuan(
           } catch { /* 预测记账失败不影响主流程 */ }
         }
       },
+    };
+    geLiHuiHuaCtx.set(String(sessionId || ''), { provider: liuShiProvider, execute: gongJuZhiXingQi, opts: xunHuanXuan, signal: zhengLunQuXiao.signal });
+    const onAbort = () => { try { geLiYunXing().abort(String(sessionId || '')); } catch { /* noop */ } };
+    try { zhengLunQuXiao.signal.addEventListener('abort', onAbort); } catch { /* noop */ }
+    try {
+      return await geLiYunXing().run(String(sessionId || ''), 'chat-engine', {
+        qiu: { ...Qiu, tools, toolChoice: (yaoDongShouBenLun || yaoHuiYiBenLun) ? 'required' : (Qiu.toolChoice || 'auto') },
+        opts: { zuiDaLunShu: xunHuanXuan.zuiDaLunShu, zuiDaJieGuoZiShu: xunHuanXuan.zuiDaJieGuoZiShu, maxToolResultChars: xunHuanXuan.maxToolResultChars, zuiDaGongJuCiShu: xunHuanXuan.zuiDaGongJuCiShu, wuYuSuanTiShi: xunHuanXuan.wuYuSuanTiShi, zuiDaQingQiuZi: xunHuanXuan.zuiDaQingQiuZi, supportsTools: xunHuanXuan.supportsTools, daoShangXianWenMoXing: xunHuanXuan.daoShangXianWenMoXing, zuiDaZongLun: xunHuanXuan.zuiDaZongLun, lingGongJuQiangZhi: xunHuanXuan.lingGongJuQiangZhi },
+        providerMeta: { protocol: (liuShiProvider as { protocol?: string }).protocol, baseURL: (liuShiProvider as { baseURL?: string }).baseURL, supportsTools: (liuShiProvider as { supportsTools?: boolean }).supportsTools },
+      }, 1800000);
+    } finally {
+      try { zhengLunQuXiao.signal.removeEventListener('abort', onAbort); } catch { /* noop */ }
+      geLiHuiHuaCtx.delete(String(sessionId || ''));
     }
-      ),
+      })(),
       xunShouPromise,
     ]);
   } catch (eLoop) {
@@ -11916,6 +11948,8 @@ chuliIpc('warmy:uiDuiLieJiSheZhi', async (_e, payload?: { queues?: Record<string
     const q = payload?.queues;
     if (!q || typeof q !== 'object') return { ok: false, error: 'queues must be an object' };
     luoPanJieMianDuiLie(q as Record<string, unknown>);
+    // R205：迪文化落点 task-state（任务队列状态经三态门控；不可用不阻断）
+    try { void luoDianDiwenHua('task-state', { text: JSON.stringify(q).slice(0, 2000) }).catch(() => { /* noop */ }); } catch { /* noop */ }
     return { ok: true };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
@@ -12443,6 +12477,8 @@ chuliIpc('warmy:jiYiHuiSuo', async (_e, payload?: string | { query?: string; lim
 });
 chuliIpc('warmy:jiYiZhuiJia', async (_e, text: string) => {
   try {
+    // R202：迪文化落点 memory-gate（记忆写入证据闸经三态门控；不可用不阻断）
+    void luoDianDiwenHua('memory-gate', { text: String(text || '') }).catch(() => { /* noop */ });
     return await memory?.append({
       id: `m-${Date.now()}`,
       sessionId: 'ui',
@@ -13159,10 +13195,10 @@ function Walk($el, $depth) {
     $ct = [string]($el.Current.ControlType.ProgrammaticName -replace 'ControlType\.','')
     $r = $el.Current.BoundingRectangle
     $val = ''
-    try { $vp = $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern); if ($vp) { $val = [string]$vp.Current.Value } } catch {}
+    try { $vp = $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern); if ($vp) { $val = [string]$vp.Current.Value } } catch { <# noop #> }
     $line = '[' + $ct + '] "' + $name + '"' + $(if ($val) { ' value="' + $val + '"' } else { '' }) + ' (' + [int]$r.X + ',' + [int]$r.Y + ' ' + [int]$r.Width + 'x' + [int]$r.Height + ')'
     if ((-not $target) -or $name -like ('*' + $target + '*') -or $ct -like ('*' + $target + '*')) { [void]$script:lines.Add($line) }
-  } catch {}
+  } catch { <# noop #> }
   try { $child = $walker.GetFirstChild($el) } catch { return }
   while ($null -ne $child) {
     Walk $child ($depth + 1)
@@ -15033,6 +15069,8 @@ async function zhenZhengFaSongBen(
             const ben = lie.find((x) => String(x?.id || '') === String(sessionId));
             const renShe = String(ben?.persona || '').trim();
             if (renShe) benNiuMaRenZhi = renShe.slice(0, renZhiInjectChars());
+            // R206：迪文化落点 persona-traits（人设特质经三态门控；不可用不阻断）
+            if (renShe) { try { void luoDianDiwenHua('persona-traits', { text: renShe }).catch(() => { /* noop */ }); } catch { /* noop */ } }
           } catch { /* 拿不到实例就不注入 */ }
           if (yongHuZhen) {
             juShenFen.push(tMain('llm.userLine', '你的用户是「{u}」，请这样称呼他。').replace('{u}', yongHuZhen));
@@ -15377,6 +15415,8 @@ async function zhenZhengFaSongBen(
                   + tMain('llm.archivedSummaryTail', '\n\n（这是压缩摘要，细节可能不全：需要原文时用 recall / retrieve 按 seq 取回，**取不到就如实说"上下文里没有"，不要凭印象编造**。）'),
               } as LiaoTianXiaoXi);
               try { audit?.log('chat.archived-summary-injected', { sessionId, zhuRu: zhu.fuGai.tiaoShu, quanBu: gui.length, weiFuGai: zhu.weiFuGai, chars: zhu.zi, fenE }); } catch { /* noop */ }
+              // R202：迪文化落点 ctx-summary（上下文摘要经三态门控；不可用不阻断）
+              try { void luoDianDiwenHua('ctx-summary', { text: String(zhu.duan || '') }).catch(() => { /* noop */ }); } catch { /* noop */ }
             }
           }
         } catch { /* 归档读不到就不注入（不影响正常对话） */ }
@@ -15499,21 +15539,24 @@ async function zhenZhengFaSongBen(
          */
         {
           const kaiGuan = (settingsStore?.load() as { preRecall?: boolean } | undefined)?.preRecall !== false;
-          const chaXun = String(xiaoXi.content || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+          // R191 项3：回忆意图轮强化前置召回（条数 3→6、查询 120→200）
+          const huiYiYiTu = shiBieHuiYiYiTu(String(xiaoXi.content || ''));
+          const zhaoHuiCanShu = qianZhiZhaoHuiCanShu(huiYiYiTu);
+          const chaXun = String(xiaoXi.content || '').replace(/\s+/g, ' ').trim().slice(0, zhaoHuiCanShu.queryChars);
           if (kaiGuan && memory && memory.isReady && chaXun.length >= 4) {
             const fenE = Math.min(2400, Math.max(600, Math.round((Number(suanBen.chars) || 0) * 0.06) || 600));
             try {
               /** 第 120 轮（P6）：把 800ms 截止时间传给记忆服务；到点停止后台补算，不再“放弃了还继续嵌入” */
               const jieZhi = Date.now() + 800;
               const zhao = await Promise.race([
-                memory.recallScoped(chaXun, 3, { sessionId: String(sessionId || '') }, { deadline: jieZhi }),
+                memory.recallScoped(chaXun, zhaoHuiCanShu.limit, { sessionId: String(sessionId || '') }, { deadline: jieZhi }),
                 new Promise<null>((res) => { const t = setTimeout(() => res(null), 800); t.unref?.(); }),
               ]);
               const ka = Array.isArray((zhao as { cards?: unknown[] } | null)?.cards)
                 ? ((zhao as { cards: Array<{ seq?: number; recordId?: string; snippet?: string; source?: string; sources?: string[] }> }).cards)
                 : [];
               if (ka.length) {
-                const hang = ka.slice(0, 3).map((c, i) => {
+                const hang = ka.slice(0, zhaoHuiCanShu.limit).map((c, i) => {
                   const src = String(c.source || (Array.isArray(c.sources) ? c.sources.join('+') : '') || '');
                   return `${i + 1}. seq=${c.seq ?? '?'} recordId=${c.recordId || '?'}${src ? ` 来源=${src}` : ''}：${String(c.snippet || '').replace(/\s+/g, ' ').slice(0, 200)}`;
                 }).join('\n');
@@ -18491,18 +18534,31 @@ ${canKaoHuo ? canKaoHuo + '\n\n' : ''}${canKaoFangFa}
 
 
 
+/** R208 y1：续派外壳默认经隔离宿主 chat-continue 编排（递归 sequencing 在子进程；宿主单步经 xu-step 裁决）。 */
 async function yanXuJiHuaRenWu(
   sessionId: string,
   xiaoXi: Parameters<typeof zhenZhengFaSong>[1],
   shangLun?: { diaoYongJi?: number; huiFu?: string; cuoWu?: string; tingZhi?: string; noReply?: boolean },
   yuPan?: { jiXu: boolean; liYou: string },
 ): Promise<void> {
+  try {
+    await geLiYunXing().run(String(sessionId || ''), 'chat-continue', { xiaoXi, shangLun, yuPan }, 1800000);
+  } catch (e) {
+    try { audit?.log('plan.auto-continue-isolation-fail', { sessionId, error: xiJingCuoWu(e).slice(0, 160) }); } catch { /* noop */ }
+  }
+}
+async function yanXuJiHuaRenWuYiBu(
+  sessionId: string,
+  xiaoXi: Parameters<typeof zhenZhengFaSong>[1],
+  shangLun?: { diaoYongJi?: number; huiFu?: string; cuoWu?: string; tingZhi?: string; noReply?: boolean },
+  yuPan?: { jiXu: boolean; liYou: string },
+): Promise<{ jiXu: boolean; next?: { shangLun?: Record<string, unknown> } }> {
   /**
    * 派一轮内部指令，再接着判续派（递归）。附件**不重发**：第一轮已经看过/转交过，
    * 续派轮再带一次就是把图重新塞给模型（真机：每个续派轮都带 att:2，看图模型每轮重看）。
    * 撞上"这个会话还有一轮在跑"⇒ 静默让路（那一轮自己会收尾），不当成出错报给用户。
    */
-  const paiYiLun = async (content: string, ziYouHuiDa = false): Promise<void> => {
+  const paiYiLun = async (content: string, ziYouHuiDa = false): Promise<{ jiXu: boolean; next?: { shangLun?: Record<string, unknown> } }> => {
     /* R147 项9：「插入」就在这一轮边界注入 —— 上一轮已收尾、最终回复还没出，正是用户说的「告一段落」 */
     let neiRong = content;
     const cha = chaHuaXin.get(sessionId) || [];
@@ -18523,7 +18579,7 @@ async function yanXuJiHuaRenWu(
     } as never);
     if (r && (r as { skipped?: string }).skipped === 'in-flight') {
       try { audit?.log('plan.auto-continue-yield', { sessionId }); } catch { /* noop */ }
-      return;
+      return { jiXu: false };
     }
     // **不在这里关小字** —— 整轮结束才关（否则每步之间小字会闪"干完了"）
     if (!r || r.ok !== true) {
@@ -18535,16 +18591,16 @@ async function yanXuJiHuaRenWu(
       });
       biaoRenWuZhongDuan(sessionId, tMain('llm.planContinueFail', '（自动继续下一步时出错，已停下。）'), String((r && (r as { error?: string }).error) || ''), '计划续派');
       etaHuo().jieShuLun(sessionId);   // 出错中止：不当作"完成"，不进学习样本
-      return;
+      return { jiXu: false };
     }
     const t = (r as { tools?: { diaoYongJi?: number; tingZhiYuanYin?: string; degradedReason?: string } }).tools || {};
-    await yanXuJiHuaRenWu(sessionId, xiaoXi, {
+    return { jiXu: true, next: { shangLun: {
       diaoYongJi: t.diaoYongJi,
       huiFu: String(r.reply || ''),
       cuoWu: String((r as { error?: string }).error || t.degradedReason || ''),
       tingZhi: String(t.tingZhiYuanYin || ''),
       noReply: (r as { noReply?: boolean }).noReply === true,
-    });
+    } } };
   };
   try {
     // **用户已点停止** ⇒ 一步都不再派（真事故：停止按钮按了，AI 还在继续干活）
@@ -18554,7 +18610,7 @@ async function yanXuJiHuaRenWu(
       etaHuo().jieShuLun(sessionId);
       try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
       try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId, reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
-      return;
+      return { jiXu: false };
     }
     /** **分词/模板硬失败 ⇒ 禁止自动续派**（真机：tokenize 400 被续派成死循环） */
     try {
@@ -18563,7 +18619,7 @@ async function yanXuJiHuaRenWu(
         audit?.log('plan.auto-continue-skip-hard-error', { sessionId, error: shangCuo.slice(0, 120) });
         yanXuZhuangTai.delete(sessionId);
         try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
-        return;
+        return { jiXu: false };
       }
     } catch { /* noop */ }
     const pan = yuPan && yuPan.liYou !== 'internal'
@@ -18600,8 +18656,7 @@ async function yanXuJiHuaRenWu(
             buZhouYanXu.delete(sessionId);
             yanXuZhuangTai.delete(sessionId);
             xuPaiJinZhan.delete(sessionId);
-            await paiYiLun('【用户决定：换一种方法继续】已确认原工具/参数形成循环。禁止重复原调用；请改用不同工具、不同参数或重新拆分步骤。');
-            return;
+            return await paiYiLun('【用户决定：换一种方法继续】已确认原工具/参数形成循环。禁止重复原调用；请改用不同工具、不同参数或重新拆分步骤。');
           } else if (/停止任务/.test(xuan)) {
             stoppedSessions.add(sessionId);
             zhongZhiXinHao(sessionId);
@@ -18660,7 +18715,7 @@ async function yanXuJiHuaRenWu(
         yanXuZhuangTai.delete(sessionId);
         try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
         try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId, reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
-        return;
+        return { jiXu: false };
       }
       if (pan.liYou === 'eta-anomaly') {
         const yi = quEtaYiChang(sessionId);
@@ -18674,7 +18729,7 @@ async function yanXuJiHuaRenWu(
         yanXuZhuangTai.delete(sessionId);
         try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
         try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId, reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
-        return;
+        return { jiXu: false };
       }
       etaHuo().jieShuLun(sessionId);
       etaYiChang.delete(sessionId);
@@ -18740,8 +18795,7 @@ async function yanXuJiHuaRenWu(
             yanXuZhuangTai.delete(sessionId);
             xuPaiJinZhan.delete(sessionId);
             buZhouYanXu.delete(sessionId);
-            await paiYiLun('【用户决定：换一种方法继续】前两次做法没有推进。禁止重复原方法；先重新分析根因，再改工具/参数/步骤继续。');
-            return;
+            return await paiYiLun('【用户决定：换一种方法继续】前两次做法没有推进。禁止重复原方法；先重新分析根因，再改工具/参数/步骤继续。');
           } else if (/^换调用链/.test(xuan)) {
             zhuiJiaLiaoTianRiZhi(sessionId, { seq: xiaYiLiaoTianXuLie(), role: 'assistant', content: '（请在设置 → 模型 → 调用链调整模型后，点击「继续 / 重试」。）', ts: Date.now() });
           } else if (/^我补充要求/.test(xuan)) {
@@ -18756,7 +18810,7 @@ async function yanXuJiHuaRenWu(
       // **整轮真的结束了** ⇒ 关动态小字、收流式气泡
       try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: false, ts: Date.now() }); } catch { /* noop */ }
       try { broadcastToWindows('warmy:suiXingPianDuan', { sessionId, reasoning: '', content: '', end: true, ts: Date.now() }); } catch { /* noop */ }
-      return;
+      return { jiXu: false };
     }
 
     /**
@@ -18786,7 +18840,7 @@ async function yanXuJiHuaRenWu(
         // （`biaoEtaYiChang` 里已经广播了「继续/重试」，这里不再重复）
         etaHuo().jieShuLun(sessionId);
         yanXuZhuangTai.delete(sessionId);
-        return;
+        return { jiXu: false };
       }
       // 判"没卡死"⇒ 预警点已在 chaXingWei 里加了一档，这里同步既有的次数预警点
       tai.ciYuJing = Math.max(tai.ciYuJing + YANXU_YUJING_CI, w.yuJingLun);
@@ -18928,7 +18982,7 @@ async function yanXuJiHuaRenWu(
      * 一直亮到**整轮真的结束**才关（在 `!pan.jiXu` 分支里关）。
      */
     try { broadcastToWindows('warmy:yunXingZhuangTai', { sessionId, kai: true, ts: Date.now() }); } catch { /* noop */ }
-    await paiYiLun(
+    return await paiYiLun(
       zhiLing
         + (xia && !heDui ? `\n\n【下一步】${xia.id} ${xia.title}` : '')
         + `\n\n【当前计划/进度】\n${qingDan}`
@@ -18957,7 +19011,9 @@ async function yanXuJiHuaRenWu(
     biaoRenWuZhongDuan(sessionId, tMain('llm.planContinueFail', '（自动继续下一步时出错，已停下。）'), xiJingCuoWu(e).slice(0, 160), '计划续派');
     try { etaHuo().jieShuLun(sessionId); } catch { /* noop */ }
     yanXuZhuangTai.delete(sessionId);
+    return { jiXu: false };
   }
+  return { jiXu: false };
 }
 
 /**
@@ -19720,6 +19776,8 @@ chuliIpc('warmy:kbRebuild', (_e, p0?: { sessionId?: string; id?: string; text?: 
     items.push({ id: 'dz-' + Date.now().toString(36), text, from: jiu?.biaoTi, ceng: zhao.ceng, ts: Date.now() });
     xieDaiZhengLi(items);
     audit?.log('kb.rebuild-queued', { sessionId: sid, id, ceng: zhao.ceng, chars: text.length });
+    // R200：迪文化落点 kb-promote（知识重构升层经三态门控；不可用不阻断）
+    void luoDianDiwenHua('kb-promote', { text }).then((dw) => { try { audit?.log('kb-promote.diwen', { mode: dw.mode }); } catch { /* noop */ } }).catch(() => { /* noop */ });
     return { ok: true, pending: items.length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
@@ -20432,7 +20490,27 @@ chuliIpc('warmy:shangXiaWenYuSuan', async (_e, p0?: { sessionId?: string }) => {
  */
 const zhiNengPeiZhi = () => daKaiZhiNengPeiZhi(app.getPath('userData'));
 chuliIpc('warmy:zhiNengPeiZhiDu', () => {
-  try { return { ok: true, text: zhiNengPeiZhi().du(), path: zhiNengPeiZhi().luJing }; }
+  try {
+    const text = zhiNengPeiZhi().du();
+    // R199：迪文化落点 smart-profile（智能档案经三态门控；不可用不阻断）
+    void luoDianDiwenHua('smart-profile', { text }).then((dw) => { try { audit?.log('smart-profile.diwen', { mode: dw.mode }); } catch { /* noop */ } }).catch(() => { /* noop */ });
+    return { ok: true, text, path: zhiNengPeiZhi().luJing };
+  }
+  catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R193：迪文化落点统一入口（A 类 16 处共用；机器侧三态门控）。 */
+chuliIpc('warmy:diwenLuoDianHua', async (_e, mu?: { luoDian?: string; text?: string; doc?: unknown }) => {
+  try { return { ok: true, ...(await luoDianDiwenHua(String(mu?.luoDian || ''), { text: mu?.text, doc: mu?.doc })) }; }
+  catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R193：用户可见落点恒回原文（知识库卡片搜索等）。 */
+chuliIpc('warmy:diwenYongHuSouSuo', async (_e, mu?: { text?: string; doc?: unknown }) => {
+  try { return { ok: true, text: await yongHuKeJianLuoDian({ text: mu?.text, doc: mu?.doc }) }; }
+  catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R193：迪文化落点摸排清单（A 适合/B 增益有限/C 红线）。 */
+chuliIpc('warmy:diwenLuoDianQingDan', () => {
+  try { return { ok: true, luoDian: DIWEN_LUO_DIAN, tongJi: luoDianTongJi() }; }
   catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:zhiNengPeiZhiTian', (_e, mu?: {
@@ -20449,6 +20527,9 @@ chuliIpc('warmy:zhiNengPeiZhiTian', (_e, mu?: {
     });
     /** 用户赞/踩是**强信号**，顺手记进审计，归档时能对上是哪一轮 */
     if (lei === 'user-vote') audit?.log('smart-config.user-vote', { zanCai: mu?.zanCai || '', huiHua: mu?.huiHua || '', moXing: mu?.moXing || '' });
+    // R206：迪文化落点 user-pref（用户偏好经三态门控）+ I3 置信度信号（赞→升，踩→降）
+    try { void luoDianDiwenHua('user-pref', { text: String(mu?.beiZhu || mu?.wenTi || lei) }).catch(() => { /* noop */ }); } catch { /* noop */ }
+    try { if (lei === 'user-vote' && mu?.huiHua) { zhiXinMoXing().update(mu.huiHua, mu.zanCai === 'down' ? 'user-correct' : 'user-affirm'); } } catch { /* noop */ }
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
@@ -25099,6 +25180,8 @@ chuliIpc('warmy:skillMarketInstall', async (_e, p0?: { id?: string; name?: strin
     fs.writeFileSync(path.join(dir, 'SKILL.md'), text, 'utf8');
     qingKongJiNengSuoYin();
     audit?.log('skill.market-install', { id, url: url.slice(0, 120) });
+    // R205：迪文化落点 skill-contract（技能契约经三态门控；不可用不阻断）
+    try { void luoDianDiwenHua('skill-contract', { text: String(text).slice(0, 2000) }).catch(() => { /* noop */ }); } catch { /* noop */ }
     return { ok: true, id, dir, luJing, muLu: gen0 };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
@@ -26093,10 +26176,211 @@ chuliIpc('warmy:moXingNengLiQu', () => {
         vision: (v as { vision?: boolean | 'unknown' }).vision,
       };
     }
+    // R205：迪文化落点 model-meta（模型能力元数据经三态门控；不可用不阻断）
+    try { void luoDianDiwenHua('model-meta', { text: JSON.stringify(m).slice(0, 2000) }).catch(() => { /* noop */ }); } catch { /* noop */ }
     return { ok: true, caps: m };
   } catch { return { ok: true, caps: {} }; }
 });
 
+/** R195 Plan A：cordis 插件运行时（懒实例）。插件工具并入工具循环，调用经启用门控+审计。 */
+let chaJianYunXingShi: ChaJianYunXingShi | null = null;
+function chaJianYunXing(): ChaJianYunXingShi {
+  if (!chaJianYunXingShi) chaJianYunXingShi = new ChaJianYunXingShi();
+  return chaJianYunXingShi;
+}
+/** 加载一个 cordis 插件模块（{name,inject,Config,apply}）；Config 校验+依赖检查在运行时内。 */
+/** R196：可选高级隔离——VM 适配器（用户自装 Microsandbox/QEMU，本程序只对接）。没装则降级 L1。 */
+let vmShiPeiQi: VmAdapterManager | null = null;
+function vmGuanLi(): VmAdapterManager { if (!vmShiPeiQi) vmShiPeiQi = new VmAdapterManager(); return vmShiPeiQi; }
+chuliIpc('warmy:vmTanCe', async () => {
+  try { return { ok: true, engines: await vmGuanLi().probeAll() }; }
+  catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:vmZhiXing', async (_e, mu?: { sandbox?: string; cmd?: string; timeoutMs?: number }) => {
+  try {
+    if (!mu?.sandbox || !mu?.cmd) return { ok: false, error: 'bad-payload' };
+    const a = await vmGuanLi().xuanKeYong();
+    if (!a) return { ok: false, error: 'no-vm-installed（用户需自行安装 Microsandbox 或 QEMU；当前降级 L1 进程级）' };
+    const r = await a.exec(mu.sandbox, mu.cmd, { timeoutMs: mu.timeoutMs });
+    try { audit?.log('vm.exec', { engine: a.engine, sandbox: mu.sandbox, ok: r.ok }); } catch { /* noop */ }
+    return { ...r, engine: a.engine };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R208 y2：可选高级 VM 隔离后端设置（opt-in；默认 null=进程级隔离不可关闭）。 */
+chuliIpc('warmy:geLiVmSheZhi', (_e, mu?: { set?: string | null }) => {
+  try {
+    const s = settingsStore?.load() as { isolationVm?: string | null } | undefined;
+    if (mu && 'set' in mu) {
+      const v = mu.set === 'microsandbox' || mu.set === 'qemu' ? mu.set : null;
+      try { (settingsStore as unknown as { save?: (o: unknown) => void })?.save?.({ ...(s || {}), isolationVm: v }); } catch { /* noop */ }
+      try { audit?.log('isolation.vm-setting', { backend: v }); } catch { /* noop */ }
+      return { ok: true, backend: v };
+    }
+    return { ok: true, backend: s?.isolationVm ?? null, default: 'process' };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R197：插件目录扫描（双模式之一）。 */
+/** R207 P1：宿主侧 LLM 调用（握密钥）；隔离子进程经 llm-call 请求，密钥明文不下放。 */
+async function geLiLlmCall(args: any, _sessionId: string): Promise<any> {
+  try {
+    const s = settingsStore?.load() as { providers?: Array<{ id?: string; protocol?: string; baseURL?: string; apiKey?: string; defaultModel?: string }> } | undefined;
+    const pr = (s?.providers || []).find((x) => x && (x.apiKey || x.protocol === 'ollama'));
+    if (!pr || !pr.id) return { content: '', toolCalls: [], error: 'no-provider' };
+    const apiKey = String(pr.apiKey || '') || (await jiexiGongyingshangMiyao(pr.id)) || '';
+    if (pr.protocol !== 'ollama' && !apiKey) return { content: '', toolCalls: [], error: 'no-api-key' };
+    const provider = congYuSheChuangJian(pr.id, { apiKey, baseURL: pr.baseURL || undefined, protocol: (pr.protocol || 'openai-compatible') as never } as never, (pr.protocol || 'openai-compatible') as never);
+    const model = String(args?.model || pr.defaultModel || '');
+    const messages = Array.isArray(args?.messages) ? args.messages : [];
+    const r = await provider.chat({ model, xiaoXiJi: messages as never, maxTokens: 2048 } as never);
+    const msg = (r as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message;
+    return { content: String(msg?.content || ''), toolCalls: [] };
+  } catch (e) { return { content: '', toolCalls: [], error: xiJingCuoWu(e) }; }
+}
+/** R207 P1 x2：每会话网关上下文（宿主握密钥/工具执行器/观测钩子；子进程只编排）。 */
+interface GeLiHuiHuaShangXiaWen {
+  provider: MoxingGongYing;
+  execute: (call: GongJuDiaoYongTi, ctx: { round: number; zuiDaJieGuoZiShu: number }) => Promise<string> | string;
+  opts: GongJuXunHuanXuan;
+  signal?: AbortSignal;
+}
+const geLiHuiHuaCtx = new Map<string, GeLiHuiHuaShangXiaWen>();
+/** 统一授权网关：子进程的一切请求在这里裁决执行（choke point 不下放）。 */
+async function geLiWangGuan(tool: string, args: any, sessionId: string): Promise<any> {
+  const ctx = geLiHuiHuaCtx.get(String(sessionId || ''));
+  if (tool === 'llm-call') {
+    if (!ctx) return geLiLlmCall(args, sessionId); // 无主循环上下文（独立 chat-turn）⇒ 设置侧供应商兜底
+    const method = String(args?.method || 'chat');
+    const p = ctx.provider as unknown as Record<string, (q?: unknown, s?: AbortSignal) => Promise<unknown>>;
+    const fn = p[method];
+    if (typeof fn !== 'function') return { error: 'bad-llm-method:' + method };
+    return fn.call(ctx.provider, args?.qiu, ctx.signal);
+  }
+  if (tool === 'tool-exec') {
+    if (!ctx) return '[tool-exec] no-session-context';
+    return ctx.execute(args?.call, args?.ctx);
+  }
+  if (tool === 'xu-step') {
+    return yanXuJiHuaRenWuYiBu(String(sessionId || ''), args?.xiaoXi, args?.shangLun, args?.yuPan);
+  }
+  if (tool === 'opt') {
+    if (!ctx) return null;
+    const name = String(args?.name || '');
+    const o = ctx.opts as Record<string, any>;
+    if (name === 'xuYuSuanLai') return typeof o.xuYuSuanLai === 'function' ? o.xuYuSuanLai(args?.k) : null;
+    if (name === 'onEvent') { if (typeof o.onEvent === 'function') o.onEvent(args?.e); return null; }
+    if (name === 'yaSuoLai') return typeof o.yaSuoLai === 'function' ? o.yaSuoLai(args?.xiaoXiJi, args?.jiYa) : args?.xiaoXiJi;
+    return null;
+  }
+  try { audit?.log('isolation.tool-denied', { sessionId, tool }); } catch { /* noop */ }
+  return { ok: false, error: 'tool-needs-host-authorization:' + tool };
+}
+/** R199 P1：进程级隔离宿主——默认开启、不可关闭（无 opt-out 设置）。隔离执行一律经此（独立 PID + 回收）。 */
+let geLiZhuJi: ConversationHost | null = null;
+function geLiYunXing(): ConversationHost {
+  if (!geLiZhuJi) {
+    geLiZhuJi = new ConversationHost({
+      runnerPath: path.join(__dirname, 'conversation-runner.js'),
+      instancesRoot: path.join(app.getPath('userData'), 'isolated'),
+      // R207 P1：工具/LLM 授权收口——子进程请求一律宿主裁决（密钥不下放；其它工具 fail-closed）
+      onTool: async (tool, args, sessionId) => geLiWangGuan(tool, args, sessionId),
+      // R208 y2：可选高级 VM 后端（opt-in；没开/没装 ⇒ 如实报错降级进程级）
+      vmExec: async (cmd, o) => {
+        const s = settingsStore?.load() as { isolationVm?: string | null } | undefined;
+        if (!s?.isolationVm) throw new Error('vm-disabled');
+        const a = await vmGuanLi().xuanKeYong();
+        if (!a) throw new Error('vm-unavailable');
+        const r = await a.exec('warmy-adv', cmd, { timeoutMs: o?.timeoutMs });
+        return { ok: r.ok, stdout: r.stdout, stderr: r.stderr };
+      },
+      // R209 z1：VM-backed IPC（opt-in）——隔离 runner 跑进 VM guest，stdio JSON-line 隧道；默认进程级 fork 不可关闭。
+      forkFnAsync: async (sid, o) => {
+        const s = settingsStore?.load() as { isolationVm?: string | null } | undefined;
+        if (s?.isolationVm) {
+          const a = await vmGuanLi().xuanKeYong();
+          if (!a || !a.spawnTunnel) throw new Error('vm-unavailable');
+          const child = await a.spawnTunnel(sid, 'WARMY_VM_STDIO=1 WARMY_SESSION_ID=' + sid + ' node /warmy/conversation-runner.js');
+          if (!child) throw new Error('vm-unavailable');
+          return vmSuiDaoBaoZhuang(child);
+        }
+        return fork(path.join(__dirname, 'conversation-runner.js'), [], { cwd: o.cwd, env: o.env, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], windowsHide: true } as never) as unknown as ForkedChild;
+      },
+    });
+    geLiZhuJi.start();
+  }
+  return geLiZhuJi;
+}
+chuliIpc('warmy:geLiZhiXing', async (_e, mu?: { sessionId?: string; kind?: string; payload?: unknown }) => {
+  try {
+    if (!mu?.sessionId || !mu?.kind) return { ok: false, error: 'bad-payload' };
+    const value = await geLiYunXing().run(mu.sessionId, mu.kind, mu.payload);
+    try { audit?.log('isolation.exec', { sessionId: mu.sessionId, kind: mu.kind }); } catch { /* noop */ }
+    return { ok: true, value };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R203 I3：知识库置信度预测模型（专用预测文件 userData/kb-confidence.json + 历史 jsonl，长周期自我改进）。 */
+let zhiXinMoXingInst: KbConfidenceModel | null = null;
+function zhiXinMoXing(): KbConfidenceModel {
+  if (!zhiXinMoXingInst) zhiXinMoXingInst = new KbConfidenceModel({ file: path.join(app.getPath('userData'), 'kb-confidence.json') });
+  return zhiXinMoXingInst;
+}
+chuliIpc('warmy:zhiXinDu', (_e, mu?: { id?: string }) => {
+  try { const m = zhiXinMoXing(); const id = String(mu?.id || ''); return { ok: true, confidence: m.predict(id), shouldDiwen: m.shouldDiwen(id), threshold: m.yuZhi, calibration: m.jiaoZhunShuJu }; }
+  catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:zhiXinTiaoZheng', (_e, mu?: { id?: string; signal?: string; note?: string }) => {
+  try {
+    if (!mu?.id || !mu?.signal) return { ok: false, error: 'bad-payload' };
+    const r = zhiXinMoXing().update(mu.id, mu.signal as never, mu.note);
+    try { audit?.log('kb.confidence-update', { id: mu.id, signal: mu.signal, confidence: r.confidence }); } catch { /* noop */ }
+    return { ok: true, confidence: r.confidence, shouldDiwen: zhiXinMoXing().shouldDiwen(mu.id) };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:zhiXinFuPan', () => {
+  try { const r = zhiXinMoXing().fuPanZiWoGaiJin(); try { audit?.log('kb.confidence-self-improve', r); } catch { /* noop */ } return { ok: true, ...r }; }
+  catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:chaJianSaoMiao2', (_e, mu?: { dirs?: string[] }) => {
+  try {
+    const dirs = Array.isArray(mu?.dirs) && mu!.dirs!.length ? mu!.dirs!.map(String) : gongJuSaomiaoLuJingQu();
+    return { ok: true, found: scanChaJianMuLu(dirs) };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R197：pnpm 安装插件（双模式之二；pnpm 不可用如实报错）。 */
+chuliIpc('warmy:chaJianAnZhuangPnpm', async (_e, mu?: { pkg?: string; profileDir?: string }) => {
+  try {
+    if (!mu?.pkg) return { ok: false, error: 'bad-payload' };
+    const prof = mu.profileDir || path.join(app.getPath('userData'), 'plugin-profile');
+    const r = await installViaPnpm(mu.pkg, prof);
+    try { audit?.log('plugin.pnpm-install', { pkg: mu.pkg, ok: r.ok }); } catch { /* noop */ }
+    return r;
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R197：插件 Config 设置 schema（供设置面板渲染）。 */
+chuliIpc('warmy:chaJianSheZhiSchema', () => {
+  try { return { ok: true, schemas: chaJianYunXing().sheZhiSchema() }; }
+  catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R197：加载已安装插件（按目录读 cordis 入口 → import → 运行时加载）。 */
+chuliIpc('warmy:chaJianJiaZaiYiZhuang', async (_e, mu?: { pluginDir?: string; config?: Record<string, unknown> }) => {
+  try {
+    if (!mu?.pluginDir) return { ok: false, error: 'bad-payload' };
+    const ruKou = chaJianRuKou(mu.pluginDir);
+    if (!ruKou) return { ok: false, error: 'no-entry（插件目录无有效入口）' };
+    const mo = await import(pathToFileURL(ruKou).href) as { name?: string; apply?: unknown; default?: ChaJianMoKuai };
+    const mod = (mo.default && typeof mo.default.apply === 'function' ? mo.default : mo) as ChaJianMoKuai;
+    const r = await chaJianYunXing().jiaZai(mod, mu.config || {}, { logger: {} });
+    try { audit?.log('plugin.load-installed', { dir: mu.pluginDir, ok: r.ok }); } catch { /* noop */ }
+    return r;
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:chaJianJiaZai', async (_e, mu?: { module?: ChaJianMoKuai; config?: Record<string, unknown> }) => {
+  try {
+    if (!mu?.module) return { ok: false, error: 'bad-payload' };
+    const r = await chaJianYunXing().jiaZai(mu.module, mu.config || {}, { logger: {} });
+    try { audit?.log('plugin.load', { name: mu.module.name, ok: r.ok, tools: r.tools }); } catch { /* noop */ }
+    return r;
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 chuliIpc('warmy:gongJuLieBiao', () => {
   const qi = gongJuQiYongBiao();
   const out: Array<{ name: string; description: string; source: string; enabled: boolean }> = [];
@@ -26110,6 +26394,7 @@ chuliIpc('warmy:gongJuLieBiao', () => {
   try { add(workToolSpecs() as never, 'work'); } catch { /* noop */ }
   try { add(hostToolSpecs() as never, 'host'); } catch { /* noop */ }
   try { add(mcpGuanWang().gongJuGuiGe() as never, 'mcp'); } catch { /* noop */ }
+  try { add(chaJianYunXing().gongJuGuiGe() as never, 'plugin'); } catch { /* noop */ }
   try { add(memory?.isReady ? (memoryToolSpecs() as never) : undefined, 'memory'); } catch { /* noop */ }
   for (const g of ziDingGongJuJiQu()) {
     out.push({ name: g.name, description: g.description, source: 'custom', enabled: qi[g.name] !== false });
@@ -27889,10 +28174,12 @@ chuliIpc('warmy:yaoQingChuangJian', (_e, groupId?: string) => anQuanChuLi(() => 
 chuliIpc('warmy:yaoQingShiYong', (_e, tok: { token: string; expiresAt: number; used: boolean }) => ({
   ok: shiYongYaoQing(tok),
 }));
-chuliIpc('warmy:tongBuFaBu', (_e, env: { fromNode: string; toNode: string; channel: string; payload: unknown; groupId?: string; incognito?: boolean }) => ({
-  ok: true,
-  envelope: syncBus?.publish(env as never),
-}));
+chuliIpc('warmy:tongBuFaBu', (_e, env: { fromNode: string; toNode: string; channel: string; payload: unknown; groupId?: string; incognito?: boolean }) => {
+  // R206：迪文化落点 cross-sync + exchange-format（跨设备同步交换经三态门控；不可用不阻断）
+  try { void luoDianDiwenHua('cross-sync', { text: JSON.stringify(env.payload || {}).slice(0, 2000) }).catch(() => { /* noop */ }); } catch { /* noop */ }
+  try { void luoDianDiwenHua('exchange-format', { text: String(env.channel || '') }).catch(() => { /* noop */ }); } catch { /* noop */ }
+  return { ok: true, envelope: syncBus?.publish(env as never) };
+});
 chuliIpc('warmy:tongBuLaQu', (_e, nodeId: string) => anQuanChuLi(() => ({ ok: true, xiaoXiJi: syncBus?.pull(nodeId) || [] }), { ok: true, xiaoXiJi: [] }))
 
 // ── WebGPU 探测（硬件信息；无则如实不可用） ──
@@ -28379,12 +28666,15 @@ async function qiDongAnQuanWangZhuang(port: number, opts: { discovery?: boolean;
   return r;
 }
 
-/** 默认锚点（稳定引导节点，供新节点入网）；R135 与 FWArmy 对齐：DHT/DHT2 × 443/62666（DHT.pondsi.com / DHT2.pondsi.com）。用户可在设置里修改 */
+/** 默认锚点（稳定引导节点，供新节点入网）；R135 与 FWArmy 对齐 DHT/DHT2 × 443/62666；R195 增 dht.numumu.com × 443/62666。
+ *  **不可更改、不可删除**：默认锚点恒在有效列表最前，用户只能追加自有锚点，不能改删默认项。 */
 const MO_REN_MAO_DIAN: string[] = [
   'DHT.pondsi.com:443',
   'DHT.pondsi.com:62666',
   'DHT2.pondsi.com:443',
   'DHT2.pondsi.com:62666',
+  'dht.numumu.com:443',
+  'dht.numumu.com:62666',
 ];
 
 /** 公开可发现：当前配置（只读，绝不回显密钥/凭证） */
@@ -28399,7 +28689,13 @@ function gongKaiFaXianPeiZhiKuai() {
   };
   return {
     enabled: net.publicDiscoverable !== false,
-    bootstrap: [...(Array.isArray(net.discoveryBootstrap) ? net.discoveryBootstrap.map(String).slice(0, 10) : []), ...MO_REN_MAO_DIAN].slice(0, 10),
+    // R195：默认锚点不可改删——恒在最前；用户追加项去重默认后补后，上限 16（6 默认 + 10 自有）
+    bootstrap: (() => {
+      const moRen = new Set(MO_REN_MAO_DIAN.map((x) => x.toLowerCase()));
+      const yongHu = (Array.isArray(net.discoveryBootstrap) ? net.discoveryBootstrap.map(String) : []).filter((x) => x.trim() && !moRen.has(x.trim().toLowerCase()));
+      return [...MO_REN_MAO_DIAN, ...yongHu].slice(0, 16);
+    })(),
+    moRenMaoDian: MO_REN_MAO_DIAN.slice(),
     port: Number.isInteger(net.discoveryPort) && Number(net.discoveryPort) >= 0 && Number(net.discoveryPort) <= 65535
       ? Number(net.discoveryPort)
       : GONG_KAI_FA_XIAN_DEFAULT_PORT,
@@ -28642,6 +28938,12 @@ function touDiFuWu(): TouDiFuWu {
       if (!secureMesh) return { ok: false, error: 'mesh-not-running' };
       const peer = duiduanYinyong().find((p) => !!p.zhiWen && zhiWenXiangTong(p.zhiWen, jiLu.recipientFp));
       if (!peer) return { ok: false, error: 'peer-gone' };
+      // R191 项2：发送前在线门禁——已知离线（liveness 有记录且 online=false）不拨号，返回不可达
+      // （保持 saved、不烧 attempts，等上线事件续投）；从未见过的对端不拦，避免挡住首次拨号。
+      try {
+        const huo = (secureMesh.presence() || []).find((p) => zhiWenXiangTong(String(p.zhiWen || ''), jiLu.recipientFp));
+        if (huo && huo.online === false) return { ok: false, unreachable: true, error: 'offline' };
+      } catch { /* 在线态查不到不阻断，按原路拨号 */ }
       const r = await secureMesh.sendToHost(
         peer.host,
         peer.port,
@@ -29419,6 +29721,14 @@ chuliIpc('warmy:zhiShiKuCongLiaoTian', (_e, payload: { sessionId: string; biaoTi
       ti: payload.ti,
       scope: 'session',
     });
+    // R200/R206：迪文化落点 kb-entry + I3 置信度联动（高置信才迪文化，低置信存原文；不可用不阻断）
+    try {
+      if (zhiXinMoXing().shouldDiwen(evId)) {
+        void luoDianDiwenHua('kb-entry', { text: String(payload.ti || '') }).then((dw) => { try { audit?.log('kb-entry.diwen', { mode: dw.mode, confidence: zhiXinMoXing().predict(evId) }); } catch { /* noop */ } }).catch(() => { /* noop */ });
+      } else {
+        try { audit?.log('kb-entry.original', { reason: 'low-confidence', confidence: zhiXinMoXing().predict(evId) }); } catch { /* noop */ }
+      }
+    } catch { /* 置信度不可用不阻断 */ }
     return { ok: true, eventId: evId };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
@@ -29748,6 +30058,9 @@ async function guiDangYiGeHuiHua(
         try { duHuaTiFanKuiCi(); } catch { /* noop */ }
       }
     } catch { /* 复盘写文件失败不影响归档 */ }
+    // R202：迪文化落点 reflection（复盘结论经三态门控；不可用不阻断归档）
+    try { void luoDianDiwenHua('reflection', { text: String(jiangJi || '') }).catch(() => { /* noop */ }); } catch { /* noop */ }
+    try { zhiXinMoXing().fuPanZiWoGaiJin(); } catch { /* noop */ } // R203 I3：复盘时置信度自我改进
     return { ok: true, tiaoShu: xin.length, zhiShiJian: evId, jiangJi, guiDangHeXin: heXinOk };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
@@ -31009,6 +31322,36 @@ chuliIpc('warmy:nmShiTuKai', (_e, p0?: { path?: string; luJing?: string; huiHuaI
     if (!p && !kw) return { ok: false, cuo: '没有文件路径' };
     return nmShiTuKai({ luJing: p, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi(), huiHuaId: String(p0?.huiHuaId || ''), kaiWangYe: kw });
   } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+/**
+ * R189 项2（nm 浏览器原生层专项）：工具栏菜单改**原生 overlay**。
+ * 原生 WebContentsView 永远盖在 DOM 之上（z-index 无效），旧实现开菜单要隐藏网页视图
+ * （⇒「开菜单瞬间页面让位」/露白）。这里把菜单交给原生 Menu.popup——与远程页右键菜单
+ * 同一机制，渲染在**所有子视图之上**，网页视图无需隐藏 ⇒ 开菜单不再让位。
+ * 条目回调按 id 路由回渲染层（闭包不可序列化）；菜单关闭回 nmCaiDanGuanBi 清回调表。
+ */
+chuliIpc('warmy:nmCaiDanTanChu', (e, p0?: { items?: Array<{ id?: string; label?: string; type?: string; checked?: boolean; enabled?: boolean; hint?: string }>; x?: number; y?: number }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win || win.isDestroyed()) return { ok: false, error: 'no-window' };
+    const items = Array.isArray(p0?.items) ? p0!.items! : [];
+    const tpl: import('electron').MenuItemConstructorOptions[] = [];
+    for (const it of items) {
+      if (!it) continue;
+      if (it.type === 'separator') { tpl.push({ type: 'separator' }); continue; }
+      const id = String(it.id || '');
+      const label = String(it.label || '') + (it.hint ? '  ' + String(it.hint) : '');
+      if (it.type === 'checkbox') {
+        tpl.push({ label, type: 'checkbox', checked: !!it.checked, enabled: it.enabled !== false, click: (mi) => { try { if (!e.sender.isDestroyed()) e.sender.send('warmy:nmCaiDanDianJi', { id, checked: mi.checked }); } catch { /* noop */ } } });
+      } else {
+        tpl.push({ label, enabled: it.enabled !== false, click: () => { try { if (!e.sender.isDestroyed()) e.sender.send('warmy:nmCaiDanDianJi', { id }); } catch { /* noop */ } } });
+      }
+    }
+    if (!tpl.length) return { ok: false, error: 'empty-menu' };
+    const menu = Menu.buildFromTemplate(tpl);
+    menu.popup({ window: win, x: Math.round(Number(p0?.x) || 0), y: Math.round(Number(p0?.y) || 0), callback: () => { try { if (!e.sender.isDestroyed()) e.sender.send('warmy:nmCaiDanGuanBi', {}); } catch { /* noop */ } } });
+    return { ok: true };
+  } catch (err) { return { ok: false, error: xiJingCuoWu(err) }; }
 });
 /** 第 104 轮 项 12：远程网页 = WebContentsView（本地网页仍走渲染层 sandbox iframe）。
  *  第 98 轮：tabKey 决定用哪个视图 —— 每个标签页一个视图，切换标签不重开网页。 */
@@ -34343,25 +34686,25 @@ chuliIpc('warmy:zhenDuanRiZhi', (_e, limit?: number) => ({
   ok: true,
   enabled: zhenDuan?.enabled ?? false,
   entries: zhenDuan?.read(limit || 200) || [],
-}));
+}), ['diag.html']);
 chuliIpc('warmy:zhenDuanZiJian', async () => {
   try {
     const jie = await yunXingZiJian(zhenDuanTanZhen());
     for (const r of jie) zhenDuan?.jiLu(r.ok ? 'selfcheck.pass' : 'selfcheck.fail', r.ok ? 'info' : 'warn', 'selfcheck', { zhi: { ...r.zhi }, dai: r.code });
     return { ok: true, results: jie };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
+}, ['diag.html']);
 chuliIpc('warmy:zhenDuanQingChu', () => {
   try { zhenDuan?.clear(); zhenDuan?.jiLu('diag.clear', 'info', 'diag'); return { ok: true }; }
   catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
+}, ['diag.html']);
 chuliIpc('warmy:zhenDuanKaiGuan', (_e, on?: boolean) => {
   try {
     if (zhenDuan) zhenDuan.enabled = on !== false;
     if (on === false) zhenDuan?.jiLu('diag.disabled', 'info', 'diag');
     return { ok: true, enabled: zhenDuan?.enabled ?? false };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
+}, ['diag.html']);
 /** 导出：再脱敏一次 + manifest；落盘由用户选路径，**不上传** */
 chuliIpc('warmy:zhenDuanDaoChu', async () => {
   try {
@@ -34374,7 +34717,7 @@ chuliIpc('warmy:zhenDuanDaoChu', async () => {
     zhenDuan.jiLu('diag.export', 'info', 'diag', { zhi: { entries: bundle.entries.length } });
     return { ok: true, path: r.filePath, entries: bundle.entries.length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
+}, ['diag.html']);
 
 // ── R185 中继站 TLS 信任（FWArmy RELAY-TLS-TRUST §2 五项；pin=自签指纹固定，verify=系统 CA+域名）──
 let zhongJiTlsCangShiLi: ZhongJiTlsPinCang | null = null;
@@ -34475,6 +34818,10 @@ chuliIpc('warmy:guiDangWaiBu', (_e, payload: { groupId: string; biaoTi: string; 
     anchors: maidianCongWaiBu(payload.anchors),
     ...(structured ? { structured: { bullets: structured.bullets, decisions: structured.decisions, todos: structured.todos, risks: structured.risks } } : {}),
   });
+  // R197：迪文化落点接线 archive-summary——摘要经三态门控（确定→迪文/不确定→原文/没有→不编）；迪文不可用不阻断归档
+  void luoDianDiwenHua('archive-summary', { text: String(payload.summary || '') }).then((dw) => {
+    try { audit?.log('archive.diwen', { mode: dw.mode, groupId: String(payload.groupId || '') }); } catch { /* noop */ }
+  }).catch(() => { /* 迪文不可用不阻断归档 */ });
   // 归档触发整理：摘要 → 知识库实体/事件 + 使用者偏好（持久跨会话）
   try {
     if (knowledge && tiqu && !(tiqu as { error?: string }).error) {

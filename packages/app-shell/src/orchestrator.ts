@@ -12,6 +12,7 @@ import { guSuanZhongYaoFuZa } from './nan-yi-du.js';
 import { paiFaZhiXingZhe, paiFaXianHou, zhiBanKeZiXing, yongHuYaoQiuZhiBanZiZuo, yongHuJinZhiZhiBanZiZuo, type PaiFaJiHua, type ZhiXingFenPei } from './zhi-ban-pai-fa.js';
 import { ZHAN_BEN_DAN_TIAO_ZI_SHANG_XIAN } from './executor.js';
 import { CcrGateway } from '@warmy/ccr-compressor';
+import { luoDianDiwenHua } from './diwen-integration.js';
 import {
   type LogEntry,
 } from './context-renderer.js';
@@ -373,6 +374,8 @@ async function paiFaZhiXingZheLun(
     ? { ...paiFaBen, fangShi: 'serial' as const, liYou: '有排队任务 ⇒ 加急/插入先干，排队的最后做' }
     : paiFaBen;
   try { deps.audit?.('orchestrator.dispatch-plan', { groupId: p.groupId, fangShi: paiFa.fangShi, chongTu: paiFa.chongTu, n: zhiXingQiJi.length, fenPei: jiHuaFenPei }); } catch { /* noop */ }
+  // R201：迪文化落点 agent-comm（值班派发经三态门控；不可用不阻断编排）
+  try { void luoDianDiwenHua('agent-comm', { text: String(p.brief || '') }).catch(() => { /* noop */ }); } catch { /* noop */ }
   /** 派给单个执行者（并行/接力共用同一段逻辑，避免两份漂移） */
   const paoYiGe = async (zxId: string, xu: number): Promise<{ zxId: string; ming: string; jg: zhixingqiJieguo }> => {
     const inst = chengYuan.find((x) => x.id === zxId);

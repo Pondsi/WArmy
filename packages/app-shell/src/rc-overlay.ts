@@ -210,7 +210,7 @@ export class BeiKongSanJianTao {
   // 点击穿透切换（热区内可点可拖）
   const stop = document.getElementById('stop');
   function chuantou(on) {
-    try { window.warmyRc && window.warmyRc.chuantou && window.warmyRc.chuantou(on); } catch (e) {}
+    try { window.warmyRc && window.warmyRc.chuantou && window.warmyRc.chuantou(on); } catch { /* 控制通道失败不影响 UI */ }
   }
   stop.addEventListener('mouseenter', () => chuantou(true));
   stop.addEventListener('mouseleave', () => chuantou(false));
@@ -243,10 +243,10 @@ export class BeiKongSanJianTao {
     chuantou(false);
   });
   document.getElementById('bStopOnce').addEventListener('click', () => {
-    try { window.warmyRc && window.warmyRc.jinTingzhi && window.warmyRc.jinTingzhi(); } catch (e) {}
+    try { window.warmyRc && window.warmyRc.jinTingzhi && window.warmyRc.jinTingzhi(); } catch { /* 控制通道失败不影响 UI */ }
   });
   document.getElementById('bStopAll').addEventListener('click', () => {
-    try { window.warmyRc && window.warmyRc.tingzhi && window.warmyRc.tingzhi(); } catch (e) {}
+    try { window.warmyRc && window.warmyRc.tingzhi && window.warmyRc.tingzhi(); } catch { /* 控制通道失败不影响 UI */ }
   });
 </script>
 </body>
