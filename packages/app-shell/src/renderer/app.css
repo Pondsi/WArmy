@@ -498,35 +498,36 @@ body.liaoTianChuangKou .liaoTianBuJu {
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
-  animation: yunXingHuanZhuan 4s linear infinite; /* R173 项3：放慢 */
+  animation: yunXingHuanZhuan 6s linear infinite; /* R211 b3：再放慢（4s→6s） */
   pointer-events: none;
   z-index: 1;   /* 角标是 2，不能被环盖住 */
 }
 @keyframes yunXingHuanZhuan { to { --yunXingJiao: 360deg; } }
-/* B. 流动扫光：**不用 mix-blend-mode**（浅色主题下 screen 等于隐形），颜色由主题令牌给 */
+/* B. 流动扫光：R211 b3 改为**横向流水波纹**（主题色深/浅交替柔波，ease-in-out 来回缓流，更像水）；不用 mix-blend-mode */
 .lieBiaoTiaoMu .avKuang.yunXingZhong::after {
   content: '';
   position: absolute; inset: 0; border-radius: inherit;
-  background: linear-gradient(115deg,
+  background: linear-gradient(100deg,
     transparent 0%,
-    transparent 18%,
-    rgba(255,255,255,.45) 30%,
-    rgba(255,255,255,.9) 46%,
-    rgba(0,0,0,.45) 60%, /* R183 项7：白正/黑负宽波带=水波 */
-    transparent 82%,
-    transparent 100%); /* R173 项3：扫光带加宽=更扩散 */
+    var(--yunXing-liang, #d8a878) 22%,
+    transparent 46%,
+    var(--yunXing-shen, #8a5a38) 68%,
+    transparent 90%,
+    transparent 100%); /* R211 b3：深/浅柔波带=水面波光 */
   background-size: 300% 300%;
-  animation: yunXingLiuDong 4.5s linear infinite;
+  opacity: .55;
+  animation: yunXingLiuDong 7s ease-in-out infinite; /* R211 b3：放慢+缓流（4.5s linear→7s ease-in-out） */
   pointer-events: none;
   z-index: 1;
 }
 @keyframes yunXingLiuDong {
-  0%   { background-position: 120% 120%; }
-  100% { background-position: -60% -60%; }
+  0%   { background-position: 120% 50%; }
+  50%  { background-position: -60% 50%; }
+  100% { background-position: 120% 50%; }
 }
 /* C. 呼吸光晕：扫光扫过去之后仍有余光，不至于「一片空白」 */
 .lieBiaoTiaoMu .avKuang.yunXingZhong {
-  animation: yunXingGuangYun 5s ease-in-out infinite; /* R173 项3：放慢 */
+  animation: yunXingGuangYun 7s ease-in-out infinite; /* R211 b3：再放慢（5s→7s） */
 }
 @keyframes yunXingGuangYun {
   0%, 100% { box-shadow: 0 0 6px 1px var(--yunXing-yun-ruo, rgba(168,118,84,.16)); }
@@ -4775,7 +4776,7 @@ html { font-weight: var(--fw-ui, 400); }
    段间 3px、悬停条距其所属块 1px、距下面内容 3px —— 悬停内容贴着"上面的回复"。 */
 .guoChengLie { display: flex; flex-direction: column; margin-bottom: 2px; }
 .guoChengLie > :not(:first-child) { margin-top: 3px; }
-.guoChengLie > .guoChengCaoZuo { margin-top: 1px; }
+.guoChengLie > .guoChengCaoZuo { margin-top: 0; } /* R211 b11：去掉 1px 死区（鼠标下移时两者 hover 都失活→条消失） */
 .guoChengDuan { margin-bottom: 0; position: relative; }
 .zhongJianKa {
   position: relative;
@@ -4832,7 +4833,7 @@ html { font-weight: var(--fw-ui, 400); }
    是死规则，鼠标一离开上方内容条就消失、够不着下面的条。保留 opacity 过渡即可。 */
 .guoChengCaoZuo {
   visibility: hidden; justify-content: flex-start; align-items: center; gap: 6px;
-  min-width: 0; padding: 0;
+  min-width: 0; padding: 3px 0 0; /* R211 b11：上 padding 桥接内容，鼠标下移直接进条 hover 区，不闪没 */
   font-size: 10px; color: var(--muted);
   min-height: 1.5em;
 }

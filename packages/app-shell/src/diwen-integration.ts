@@ -10,6 +10,7 @@
  * 用户可见落点一律回退原文；迪文只给机器看；S8 非安全/加密层。
  */
 import { diwenHua, diwenYongHuSouSuo, gcfBianMa, diwenValidate, type DiwenHuaJieGuo } from './diwen-bridge.js';
+import { fenLeiI5, i5MingOf } from './diwen-i5.js';
 
 export type LuoDianFenLei = 'A-适合' | 'B-增益有限' | 'C-不该';
 export interface LuoDian { id: string; ming: string; fenLei: LuoDianFenLei; liYou: string; yongHuKeJian?: boolean; }
@@ -46,13 +47,17 @@ export const DIWEN_LUO_DIAN: LuoDian[] = [
   { id: 'diag-obs', ming: 'diag.jsonl/token-observations.jsonl', fenLei: 'C-不该', liYou: '运行时观测/日志非知识，可能含敏感路径' },
 ];
 
-/** A 类落点统一迪文化（机器侧）。用户可见落点请走 yongHuKeJianLuoDian。 */
-export async function luoDianDiwenHua(luoDianId: string, input: { text?: string; doc?: any }): Promise<DiwenHuaJieGuo & { luoDian: string }> {
+/** A 类落点统一迪文化（机器侧）。用户可见落点请走 yongHuKeJianLuoDian。
+ *  R212：agent-comm/exchange-format 额外带 I5 协作言语行为归类（承诺/质询/证据/拒绝/请求/汇报/纠错）。 */
+export async function luoDianDiwenHua(luoDianId: string, input: { text?: string; doc?: any }): Promise<DiwenHuaJieGuo & { luoDian: string; i5?: { lei: string | null; ming: string } }> {
   const ld = DIWEN_LUO_DIAN.find((x) => x.id === luoDianId);
-  if (!ld) return { ...(await diwenHua(input)), luoDian: luoDianId };
-  if (ld.fenLei === 'C-不该') return { mode: 'fallback-text', text: String(input?.text ?? ''), luoDian: luoDianId }; // 红线落点恒回原文
-  if (ld.yongHuKeJian) return { mode: 'fallback-text', text: await diwenYongHuSouSuo(input), luoDian: luoDianId }; // 用户可见恒原文
-  return { ...(await diwenHua(input)), luoDian: luoDianId };
+  const i5 = (luoDianId === 'agent-comm' || luoDianId === 'exchange-format')
+    ? (() => { const lei = fenLeiI5(String(input?.text ?? '')); return { i5: { lei, ming: i5MingOf(lei) } }; })()
+    : {};
+  if (!ld) return { ...(await diwenHua(input)), luoDian: luoDianId, ...i5 };
+  if (ld.fenLei === 'C-不该') return { mode: 'fallback-text', text: String(input?.text ?? ''), luoDian: luoDianId, ...i5 }; // 红线落点恒回原文
+  if (ld.yongHuKeJian) return { mode: 'fallback-text', text: await diwenYongHuSouSuo(input), luoDian: luoDianId, ...i5 }; // 用户可见恒原文
+  return { ...(await diwenHua(input)), luoDian: luoDianId, ...i5 };
 }
 
 /** 用户可见落点：永远只回原文（自然语）。 */

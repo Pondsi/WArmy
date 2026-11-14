@@ -4687,11 +4687,19 @@ function zhuSiKaoZhui(sid0: string, wen: string, moXing?: string): void {
   const sid = String(sid0 || '');
   const s = String(wen || '');
   if (!sid || !s) return;
+  /** R211 b12：段模型名统一带供应商（原来只存模型 id，悬停看不到是哪家）。 */
+  let mx = String(moXing || '');
+  try {
+    if (mx && !mx.includes('·')) {
+      const gong = gongYingShangXianShiMing(String(providerCfg.presetId || '')) || String(providerCfg.presetId || '');
+      if (gong) mx = gong + ' · ' + mx;
+    }
+  } catch { /* 取不到供应商就保留模型 id */ }
   let a = ZHU_SI_KAO_DUAN.get(sid);
   if (!a) { a = []; ZHU_SI_KAO_DUAN.set(sid, a); }
   const wei = a[a.length - 1];
-  if (!wei || wei.feng) a.push({ ts: Date.now(), text: s, moXing: String(moXing || '') });
-  else { wei.text += s; if (!wei.moXing && moXing) wei.moXing = String(moXing); }
+  if (!wei || wei.feng) a.push({ ts: Date.now(), text: s, moXing: mx });
+  else { wei.text += s; if (!wei.moXing && mx) wei.moXing = mx; }
   while (a.length > 120) a.shift();
 }
 function zhuSiKaoFeng(sid0: string): void {
@@ -5525,6 +5533,20 @@ async function yunXingLiaoTianXunHuan(
               }
               return { biaoQian: String(o ?? ''), tuiJian: false };
             }).filter((o) => o.biaoQian.trim()) : [];
+            /** R211 b8 硬兜底：选项是泛化「步骤N/Step N」时，自动补上计划里该步骤的真实标题，
+             *  用户才看得懂在选什么（不依赖模型自觉带内容）。 */
+            try {
+              const buZhou = jiHuaBenCi(sessionId);
+              if (buZhou.length) {
+                for (const o of houXuan) {
+                  const mm = /^\s*(?:步骤|step)\s*(\d+)\s*$/i.exec(o.biaoQian);
+                  if (mm) {
+                    const bu = buZhou[Number(mm[1]) - 1];
+                    if (bu && bu.title) o.biaoQian = o.biaoQian + '：' + String(bu.title).slice(0, 60);
+                  }
+                }
+              }
+            } catch { /* 补内容失败不影响弹卡 */ }
             /**
              * **不许把"长文还差多少字"抛回用户**（真机 r35-2-ollama-4：27B 写到 3507/6000 字就
              * 弹卡问"要补完、就这样收、还是整篇重来？"）。
@@ -6283,6 +6305,29 @@ async function yunXingLiaoTianXunHuan(
                 ? lie.map((t) => `${t.id} | ${t.ming} | ${t.user}@${t.host}:${t.port} | ${t.renZheng}`).join('\n')
                 : '（空——用户可在设置里登记 SSH 目标）');
               okH = true;
+            } else if (dongZuo === 'add') {
+              /** R211 f7：牛马自行登记 SSH 设备（用户告知信息→授权→登记→测试→成功自动加入列表以便复用）。 */
+              const host = String(argsH.host || '').trim();
+              const user = String(argsH.user || '').trim();
+              if (!host || !user) { okH = false; huiBaoH = '[remote_ssh] add 需要 host 与 user'; }
+              else {
+                const quanOk = anQuanDangWei().full || /同意/.test(await qingQiuKaPian(
+                  sessionId, '登记新的 SSH 远程设备',
+                  `设备：${String(argsH.ming || host)}\n目标：${user}@${host}:${Number(argsH.port) || 22}\n认证：${String(argsH.renZheng || 'key')}\n（登记后牛马可复用此设备；拒绝 = 不登记）`,
+                  [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }],
+                ));
+                if (!quanOk) { okH = false; huiBaoH = huiBaoJuJue(sessionId, 'remote_ssh', 'yongHu', ''); }
+                else {
+                  const r = ssh.baoCunMuBiao({ ming: String(argsH.ming || host), host, port: Number(argsH.port) || 22, user, renZheng: argsH.renZheng === 'password' ? 'password' : 'key', pingZheng: String(argsH.pingZheng || argsH.key || '') });
+                  if (!r.ok) { okH = false; huiBaoH = '[remote_ssh] 登记失败：' + String((r as { error?: string }).error || ''); }
+                  else {
+                    const ce = await ssh.ceShi(String(r.id || ''));
+                    okH = ce.ok;
+                    huiBaoH = `[remote_ssh] 已登记「${String(argsH.ming || host)}」（id=${String(r.id || '')}），连接${ce.ok ? '成功' : '失败'}${ce.error ? '\n' + ce.error : ''}` + (ce.ok ? '。以后可用 action=run target=' + String(r.id || '') + ' 复用。' : '。请核对密钥/地址，或改用其他方法达成目标。');
+                    try { audit?.log('ssh.target-auto-add', { sessionId, id: String(r.id || ''), ok: ce.ok }); } catch { /* noop */ }
+                  }
+                }
+              }
             } else {
               const t = ssh.lieBiao().find((x) => x.id === muBiaoId || x.ming === muBiaoId);
               if (!t) {
@@ -15291,6 +15336,8 @@ async function zhenZhengFaSongBen(
            * 把长产出拆成可验证的小步）。这里把规矩写进系统提示，工具侧 `write_file(append:true)` 支持续写。
            */
           ju.push('【长文分段写】要用 write_file 产出**超过 1500 字**的长文时：**不要在一次调用里塞整篇**。第 1 次调用不带 append（写第 1 段，约 600~1200 字），之后**每次都用 append:true 续写下一段**，一次一段，直到整篇写完；每次返回都会告诉你「文件当前共多少字节/字符」，据此判断还需要再写几段。**分段之间不要重复调用完全相同的参数**（那会被当成原地打转而挡下）。全部写完后，在最终回复里给出绝对路径与总字数。');
+          /** R211 b8：选择卡选项必须带具体内容（真事故：只写「步骤1/步骤2」用户无法判断）。 */
+          ju.push('【选择卡要带内容】用 ask_user 弹选择卡让用户挑步骤/方案时，每个选项的标签必须写出**具体内容**（计划步骤的真实标题或动作、方案的实际做法），必要时用 description 补充细节；**不许只写「步骤1/步骤2/步骤3」这种空标签**——用户看不到内容就无法判断该选哪个。');
           /**
            * 第 29 轮 项 10：最终回复里出现文件时**必须写绝对路径**，并自带可点超链接。
            */
@@ -16201,9 +16248,12 @@ async function zhenZhengFaSongBen(
             }
           }
         } catch { /* noop */ }
+        /** R211 q2：把当前模型身份如实告知模型（末尾追加，不动冻结系统提示头）。
+         *  真事故：用户问「你在用哪个模型」，牛马去 dir 安装目录代码查自己是谁——身份是运行时已知信息，不该读安装目录。 */
+        const shenFenMoXing = (gongYingShangXianShiMing(String(providerCfg.presetId || '')) || String(providerCfg.presetId || '')) + ' · ' + String(modelId || '');
         const jiBenQiu: { model: string; xiaoXiJi: typeof xiaoXiJiZui; maxTokens: number; toolChoice?: 'auto' } = {
           model: modelId,
-          xiaoXiJi: xiaoXiJiZui,
+          xiaoXiJi: [...xiaoXiJiZui, { role: 'system' as const, content: '【当前模型身份】你当前运行在「' + shenFenMoXing + '」。用户问你在用哪个模型/供应商时，直接按这一条如实回答；不要去读程序安装目录的代码或配置文件来查自己是谁。' }],
           maxTokens: yunXuShuChu,
           ...(xiaoXi.ziYouHuiDa ? { toolChoice: 'auto' as const } : {}),
         };
@@ -17232,7 +17282,16 @@ function dangQianMoXingOf(sessionId: string): string {
     const lie = Array.isArray(s?.instances) ? s.instances! : [];
     const sid = String(sessionId || '');
     const cur = lie.find((x) => x && (String(x.id || '') === sid || String(x.ming || '') === sid || String(x.name || '') === sid));
-    return String(cur?.currentModel || '').trim();
+    const pinned = String(cur?.currentModel || '').trim();
+    /** R211 b5：钉住的降级模型若已不在当前调用链（或被禁用）⇒ 失效，回到按调用链选。
+     *  真事故：调用链首个改成 ollama，却仍用旧降级模型 D-2，上下文预算也跟着错。 */
+    if (pinned && cur) {
+      const lian = Array.isArray((cur as { chain?: unknown }).chain) ? ((cur as { chain?: unknown[] }).chain || []).map((x) => String(x || '')) : [];
+      const jin = new Set((Array.isArray((cur as { chainDisabled?: unknown }).chainDisabled) ? ((cur as { chainDisabled?: unknown[] }).chainDisabled || []) : []).map((x) => String(x || '')));
+      const youXiao = lian.filter((m) => m && !jin.has(m));
+      if (youXiao.length && !youXiao.includes(pinned)) return '';
+    }
+    return pinned;
   } catch { return ''; }
 }
 
@@ -18146,6 +18205,16 @@ function yingGaiZiDongJiXu(
   const sid = String(sessionId || '');
   /** 已经判过异常 ⇒ **一步都不许再往下走**（用户回一句话才会清掉这个标记） */
   if (quEtaYiChang(sid)) return { jiXu: false, liYou: 'eta-anomaly' };
+  /** R211 b13：有**待答决策卡/选项卡** ⇒ 不续派，停下来等用户操作。
+   *  真事故：3 张卡一直没点，任务却自行推进到完成。待答卡是「要人拍板」的硬阻塞，
+   *  续派/完成核对一律不许越过它（用户点完卡或回一句话才继续）。 */
+  try {
+    const daiDa = aiQuestions.pending(sid);
+    if (daiDa.length) {
+      try { audit?.log('plan.auto-continue-blocked-pending-card', { sessionId: sid, n: daiDa.length }); } catch { /* noop */ }
+      return { jiXu: false, liYou: 'pending-card' };
+    }
+  } catch { /* noop */ }
   /**
    * R163 #8：**用户时限优先于一切续派理由**。
    * 到点后只放行恰好一轮收尾（总结成果 / 列决策点 / 写交接文档 —— 用户明确要的），
@@ -18232,6 +18301,14 @@ function yingGaiZiDongJiXu(
     }
   }
   const weiWan = jiHuaWeiWanCheng(sid);
+  /** R211 b4：计划全部销账 + 无缺证据 + 已有实质最终回复 + 非截断 ⇒ 真完成，收工不重跑。
+   *  真事故：最终回复已出、计划都显示完成，却被完成核对/续派拉起重头再做。
+   *  缺证据（jiHuaQueZhengJu 非空）或截断（beiJieDuan）仍走原核对/续派，不被这条挡。 */
+  if (!weiWan.length && !jiHuaQueZhengJu(sid).length && !beiJieDuan && String(shangLun?.huiFu || '').trim().length > 0) {
+    try { audit?.log('plan.auto-continue-all-done-stop', { sessionId: sid }); } catch { /* noop */ }
+    try { qiYongShouWeiDuiQi(sid); } catch { /* noop */ }
+    return { jiXu: false, liYou: 'done' };
+  }
   if (weiWan.length) {
     if (chongFu3()) return { jiXu: false, liYou: 'repeat-3x' };
     /**

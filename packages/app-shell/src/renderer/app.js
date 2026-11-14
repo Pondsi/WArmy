@@ -10686,14 +10686,22 @@ window.__keYiLiaoTian = keYiLiaoTian;
               const useOpt = (realBtn || firstBtn)?.getAttribute('data-opt');
               const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: useOpt || '__custom__', customText: useOpt ? undefined : '允许' });
               if (r2 && r2.ok === false) uiAlert(String(r2.error||''));
+              // R211 b6：「长期允许」作答后同样标记已答+清兜底窗口+刷新角标（原来只 renderAiQuestions，问号不消）
+              try { state.aiQuestions = (state.aiQuestions || []).map((q) => q.id === id ? { ...q, status: 'answered', answered: true } : q); } catch { /* noop */ }
+              try { const q0 = (state.aiQuestions || []).find((q) => q && q.id === id); const sid0 = String((q0 && (q0.sessionId || q0.groupId)) || qunId || ''); if (sid0 && state.aiqBenLun && state.aiqBenLun.get && state.aiqBenLun.get(sid0)) { const haiYou = (state.aiQuestions || []).some((q) => q && q.status === 'pending' && !q.answered && (q.sessionId === sid0 || q.groupId === sid0)); if (!haiYou) state.aiqBenLun.delete(sid0); } } catch { /* noop */ }
               renderAiQuestions();
+              try { renderList(); } catch { /* noop */ }
+              try { gengXinDiYiLieYuanDian(); } catch { /* noop */ }
               return;
             }
             const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: opt === '__allow__' ? 'allow' : opt });
             if (r2 && r2.ok === false) uiAlert(String(r2.error||''));
             try { state.aiQuestions = (state.aiQuestions || []).map((q) => q.id === id ? { ...q, status: 'answered', answered: true } : q); } catch { /* noop */ }
+            // R211 b6：作答后立即清「本轮出现过卡」兜底窗口并刷新角标（不必等滚动到聊天底部）
+            try { const q0 = (state.aiQuestions || []).find((q) => q && q.id === id); const sid0 = String((q0 && (q0.sessionId || q0.groupId)) || qunId || ''); if (sid0 && state.aiqBenLun && state.aiqBenLun.get && state.aiqBenLun.get(sid0)) { const haiYou = (state.aiQuestions || []).some((q) => q && q.status === 'pending' && !q.answered && (q.sessionId === sid0 || q.groupId === sid0)); if (!haiYou) state.aiqBenLun.delete(sid0); } } catch { /* noop */ }
             renderAiQuestions();
             try { renderList(); } catch { /* noop */ }
+            try { gengXinDiYiLieYuanDian(); } catch { /* noop */ }
           };
         });
         host.querySelectorAll('[data-aiq-submit]').forEach((b) => {
@@ -12754,6 +12762,7 @@ async function renderDashboard(host) {
     if (!(inst.availableModels || []).includes(m)) inst.availableModels = [...(inst.availableModels || []), m];
     if (!(inst.chainManual || []).includes(m)) inst.chainManual = [...(inst.chainManual || []), m];
     inst.smartMode = false;
+    inst.currentModel = ''; /* R211 b5：提到链首=改了调用链 ⇒ 清掉降级钉住的旧模型（否则 ollama 提为首却仍用 D-2） */
     dingZhengMoRenMoXing(inst);
   }
 
@@ -14198,6 +14207,7 @@ async function renderDashboard(host) {
             if (!(await uiConfirm(tOr('model.deleteConfirm', '确定从调用链移除该模型？（可用「手动添加」再加回）') + '\n' + m))) return;
             inst2.chain.splice(i, 1);
             inst2.chainDisabled = (inst2.chainDisabled || []).filter((x) => x !== m);
+            inst2.currentModel = ''; /* R211 b5：改链清掉降级钉住模型 */
             if (!shiZhiNengMoShi(inst2)) inst2.defaultModel = lianMoRenMoXing(inst2);
             saveInst(); renderChain();
             showToast(tOr('model.deleted', '已移除') + '：' + m);
@@ -30791,6 +30801,10 @@ async function renderDashboard(host) {
         ${editable ? '' : '<span class="mgrRo">' + escapeHtml(t('panel.modelMgrReadonly')) + '</span>'}
       </summary>
       <div class="mgrTi">
+        <label class="mgrLb" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" data-mgsmart="${suoYin}"${shiZhiNengMoShi(inst) ? ' checked' : ''}${dis}/>
+          <span>${escapeHtml(tOr('model.smartMode', '智能模式（系统自动安排调用链）'))}</span>
+        </label>
         ${
           /**
            * **当前模型**（只有真降级过才出现）：产品要求"在可用模型上面出现一行，
@@ -30890,6 +30904,18 @@ async function renderDashboard(host) {
         delete e.inst.currentModel;
         renderModelMgr();
         window.__saveState?.();
+      };
+    });
+    /** R211 b5：模型管理卡「智能模式」勾选（对应牛马设置 smartMode；勾=系统自动安排调用链）。 */
+    heZi.querySelectorAll('[data-mgsmart]').forEach((el) => {
+      el.onchange = () => {
+        const e = entries[Number(el.getAttribute('data-mgsmart'))];
+        if (!e || !e.editable) return;
+        e.inst.smartMode = !!el.checked;
+        if (e.inst.smartMode) { e.inst.defaultModel = ''; }
+        else if (!e.inst.defaultModel) { e.inst.defaultModel = lianMoRenMoXing(e.inst); }
+        window.__saveState?.();
+        renderModelMgr();
       };
     });
     heZi.querySelectorAll('[data-mg="default"]').forEach((selEl) => {
@@ -31018,6 +31044,7 @@ async function renderDashboard(host) {
         if (picked && picked.length) {
           e3.inst.availableModels = [...new Set([...(e3.inst.availableModels || []), ...picked])];
           e3.inst.chain = [...new Set([...(e3.inst.chain || []), ...picked])];
+          e3.inst.currentModel = ''; /* R211 b5：改链清掉降级钉住模型 */
           renderModelMgr();
           window.__saveState?.();
         }

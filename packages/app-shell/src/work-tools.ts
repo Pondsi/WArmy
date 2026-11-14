@@ -1718,20 +1718,28 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'remote_ssh',
-        description: '**SSH 远程执行**：在用户登记过的 SSH 目标（可以是任何装有 sshd 的设备，不必装 WArmy）上执行命令、传文件。'
+        description: '**SSH 远程执行**：在 SSH 目标（任何装有 sshd 的设备，不必装 WArmy）上执行命令、传文件。'
           + '网络可达性由用户自己解决（局域网/VPN/端口转发均可），本工具只负责对接对面设备的 SSH。'
-          + '每次调用都会弹用户授权卡（完全授权档自动放行）并记审计。action：run=执行命令（默认）/ get=远端文件取回本机 / put=本机文件推到远端 / list=列出已登记目标 / test=测试连通。',
+          + '每次调用都会弹用户授权卡（完全授权档自动放行）并记审计。action：run=执行命令（默认）/ get=远端文件取回本机 / put=本机文件推到远端 / list=列出已登记目标 / test=测试连通 / add=登记新设备。'
+          + '【设备复用流程】① 用户告知了 SSH 信息（host/user/密钥）⇒ 用 action=add 登记并测试，成功后自动加入设备列表以便复用；'
+          + '② 用户没给密钥 ⇒ 先 action=list 查有无已登记目标，有就复用（target=其 id）；'
+          + '③ 没有或信息不对连不上 ⇒ 先试其他方法达成目标；用户明确要 SSH 或无其他方法 ⇒ 用 ask_user 向用户要 host/user/密钥。',
         parameters: {
           type: 'object',
           properties: {
-            action: { type: 'string', description: 'run | get | put | list | test，默认 run' },
-            target: { type: 'string', description: '目标 id 或 显示名（list 动作可省略）' },
+            action: { type: 'string', description: 'run | get | put | list | test | add，默认 run' },
+            target: { type: 'string', description: '目标 id 或 显示名（list/add 动作可省略）' },
             command: { type: 'string', description: 'action=run 时：远端要执行的命令' },
             remotePath: { type: 'string', description: 'action=get/put 时：远端路径' },
             localPath: { type: 'string', description: 'action=get/put 时：本机路径（工作区相对或绝对）' },
+            host: { type: 'string', description: 'action=add 时：设备地址（IP/域名）' },
+            user: { type: 'string', description: 'action=add 时：SSH 用户名' },
+            port: { type: 'number', description: 'action=add 时：SSH 端口（默认 22）' },
+            ming: { type: 'string', description: 'action=add 时：设备显示名（便于复用）' },
+            renZheng: { type: 'string', description: 'action=add 时：认证方式 key | password（默认 key）' },
+            pingZheng: { type: 'string', description: 'action=add 时：密钥内容或密码（用户告知的凭证；safeStorage 加密落盘）' },
             timeoutMs: { type: 'number', description: '超时毫秒（默认 60000）' },
           },
-          required: ['target'],
         },
       },
     },
