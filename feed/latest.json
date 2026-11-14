@@ -1,13 +1,13 @@
 {
-  "version": "0.4.13",
-  "notes": "WArmy 0.4.13 — relay TLS trust establishment (self-signed certificate fingerprint pinning with first-use manual verification, persistent per-relay pins, automatic mismatch rejection and re-verification, plus CA/domain verification mode); fixes the dsh update check and one-click install on Windows (Node >= 18.20 EINVAL when spawning npm.cmd, now resolved through npm-cli.js with asynchronous spawn so it never blocks the main process); the diagnostic log opens in its own window; the help drawer opens from the rail/list seam and is fully invisible when closed; consistent context-menu ordering across session types; a larger workhorse settings window; knowledge panel rework. Verified by a 160-turn / 24 MB long-context stress test against a local 128K Ollama model: zero failures, zero anomalies, a stable context budget, and correct memory retrieval whenever recall/retrieve is invoked. The in-app updater downloads only changed blocks with unchanged SHA-256 verification.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.13/WArmy-Setup-0.4.13.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.13/WArmy-Setup-0.4.13.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.13/WArmy-Setup-0.4.13.exe.warmyblocks",
-  "sha256": "32aac22f518222b65fd8c7a858761fb4d8203f3d22b120066000c95df3b415aa",
-  "size": 234839666,
+  "version": "0.4.14",
+  "notes": "WArmy 0.4.14 — fixes custom-provider chat failing with \"object is not iterable\": the process-isolated chat engine no longer proxies its synchronous compression/budget callbacks across processes, and streamed responses are consumed as complete payloads, so chat and call-chain fallback work for every provider; fetching a provider model list now validates chat usability with a minimal probe (insufficient balance/quota is not a failure, while invalid keys/endpoints block adding the provider); abnormal-session badges show only the exclamation mark in the theme accent color (no overlapping unread count); in the model management card, enabling Smart Mode greys out and disables the call-chain section and the label drops its parenthetical; privacy gate hardening (no hardcoded workspace paths in scripts). Verified by the full gate suite: 78 gates x 3 consecutive clean rounds (234 checks, 0 failures, 0 flakes). The in-app updater downloads only changed blocks with unchanged SHA-256 verification.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.14/WArmy-Setup-0.4.14.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.14/WArmy-Setup-0.4.14.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.14/WArmy-Setup-0.4.14.exe.warmyblocks",
+  "sha256": "df98825b2f6e6cd1294d87459f2f8c77114fa9af75314ebdb297e84b5baa506f",
+  "size": 234840529,
   "mandatory": false,
-  "publishedAt": "2026-11-14T16:48:01.345Z",
+  "publishedAt": "2026-11-14T19:27:51.725Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.13"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.14"
 }

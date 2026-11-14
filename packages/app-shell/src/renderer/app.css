@@ -1949,6 +1949,8 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 .mgrTi .mgrZhe[open] > summary::before { content: '▾'; }
 .mgrTi .mgrZhe > summary:hover { background: var(--hover); color: var(--ink); }
 .mgrTi .mgrZhe .mgrMoXingJi, .mgrTi .mgrZhe .mgrChain { margin-top: 4px; }
+/* R216：智能模式勾选后调用链灰色禁用（系统自动安排调用链，手动链不生效） */
+.mgrTi .mgrZhe.mgrZheJinYong { opacity: .45; pointer-events: none; }
 /**
  * **「当前模型」行**（降级后才出现）：与可用模型的 chip 同一套外观，
  * 只把底色换成强调色 —— 一眼能看出"这是现状，不是预设"，而且带 ❌ 可清掉。
@@ -3768,7 +3770,7 @@ html { font-weight: var(--fw-ui, 400); }
   pointer-events: none; z-index: 2;
 }
 .hangJiaoBiao.wen { background: var(--accent); }
-.hangJiaoBiao.tan { background: var(--danger, #d9534f); }
+.hangJiaoBiao.tan { background: var(--accent); } /* R215 e3：异常感叹号用主题色（用户要求） */
 /* R160 项6：未读角标移到右上角，与问号/感叹号并排（以前在右下角，用户要求在右上角） */
 .weiDuZi {
   position: absolute; right: -5px; top: -5px;

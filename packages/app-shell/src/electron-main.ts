@@ -13396,6 +13396,22 @@ chuliIpc(
         return { ok: false, error: errTxt, hint: String(key || '').trim() ? '密钥已读到，是端点拒绝或网络问题' : '没有读到密钥' };
       }
       try { audit?.log('models.fetch-ok', { providerId: String(cfg.providerId || ''), n: models.length, hasKey: !!String(key || '').trim(), keyLen: String(key || '').length }); } catch { /* noop */ }
+      /** R215 e2：模型列表能拉到 ≠ 聊天接口可用。拉取时做一次最小聊天验证：
+       *  接口地址/密钥/站点不匹配（401/403/404/网络错）⇒ 阻止添加并如实告知；
+       *  余额不足/额度类（402/insufficient/quota）⇒ 不算端点错误，不阻止添加。 */
+      if (models.length) {
+        try {
+          await p.chat({ model: models[0], xiaoXiJi: [{ role: 'user', content: 'hi' }], maxTokens: 1 } as never, AbortSignal.timeout(20000));
+        } catch (eVal) {
+          const vt = xiJingCuoWu(eVal);
+          const shiYuE = /insufficient|balance|quota|余额|额度|402|payment|credit|exceeded.*balance/i.test(vt);
+          const shiDuanDianCuo = /401|403|404|unauthorized|forbidden|not found|ENOTFOUND|ECONNREFUSED|invalid.*(url|api|key)|fetch failed|no-api-key/i.test(vt);
+          if (!shiYuE && shiDuanDianCuo) {
+            try { audit?.log('models.validate-failed', { providerId: String(cfg.providerId || ''), model: models[0], error: vt.slice(0, 200) }); } catch { /* noop */ }
+            return { ok: false, error: '聊天端点验证失败：' + vt, hint: '模型列表能拉到，但聊天接口不可用（请检查接口地址是否缺 /v1、密钥与站点是否匹配）。余额不足不会阻止添加。' };
+          }
+        }
+      }
       /**
        * 问出**该模型会什么**（视觉 / 思考档位 / 工具）：
        *  · 端点给字段（`input_modalities`/`capabilities`/`supported_parameters`）就用端点的；
@@ -26326,7 +26342,8 @@ async function geLiWangGuan(tool: string, args: any, sessionId: string): Promise
   const ctx = geLiHuiHuaCtx.get(String(sessionId || ''));
   if (tool === 'llm-call') {
     if (!ctx) return geLiLlmCall(args, sessionId); // 无主循环上下文（独立 chat-turn）⇒ 设置侧供应商兜底
-    const method = String(args?.method || 'chat');
+    /** R215：子进程只能消费可序列化的全量响应，统一走非流式 chat（宿主内部仍流式广播增量给界面）。 */
+    const method = 'chat';
     const p = ctx.provider as unknown as Record<string, (q?: unknown, s?: AbortSignal) => Promise<unknown>>;
     const fn = p[method];
     if (typeof fn !== 'function') return { error: 'bad-llm-method:' + method };

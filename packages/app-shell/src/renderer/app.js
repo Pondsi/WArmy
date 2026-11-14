@@ -3670,7 +3670,7 @@ async function langDuWenBen(text, btnEl) {
         b.title = escapeHtml(st.yiChang ? tOr('list.errorBadge', '对话出现异常') : tOr('list.waitDecision', '有等待决策'));
         (av || hangYuanSu).appendChild(b);
       }
-      if (!tingYong && n > 0) {
+      if (!tingYong && n > 0 && !st.yiChang) { /* R215 e3：异常时只显示感叹号，不叠加未读数字 */
         const w = document.createElement('span');
         w.className = 'weiDuZi';
         w.textContent = n > 99 ? '99+' : String(n);
@@ -8520,7 +8520,7 @@ async function langDuWenBen(text, btnEl) {
     if (dong === 'requests') bzXuanRanRequests();
     else if (dong === 'system') bzXuanRanSystem();
     else if (dong === 'docs') { bzGuan(); try { window.warmy.daKaiBangZhuWenDang(); } catch (e) { /* noop */ } } // R183 项12：本地帮助文档
-    else if (dong === 'feedback') { bzGuan(); try { window.warmy.openExternal(BZ_REPO + '/discussions'); } catch (e) { /* noop */ } }
+    else if (dong === 'feedback') { bzGuan(); try { window.warmy.openExternal(BZ_REPO + '/issues'); } catch (e) { /* noop */ } } // R214 D4：反馈外链改为 issues
     else if (dong === 'diag') bzDaKaiZhenDuan();
   });
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { var d = bzEl('bangZhuChouTi'); if (d && d.classList.contains('kai')) bzGuan(); } });
@@ -19927,7 +19927,7 @@ async function renderDashboard(host) {
           '</button></div></div>' +
           '</div>' +
           '<div class="provDongZuoJi">' +
-            '<button class="anNiuXiao" data-fetch title="' + escapeHtml(laQuBiaoTi) + '">' + escapeHtml(tOr('settings.autoAddModel', '自动添加模型')) + '</button>' +
+            '<button class="anNiuXiao' + (pr.__laQuZhong ? ' laQuZhong' : '') + '" data-fetch' + (pr.__laQuZhong ? ' disabled' : '') + ' title="' + escapeHtml(laQuBiaoTi) + '">' + (pr.__laQuZhong ? '<span class="laQuZhuan" aria-hidden="true"></span>' + escapeHtml(t('common.loading')) : escapeHtml(tOr('settings.autoAddModel', '自动添加模型'))) + '</button>' +
             '<button class="anNiuXiao" data-manual-add="' + escapeHtml(pr.id) + '" title="' + escapeHtml(tOr('settings.manualAddModelTip', '手动填写模型名称与能力并验证')) + '">' + escapeHtml(tOr('settings.manualAddModel', '手动添加模型')) + '</button>' +
           '</div>' +
           '<div class="moXingHang">' +
@@ -20063,78 +20063,67 @@ async function renderDashboard(host) {
           });
         });
         yuanSu.querySelector('[data-fetch]').onclick = async () => {
+          /** R214：防并发拉取（上一轮还在跑就不重复发起）；标志挂在 pr 上，重渲染后仍有效。 */
+          if (pr.__laQuZhong) return;
           const btn = yuanSu.querySelector('[data-fetch]');
           const note0 = yuanSu.querySelector('[data-models-note]');
-          const jiuWenBen = btn.textContent;
-          /**
-           * 拉取过程要有**看得见的动画**，且至少 1.7 秒（产品要求）：
-           * 转圈 + 不确定进度条，直到真的拉完/报错；没到 1.7 秒就等满，别一闪而过。
-           */
+          /** R214：用固定文案复位，不捕获点击时文本（避免上次残留的加载态文本被当成「原文」恢复）。 */
+          const jiuWenBen = tOr('settings.autoAddModel', '自动添加模型');
           const kaiShi = Date.now();
+          pr.__laQuZhong = true;
           btn.disabled = true;
           btn.classList.add('laQuZhong');
           btn.innerHTML = '<span class="laQuZhuan" aria-hidden="true"></span>' + escapeHtml(t('common.loading'));
           if (note0) note0.innerHTML = '<div class="laQuJinDu"><div class="laQuJinDuTiao"></div></div>';
           let r = null;
           try {
-            // 拉取模型**只用本卡的端点/密钥**（listModels 自带 providerId），不改生效供应商
-            r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, providerId: pr.id, apiKey: pr.apiKey || undefined });
-            // 记下模型能力（种类 / 上下文长度 / 视觉 / 思考），界面上按它过滤与标注
-            if (r && r.nengLi) {
-              window.__moXingNengLi = Object.assign({}, window.__moXingNengLi || {}, r.nengLi);
+            try {
+              // 拉取模型**只用本卡的端点/密钥**（listModels 自带 providerId），不改生效供应商
+              r = await window.warmy.listModels({ protocol: pr.protocol, baseURL: pr.baseURL, providerId: pr.id, apiKey: pr.apiKey || undefined });
+              if (r && r.nengLi) {
+                window.__moXingNengLi = Object.assign({}, window.__moXingNengLi || {}, r.nengLi);
+              }
+            } catch (e) {
+              r = { ok: false, error: String(e && e.message || e) };
             }
-          } catch (e) {
-            r = { ok: false, error: String(e && e.message || e) };
-          }
-          const shengYu = 1700 - (Date.now() - kaiShi);
-          if (shengYu > 0) await new Promise((zhong) => setTimeout(zhong, shengYu));
-          if (!r) r = { ok: false, error: t('common.error') };
-          if (r?.ok && r.models?.length) {
-            pr.lastFetchError = '';
-            const fetched = new Set(r.models);
-            const prev = pr.models || [];
-            // 又被拉到的模型 ⇒ 恢复正常
-            const GuoQi = { ...(pr.staleModels || {}) };
-            fetched.forEach((m) => { delete GuoQi[m]; });
-            // 没被拉到：**没人在用就删除**；正在被使用则保留（继续标红，悬停显示占用位置）
-            modelUsageCache = await collectModelUsage();
-            const kept = prev.filter((m) => fetched.has(m) || modelUsageCache.has(m));
-            kept.forEach((m) => { if (!fetched.has(m)) GuoQi[m] = true; });
-            pr.models = [...new Set([...kept, ...r.models])];
-            pr.staleModels = GuoQi;
-            /**
-             * **按模型标签自动分配到对应的功能链**（产品要求：拉取完模型，下面那些
-             * 「听话 / 说话 / 向量 / 看图 / 对话…」的选项就该按标签归位，不该让用户一个个手选）。
-             *
-             * 规则（只**追加**、不改用户已排好的顺序、已有的不重复加）：
-             *   kind=asr → 听话链；kind=tts → 说话链；kind=embedding → 向量链；
-             *   kind=image → 画图链；kind=ocr/rerank → 各自链；
-             *   chat 且带视觉 → 看图链 + 对话链；其余 chat → 对话链 + 整理链。
-             */
-            try { await anBiaoQianFenPeiMoXing(r.models, window.__moXingNengLi || {}); } catch { /* 分配失败不影响拉取结果 */ }
-            const droppedN = prev.filter((m) => !kept.includes(m)).length;
-            const stillStale = pr.models.filter((m) => GuoQi[m]).length;
-            if (note0) {
-              note0.textContent = [
-                droppedN ? fmtKey('settings.modelsDropped', { n: String(droppedN) }) : '',
-                stillStale ? fmtKey('settings.modelsStale', { n: String(stillStale) }) : '',
-              ].filter(Boolean).join(' · ');
+            const shengYu = 1700 - (Date.now() - kaiShi);
+            if (shengYu > 0) await new Promise((zhong) => setTimeout(zhong, shengYu));
+            if (!r) r = { ok: false, error: t('common.error') };
+            if (r?.ok && r.models?.length) {
+              pr.lastFetchError = '';
+              const fetched = new Set(r.models);
+              const prev = pr.models || [];
+              const GuoQi = { ...(pr.staleModels || {}) };
+              fetched.forEach((m) => { delete GuoQi[m]; });
+              try { modelUsageCache = await collectModelUsage(); } catch { /* 用量统计失败不影响拉取 */ }
+              const kept = prev.filter((m) => fetched.has(m) || modelUsageCache.has(m));
+              kept.forEach((m) => { if (!fetched.has(m)) GuoQi[m] = true; });
+              pr.models = [...new Set([...kept, ...r.models])];
+              pr.staleModels = GuoQi;
+              try { await anBiaoQianFenPeiMoXing(r.models, window.__moXingNengLi || {}); } catch { /* 分配失败不影响拉取结果 */ }
+              const droppedN = prev.filter((m) => !kept.includes(m)).length;
+              const stillStale = pr.models.filter((m) => GuoQi[m]).length;
+              if (note0) {
+                note0.textContent = [
+                  droppedN ? fmtKey('settings.modelsDropped', { n: String(droppedN) }) : '',
+                  stillStale ? fmtKey('settings.modelsStale', { n: String(stillStale) }) : '',
+                ].filter(Boolean).join(' · ');
+              }
+              showToast(tOr('settings.modelsFetched', '已拉取') + '：' + pr.models.length + ' ' + tOr('settings.modelsUnit', '个模型'));
+            } else {
+              // 拉取失败**照实说**：不清空已有模型，也不假装成功（标红状态保持原样）
+              const msg = fmtKey('settings.modelsFetchFailed', { err: String((r && (r.error + (r.hint ? ' · ' + r.hint : ''))) || t('common.error')) });
+              pr.lastFetchError = msg;
+              if (note0) note0.textContent = msg;
+              uiAlert(msg, t('settings.fetchModels'));
             }
-            showToast(tOr('settings.modelsFetched', '已拉取') + '：' + pr.models.length + ' ' + tOr('settings.modelsUnit', '个模型'));
-          } else {
-            // 拉取失败**照实说**：不清空已有模型，也不假装成功（标红状态保持原样）
-            const msg = fmtKey('settings.modelsFetchFailed', { err: String((r && (r.error + (r.hint ? ' · ' + r.hint : ''))) || t('common.error')) });
-            pr.lastFetchError = msg;
-            if (note0) note0.textContent = msg;
-            uiAlert(msg, t('settings.fetchModels'));
+          } finally {
+            /** R214：无论成功/失败/中途异常，按钮都复位（原来不在 finally，异常时按钮卡在加载态，只能等成功拉取才恢复）。 */
+            pr.__laQuZhong = false;
+            btn.disabled = false;
+            btn.classList.remove('laQuZhong');
+            btn.textContent = jiuWenBen;
           }
-          /**
-           * **先出结果、再收动画**：以前先把「忙」标志撤了才写提示，
-           * 用户（与门禁）正好卡在那个空窗里看到"没反应/没提示"。
-           */
-          btn.disabled = false;
-          btn.classList.remove('laQuZhong');
-          btn.textContent = jiuWenBen;
           await saveProviders();
           // 拉完模型只刷新模型芯片所属的这一栏（不整页重绘）
           window.__renderProvList?.();
@@ -30803,7 +30792,7 @@ async function renderDashboard(host) {
       <div class="mgrTi">
         <label class="mgrLb" style="display:flex;align-items:center;gap:6px;cursor:pointer">
           <input type="checkbox" data-mgsmart="${suoYin}"${shiZhiNengMoShi(inst) ? ' checked' : ''}${dis}/>
-          <span>${escapeHtml(tOr('model.smartMode', '智能模式（系统自动安排调用链）'))}</span>
+          <span>${escapeHtml(tOr('model.smartMode', '智能模式'))}</span>
         </label>
         ${
           /**
@@ -30838,7 +30827,7 @@ async function renderDashboard(host) {
             : '<span class="jingYin">' + escapeHtml(t('settings.modelsEmpty')) + '</span>'
         }</div>
         </details>
-        <details class="mgrZhe" data-mgsec="${suoYin}:chain"${zheKai('chain')}>
+        <details class="mgrZhe${shiZhiNengMoShi(inst) ? ' mgrZheJinYong' : ''}" data-mgsec="${suoYin}:chain"${zheKai('chain')}>
         <summary>${escapeHtml(t('instances.fallbackChain'))} <span class="ctgDim">${chain.length}</span></summary>
         <ol class="mgrChain">${
           chain.length

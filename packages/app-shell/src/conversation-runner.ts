@@ -127,7 +127,8 @@ registerTask('chat-engine', async (p, c) => {
     baseURL: meta.baseURL || '',
     supportsTools: meta.supportsTools,
     chat: (q: unknown) => llm('chat', q),
-    chatStream: (q: unknown) => llm('chatStream', q),
+    /** R215：chatStream 必须是 AsyncIterable（不能返回 Promise）；宿主非流式拿全量响应，这里包成单片产出。 */
+    chatStream: (q: unknown) => (async function* () { const r = await llm('chat', q); yield r; })(),
     listModels: () => llm('listModels', null),
     ping: () => llm('ping', null),
   };
@@ -136,9 +137,11 @@ registerTask('chat-engine', async (p, c) => {
   const opts = {
     ...o,
     signal: ctrl.signal,
-    xuYuSuanLai: (k: unknown) => c.requestTool('opt', { name: 'xuYuSuanLai', k }, 30000),
+    /** R215：onEvent 是 void 钩子，可 fire-and-forget 回宿主（审计/ETA）。 */
     onEvent: (e: unknown) => { void c.requestTool('opt', { name: 'onEvent', e }, 30000).catch(() => { /* 观测钩子失败不影响编排 */ }); },
-    yaSuoLai: (x: unknown, j: unknown) => c.requestTool('opt', { name: 'yaSuoLai', xiaoXiJi: x, jiYa: j }, 30000),
+    /** R215 真因修复：yaSuoLai/xuYuSuanLai 是引擎的**同步**回调，不能跨进程异步代理——
+     *  返回 Promise 会被引擎当数组迭代 ⇒ 「object is not iterable」。不传这两个钩子，
+     *  用引擎内置的上下文压缩（shouQiZhongDuan）与预算逻辑，不再异步代理回宿主。 */
   };
   try {
     return await liaoTianDaiGongJu(provider as never, p?.qiu as never, execute as never, opts as never);
