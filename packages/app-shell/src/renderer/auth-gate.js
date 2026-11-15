@@ -142,7 +142,7 @@
       termsFallback: '请阅读并同意以下条款后继续。',
       termsAgree: '我已阅读并同意以上全部条款',
       termsContinue: '同意并继续',
-      termsDecline: '不同意并退出',
+      termsDecline: '不同意',
       termsRequired: '请先滚动到条款底部并等待 3 秒。',
       termsGateHint: '滚动到条款底部并等待 3 秒后，才能勾选同意。',
       loginTitle: '登录',
@@ -241,7 +241,7 @@
       termsFallback: '請閱讀並同意以下條款後繼續。',
       termsAgree: '我已閱讀並同意以上全部條款',
       termsContinue: '同意並繼續',
-      termsDecline: '不同意並退出',
+      termsDecline: '不同意',
       termsRequired: '請先滾動到條款底部並等待 3 秒。',
       termsGateHint: '滾動到條款底部並等待 3 秒後，才能勾選同意。',
       loginTitle: '登入',
@@ -340,7 +340,7 @@
       termsFallback: 'Please read and accept the terms below to continue.',
       termsAgree: 'I have read and agree to all of the above',
       termsContinue: 'Agree and continue',
-      termsDecline: 'Decline and quit',
+      termsDecline: 'Disagree',
       termsRequired: 'Scroll to the bottom and wait 3 seconds first',
       termsGateHint: 'Scroll to the bottom and wait 3 seconds before you can tick consent.',
       loginTitle: 'Sign in',
@@ -439,7 +439,7 @@
       termsFallback: '以下の規約を読んで同意すると続行できます。',
       termsAgree: '上記の規約をすべて読み、同意します',
       termsContinue: '同意して続行',
-      termsDecline: '同意しないで終了',
+      termsDecline: '同意しない',
       termsRequired: '先に規約の最後までスクロールし、3 秒お待ちください',
       termsGateHint: '規約の最後までスクロールし、3 秒待つと同意にチェックできます。',
       loginTitle: 'ログイン',
@@ -538,7 +538,7 @@
       termsFallback: '아래 약관을 읽고 동의하면 계속할 수 있습니다.',
       termsAgree: '위 약관을 모두 읽고 동의합니다',
       termsContinue: '동의하고 계속',
-      termsDecline: '동의하지 않고 종료',
+      termsDecline: '동의하지 않음',
       termsRequired: '먼저 약관 끝까지 스크롤하고 3초를 기다리세요',
       termsGateHint: '약관 끝까지 스크롤하고 3초를 기다리면 동의에 체크할 수 있습니다.',
       loginTitle: '로그인',
@@ -637,7 +637,7 @@
       termsFallback: 'Veuillez lire et accepter les conditions ci-dessous pour continuer.',
       termsAgree: 'J’ai lu et j’accepte l’ensemble de ce qui précède',
       termsContinue: 'Accepter et continuer',
-      termsDecline: 'Refuser et quitter',
+      termsDecline: 'Refuser',
       termsRequired: 'Faites d’abord défiler jusqu’en bas et attendez 3 secondes',
       termsGateHint: 'Faites défiler jusqu’en bas et attendez 3 secondes pour pouvoir cocher le consentement.',
       loginTitle: 'Connexion',
@@ -736,7 +736,7 @@
       termsFallback: 'Lee y acepta las condiciones siguientes para continuar.',
       termsAgree: 'He leído y acepto todo lo anterior',
       termsContinue: 'Aceptar y continuar',
-      termsDecline: 'Rechazar y salir',
+      termsDecline: 'Rechazar',
       termsRequired: 'Desplázate primero hasta el final y espera 3 segundos',
       termsGateHint: 'Desplázate hasta el final y espera 3 segundos para poder marcar el consentimiento.',
       loginTitle: 'Iniciar sesión',
@@ -835,7 +835,7 @@
       termsFallback: 'Leia e aceite os termos abaixo para continuar.',
       termsAgree: 'Li e aceito tudo o que está acima',
       termsContinue: 'Aceitar e continuar',
-      termsDecline: 'Recusar e sair',
+      termsDecline: 'Recusar',
       termsRequired: 'Role até o fim e aguarde 3 segundos primeiro',
       termsGateHint: 'Role até o fim e aguarde 3 segundos para poder marcar o consentimento.',
       loginTitle: 'Entrar',
@@ -934,7 +934,7 @@
       termsFallback: 'Прочитайте и примите условия ниже, чтобы продолжить.',
       termsAgree: 'Я прочитал(а) и принимаю всё вышеизложенное',
       termsContinue: 'Принять и продолжить',
-      termsDecline: 'Отказаться и выйти',
+      termsDecline: 'Отказаться',
       termsRequired: 'Сначала прокрутите до конца и подождите 3 секунды',
       termsGateHint: 'Прокрутите до конца и подождите 3 секунды, чтобы поставить галочку согласия.',
       loginTitle: 'Вход',
@@ -1033,7 +1033,7 @@
       termsFallback: 'Bonvolu legi kaj akcepti la subajn kondiĉojn por daŭrigi.',
       termsAgree: 'Mi legis kaj akceptas ĉion ĉi-supre',
       termsContinue: 'Akcepti kaj daŭrigi',
-      termsDecline: 'Rifuzi kaj eliri',
+      termsDecline: 'Rifuzi',
       termsRequired: 'Unue rulumu ĝis la fino kaj atendu 3 sekundojn',
       termsGateHint: 'Rulumu ĝis la fino kaj atendu 3 sekundojn por povi marki konsenton.',
       loginTitle: 'Ensaluti',
@@ -1132,7 +1132,7 @@
       termsFallback: 'Bitte lies die folgenden Bedingungen und stimme ihnen zu, um fortzufahren.',
       termsAgree: 'Ich habe alles oben gelesen und stimme zu',
       termsContinue: 'Zustimmen und fortfahren',
-      termsDecline: 'Ablehnen und beenden',
+      termsDecline: 'Ablehnen',
       termsRequired: 'Bitte zuerst nach unten scrollen und 3 Sekunden warten.',
       termsGateHint: 'Scrolle bis zum Ende und warte 3 Sekunden, dann kannst du zustimmen.',
       loginTitle: 'Anmelden',
@@ -1231,7 +1231,7 @@
       termsFallback: 'Leggi e accetta le condizioni qui sotto per continuare.',
       termsAgree: 'Ho letto e accetto tutto quanto sopra',
       termsContinue: 'Accetta e continua',
-      termsDecline: 'Rifiuta ed esci',
+      termsDecline: 'Rifiuta',
       termsRequired: 'Scorri prima fino in fondo e attendi 3 secondi.',
       termsGateHint: 'Scorri fino in fondo e attendi 3 secondi per poter accettare.',
       loginTitle: 'Accesso',
@@ -1330,7 +1330,7 @@
       termsFallback: 'Lees en accepteer de voorwaarden hieronder om door te gaan.',
       termsAgree: 'Ik heb alles hierboven gelezen en ga akkoord',
       termsContinue: 'Akkoord en doorgaan',
-      termsDecline: 'Weigeren en afsluiten',
+      termsDecline: 'Weigeren',
       termsRequired: 'Scroll eerst naar beneden en wacht 3 seconden.',
       termsGateHint: 'Scroll naar het einde en wacht 3 seconden voordat je kunt aanvinken.',
       loginTitle: 'Inloggen',
@@ -1429,7 +1429,7 @@
       termsFallback: 'Przeczytaj i zaakceptuj poniższe warunki, aby kontynuować.',
       termsAgree: 'Przeczytałem i akceptuję wszystkie powyższe warunki',
       termsContinue: 'Akceptuję i kontynuuję',
-      termsDecline: 'Odrzuć i zamknij',
+      termsDecline: 'Odrzuć',
       termsRequired: 'Najpierw przewiń do dołu i odczekaj 3 sekundy.',
       termsGateHint: 'Przewiń do końca i odczekaj 3 sekundy, aby móc zaznaczyć zgodę.',
       loginTitle: 'Logowanie',
@@ -1528,7 +1528,7 @@
       termsFallback: 'Läs och godkänn villkoren nedan för att fortsätta.',
       termsAgree: 'Jag har läst och godkänner allt ovan',
       termsContinue: 'Godkänn och fortsätt',
-      termsDecline: 'Avböj och avsluta',
+      termsDecline: 'Avböj',
       termsRequired: 'Scrolla först till botten och vänta 3 sekunder.',
       termsGateHint: 'Scrolla till slutet och vänta 3 sekunder innan du kan kryssa i.',
       loginTitle: 'Logga in',
@@ -1627,7 +1627,7 @@
       termsFallback: 'Přečtěte si a přijměte níže uvedené podmínky, abyste mohli pokračovat.',
       termsAgree: 'Přečetl jsem si a souhlasím se vším výše uvedeným',
       termsContinue: 'Souhlasím a pokračovat',
-      termsDecline: 'Odmítnout a ukončit',
+      termsDecline: 'Odmítnout',
       termsRequired: 'Nejprve se posuňte na konec a počkejte 3 sekundy.',
       termsGateHint: 'Posuňte se na konec a počkejte 3 sekundy, teprve pak můžete zaškrtnout souhlas.',
       loginTitle: 'Přihlášení',
@@ -1726,7 +1726,7 @@
       termsFallback: 'A folytatáshoz olvassa el és fogadja el az alábbi feltételeket.',
       termsAgree: 'Elolvastam és elfogadom a fentiek mindegyikét',
       termsContinue: 'Elfogadás és folytatás',
-      termsDecline: 'Elutasítás és kilépés',
+      termsDecline: 'Elutasítás',
       termsRequired: 'Először görgessen az aljára, és várjon 3 másodpercet.',
       termsGateHint: 'Görgessen a végére, és várjon 3 másodpercet, csak utána jelölheti be.',
       loginTitle: 'Bejelentkezés',
@@ -1825,7 +1825,7 @@
       termsFallback: 'Læs og accepter vilkårene nedenfor for at fortsætte.',
       termsAgree: 'Jeg har læst og accepterer alt ovenstående',
       termsContinue: 'Accepter og fortsæt',
-      termsDecline: 'Afvis og afslut',
+      termsDecline: 'Afvis',
       termsRequired: 'Rul først til bunden, og vent 3 sekunder.',
       termsGateHint: 'Rul til slutningen, og vent 3 sekunder, før du kan sætte kryds.',
       loginTitle: 'Log ind',
@@ -1924,7 +1924,7 @@
       termsFallback: 'Les og godta vilkårene nedenfor for å fortsette.',
       termsAgree: 'Jeg har lest og godtar alt ovenfor',
       termsContinue: 'Godta og fortsett',
-      termsDecline: 'Avvis og avslutt',
+      termsDecline: 'Avvis',
       termsRequired: 'Rull først til bunnen og vent 3 sekunder.',
       termsGateHint: 'Rull til slutten og vent 3 sekunder før du kan krysse av.',
       loginTitle: 'Logg inn',
@@ -2023,7 +2023,7 @@
       termsFallback: 'Devam etmek için lütfen aşağıdaki koşulları okuyup kabul edin.',
       termsAgree: 'Yukarıdakilerin tamamını okudum ve kabul ediyorum',
       termsContinue: 'Kabul et ve devam et',
-      termsDecline: 'Reddet ve çık',
+      termsDecline: 'Reddet',
       termsRequired: 'Önce sayfanın sonuna kaydırın ve 3 saniye bekleyin.',
       termsGateHint: 'Onay kutusunu işaretleyebilmek için sona kaydırın ve 3 saniye bekleyin.',
       loginTitle: 'Giriş',
@@ -2122,7 +2122,7 @@
       termsFallback: 'Прочитайте та прийміть наведені нижче умови, щоб продовжити.',
       termsAgree: 'Я прочитав(-ла) і приймаю все вищезазначене',
       termsContinue: 'Прийняти й продовжити',
-      termsDecline: 'Відхилити й вийти',
+      termsDecline: 'Відхилити',
       termsRequired: 'Спочатку прокрутіть до кінця та зачекайте 3 секунди.',
       termsGateHint: 'Прокрутіть до кінця та зачекайте 3 секунди, після цього можна поставити позначку.',
       loginTitle: 'Вхід',
@@ -2221,7 +2221,7 @@
       termsFallback: 'Baca dan setujui ketentuan di bawah ini untuk melanjutkan.',
       termsAgree: 'Saya telah membaca dan menyetujui semua hal di atas',
       termsContinue: 'Setujui dan lanjutkan',
-      termsDecline: 'Tolak dan keluar',
+      termsDecline: 'Tolak',
       termsRequired: 'Gulir ke bawah terlebih dahulu dan tunggu 3 detik.',
       termsGateHint: 'Gulir sampai akhir dan tunggu 3 detik sebelum dapat mencentang.',
       loginTitle: 'Masuk',
@@ -2320,7 +2320,7 @@
       termsFallback: 'Hãy đọc và chấp nhận các điều khoản bên dưới để tiếp tục.',
       termsAgree: 'Tôi đã đọc và đồng ý với tất cả nội dung trên',
       termsContinue: 'Đồng ý và tiếp tục',
-      termsDecline: 'Từ chối và thoát',
+      termsDecline: 'Từ chối',
       termsRequired: 'Trước tiên hãy cuộn xuống cuối và đợi 3 giây.',
       termsGateHint: 'Cuộn đến cuối và đợi 3 giây rồi mới có thể đánh dấu.',
       loginTitle: 'Đăng nhập',
@@ -2419,7 +2419,7 @@
       termsFallback: 'โปรดอ่านและยอมรับข้อกำหนดด้านล่างเพื่อดำเนินการต่อ',
       termsAgree: 'ฉันได้อ่านและยอมรับทุกข้อข้างต้นแล้ว',
       termsContinue: 'ยอมรับและดำเนินการต่อ',
-      termsDecline: 'ปฏิเสธและออก',
+      termsDecline: 'ปฏิเสธ',
       termsRequired: 'โปรดเลื่อนลงไปด้านล่างสุดและรอ 3 วินาทีก่อน',
       termsGateHint: 'เลื่อนไปจนสุดและรอ 3 วินาที จึงจะสามารถทำเครื่องหมายได้',
       loginTitle: 'เข้าสู่ระบบ',
@@ -2518,7 +2518,7 @@
       termsFallback: 'जारी रखने के लिए नीचे दी गई शर्तें पढ़ें और स्वीकार करें।',
       termsAgree: 'मैंने ऊपर सब कुछ पढ़ लिया है और सहमत हूँ',
       termsContinue: 'स्वीकार करें और जारी रखें',
-      termsDecline: 'अस्वीकार करें और बाहर निकलें',
+      termsDecline: 'अस्वीकार करें',
       termsRequired: 'पहले नीचे तक स्क्रॉल करें और 3 सेकंड प्रतीक्षा करें।',
       termsGateHint: 'अंत तक स्क्रॉल करें और 3 सेकंड प्रतीक्षा करें, तभी टिक कर सकते हैं।',
       loginTitle: 'साइन इन',
@@ -2617,7 +2617,7 @@
       termsFallback: 'يرجى قراءة الشروط أدناه والموافقة عليها للمتابعة.',
       termsAgree: 'لقد قرأت كل ما سبق وأوافق عليه',
       termsContinue: 'أوافق وأتابع',
-      termsDecline: 'أرفض وأخرج',
+      termsDecline: 'أرفض',
       termsRequired: 'مرّر إلى الأسفل أولًا وانتظر 3 ثوانٍ.',
       termsGateHint: 'مرّر حتى النهاية وانتظر 3 ثوانٍ لتتمكن من التأشير.',
       loginTitle: 'تسجيل الدخول',
@@ -2716,7 +2716,7 @@
       termsFallback: 'برای ادامه، شرایط زیر را بخوانید و بپذیرید.',
       termsAgree: 'همه موارد بالا را خواندهام و میپذیرم',
       termsContinue: 'میپذیرم و ادامه میدهم',
-      termsDecline: 'رد میکنم و خارج میشوم',
+      termsDecline: 'رد میکنم',
       termsRequired: 'ابتدا تا انتها پیمایش کنید و ۳ ثانیه صبر کنید.',
       termsGateHint: 'تا انتها پیمایش کنید و ۳ ثانیه صبر کنید تا بتوانید تیک بزنید.',
       loginTitle: 'ورود',
@@ -4150,8 +4150,9 @@
       return;
     }
     if (action === 'terms-decline') {
-      await call('privacyConsentSet', false);
-      await call('appQuit', 'terms-disagree');
+      // R219：不同意条款 = 回到语言选择重选（上一页），不退出、不落盘拒绝
+      stopTermsClock();
+      enterLanguage();
       return;
     }
     if (action === 'login-back') {
@@ -4725,8 +4726,12 @@
           <button class="warmyAuthBtn warmyAuthBtnPrimary" data-modal="ok">${escapeHtml(pinLabel)}</button>
         </div>
       </div>`;
-    const close = (ok) => { modal.remove(); resolve(!!ok); };
+    const close = (ok) => { modal.remove(); try { document.removeEventListener('keydown', onEsc, true); } catch { /* noop */ } resolve(!!ok); };
+    /* R220：点遮罩外部/Esc = 取消 —— 弹窗绝不允许把界面锁死（解锁按钮被遮住点不到） */
+    const onEsc = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); } };
+    document.addEventListener('keydown', onEsc, true);
     modal.addEventListener('click', async (ev) => {
+      if (ev.target === modal) { close(false); return; }
       const b = ev.target && ev.target.closest ? ev.target.closest('[data-modal]') : null;
       if (!b) return;
       if (b.getAttribute('data-modal') === 'cancel') { close(false); return; }
@@ -4774,9 +4779,14 @@
         </div>`;
       const close = (answer) => {
         modal.remove();
+        try { document.removeEventListener('keydown', onEsc, true); } catch { /* noop */ }
         resolve(answer);
       };
+      /* R220：点遮罩外部/Esc = 取消 —— 弹窗绝不允许把界面锁死（解锁按钮被遮住点不到） */
+      const onEsc = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); } };
+      document.addEventListener('keydown', onEsc, true);
       modal.addEventListener('click', (ev) => {
+        if (ev.target === modal) { close(false); return; }
         const b = ev.target && ev.target.closest ? ev.target.closest('[data-modal]') : null;
         if (!b) return;
         close(b.getAttribute('data-modal') === 'ok');

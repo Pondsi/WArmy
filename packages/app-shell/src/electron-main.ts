@@ -8715,8 +8715,21 @@ async function jieMoXingGongYingShang(modelId: string): Promise<MoXingGongYingXi
     const lie = Array.isArray(s?.providers) ? s.providers : [];
     const ming = String(modelId || '').trim();
     if (!ming) return null;
-    let hit = lie.find((p) => Array.isArray(p.models) && p.models.some((m) => String(typeof m === 'string' ? m : (m as { id?: string })?.id || '') === ming));
-    if (!hit) hit = lie.find((p) => String(p.defaultModel || '') === ming);
+    /* R220：同名模型（多供应商都有 qwen3:8b）时必须按**全称**「供应商 · 模型id」精确匹配，
+       否则 find 第一家就错（Ollama 的 qwen 被路由成 DeepSeek 的 qwen，身份注入也跟着标错）。 */
+    let hit;
+    const fen = ming.lastIndexOf(' · ');
+    if (fen >= 0) {
+      const gs = ming.slice(0, fen).trim();
+      const id = ming.slice(fen + 3).trim();
+      hit = lie.find((p) => String(p.biaoQian || '') === gs && Array.isArray(p.models)
+        && p.models.some((m) => jieMoXingMing(String(typeof m === 'string' ? m : (m as { id?: string })?.id || '')) === id));
+      if (!hit) hit = lie.find((p) => Array.isArray(p.models)
+        && p.models.some((m) => String(typeof m === 'string' ? m : (m as { id?: string })?.id || '') === ming));
+    }
+    if (!hit) hit = lie.find((p) => Array.isArray(p.models) && p.models.some((m) => String(typeof m === 'string' ? m : (m as { id?: string })?.id || '') === ming));
+    if (!hit) hit = lie.find((p) => Array.isArray(p.models) && p.models.some((m) => jieMoXingMing(String(typeof m === 'string' ? m : (m as { id?: string })?.id || '')) === ming));
+    if (!hit) hit = lie.find((p) => String(p.defaultModel || '') === ming || jieMoXingMing(String(p.defaultModel || '')) === ming);
     if (!hit) return null;
     const xieYi = (String(hit.protocol || '') as MoXingGongYingXinXi['protocol']);
     return {
@@ -10683,6 +10696,8 @@ async function huiFuNiuMa(): Promise<void> {
     const yiCun = new Set((p1.instances.LieBiao() || []).map((x) => x.id));
     for (const id of cun) {
       if (yiCun.has(id)) continue;
+      /* R219：拟态（mimic-pet）不是牛马 —— 不随目录恢复成普通牛马；它由 设置→拟态 按需 spawn */
+      if (id === 'mimic-pet') continue;
       try {
         await p1.instances.spawn({
           config: {
@@ -10713,6 +10728,8 @@ function shiLiMing(inst: { id?: string; ming?: string; name?: string } | null | 
 }
 function joinLocalInstances(groupId: string): void {
   for (const inst of p1?.instances.LieBiao() || []) {
+    /* R219：拟态不是牛马，不进群成员表 */
+    if (String(inst.id || '') === 'mimic-pet') continue;
     if (router.listMembers(groupId).some((m) => m.id === inst.id)) continue;
     try {
       router.join(groupId, {
@@ -12281,31 +12298,31 @@ chuliIpc('warmy:tingZhiDuiHua', async (_e, payload?: string | { sessionId?: stri
 
 /**
  * ══════════════════════════════════════════════════════════════
- * 拟态（桌宠）
+ * 拟态（拟态）
  * ── 窗口要点（依 Electron 官方实践 / issue #52456）：
  *    transparent + frame:false + alwaysOnTop + skipTaskbar + focusable:false；
  *    **点击穿透**用 `setIgnoreMouseEvents(true, { forward: true })`，
- *    并且只在鼠标**离开桌宠本体**时开启穿透（否则它会把桌面上所有点击都吃掉）。
+ *    并且只在鼠标**离开拟态本体**时开启穿透（否则它会把桌面上所有点击都吃掉）。
  * ══════════════════════════════════════════════════════════════
  */
 let mimicWin: BrowserWindow | null = null;
 let mimicDragCun: { x: number; y: number; bx: number; by: number } | null = null;
-/** 桌宠本体在窗口内的矩形（CSS 像素 ≈ DIP；渲染层上报） */
+/** 拟态本体在窗口内的矩形（CSS 像素 ≈ DIP；渲染层上报） */
 let mimicBodyRect: { x: number; y: number; w: number; h: number } = { x: 0, y: 100, w: 160, h: 160 };
 let mimicHoverTick: NodeJS.Timeout | null = null;
 let mimicLastInside: boolean | null = null;
 let mimicDragging = false;
 
 /**
- * **桌宠点击穿透 —— Windows 稳妥方案**（本轮按官方 issue 结论重做）。
+ * **拟态点击穿透 —— Windows 稳妥方案**（本轮按官方 issue 结论重做）。
  *
  * 为什么**弃用** `setIgnoreMouseEvents(true, { forward: true })`：
  *   Electron 官方仓库确认它在 Windows 有多条未修 bug ——
  *     · hover/mouseenter 抖动、闪烁（#30808）
- *     · 页面刷新后 forward 彻底失效（#15376）⇒ 桌宠要么永远吃掉桌面点击，要么永远点不到
+ *     · 页面刷新后 forward 彻底失效（#15376）⇒ 拟态要么永远吃掉桌面点击，要么永远点不到
  *     · 拖动时让同应用其它窗口闪烁（#35030）
  *     · 光标在 arrow/grab 之间抖动（#29152）；UIPI 还会让转发临时停止
- *   用户看到的正是"桌宠开着时点击时有几率没反应 / 鼠标样式乱变"。
+ *   用户看到的正是"拟态开着时点击时有几率没反应 / 鼠标样式乱变"。
  *
  * 稳妥做法（issue #15376 官方示例的思路，**完全不依赖 forward**）：
  *   主进程每 50ms 读一次屏幕光标坐标，用渲染层上报的"本体矩形"做命中测试：
@@ -12365,17 +12382,18 @@ function mimicSaoRenWu(): Array<{ id: string; name: string; file: string; kind: 
       const ext = path.extname(n).toLowerCase();
       // 内置默认（随包）用 app 相对路径，用户目录用 file://
       const isBundled = root.includes(path.join('renderer', 'mimic'));
-      const ref = isBundled ? './mimic/characters/' + n : 'file://' + fp.replace(/\\/g, '/');
-      if (ext === '.json') {
+      const ref = isBundled ? './mimic/characters/' + n : 'file:///' + fp.replace(/\\/g, '/').replace(/^\/+/, '');
+      if (n.toLowerCase().endsWith('.model3.json')) {
+        /* R219：Live2D 识别必须用 endsWith —— path.extname('x.model3.json') 只有 '.json' */
+        out.push({ id: n.replace(/\.model3\.json$/i, ''), name: n.replace(/\.model3\.json$/i, ''), file: ref, kind: 'live2d' });
+      } else if (ext === '.json') {
         // 精灵图定义
         try {
           const d = JSON.parse(fs.readFileSync(fp, 'utf8'));
           const sheet = String(d.sheet || d.image || n.replace(/\.json$/i, '.png'));
-          const sheetRef = isBundled ? './mimic/characters/' + sheet : 'file://' + path.join(path.dirname(fp), sheet).replace(/\\/g, '/');
+          const sheetRef = isBundled ? './mimic/characters/' + sheet : 'file:///' + path.join(path.dirname(fp), sheet).replace(/\\/g, '/').replace(/^\/+/, '');
           out.push({ id: n.replace(/\.json$/i, ''), name: String(d.name || n.replace(/\.json$/i, '')), file: sheetRef, kind: 'sheet' });
         } catch { /* 坏 json 跳过 */ }
-      } else if (ext === '.model3.json') {
-        out.push({ id: n.replace(/\.model3\.json$/i, ''), name: n.replace(/\.model3\.json$/i, ''), file: ref, kind: 'live2d' });
       } else if (['.glb', '.gltf', '.vrm'].includes(ext)) {
         /* R218：3D 模型（glTF/GLB/VRM）识别登记；渲染器按形态选择 */
         out.push({ id: n.replace(/\.[^.]+$/, ''), name: n.replace(/\.[^.]+$/, ''), file: ref, kind: ext === '.vrm' ? 'vrm' : 'glb' });
@@ -12405,7 +12423,7 @@ function mimicSaoDongZuo(): Array<{ id: string; name: string; desc: string; trig
         const j = JSON.parse(fs.readFileSync(jp, 'utf8'));
         const sheet = String(j.sheet?.image || 'sheet.png');
         const ref = bundled ? './mimic/actions/' + d + '/' + sheet
-          : 'file://' + path.join(root, d, sheet).replace(/\\/g, '/');
+          : 'file:///' + path.join(root, d, sheet).replace(/\\/g, '/').replace(/^\/+/, '');
         out.push({
           id: d,
           name: String(j.name || d),
@@ -12424,10 +12442,10 @@ function mimicSaoDongZuo(): Array<{ id: string; name: string; desc: string; trig
 
 chuliIpc('warmy:mimicRenWuLieBiao', () => ({ ok: true, items: mimicSaoRenWu() }));
 chuliIpc('warmy:mimicDongZuoLieBiao', () => ({ ok: true, items: mimicSaoDongZuo() }));
-/* R218：删除「看一眼（截本应用窗口）」功能 —— 桌宠改由互动中理解意图来截**全屏**，
+/* R218：删除「看一眼（截本应用窗口）」功能 —— 拟态改由互动中理解意图来截**全屏**，
  * 见 mimicZhuoMianJieTu（本区块下方）。旧通道不再注册。 */
 
-/** 启动桌宠窗口 */
+/** 启动拟态窗口 */
 chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
   try {
     if (mimicWin && !mimicWin.isDestroyed()) {
@@ -12461,12 +12479,17 @@ chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
         return { ...a, modelId: cap || String(a.modelId || '') };
       } catch { return { modelId: cap }; }
     })();
+    /* R219：全新用户没配过外观也必须有形象 —— 合并默认 2D 参数下发（原来什么都不发 ⇒ 只有空白边框） */
+    const moRenWaiGuan = { xingTai: '2d', zhuSe: '#f4a460', fuSe: '#e8e0d0', yanSe: '#2b2b2b', hongSe: '#e05a5a', yanXing: 'yuan', zuiXing: 'xiao', erDuo: true, weiBa: true };
     if (Object.keys(wg).length > 1 || wg.modelId) {
-      try { mimicWin.webContents.send('warmy:mimicSetTi', wg); } catch { /* noop */ }
+      try { mimicWin.webContents.send('warmy:mimicSetTi', { ...moRenWaiGuan, ...wg }); } catch { /* noop */ }
     } else if (cap) {
       const list = mimicSaoRenWu();
       const hit = list.find((x) => x.id === cap) || list[0];
       if (hit) { try { mimicWin.webContents.send('warmy:mimicSetTi', { src: hit.file }); } catch { /* noop */ } }
+      else { try { mimicWin.webContents.send('warmy:mimicSetTi', moRenWaiGuan); } catch { /* noop */ } }
+    } else {
+      try { mimicWin.webContents.send('warmy:mimicSetTi', moRenWaiGuan); } catch { /* noop */ }
     }
     mimicWin.on('closed', () => { mimicStopHoverPoll(); mimicWin = null; });
     mimicStartHoverPoll();
@@ -12489,7 +12512,7 @@ chuliIpc('warmy:mimicStop', () => {
 
 chuliIpc('warmy:mimicZhuangTai', () => ({ ok: true, on: !!(mimicWin && !mimicWin.isDestroyed()) }));
 
-/** 让桌宠说话（字幕 + 可选语音由渲染层负责） */
+/** 让拟态说话（字幕 + 可选语音由渲染层负责） */
 chuliIpc('warmy:mimicShuo', (_e, p0?: { text?: string; ms?: number }) => {
   try {
     if (mimicWin && !mimicWin.isDestroyed()) {
@@ -12507,7 +12530,7 @@ chuliIpc('warmy:mimicDian', (_e, p0?: { on?: boolean }) => {
   } catch { return { ok: false }; }
 });
 
-/** 拖动桌宠：用屏幕坐标差移动窗口（不是 CSS 位移，桌宠不会跑出屏幕） */
+/** 拖动拟态：用屏幕坐标差移动窗口（不是 CSS 位移，拟态不会跑出屏幕） */
 ipcMain.on('warmy:mimicDragStart', (_e, p0?: { x?: number; y?: number }) => {
   try {
     if (!mimicWin || mimicWin.isDestroyed()) return;
@@ -12549,7 +12572,7 @@ ipcMain.on('warmy:mimicBodyRect', (_e, r?: { x?: number; y?: number; w?: number;
  */
 ipcMain.on('warmy:mimicClickThrough', () => { /* 由主进程轮询接管（不再使用 forward） */ });
 
-/** 双击桌宠 ⇒ 唤醒主窗口并打开与原形牛马的会话 */
+/** 双击拟态 ⇒ 唤醒主窗口并打开与原形牛马的会话 */
 ipcMain.on('warmy:mimicOpenChat', () => {
   try {
     if (win && !win.isDestroyed()) { win.show(); win.focus(); broadcastToWindows('warmy:mimicOpenChat', {}); }
@@ -12557,13 +12580,13 @@ ipcMain.on('warmy:mimicOpenChat', () => {
 });
 
 /* ══════════════════════════════════════════════════════════════
- * R218：桌宠本体与语音互动
- * 桌宠 = 特殊牛马实例 `mimic-pet`（复用全部牛马链路：模型链 / 认知 / 社交 / 规范 / 总结总结）。
- * 这里只有桌宠专属的：语音互动引擎（wake / smart / always）、全屏「看屏幕」、字幕 / 语音回话。
+ * R218：拟态本体与语音互动
+ * 拟态 = 特殊牛马实例 `mimic-pet`（复用全部牛马链路：模型链 / 认知 / 社交 / 规范 / 总结总结）。
+ * 这里只有拟态专属的：语音互动引擎（wake / smart / always）、全屏「看屏幕」、字幕 / 语音回话。
  * ══════════════════════════════════════════════════════════════ */
 const MIMIC_SID = 'mimic-pet';
 
-/** 桌宠语音互动配置（设置里录入） */
+/** 拟态语音互动配置（设置里录入） */
 function mimicYuYinPeiZhi(): { moShi: string; ci: string[]; panDuan: string } {
   try {
     const s = settingsStore?.load() as {
@@ -12575,13 +12598,13 @@ function mimicYuYinPeiZhi(): { moShi: string; ci: string[]; panDuan: string } {
   } catch { return { moShi: 'smart', ci: [], panDuan: '' }; }
 }
 
-/** 桌宠窗口查询当前语音模式（决定要不要录音） */
+/** 拟态窗口查询当前语音模式（决定要不要录音） */
 chuliIpc('warmy:mimicYuYinMoShi', () => {
   const pz = mimicYuYinPeiZhi();
   return { ok: true, moShi: pz.moShi, ci: pz.ci };
 });
 
-/** 桌宠当前模型：设置页「当前模型」优先，否则调用链第一个未禁用，否则回退全局默认 */
+/** 拟态当前模型：设置页「当前模型」优先，否则调用链第一个未禁用，否则回退全局默认 */
 function mimicDangQianMoXing(): string {
   try {
     const s = settingsStore?.load() as { instances?: Array<{ id?: string; currentModel?: string; chain?: string[]; chainDisabled?: string[]; defaultModel?: string }> } | undefined;
@@ -12602,9 +12625,9 @@ let mimicYuYinZuiHou = 0;
 const MIMIC_YUYIN_JIANGE_MS = 4000;
 
 /**
- * 全屏截图 → dataURL（桌宠「看屏幕」）。
+ * 全屏截图 → dataURL（拟态「看屏幕」）。
  * 与聊天区的选区截图不同：不弹遮罩、不落盘，抓主屏后缩到 1280 宽，
- * 只把当次画面给模型看（R218：桌宠由互动中理解意图来截图，能看到屏幕全部内容）。
+ * 只把当次画面给模型看（R218：拟态由互动中理解意图来截图，能看到屏幕全部内容）。
  */
 async function mimicZhuoMianJieTu(): Promise<{ ok: boolean; dataUrl?: string; width?: number; height?: number; error?: string }> {
   try {
@@ -12628,7 +12651,7 @@ async function mimicZhuoMianJieTu(): Promise<{ ok: boolean; dataUrl?: string; wi
 }
 chuliIpc('warmy:mimicZhuoMianJieTu', () => mimicZhuoMianJieTu());
 
-/** 桌宠字幕 + 可选语音回话（本地 TTS 优先，否则说话模型链；失败只显示字幕，不阻塞） */
+/** 拟态字幕 + 可选语音回话（本地 TTS 优先，否则说话模型链；失败只显示字幕，不阻塞） */
 async function mimicHuiHuaShuo(text: string): Promise<void> {
   try {
     if (!text || !mimicWin || mimicWin.isDestroyed()) return;
@@ -12642,7 +12665,7 @@ async function mimicHuiHuaShuo(text: string): Promise<void> {
     mimicWin.webContents.send('warmy:mimicSay', { text: wenBen.slice(0, 400), ms: 0 });
     try { broadcastToWindows('warmy:mimicShuo', { text: wenBen.slice(0, 400) }); } catch { /* noop */ }
   } catch { /* noop */ }
-  // 语音：只在配置了说话模型或本地语音启用时尝试；合成期间给桌宠开「说话口型」
+  // 语音：只在配置了说话模型或本地语音启用时尝试；合成期间给拟态开「说话口型」
   try {
     let s: string;
     try { s = String(text || '').slice(0, 300); } catch { return; }
@@ -12691,9 +12714,9 @@ async function mimicHuiHuaShuo(text: string): Promise<void> {
 }
 
 /**
- * 语音互动主入口：桌宠窗口把录音分片发来 → ASR → 按模式判断 → 触发桌宠会话对话。
+ * 语音互动主入口：拟态窗口把录音分片发来 → ASR → 按模式判断 → 触发拟态会话对话。
  * wake：识别文本含任一唤醒词才触发；always：有语音就触发；
- * smart：判断模型（或桌宠当前模型）决定该不该回应。
+ * smart：判断模型（或拟态当前模型）决定该不该回应。
  */
 chuliIpc('warmy:mimicYuYinFenPian', async (_e, p0?: { dataUrl?: string; ext?: string }) => {
   try {
@@ -12724,7 +12747,7 @@ chuliIpc('warmy:mimicYuYinFenPian', async (_e, p0?: { dataUrl?: string; ext?: st
       } else if (pz.moShi === 'always') {
         ying = true;
       } else {
-        // smart：判断模型（或桌宠当前模型）决定该不该回应
+        // smart：判断模型（或拟态当前模型）决定该不该回应
         const panDuan = String(pz.panDuan || mimicDangQianMoXing() || '');
         if (!panDuan) { ying = true; }
         else {
@@ -12743,10 +12766,15 @@ chuliIpc('warmy:mimicYuYinFenPian', async (_e, p0?: { dataUrl?: string; ext?: st
       /* R218：动作触发词命中（语音里说「摇尾巴」「转圈」等）→ 直接播放动作 */
       try {
         const ciBiao = (settingsStore?.load() as { mimicActionTriggers?: Record<string, string> } | undefined)?.mimicActionTriggers || {};
+        const dzPei = ((settingsStore?.load() as { mimicActions?: Record<string, { enabled?: boolean }> } | undefined)?.mimicActions) || {};
         for (const ci of Object.keys(ciBiao)) {
           if (ci && text.includes(ci) && ciBiao[ci]) {
-            if (mimicWin && !mimicWin.isDestroyed()) mimicWin.webContents.send('warmy:mimicDongZuo', { id: String(ciBiao[ci]) });
-            try { audit?.log('mimic.action-trigger', { ci: ci.slice(0, 20), dongZuo: String(ciBiao[ci]) }); } catch { /* noop */ }
+            /* R219：动作模型里禁用（未选中）的不触发 */
+            const dzId = String(ciBiao[ci]);
+            const pei = dzPei[dzId];
+            if (pei && pei.enabled === false) break;
+            if (mimicWin && !mimicWin.isDestroyed()) mimicWin.webContents.send('warmy:mimicDongZuo', { id: dzId });
+            try { audit?.log('mimic.action-trigger', { ci: ci.slice(0, 20), dongZuo: dzId }); } catch { /* noop */ }
             break;
           }
         }
@@ -12767,10 +12795,45 @@ chuliIpc('warmy:mimicYuYinFenPian', async (_e, p0?: { dataUrl?: string; ext?: st
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-/** 智能模式：没有判断模型时，桌宠当前模型也要能当判断模型用 —— 渲染层下拉缺省值从这里读 */
+/** 智能模式：没有判断模型时，拟态当前模型也要能当判断模型用 —— 渲染层下拉缺省值从这里读 */
+chuliIpc('warmy:daKaiNiTaiSheZhi', () => {
+  /* R220：拟态独立窗点设置图标 → 主界面显示到前面并打开 设置→拟态 */
+  try {
+    if (win && !win.isDestroyed()) {
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+      win.webContents.send('warmy:goNiTaiSheZhi', {});
+    }
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 chuliIpc('warmy:mimicPanDuanMoXingMoRen', () => ({ ok: true, model: mimicDangQianMoXing() }));
 
-/* R218：保存桌宠外观（2D/3D 形态 + 手捏参数）并下发到桌宠窗口 */
+/* R218：保存拟态外观（2D/3D 形态 + 手捏参数）并下发到拟态窗口 */
+chuliIpc('warmy:daKaiGongZuoMuLuKongZhiTai', async (_e, p0?: { sessionId?: string; dir?: string }) => {
+  /* R220：本机会话 —— 打开该会话工作目录的控制台（终端） */
+  try {
+    let dir = String((p0 && p0.dir) || '').trim();
+    if (!dir && p0 && p0.sessionId) dir = workspaceDirOf(app.getPath('userData'), String(p0.sessionId));
+    if (!dir) dir = app.getPath('userData');
+    const resolved = path.resolve(dir);
+    const ud = path.resolve(app.getPath('userData'));
+    /* 安全：只允许 userData 及其子目录（工作区/实例目录），不开放任意路径 */
+    if (resolved !== ud && !resolved.startsWith(ud + path.sep)) return { ok: false, error: 'dir-outside-userdata' };
+    try { fs.mkdirSync(resolved, { recursive: true }); } catch { /* noop */ }
+    if (process.platform === 'win32') {
+      try { spawn('wt', ['-d', resolved], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); }
+      catch { spawn('cmd', ['/k', 'cd /d ' + resolved], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); }
+    } else if (process.platform === 'darwin') {
+      try { spawn('open', ['-a', 'Terminal', resolved], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); } catch { /* noop */ }
+    } else {
+      try { spawn('x-terminal-emulator', ['--working-directory=' + resolved], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); }
+      catch { spawn('xterm', ['-e', 'cd ' + resolved + '; exec $SHELL'], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); }
+    }
+    return { ok: true, dir: resolved };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 chuliIpc('warmy:mimicWaiGuanShe', (_e, p0?: Record<string, unknown>) => {
   try {
     const a = (p0 && typeof p0 === 'object') ? p0 : {};
@@ -12783,6 +12846,13 @@ chuliIpc('warmy:mimicWaiGuanShe', (_e, p0?: Record<string, unknown>) => {
 });
 
 /* R218：动作触发词（用户设置：词 → 动作 id）；语音/文字对话命中即播放 */
+chuliIpc('warmy:mimicMoXingMuLuKai', async () => {
+  /* R219：打开模型文件夹（用户把模型放进去即自动加载） */
+  const dir = path.join(app.getPath('userData'), 'mimic', 'characters');
+  try { fs.mkdirSync(dir, { recursive: true }); } catch { /* noop */ }
+  await shell.openPath(dir);
+  return { ok: true, dir };
+});
 chuliIpc('warmy:mimicDongZuoCiQu', () => {
   try {
     const s = settingsStore?.load() as { mimicActionTriggers?: Record<string, string> } | undefined;
@@ -12805,7 +12875,7 @@ async function shiJueDingDiaoYong(an: MoXingGongYingXinXi, mo: string, text: str
       body: JSON.stringify({
         model: mo,
         messages: [
-          { role: 'system', content: '你是极简判断器：判断这句话是不是用户在对桌面上的 AI 桌宠说话（叫它的名字、问它问题、给它下指令、闲聊都算；自言自语、跟别人说话、读书不算）。只回答 yes 或 no。' },
+          { role: 'system', content: '你是极简判断器：判断这句话是不是用户在对桌面上的 AI 拟态说话（叫它的名字、问它问题、给它下指令、闲聊都算；自言自语、跟别人说话、读书不算）。只回答 yes 或 no。' },
           { role: 'user', content: String(text || '').slice(0, 500) },
         ],
         max_tokens: 8,
@@ -13707,7 +13777,7 @@ chuliIpc(
       );
       let models: string[] = [];
       try {
-        models = await p.listModels();
+        models = await p.listModels(AbortSignal.timeout(30000));
       } catch (eList) {
         const errTxt = xiJingCuoWu(eList);
         try { audit?.log('models.fetch-failed', { providerId: String(cfg.providerId || ''), hasKey: !!String(key || '').trim(), keyLen: String(key || '').length, error: errTxt.slice(0, 200), baseURL: cfg.baseURL }); } catch { /* noop */ }
@@ -13716,8 +13786,11 @@ chuliIpc(
       try { audit?.log('models.fetch-ok', { providerId: String(cfg.providerId || ''), n: models.length, hasKey: !!String(key || '').trim(), keyLen: String(key || '').length }); } catch { /* noop */ }
       /** R215 e2：模型列表能拉到 ≠ 聊天接口可用。拉取时做一次最小聊天验证：
        *  接口地址/密钥/站点不匹配（401/403/404/网络错）⇒ 阻止添加并如实告知；
-       *  余额不足/额度类（402/insufficient/quota）⇒ 不算端点错误，不阻止添加。 */
-      if (models.length) {
+       *  余额不足/额度类（402/insufficient/quota）⇒ 不算端点错误，不阻止添加。
+       *  R219：ollama 跳过本验证 —— 本地 Ollama 的 /api/chat 会把 models[0] 强制加载进内存
+       *  （大模型冷加载 10s~分钟级，再叠加 20s 超时白等），列表拉取因此「忽然变慢」。
+       *  Ollama 端点地址错了 /api/tags 一步就会失败，不需要再用聊天验证。 */
+      if (models.length && xieYi !== 'ollama') {
         try {
           await p.chat({ model: models[0], xiaoXiJi: [{ role: 'user', content: 'hi' }], maxTokens: 1 } as never, AbortSignal.timeout(20000));
         } catch (eVal) {
@@ -13737,7 +13810,7 @@ chuliIpc(
        *  · 两者都没有 ⇒ 如实 unknown（界面上不显示能力徽章，不猜）。
        */
       try {
-        const det = await (p as unknown as { listModelsDetailed?: (sig?: AbortSignal) => Promise<Array<{ id: string; thinkLevels: string[]; vision?: boolean | 'unknown'; tools?: boolean | 'unknown'; supportsThinking?: boolean; kind?: string; contextLen?: number }>> }).listModelsDetailed?.();
+        const det = await (p as unknown as { listModelsDetailed?: (sig?: AbortSignal) => Promise<Array<{ id: string; thinkLevels: string[]; vision?: boolean | 'unknown'; tools?: boolean | 'unknown'; supportsThinking?: boolean; kind?: string; contextLen?: number }>> }).listModelsDetailed?.(AbortSignal.timeout(60000));
         /**
          * **拉取时就要把"上下文大小"存下来**（真机反馈）：Ollama `/api/show` 等端点本来就能问到
          * `contextLen`，以前只存了 vision/thinking/tools ⇒ 上下文预算滑块只能退回写死的对照表。
@@ -15064,7 +15137,7 @@ async function zhenZhengFaSongBen(
         continue;
       }
       if (yiShiBai.includes(modelId) && yiShiBai.length >= Math.max(1, keYongMoXing.length)) break;
-      an = await jieMoXingGongYingShang(modelId);
+      an = await jieMoXingGongYingShang(jueCe?.modelQuan || modelId); /* R220：带全称，同名模型不找错供应商 */
       zhu = an || {
         presetId: providerCfg.presetId,
         baseURL: providerCfg.baseURL || '',
@@ -15433,8 +15506,10 @@ async function zhenZhengFaSongBen(
           if (niMing) juShenFen.push(tMain('llm.identityLine', '你是「{ming}」。').replace('{ming}', niMing));
           else juShenFen.push(tMain('llm.identityAnon', '你是 WArmy 里的 AI 牛马。'));
           // 让它知道自己跑在哪个模型上（真事故：用户问"你是哪个模型"，它说"看不清蹄子底下"）
+          /* R220：注入全称「供应商 · 模型id」—— 同名模型时回答不会张冠李戴（Ollama 的 qwen 不再说成 DeepSeek 的） */
+          const modelXianShi = String((jueCe && jueCe.modelQuan) || modelId);
           if (modelId) juShenFen.push(tMain('llm.modelLine', '你当前运行在模型「{model}」上。用户问你是什么模型时如实回答它。')
-            .replace(/\{model\}/g, String(modelId))
+            .replace(/\{model\}/g, modelXianShi)
             .replace(/\{ming\}/g, niMing || tMain('llm.identityAnon', 'AI 牛马')));
           /**
            * **身份锚 · 每轮重申**（真机事故：反复续派 + 模型降级后，牛马忘了自己是牛马，
@@ -15723,26 +15798,26 @@ async function zhenZhengFaSongBen(
         if (benNiuMaShenFen) {
           shenFenTou.push({ role: 'system', content: '【身份 · 模型 · 时间】\n' + benNiuMaShenFen } as LiaoTianXiaoXi);
         }
-        /** R218：桌宠本体（mimic-pet 会话专属注入：本体说明 / 认知 / 规范 / 看屏幕协议） */
+        /** R218：拟态本体（mimic-pet 会话专属注入：本体说明 / 认知 / 规范 / 看屏幕协议） */
         if (String(sessionId || '') === MIMIC_SID) {
           try {
             const s0 = settingsStore?.load() as { instances?: Array<Record<string, unknown>> } | undefined;
             const inst = (s0?.instances || []).find((x) => x && String((x as { id?: string }).id || '') === MIMIC_SID) as Record<string, unknown> | undefined;
-            const ming = String((inst && (inst as { ming?: string }).ming) || (inst && (inst as { name?: string }).name) || '桌宠');
+            const ming = String((inst && (inst as { ming?: string }).ming) || (inst && (inst as { name?: string }).name) || '拟态');
             const renZhi = String((inst && (inst as { persona?: string }).persona) || '').trim();
             const guiFan = duYaoQiu(MIMIC_SID).trim();
             const sj = ((inst && (inst as { sheJiao?: { niCheng?: string } }).sheJiao) || {}) as { niCheng?: string };
             const zhuo = [
-              '【桌宠 · 本体】你是用户桌面上的 AI 桌宠「' + ming + '」，不是普通助手，语气自然亲切、像桌面上的小宠物。',
-              renZhi ? '【桌宠 · 认知】' + renZhi : '',
-              guiFan ? '【桌宠 · 规范（模型自动总结执行）】' + guiFan : '',
-              (sj && sj.niCheng) ? '【桌宠 · 社交昵称】' + sj.niCheng : '',
-              '【桌宠 · 看屏幕】你可以**只在确实需要看屏幕时**在回复里单独写一行【看屏幕】：宿主会把当前屏幕截图放进你的下一轮输入，之后你能描述看到的内容。不需要看屏幕就别写。',
-              '【桌宠 · 动作】你可以在回复里单独写一行【动作:名字】来表达情绪/行为（如【动作:开心】【动作:摇尾】【动作:点头】【动作:疑惑】【动作:挥手】）。可用的动作名：呼吸、眨眼、摇尾、嘟嘴、开心、招手、点头、摇头、歪头、蹦跳、打瞌睡、害羞、生气、委屈、惊讶、思考、转圈、跳舞、鼓掌、挥手、欢迎、趴下、起立、伸懒腰、打哈欠、疑惑、打滚、睡觉、伸爪。不写就不动（宿主不会自己猜）。',
+              '【拟态 · 本体】你是用户桌面上的 AI 拟态「' + ming + '」，不是普通助手，语气自然亲切、像桌面上的小宠物。',
+              renZhi ? '【拟态 · 认知】' + renZhi : '',
+              guiFan ? '【拟态 · 规范（模型自动总结执行）】' + guiFan : '',
+              (sj && sj.niCheng) ? '【拟态 · 社交昵称】' + sj.niCheng : '',
+              '【拟态 · 看屏幕】你可以**只在确实需要看屏幕时**在回复里单独写一行【看屏幕】：宿主会把当前屏幕截图放进你的下一轮输入，之后你能描述看到的内容。不需要看屏幕就别写。',
+              '【拟态 · 动作】你可以在回复里单独写一行【动作:名字】来表达情绪/行为（如【动作:开心】【动作:摇尾】【动作:点头】【动作:疑惑】【动作:挥手】）。可用的动作名：呼吸、眨眼、摇尾、嘟嘴、开心、招手、点头、摇头、歪头、蹦跳、打瞌睡、害羞、生气、委屈、惊讶、思考、转圈、跳舞、鼓掌、挥手、欢迎、趴下、起立、伸懒腰、打哈欠、疑惑、打滚、睡觉、伸爪。不写就不动（宿主不会自己猜）。',
               '（语音互动场景回复控制在 80 字以内。）',
             ].filter(Boolean).join('\n\n');
             shenFenTou.push({ role: 'system', content: zhuo } as LiaoTianXiaoXi);
-          } catch { /* 桌宠注入失败不影响对话 */ }
+          } catch { /* 拟态注入失败不影响对话 */ }
         }
         /**
          * **更早的对话（总结摘要）必须真的进上下文**（产品要求：聊天记录涨到 10M 也不许"忘记中间"）。
@@ -16700,8 +16775,8 @@ async function zhenZhengFaSongBen(
           }
         }
         /**
-         * R218 桌宠「看屏幕」：模型在回复里写了【看屏幕】⇒ 宿主截当前**全屏**，
-         * 作为多模态图片放进下一轮输入再跑一轮（桌宠由互动中理解意图来截图，能看到屏幕全部内容）。
+         * R218 拟态「看屏幕」：模型在回复里写了【看屏幕】⇒ 宿主截当前**全屏**，
+         * 作为多模态图片放进下一轮输入再跑一轮（拟态由互动中理解意图来截图，能看到屏幕全部内容）。
          */
         if (String(sessionId || '') === MIMIC_SID && /【看屏幕】/.test(String(neiRongWenBen(loop.xiangYingTi.choices[0]?.message?.content) || ''))) {
           try {
@@ -17512,7 +17587,7 @@ async function zhenZhengFaSongBen(
         tiaoGuo: yiShiBai,
       });
       if (!xiaYiGe || !xiaYiGe.model || xiaYiGe.model === modelId || yiShiBai.includes(xiaYiGe.model)) break;
-      const an2 = await jieMoXingGongYingShang(xiaYiGe.model);
+      const an2 = await jieMoXingGongYingShang(xiaYiGe.modelQuan || xiaYiGe.model); /* R220：带全称 */
       const zhu2 = an2 || { presetId: providerCfg.presetId, baseURL: providerCfg.baseURL || '', protocol: providerCfg.protocol, apiKey: providerCfg.apiKey || '', biaoQian: providerCfg.presetId };
       if (!zhu2.apiKey && zhu2.protocol !== 'ollama') continue;
       /**

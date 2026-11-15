@@ -507,24 +507,29 @@ body.liaoTianChuangKou .liaoTianBuJu {
 .lieBiaoTiaoMu .avKuang.yunXingZhong::after {
   content: '';
   position: absolute; inset: 0; border-radius: inherit;
-  /* 对角流水：带沿 45°（左下→右上）；深浅两色带+白高光，对比强（正负片 mix-blend 会绘制层混合覆盖角标，已不用） */
+  /* R220：流水方向左右反调（右上角 → 左下角）、放慢（2.6s → 4.2s）、更像水流 ——
+     多道波峰（一主两副水纹）+ 柔和肩部过渡，观感是连续的水波扫过，不是一条硬光带。 */
   background: linear-gradient(45deg,
     transparent 0%,
-    var(--yunXing-liang, #f7dcae) 20%,
-    #fff8ec 26%,
-    var(--accent, #A87654) 34%,
-    var(--yunXing-shen, #7a4a28) 42%,
-    transparent 52%,
+    transparent 26%,
+    var(--yunXing-liu-ruo, rgba(255,248,236,.14)) 33%,
+    var(--yunXing-liang, #f7dcae) 39%,
+    #fffdf7 43%,
+    var(--yunXing-liang, #f7dcae) 47%,
+    var(--yunXing-liu-qiang, rgba(255,248,236,.3)) 53%,
+    var(--yunXing-liang, #f7dcae) 58%,
+    var(--yunXing-liu-ruo, rgba(255,248,236,.14)) 64%,
+    transparent 71%,
     transparent 100%);
-  background-size: 220% 220%;
-  opacity: .8;
-  animation: yunXingLiuDong 4.5s ease-in-out infinite;
+  background-size: 320% 320%;
+  opacity: .92;
+  animation: yunXingLiuDong 4.2s linear infinite;
   pointer-events: none;
   z-index: 1;
 }
 @keyframes yunXingLiuDong {
-  0%, 100% { background-position: 120% 120%; }
-  50%      { background-position: -120% -120%; }
+  0%   { background-position: 145% -45%; }  /* 右上角外（R220：方向左右反调） */
+  100% { background-position: -45% 145%; }  /* 左下角外 */
 }
 /* C. 呼吸光晕：扫光扫过去之后仍有余光，不至于「一片空白」 */
 .lieBiaoTiaoMu .avKuang.yunXingZhong {
@@ -1462,7 +1467,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
   max-width: 160px; min-width: 0; font-weight: 600;
 }
 .moXingChip.qiYong { background: var(--accent); color: var(--accent-ink, #fff); border-color: var(--accent); }
-/* R218：桌宠配置「可用模型」chips 的未选用态（点了才加入可用集） */
+/* R218：拟态配置「可用模型」chips 的未选用态（点了才加入可用集） */
 .moXingChip.offChip { opacity: .55; border-style: dashed; }
 .moXingChip.offChip:hover { opacity: .85; }
 #mimicLian li { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
@@ -4144,8 +4149,8 @@ html { font-weight: var(--fw-ui, 400); }
 .moXingNengLi { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 4px;
   font-size: 10px; line-height: 15px; background: var(--line); color: var(--muted); vertical-align: middle; }
 
-/* 拟态外框：被选为桌宠「原形」的牛马头像加一圈强调色环 + 小角标 */
-/* 拟态外框：桌宠「原形」细环标记（跟随头像形状；R138 简化：去掉强裁圆与角点小圆） */
+/* 拟态外框：被选为拟态「原形」的牛马头像加一圈强调色环 + 小角标 */
+/* 拟态外框：拟态「原形」细环标记（跟随头像形状；R138 简化：去掉强裁圆与角点小圆） */
 .mimicKuang { box-shadow: 0 0 0 2px var(--accent); position: relative; }
 
 /* 拟态音频设备：麦克风 / 播放器 / 音量 **同一行**，音量用竖滑块 */
@@ -5383,6 +5388,15 @@ html { font-weight: var(--fw-ui, 400); }
 .lieBiaoFenZuKong { padding: 2px 12px 6px; font-size: 11px; }
 
 /* R218：外观模型内置库卡片 */
+/* R219：形象/动作网格 —— 3 行滚动（再多出滚动条） */
+.mimicMoXingKu {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  max-height: 236px;
+  overflow-y: auto;
+  padding: 2px;
+}
 .mimicMoXingKa {
   display: inline-flex; flex-direction: column; align-items: center; gap: 2px;
   width: 76px; padding: 6px 4px; border: 1px solid var(--line); border-radius: 10px;

@@ -106,7 +106,10 @@
 .warmyAuthModal { position: fixed; inset: 0; z-index: 2147483001; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.62); }
 /* R163 #4：首启的确认 modal 与主界面确认框同一口径 —— 封顶 60vh/460px，超出自己滚，
    不再让长文案把窗口撑到接近满屏（旧实现这里根本没有 max-height）。 */
-.warmyAuthModalCard { width: min(480px, 100%); max-height: min(60vh, 460px); overflow: auto; background: #23262d; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.warmyAuthModalCard { width: min(480px, 100%); max-height: min(60vh, 460px); display: flex; flex-direction: column; overflow: hidden; background: #23262d; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+/* R220：正文可滚、按钮恒在底部可见（防止长文案把按钮挤出可视区=点不到=锁死） */
+.warmyAuthModalCard .warmyAuthModalBody { overflow: auto; flex: 1 1 auto; min-height: 0; }
+.warmyAuthModalCard .warmyAuthActions { flex: 0 0 auto; margin-top: 12px; }
 .warmyAuthModalBody { color: #c8c1b7; font-size: 13px; margin-top: 10px; }
 
 /* My page card: reuse the app's .sheZhiKa shell but keep this widget's layout local. */

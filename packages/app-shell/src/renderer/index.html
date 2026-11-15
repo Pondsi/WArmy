@@ -155,6 +155,10 @@
               <!-- ADR 004 P4 定稿：**控制台就是容器内的控制台**（其价值是给主机带来安全性防护）。
                    硬约束：只在「项目 / 我的牛马」里、且容器真的就绪时才可用；否则置灰并给出
                    诚实原因（见 app.js 的 refreshContainerConsoleGate / openContainerShell）。 -->
+              <!-- R220：拟态设置图标（仅拟态独立窗显示）—— 点击回主界面 设置→拟态 -->
+              <button id="anNiuNiTaiSheZhi" class="anNiuTuBiao yinCang" data-i18n-title="mimic.openSettings" aria-label="mimic settings" style="display:none">
+                <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="50" r="14"/><path d="M50 12v10M50 78v10M12 50h10M78 50h10M23 23l7 7M70 70l7 7M77 23l-7 7M30 70l-7 7"/></g></svg>
+              </button>
               <button id="anNiuRongQiKongZhiTai" class="anNiuTuBiao" data-i18n-title="container.console.tip" aria-label="in-container shell console" disabled>
                 <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="24" width="84" height="56" rx="6"/><line x1="22" y1="48" x2="46" y2="48"/><circle cx="60" cy="48" r="5" fill="currentColor" stroke="none"/><circle cx="76" cy="48" r="5" fill="currentColor" stroke="none"/></g></svg>
               </button>

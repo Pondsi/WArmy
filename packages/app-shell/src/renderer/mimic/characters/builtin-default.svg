@@ -5,7 +5,7 @@
       <stop offset="1" stop-color="#e0bd93"/>
     </linearGradient>
   </defs>
-  <!-- 桌宠本体：圆润的小家伙，无性别特征 -->
+  <!-- 拟态本体：圆润的小家伙，无性别特征 -->
   <ellipse cx="64" cy="96" rx="30" ry="22" fill="#3f4d63" opacity="0.18"/>
   <ellipse cx="64" cy="72" rx="34" ry="34" fill="url(#mBody)"/>
   <!-- 耳/角：小小的两点，增加灵动感 -->

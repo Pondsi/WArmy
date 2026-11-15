@@ -58,6 +58,8 @@ export interface MoXingJueCeShuRu {
 
 export interface MoXingJueCeJieGuo {
   model: string;
+  /** R220：原始条目（可能是「供应商 · 模型id」全称）—— 同名模型歧义时靠它精确定位供应商 */
+  modelQuan?: string;
   /** 决策依据（审计/可观测用；不是给用户看的文案） */
   why: 'explicit' | 'default' | 'chain' | 'smart' | 'role-duty' | 'role-executor' | 'role-summary' | 'fallback' | 'fallback-disabled';
   /** 本次选中的是调用链第几个（0 起，按启用/存在的链计算）；非链选为 -1 */
@@ -95,7 +97,7 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
   const tiaoGuo = new Set((shuRu.tiaoGuo || []).map((m) => jieMoXingMing(m)));
   const explicit = String(shuRu.explicit || '').trim();
   if (explicit && !tiaoGuo.has(jieMoXingMing(explicit))) {
-    return { model: jieMoXingMing(explicit), why: 'explicit', chainIndex: -1 };
+    return { model: jieMoXingMing(explicit), modelQuan: explicit, why: 'explicit', chainIndex: -1 };
   }
 
   const disabled = (shuRu.chainDisabled || []).map((s) => String(s));
@@ -122,7 +124,7 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
     const di = new Set((shuRu.benDiMoXing || []).map((m) => jieMoXingMing(m)).filter(Boolean));
     const shiBenDi = (m: string) => di.has(jieMoXingMing(m));
     const keLian = lian
-      .map((m, i) => ({ m: jieMoXingMing(m), i }))
+      .map((m, i) => ({ m: jieMoXingMing(m), i, raw: m }))
       .filter((x) => x.m && !tiaoGuo.has(x.m) && !beiJinYong(x.m));
     if (keLian.length) {
       const nan = Number(shuRu.nan);
@@ -161,7 +163,7 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
       });
       daFen.sort((a, b) => b.score - a.score || a.i - b.i);
       const pick = daFen[0]!;
-      return { model: pick.m, why: 'smart', chainIndex: pick.i };
+      return { model: pick.m, modelQuan: pick.raw, why: 'smart', chainIndex: pick.i };
     }
     // 智能模式但链为空/都不可用 ⇒ 落到角色表/兜底
   }
@@ -169,12 +171,12 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
   // 2) 非智能：默认模型优先；默认不行后再严格按调用链顺序
   if (!zhiNeng) {
     const d = jieMoXingMing(dm);
-    if (d && keYongQie(d)) return { model: d, why: 'default', chainIndex: -1 };
+    if (d && keYongQie(d)) return { model: d, modelQuan: dm, why: 'default', chainIndex: -1 };
     // 默认不可用/已失败/被禁用 ⇒ 继续严格按调用链往下试
     for (let i = 0; i < lian.length; i++) {
       const m = jieMoXingMing(lian[i]);
       if (!m || tiaoGuo.has(m) || beiJinYong(m)) continue;
-      return { model: m, why: 'chain', chainIndex: i };
+      return { model: m, modelQuan: lian[i], why: 'chain', chainIndex: i };
     }
   }
 
@@ -186,12 +188,15 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
   ];
   for (const r of roles) {
     const m = jieMoXingMing(r.m);
-    if (m && keYongQie(m)) return { model: m, why: r.why, chainIndex: -1 };
+    if (m && keYongQie(m)) return { model: m, modelQuan: r.m, why: r.why, chainIndex: -1 };
   }
 
   // 4) 任意真实可用模型（仍按清单顺序，不跳着挑）
   const sheng = keYong.filter((m) => keYongQie(m));
-  if (sheng.length) return { model: jieMoXingMing(sheng[0]!), why: 'chain', chainIndex: -1 };
+  if (sheng.length) {
+    const yuan = (shuRu.keYongMoXing || []).find((x) => jieMoXingMing(x) === sheng[0]) || sheng[0];
+    return { model: jieMoXingMing(sheng[0]!), modelQuan: yuan, why: 'chain', chainIndex: -1 };
+  }
 
   // 5) 兜底（前面的“任意可用模型”已经覆盖了还有别的可用的情形）
   if (disabled.some((d) => jieMoXingMing(d) === fallback)) {

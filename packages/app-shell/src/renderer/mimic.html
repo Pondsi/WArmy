@@ -7,7 +7,7 @@
   html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; user-select: none;
     -webkit-app-region: no-drag; font: 13px/1.5 -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
   #stage { position: relative; width: 100%; height: 100%; }
-  /* 桌宠本体：可拖动 */
+  /* 拟态本体：可拖动 */
   #pet { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
     width: 160px; height: 160px; cursor: grab; }
   #pet:active { cursor: grabbing; }
@@ -28,6 +28,59 @@
     width: 8px; height: 8px; border-radius: 50%; background: #6fd18f; display: none; }
   #dot.kai { display: block; animation: tan 1.2s ease-in-out infinite; }
   @keyframes tan { 0%,100% { opacity:.35 } 50% { opacity:1 } }
+
+  /* ══ R220：拟态动起来 —— 2D 常驻 idle（呼吸浮动 + 周期眨眼）+ 触发动作动画 ══ */
+  @keyframes dzIdleHuXi {
+    0%, 100% { transform: translateY(0) scale(1, 1); }
+    50%      { transform: translateY(-3px) scale(1.015, 0.985); }
+  }
+  @keyframes dzIdleZhaYan {
+    0%, 92%, 100% { filter: none; }
+    95%           { filter: brightness(1.06); transform: scaleY(0.94); }
+    97%           { filter: none; }
+  }
+  #pet img {
+    transform-origin: 50% 100%;
+    animation: dzIdleHuXi 3.2s ease-in-out infinite, dzIdleZhaYan 5.7s linear infinite;
+  }
+  /* 兜底轻摆放前面（特异性低于具名规则，具名动作后定义者赢） */
+  #pet img.dz2d[class*="dz-"] { animation: dzQingBai 1s ease-in-out 2; }
+  @keyframes dzQingBai   { 0%,100%{ transform: rotate(0) translateY(0) } 35%{ transform: rotate(-5deg) translateY(-3px) } 70%{ transform: rotate(4deg) translateY(-1px) } }
+  #pet img.dz2d.dz-kaiXin  { animation: dzKaixin .9s ease-in-out infinite; }
+  @keyframes dzKaixin   { 0%,100%{ transform: translateY(0) rotate(0) } 30%{ transform: translateY(-8px) rotate(-4deg) } 60%{ transform: translateY(-4px) rotate(4deg) } }
+  #pet img.dz2d.dz-yaoWei { animation: dzYaoWei 1s ease-in-out infinite; }
+  @keyframes dzYaoWei   { 0%,100%{ transform: rotate(0) } 25%{ transform: rotate(-7deg) } 75%{ transform: rotate(7deg) } }
+  #pet img.dz2d.dz-dianTou { animation: dzDianTou .8s ease-in-out 2; }
+  @keyframes dzDianTou  { 0%,100%{ transform: rotate(0) } 50%{ transform: rotate(9deg) translateY(3px) } }
+  #pet img.dz2d.dz-yaoTou { animation: dzYaoTou .8s ease-in-out 2; }
+  @keyframes dzYaoTou   { 0%,100%{ transform: rotate(0) } 30%{ transform: rotate(-9deg) } 70%{ transform: rotate(9deg) } }
+  #pet img.dz2d.dz-waiTou { animation: dzWaiTou 1s ease-in-out 2; }
+  @keyframes dzWaiTou   { 0%,100%{ transform: rotate(0) } 50%{ transform: rotate(-12deg) } }
+  #pet img.dz2d.dz-bengTiao { animation: dzBengTiao .7s ease-in-out 3; }
+  @keyframes dzBengTiao { 0%,100%{ transform: translateY(0) } 40%{ transform: translateY(-16px) } 70%{ transform: translateY(0) scaleY(.92) } }
+  #pet img.dz2d.dz-zhaoshou { animation: dzZhaoShou 1.1s ease-in-out 2; }
+  @keyframes dzZhaoShou { 0%,100%{ transform: rotate(0) } 25%{ transform: rotate(-12deg) } 60%{ transform: rotate(10deg) } }
+  #pet img.dz2d.dz-huiShou { animation: dzZhaoShou 1.1s ease-in-out 2; }
+  #pet img.dz2d.dz-huanYing { animation: dzZhaoShou 1.1s ease-in-out 2; }
+  #pet img.dz2d.dz-zhuanQuan { animation: dzZhuanQuan 1s ease-in-out 1; }
+  @keyframes dzZhuanQuan { 0%{ transform: rotate(0) } 100%{ transform: rotate(360deg) } }
+  #pet img.dz2d.dz-tiaoWu { animation: dzTiaoWu 1.2s ease-in-out infinite; }
+  @keyframes dzTiaoWu  { 0%,100%{ transform: translateY(0) rotate(-5deg) } 50%{ transform: translateY(-10px) rotate(5deg) } }
+  #pet img.dz2d.dz-guZhang { animation: dzGuZhang .6s ease-in-out 3; }
+  @keyframes dzGuZhang  { 0%,100%{ transform: scale(1) } 50%{ transform: scale(1.08) } }
+  #pet img.dz2d.dz-daHaQian { animation: dzDaHaQian 1.4s ease-in-out 1; }
+  @keyframes dzDaHaQian { 0%,100%{ transform: scaleY(1) } 45%{ transform: scaleY(1.1) rotate(-4deg) } }
+  #pet img.dz2d.dz-shenLan { animation: dzShenLan 1.4s ease-in-out 1; }
+  @keyframes dzShenLan { 0%,100%{ transform: scale(1,1) } 40%{ transform: scale(1.06,1.12) translateY(-6px) } }
+  #pet img.dz2d.dz-daGun { animation: dzDaGun 1.2s ease-in-out 1; }
+  @keyframes dzDaGun    { 0%{ transform: rotate(0) } 100%{ transform: rotate(360deg) translateY(-4px) } }
+  #pet img.dz2d.dz-paXia { animation: dzPaXia 1s ease-in-out 1 forwards; }
+  @keyframes dzPaXia    { 100%{ transform: scaleY(.8) translateY(6px) } }
+  #pet img.dz2d.dz-qiLi { animation: dzQiLi 1s ease-in-out 1; }
+  @keyframes dzQiLi     { 0%{ transform: scaleY(.8) translateY(6px) } 100%{ transform: scaleY(1) translateY(0) } }
+  #pet img.dz2d.dz-shuiJiao, #pet img.dz2d.dz-keShui { animation: dzShuiJiao 3s ease-in-out infinite; }
+  @keyframes dzShuiJiao { 0%,100%{ transform: scaleY(1) rotate(0) } 50%{ transform: scaleY(.96) rotate(-3deg) } }
+
 </style>
 </head>
 <body>
@@ -57,7 +110,7 @@
     };
     window.__dian = (on) => { dot.classList.toggle('kai', !!on); };
 
-    // 拖动：按住桌宠移动整个窗口（主进程用 win.setBounds）
+    // 拖动：按住拟态移动整个窗口（主进程用 win.setBounds）
     let dragging = false, sx = 0, sy = 0;
     pet.addEventListener('mousedown', (e) => {
       dragging = true; sx = e.screenX; sy = e.screenY;
@@ -90,7 +143,7 @@
     shangBaoBenTi();
     setTimeout(shangBaoBenTi, 300);
 
-    // 双击桌宠 = 打开主窗口聊天
+    // 双击拟态 = 打开主窗口聊天
     pet.addEventListener('dblclick', () => { window.warmyMimic?.openChat?.(); });
 
     // 主进程推来的说话/状态
@@ -144,7 +197,7 @@
           rec.start();
           luYin = { stream, rec, timer: setInterval(() => { try { if (rec.state === 'recording') rec.stop(); } catch { /* noop */ } }, 2500) };
         })
-        .catch(() => { /* 无麦克风授权：静默（不打扰桌宠） */ });
+        .catch(() => { /* 无麦克风授权：静默（不打扰拟态） */ });
     }
     function guanLuYin() {
       if (!luYin) return;

@@ -1,5 +1,5 @@
 /**
- * mimic-render.js —— 桌宠 2D/3D 外观渲染 + 动作系统（R218+）
+ * mimic-render.js —— 拟态 2D/3D 外观渲染 + 动作系统（R218+）
  *
  * 形态：
  *  · 2D：静态图 / 精灵图 / 程序化 SVG 角色（手捏参数渲染成 SVG）
@@ -11,7 +11,7 @@
  *  · 触发动作：window.__mimicDongZuo('id') 播放一次（触发词 / AI 判断 / 事件）
  *  · 动作库：内置 ~100 条（基础动作 × 幅度/速度变体），2D 用 CSS/图层变换、3D 用骨骼关键帧
  *
- * 数据流：外观定义（settings.mimicAppearance）经主进程下发到桌宠窗口（warmy:mimicSetTi 扩展），
+ * 数据流：外观定义（settings.mimicAppearance）经主进程下发到拟态窗口（warmy:mimicSetTi 扩展），
  * 本文件只负责"给定外观定义 → 渲染 + 播放动作"。
  */
 (function () {
@@ -329,14 +329,24 @@
     yi.classList.remove('dz2d');
     void yi.offsetWidth;
     yi.classList.add('dz2d', 'dz-' + id);
+    /* R220：动作动画播完摘掉类，回落常驻呼吸/眨眼 idle */
+    clearTimeout(yi._dzTimer);
+    yi._dzTimer = setTimeout(() => { try { yi.classList.remove('dz2d', 'dz-' + id); } catch { /* noop */ } }, 3200);
   }
 
   /** 播放动作（3D 骨骼关键帧 / 2D 图层类） */
   function boFang(id) {
-    if (!DONG_ZUO[id]) return false;
-    if (xingTai === '2d') { dongZuo2D(id); return true; }
+    let k = String(id || '');
+    if (!DONG_ZUO[k]) {
+      /* R219：AI【动作:名字】给的是中文名 —— 按 ming 回退查拼音 id */
+      const hit = Object.keys(DONG_ZUO).find((x) => DONG_ZUO[x] && DONG_ZUO[x].ming === k);
+      if (!hit) return false;
+      k = hit;
+    }
+    if (xingTai === '2d') { dongZuo2D(k); return true; }
+    if (gltfMixer) return yingYongGltfDongZuo(k);
     if (!BONE.root) return false;
-    dongZuoZhengZai = DONG_ZUO[id];
+    dongZuoZhengZai = DONG_ZUO[k];
     dongZuoKaiShi = performance.now();
     dongZuoQian = null;
     return true;
@@ -369,6 +379,7 @@
 
   /** 每帧更新：idle 自动 + 当前动作 + 口型 */
   function gengXin(t) {
+    if (gltfMixer) { try { gltfMixer.update(1 / 60); } catch { /* noop */ } return; }
     if (!BONE.root) return;
     // idle 自动：呼吸 + 眨眼（概率）+ 随机小动作
     const miao = t / 1000;
@@ -409,19 +420,93 @@
   }
 
   /** 外观渲染入口：a = { xingTai:'2d'|'3d', zhuSe, fuSe, yanXing, zuiXing, erDuo, weiBa, yanSe, hongSe, touDa, zhuang, modelId? } */
+  /* ══ R220：GLB（glTF 2.0）现成模型 —— RobotExpressive 等开源模型直接用，动画剪辑驱动 ══ */
+  let gltfRoot = null, gltfMixer = null, gltfClips = {};
+  const GLTF_DONG_ZUO = {
+    huXi: 'Idle', zhaYan: 'Idle', siKao: 'Idle', shuiJiao: 'Sitting', keShui: 'Sitting', paXia: 'Sitting',
+    zhaoShou: 'Wave', huiShou: 'Wave', huanYing: 'Wave', kaiXin: 'ThumbsUp', guZhang: 'ThumbsUp',
+    zhuanQuan: 'Dance', tiaoWu: 'Dance', bengTiao: 'Jump', daGun: 'Jump', qiLi: 'Jump',
+    dianTou: 'Wave', yaoTou: 'Wave', waiTou: 'Wave', yaoWei: 'Dance', duZui: 'Wave',
+    haiXiu: 'Idle', shengQi: 'Punch', weiQu: 'Idle', jingYa: 'Jump', shenLan: 'Jump',
+    daHaQian: 'Sitting', yiHuo: 'Wave', shenZhua: 'Wave',
+  };
+  function yingYongGltfDongZuo(id) {
+    if (!gltfMixer || !gltfRoot) return false;
+    const ming = GLTF_DONG_ZUO[id] || 'Idle';
+    const clip = gltfClips[ming] || gltfClips.Idle;
+    if (!clip) return false;
+    try {
+      gltfMixer.stopAllAction();
+      const act = gltfMixer.clipAction(clip);
+      if (ming !== 'Idle' && clip.duration > 1.5) { act.setLoop(2201 /* LoopRepeat */, 1); act.clampWhenFinished = true; }
+      act.reset().fadeIn(0.12).play();
+      return true;
+    } catch { return false; }
+  }
+  function init3DGlTF(src) {
+    try {
+      const THREE = window.THREE;
+      if (!THREE || !window.GLTFLoader) return false;
+      if (!sanD) init3D({});
+      if (!scene) return false;
+      if (gltfRoot) { try { scene.remove(gltfRoot); } catch { /* noop */ } gltfRoot = null; gltfMixer = null; gltfClips = {}; }
+      if (BONE && BONE.root) BONE.root.visible = false;
+      const loader = new window.GLTFLoader();
+      loader.load(src, (gltf) => {
+        try {
+          gltfRoot = gltf.scene || gltf.scenes[0];
+          if (!gltfRoot) return;
+          /* 自适应尺寸：缩放到约 2.2 单位高、落在脚下 */
+          const box = new THREE.Box3().setFromObject(gltfRoot);
+          const size = new THREE.Vector3(); box.getSize(size);
+          const s = size.y > 0.01 ? 2.2 / size.y : 1;
+          gltfRoot.scale.setScalar(s);
+          const box2 = new THREE.Box3().setFromObject(gltfRoot);
+          gltfRoot.position.y -= box2.min.y;
+          scene.add(gltfRoot);
+          gltfMixer = new THREE.AnimationMixer(gltfRoot);
+          gltfClips = {};
+          for (const c of (gltf.animations || [])) gltfClips[c.name] = c;
+          yingYongGltfDongZuo('huXi');
+          if (window.__shangBaoBenTi) { try { window.__shangBaoBenTi(); } catch { /* noop */ } }
+        } catch { /* noop */ }
+      }, undefined, () => { /* 加载失败保持程序化骨骼可见 */ if (BONE && BONE.root) BONE.root.visible = true; });
+      return true;
+    } catch { return false; }
+  }
+
   function yingYongWaiGuan(a, tupianEl) {
     xingTai = String((a && a.xingTai) || '2d');
     const pet = document.getElementById('pet');
     const img = tupianEl || document.getElementById('tupian');
     const san = document.getElementById('tiSanD');
+    const glbSrc = String((a && (a.glbSrc || (String(a.imgSrc || '').toLowerCase().endsWith('.glb') ? a.imgSrc : ''))) || '');
     if (xingTai === '3d') {
-      img.style.display = 'none';
+      /* R220：.glb 现成模型走 GLTFLoader（动画剪辑）；否则程序化骨骼 */
+      if (glbSrc && init3DGlTF(glbSrc)) {
+        img.style.display = 'none';
+        if (san) san.style.display = 'block';
+        kaiShi3D();
+        kaiShiAutoDongZuo();
+        return;
+      }
       if (init3D(a || {})) {
+        img.style.display = 'none';
         if (san) san.style.display = 'block';
         jiLuJiZhun();
         kaiShi3D();
+        kaiShiAutoDongZuo();
+      } else {
+        /* R219：3D 初始化失败（无 THREE/WebGL）回退 2D，绝不留空白 */
+        xingTai = '2d';
+        if (san) san.style.display = 'none';
+        img.style.display = '';
+        if (a && a.imgSrc) img.src = a.imgSrc;
+        else img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(hua2DSvg(a || {}));
       }
     } else {
+      /* R220：2D 的 idle 呼吸/眨眼由 CSS 常驻动画负责，停掉 3D 调度器 */
+      try { clearTimeout(autoXunHuan); autoXunHuan = 0; } catch { /* noop */ }
       if (san) san.style.display = 'none';
       if (renderer) { renderer.dispose(); renderer = null; scene = null; camera = null; sanD = null; boneRoot = null; }
       img.style.display = '';
@@ -432,6 +517,26 @@
   }
 
   let sanLoop = null;
+  /* R220：auto 动作调度（呼吸常驻 + 周期眨眼）—— 之前 zhiLing:'auto' 定义了却从未被消费 */
+  let autoXunHuan = 0;
+  function kaiShiAutoDongZuo() {
+    if (autoXunHuan) return;
+    const yan = () => {
+      try {
+        const dang = dongZuoZhengZai;
+        const beiDaDuan = !!(dang && dang.zhiLing === 'trigger');
+        if (!beiDaDuan) {
+          boFang('zhaYan');
+          setTimeout(() => {
+            if (!dongZuoZhengZai || dongZuoZhengZai === DONG_ZUO.zhaYan) boFang('huXi');
+          }, 260);
+        }
+      } catch { /* noop */ }
+      autoXunHuan = setTimeout(yan, 3400 + Math.random() * 4200);
+    };
+    autoXunHuan = setTimeout(yan, 2800);
+    boFang('huXi');
+  }
   function kaiShi3D() {
     if (sanLoop) return;
     const loop = (t) => { try { gengXin(t); } catch { /* noop */ } };
@@ -445,6 +550,8 @@
   window.__mimicKouXing = (on) => { kouXingOn = !!on; };
   window.__mimicTingZhi = tingZhi;
   window.__mimicDongZuoBiao = DONG_ZUO;
+  /* R220：GLB 状态暴露（探针/调试用） */
+  window.__mimicGltfZhuangTai = () => ({ loaded: !!gltfRoot, mixer: !!gltfMixer, clips: Object.keys(gltfClips), dongZuo: dongZuoZhengZai ? String(dongZuoZhengZai.ming || '') : '' });
   jiChuDongZuo();
 
   /* 精灵图支持：sheet JSON（帧动画由 mimic 窗口按时间播放）—— 基础实现：帧索引切换 */
