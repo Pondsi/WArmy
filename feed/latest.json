@@ -1,13 +1,13 @@
 {
-  "version": "0.4.14",
-  "notes": "WArmy 0.4.14 — fixes custom-provider chat failing with \"object is not iterable\": the process-isolated chat engine no longer proxies its synchronous compression/budget callbacks across processes, and streamed responses are consumed as complete payloads, so chat and call-chain fallback work for every provider; fetching a provider model list now validates chat usability with a minimal probe (insufficient balance/quota is not a failure, while invalid keys/endpoints block adding the provider); abnormal-session badges show only the exclamation mark in the theme accent color (no overlapping unread count); in the model management card, enabling Smart Mode greys out and disables the call-chain section and the label drops its parenthetical; privacy gate hardening (no hardcoded workspace paths in scripts). Verified by the full gate suite: 78 gates x 3 consecutive clean rounds (234 checks, 0 failures, 0 flakes). The in-app updater downloads only changed blocks with unchanged SHA-256 verification.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.14/WArmy-Setup-0.4.14.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.14/WArmy-Setup-0.4.14.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.14/WArmy-Setup-0.4.14.exe.warmyblocks",
-  "sha256": "df98825b2f6e6cd1294d87459f2f8c77114fa9af75314ebdb297e84b5baa506f",
-  "size": 234840529,
+  "version": "0.4.15",
+  "notes": "WArmy 0.4.15 — fixes custom-provider chat failing with \"object is not iterable\": the process-isolated chat engine no longer proxies its synchronous compression/budget callbacks across processes, and streamed responses are consumed as complete payloads, so chat and call-chain fallback work for every provider; fetching a provider model list now validates chat usability with a minimal probe (insufficient balance/quota is not a failure, while invalid keys/endpoints block adding the provider); abnormal-session badges show only the exclamation mark in the theme accent color (no overlapping unread count); in the model management card, enabling Smart Mode greys out and disables the call-chain section and the label drops its parenthetical; privacy gate hardening (no hardcoded workspace paths in scripts). Verified by the full gate suite: 78 gates x 3 consecutive clean rounds (234 checks, 0 failures, 0 flakes). The in-app updater downloads only changed blocks with unchanged SHA-256 verification.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.15/WArmy-Setup-0.4.15.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.15/WArmy-Setup-0.4.15.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.15/WArmy-Setup-0.4.15.exe.warmyblocks",
+  "sha256": "efc8392f587fbbf0b43cb8270f8740a6920068ebbf6583ab13d67664c47e2410",
+  "size": 241263136,
   "mandatory": false,
-  "publishedAt": "2026-11-14T19:27:51.725Z",
+  "publishedAt": "2026-11-15T11:36:05.313Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.14"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.15"
 }

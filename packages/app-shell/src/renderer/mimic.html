@@ -36,6 +36,7 @@
     <div id="bubble"></div>
     <div id="pet"><img id="tupian" alt=""/></div>
   </div>
+  <audio id="yinPin" hidden></audio>
   <script>
     const pet = document.getElementById('pet');
     const tupian = document.getElementById('tupian');
@@ -94,6 +95,62 @@
     window.warmyMimic?.onSay?.((d) => window.__shuo(d && d.text, d && d.ms));
     window.warmyMimic?.onDot?.((d) => window.__dian(d && d.on));
     window.warmyMimic?.onSetTi?.((d) => window.__setTi(d && d.src));
+    // 语音回复播放（主进程合成好的音频）
+    window.warmyMimic?.onPlay?.((d) => {
+      try {
+        const a = document.getElementById('yinPin');
+        if (!a || !d || !d.dataUrl) return;
+        a.src = String(d.dataUrl);
+        a.play().catch(() => { /* 播放失败不影响字幕 */ });
+      } catch { /* noop */ }
+    });
+
+    // ── R218 语音互动：非 off 模式持续录音，每 2.5s 分片交给主进程 ASR/判断 ──
+    let luYin = null;
+    function kaiShiLuYin() {
+      if (luYin) return;
+      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+        .then((stream) => {
+          let mime = 'audio/webm';
+          try { mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'; } catch { /* noop */ }
+          const rec = new MediaRecorder(stream, { mimeType: mime });
+          let kuai = [];
+          rec.ondataavailable = (e) => { if (e.data && e.data.size) kuai.push(e.data); };
+          rec.onstop = () => {
+            if (kuai.length) {
+              const blob = new Blob(kuai, { type: rec.mimeType || 'audio/webm' });
+              kuai = [];
+              try {
+                const fr = new FileReader();
+                fr.onload = () => { try { window.warmyMimic?.yuYinFenPian?.({ dataUrl: String(fr.result), ext: 'webm' }); } catch { /* noop */ } };
+                fr.readAsDataURL(blob);
+              } catch { /* noop */ }
+            }
+            if (luYin && luYin.rec === rec && rec.state !== 'recording') { try { rec.start(); } catch { /* noop */ } }
+          };
+          rec.start();
+          luYin = { stream, rec, timer: setInterval(() => { try { if (rec.state === 'recording') rec.stop(); } catch { /* noop */ } }, 2500) };
+        })
+        .catch(() => { /* 无麦克风授权：静默（不打扰桌宠） */ });
+    }
+    function guanLuYin() {
+      if (!luYin) return;
+      clearInterval(luYin.timer);
+      try { if (luYin.rec.state !== 'inactive') luYin.rec.stop(); } catch { /* noop */ }
+      try { luYin.stream.getTracks().forEach((t) => t.stop()); } catch { /* noop */ }
+      luYin = null;
+    }
+    function tongBuYuYinMoShi() {
+      try {
+        window.warmyMimic?.yuYinMoShiQu?.().then((r) => {
+          const moShi = String((r && r.moShi) || 'off');
+          if (moShi !== 'off') { kaiShiLuYin(); window.__dian(true); }
+          else { guanLuYin(); window.__dian(false); }
+        }).catch(() => { /* 查不到按 off */ });
+      } catch { /* noop */ }
+    }
+    tongBuYuYinMoShi();
+    setInterval(tongBuYuYinMoShi, 10000); // 设置页改模式后 10s 内生效
   </script>
 </body>
 </html>

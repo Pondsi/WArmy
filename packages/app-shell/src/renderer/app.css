@@ -1461,6 +1461,11 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
   max-width: 160px; min-width: 0; font-weight: 600;
 }
 .moXingChip.qiYong { background: var(--accent); color: var(--accent-ink, #fff); border-color: var(--accent); }
+/* R218：桌宠配置「可用模型」chips 的未选用态（点了才加入可用集） */
+.moXingChip.offChip { opacity: .55; border-style: dashed; }
+.moXingChip.offChip:hover { opacity: .85; }
+#mimicLian li { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+#mimicLian li .mgrChainMing { flex: 1; min-width: 0; }
 
 /* Scrollbars */
 .pageBuJu::-webkit-scrollbar,
@@ -2464,6 +2469,20 @@ table.hkMiYaoJi td.hkMiYaoJiMiaoShu { color: var(--ink-dim); font-size: var(--fs
 
 .ctgHang { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--card); }
 .ctgHangHead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* R218：门禁软/硬两区默认折叠（details 摘要行样式） */
+details.menJinZheDie { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); }
+details.menJinZheDie > summary {
+  cursor: pointer; padding: 9px 12px; font-weight: 600; user-select: none;
+  list-style: none; display: flex; align-items: baseline; flex-wrap: wrap;
+}
+details.menJinZheDie > summary::-webkit-details-marker { display: none; }
+details.menJinZheDie > summary::before {
+  content: '▸'; display: inline-block; width: 14px; color: var(--muted);
+  transition: transform .12s ease; font-size: 12px;
+}
+details.menJinZheDie[open] > summary::before { transform: rotate(90deg); }
+details.menJinZheDie > summary:hover { background: var(--hover); }
+details.menJinZheDie > div { padding: 0 12px 12px; }
 .ctgMing { font-weight: 600; }
 .ctgLeiXing { color: var(--ink-dim); font-size: var(--fs-sm); }
 .ctgSpacer { flex: 1; }
@@ -5328,3 +5347,36 @@ html { font-weight: var(--fw-ui, 400); }
 .zjtls-ka::-webkit-scrollbar { width: 8px; }
 .zjtls-ka::-webkit-scrollbar-thumb { background: var(--scroll, #c1c1c1); border-radius: 8px; border: 2px solid var(--card, #fff); }
 .zjtls-ka::-webkit-scrollbar-track { background: transparent; }
+
+/* R218：远程设备 —— 请求提示卡 / SSH 历史列表 / 控制条 */
+.rcQingQiuKa {
+  position: fixed; left: 12px; bottom: 56px; z-index: 9999; width: 300px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.22); padding: 12px 14px;
+}
+.rcQingQiuBiaoTi { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+.rcQingQiuMing { font-size: 14px; font-weight: 600; }
+.rcQingQiuId { font-size: 11px; word-break: break-all; }
+.rcQingQiuLiYou { margin: 8px 0 0; }
+.rcQingQiuLiYou input { border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); padding: 5px 8px; font: inherit; font-size: 12px; }
+.rcQingQiuAnNiu { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.rcLiShiLieBiao { max-height: 200px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: 4px; background: var(--card); }
+.rcLiShiHang { cursor: pointer; }
+.rcLiShiHang:hover { background: var(--hover); }
+.rcLiShiHang.xuan { background: color-mix(in srgb, var(--accent) 14%, transparent); outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+
+/* R218：第二列分组 */
+.lieBiaoFenZu {
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px 2px;
+  font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer;
+  user-select: none; border-radius: 6px;
+}
+.lieBiaoFenZu:hover { color: var(--ink); }
+.lieBiaoFenZu.guDing { opacity: .8; }
+.lieBiaoFenZu.zhe .lieBiaoFenZuTou::before { content: '▸ '; }
+.lieBiaoFenZu:not(.zhe) .lieBiaoFenZuTou::before { content: '▾ '; }
+.lieBiaoFenZu.tuoMuBiao { outline: 1px dashed var(--accent); }
+.lieBiaoFenZu.tuoGuo { outline: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.lieBiaoFenZuNei { padding: 0 2px; }
+.lieBiaoFenZuNei.zheLinShi { opacity: .25; }
+.lieBiaoFenZuKong { padding: 2px 12px 6px; font-size: 11px; }

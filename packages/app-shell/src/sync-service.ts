@@ -18,9 +18,9 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export type SyncDomain = 'chat' | 'dao' | 'shu' | 'yinxiang' | 'kb1' | 'kb2' | 'kb3' | 'models' | 'settings';
+export type SyncDomain = 'chat' | 'dao' | 'shu' | 'yinxiang' | 'kb1' | 'kb2' | 'kb3' | 'models' | 'settings' | 'duijie';
 
-export const SYNC_DOMAINS: ReadonlyArray<SyncDomain> = ['chat', 'dao', 'shu', 'yinxiang', 'kb1', 'kb2', 'kb3', 'models', 'settings'];
+export const SYNC_DOMAINS: ReadonlyArray<SyncDomain> = ['chat', 'dao', 'shu', 'yinxiang', 'kb1', 'kb2', 'kb3', 'models', 'settings', 'duijie'];
 
 export interface SyncEntry {
   domain: SyncDomain;
@@ -75,6 +75,8 @@ export interface SyncServiceOptions {
   onlinePeers?: () => string[];
   /** 宿主为各域提供导出函数（chat 会话勾选等）；缺省域返回 null */
   domainExport?: (domain: SyncDomain, sessions: Record<string, { sid: string; name: string; sync: boolean }>) => Array<{ id: string; ts: number; data?: string; kind?: 'add' | 'mod' }> | null;
+  /** R218：接收方宿主应用入口（chat/duijie 等需要写回生产文件的域由宿主处理；返回应用条数） */
+  domainApply?: (domain: SyncDomain, entries: Array<{ id: string; ts: number; data?: string }>) => number;
 }
 
 const TOMBSTONE_MS = 2 * 365 * 24 * 3600 * 1000; // 2 年删除记录
@@ -83,7 +85,7 @@ export class SyncService {
   private readonly dir: string;
   private readonly options: SyncServiceOptions;
   private devices: SyncDevice[] = [];
-  private domains: Record<SyncDomain, boolean> = { chat: true, dao: true, shu: true, yinxiang: true, kb1: true, kb2: true, kb3: true, models: true, settings: true };
+  private domains: Record<SyncDomain, boolean> = { chat: true, dao: true, shu: true, yinxiang: true, kb1: true, kb2: true, kb3: true, models: true, settings: true, duijie: true };
   private sessions: Record<string, { sid: string; name: string; sync: boolean }> = {};
   private pairs: Array<{ token: string; deviceId: string; ming: string; fingerprint: string; expiresAt: number }> = [];
   /** 被本机强制解锁过的设备 id：其旧 token 一律作废，重新上线不自动复活配对 */
@@ -421,7 +423,7 @@ export class SyncService {
       if (peerDels.has(key) && this.tombstones.some((t) => t.domain === e.domain && t.id === e.id)) {
         refilled += 1; // 我删过、对方还有 → 回填（对方为准）
       }
-      const applied = this.applyEntry(e);
+      const applied = this.applyEntryWithHost(e);
       if (applied) accepted += 1;
     }
     for (const d of Array.isArray(payload.dels) ? payload.dels : []) {
@@ -446,6 +448,18 @@ export class SyncService {
     if (cur && Number(cur.ts) >= Number(e.ts)) return false; // LWW：不比自己新
     this.writeDomainItem(e.domain, e.id, e);
     return true;
+  }
+
+  /**
+   * R218：接收端应用一条同步条目。
+   * 优先走宿主 domainApply（chat/duijie 等要写回生产文件的域），否则落 sync 数据目录。
+   */
+  applyEntryWithHost(e: SyncEntry): boolean {
+    if (this.options.domainApply) {
+      const n = this.options.domainApply(e.domain, [{ id: e.id, ts: Number(e.ts) || Date.now(), data: e.data ?? '' }]);
+      if (n > 0) return true;
+    }
+    return this.applyEntry(e);
   }
 
   private pruneTombstones() {

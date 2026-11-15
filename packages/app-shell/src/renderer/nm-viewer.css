@@ -1542,6 +1542,11 @@ body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
 .anNiuXiao:disabled, .anNiuZhuYao:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ── 收藏夹：添加弹窗 + 悬停面板 ── */
+/* R218：网页视图被暂时隐藏时用暗化层铺底（不再是白屏）；面板/添加框在其上 */
+.scZheZhaoMian {
+  position: fixed; inset: 0; z-index: 85;
+  background: rgba(15,18,26,.5);
+}
 .scZheZhao {
   position: fixed; inset: 0; z-index: 80;
   background: rgba(0,0,0,.42);

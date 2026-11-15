@@ -17,4 +17,8 @@ contextBridge.exposeInMainWorld('warmyMimic', {
   onSetTi: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicSetTi', h); return () => ipcRenderer.removeListener('warmy:mimicSetTi', h); },
   /** 主进程命中测试的结果：光标是否落在本体上（用来切悬停样式） */
   onHover: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicHover', h); return () => ipcRenderer.removeListener('warmy:mimicHover', h); },
+  /** R218：语音互动 —— 录音分片上交 / 查询当前模式 / 播放合成语音 */
+  yuYinFenPian: (p) => ipcRenderer.invoke('warmy:mimicYuYinFenPian', p),
+  yuYinMoShiQu: () => ipcRenderer.invoke('warmy:mimicYuYinMoShi'),
+  onPlay: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicPlay', h); return () => ipcRenderer.removeListener('warmy:mimicPlay', h); },
 });

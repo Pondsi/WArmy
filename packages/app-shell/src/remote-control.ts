@@ -57,6 +57,23 @@ interface RcZhuangTai {
   jujue: string[];
   /** 活跃会话（程序重启后未结束的会话按已结束处理） */
   sessions: RcSession[];
+  /** R218：远程控制请求记录（联系人右键「远程控制」；收进帮助抽屉申请记录） */
+  qingQiu: RcQingQiu[];
+}
+
+/**
+ * R218：远程控制**请求记录**（联系人/设备右键「远程控制」发起；收进帮助抽屉的申请记录）。
+ * direction：in=别人申请控制我；out=我申请控制别人。
+ * status：pending / approved / rejected（拒绝可带理由 liYou）。
+ */
+export interface RcQingQiu {
+  id: string;
+  duiFang: string;
+  duiFangMing: string;
+  direction: 'in' | 'out';
+  status: 'pending' | 'approved' | 'rejected';
+  liYou?: string;
+  ts: number;
 }
 
 const QIAN_ZUI = 'rc-';
@@ -84,9 +101,10 @@ export class YuanChengKongZhi {
         devices: Array.isArray(j.devices) ? j.devices : [],
         jujue: Array.isArray(j.jujue) ? j.jujue : [],
         sessions: Array.isArray(j.sessions) ? j.sessions : [],
+        qingQiu: Array.isArray(j.qingQiu) ? j.qingQiu : [],
       };
     } catch {
-      return { devices: [], jujue: [], sessions: [] };
+      return { devices: [], jujue: [], sessions: [], qingQiu: [] };
     }
   }
 
@@ -200,6 +218,8 @@ export class YuanChengKongZhi {
     const d = this.anZhiWen(zhiWen);
     if (!d) return { ok: false, reason: 'unknown-device' };
     if (this.state.jujue.includes(d.id)) return { ok: false, reason: 'permanently-rejected' };
+    /* R218：自己的设备（同账号已配对）天然免确认 —— 不需要勾「可被控制/信任」 */
+    if (d.leixing === 'my') return { ok: true, device: d, xinRen: true };
     if (!d.keBeiKong) return { ok: false, reason: 'not-allowed' };
     return { ok: true, device: d, xinRen: d.xinRen };
   }
@@ -277,6 +297,36 @@ export class YuanChengKongZhi {
   /** 会话查询 */
   huiHua(sid: string): RcSession | undefined {
     return this.state.sessions.find((x) => x.sid === sid);
+  }
+
+  // ── 请求记录（R218：联系人远程控制申请；帮助抽屉申请记录里区分 in/out） ──
+
+  qingQiuJiLu(): RcQingQiu[] {
+    return [...this.state.qingQiu];
+  }
+
+  /** 登记一条请求（同一对端同一方向的 pending 只保留最新一条；历史保留最近 120 条） */
+  qingQiuCun(q: RcQingQiu): void {
+    if (q.direction === 'out') {
+      this.state.qingQiu = this.state.qingQiu.filter((x) => !(x.direction === 'out' && x.duiFang === q.duiFang && x.status === 'pending'));
+    } else {
+      this.state.qingQiu = this.state.qingQiu.filter((x) => !(x.direction === 'in' && x.duiFang === q.duiFang && x.status === 'pending'));
+    }
+    this.state.qingQiu.push(q);
+    const done = this.state.qingQiu.filter((x) => x.status !== 'pending').sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 80);
+    const pend = this.state.qingQiu.filter((x) => x.status === 'pending');
+    this.state.qingQiu = [...pend, ...done].slice(0, 120);
+    this.cun();
+  }
+
+  /** 按 id 应答一条请求（允许/拒绝 + 可选理由） */
+  qingQiuYingDa(id: string, status: 'approved' | 'rejected', liYou?: string): RcQingQiu | null {
+    const q = this.state.qingQiu.find((x) => x.id === id);
+    if (!q || q.status !== 'pending') return null;
+    q.status = status;
+    if (liYou) q.liYou = String(liYou).slice(0, 200);
+    this.cun();
+    return q;
   }
 }
 

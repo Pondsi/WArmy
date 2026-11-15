@@ -1341,6 +1341,18 @@
 
   /* ── 收藏夹（本机 localStorage，独立于主进程配置；人/牛马共用） ── */
   const SC_KEY = 'nm_shouCangJia_v1';
+  /** R218：网页视图隐藏时的暗化铺底层（避免「网页变白」；面板在其上） */
+  function zheZhaoMianJia() {
+    if (el('scZheZhaoMian')) return;
+    const z = document.createElement('div');
+    z.id = 'scZheZhaoMian';
+    z.className = 'scZheZhaoMian';
+    document.body.appendChild(z);
+  }
+  function zheZhaoMianQu() {
+    const z = el('scZheZhaoMian');
+    if (z) z.remove();
+  }
   function scDu() {
     try {
       const s = localStorage.getItem(SC_KEY);
@@ -1358,7 +1370,7 @@
   /** 点击收藏夹图标：弹出「名称 + 网站地址 + 选择收藏夹文件夹」添加框 */
   function shouCangJiaDianJi() {
     const jiu = el('scTianJiaZheZhao');
-    if (jiu) { jiu.remove(); return; }
+    if (jiu) { jiu.remove(); huiFuYeShiTu(); return; }
     const zh = document.createElement('div');
     zh.id = 'scTianJiaZheZhao';
     zh.className = 'scZheZhao';
@@ -1371,6 +1383,8 @@
       + '<div class="scAnNiuHang"><button class="anNiuXiao" id="scQuXiao">取消</button>'
       + '<button class="anNiuZhuYao" id="scQueDing">确定</button></div></div>';
     document.body.appendChild(zh);
+    /** R218：不遮挡会被原生网页视图盖住（用户报「添加框被网页内容挡住」） */
+    zheDangYeShiTu();
     const ka = wangYeDangQian();
     const yu = ka && !ka.shiBenDi && ka.url ? ka.url : '';
     const yuMing = yu ? (() => { try { return new URL(yu).host || yu; } catch { return yu; } })() : '';
@@ -1386,7 +1400,7 @@
       o.value = String(i); o.textContent = f.ming || ('收藏夹 ' + (i + 1));
       xuan.appendChild(o);
     });
-    const guan = () => zh.remove();
+    const guan = () => { zh.remove(); huiFuYeShiTu(); };
     zh.addEventListener('mousedown', (e) => { if (e.target === zh) guan(); });
     zh.querySelector('#scQuXiao').addEventListener('click', guan);
     zh.querySelector('#scQueDing').addEventListener('click', () => {
@@ -1433,6 +1447,7 @@
      * 于是收藏夹面板被网页盖住（用户报「显示的内容被遮挡」）。这里显式遮挡，关闭时精确恢复一次。
      */
     zheDangYeShiTu();
+    zheZhaoMianJia(); // R218：网页隐藏期间暗化铺底（不再是白屏）
     let yiGuan = false;
     let scWaiFn = null;
     const guanMianBan = () => {
@@ -1441,6 +1456,7 @@
       if (scTing) { clearTimeout(scTing); scTing = null; }
       mb.remove();
       if (scWaiFn) document.removeEventListener('click', scWaiFn);
+      zheZhaoMianQu();
       huiFuYeShiTu();
     };
     const fang = b.getBoundingClientRect();
