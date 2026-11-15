@@ -21,4 +21,7 @@ contextBridge.exposeInMainWorld('warmyMimic', {
   yuYinFenPian: (p) => ipcRenderer.invoke('warmy:mimicYuYinFenPian', p),
   yuYinMoShiQu: () => ipcRenderer.invoke('warmy:mimicYuYinMoShi'),
   onPlay: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicPlay', h); return () => ipcRenderer.removeListener('warmy:mimicPlay', h); },
+  /** R218：动作触发与说话口型 */
+  onDongZuo: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicDongZuo', h); return () => ipcRenderer.removeListener('warmy:mimicDongZuo', h); },
+  onKouXing: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicKouXing', h); return () => ipcRenderer.removeListener('warmy:mimicKouXing', h); },
 });

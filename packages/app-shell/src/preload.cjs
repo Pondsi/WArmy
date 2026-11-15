@@ -270,6 +270,9 @@ contextBridge.exposeInMainWorld('warmy', {
   mimicZhuoMianJieTu: () => ipcRenderer.invoke('warmy:mimicZhuoMianJieTu'),
   mimicYuYinFenPian: (p) => ipcRenderer.invoke('warmy:mimicYuYinFenPian', p),
   mimicPanDuanMoXingMoRen: () => ipcRenderer.invoke('warmy:mimicPanDuanMoXingMoRen'),
+  mimicWaiGuanShe: (p) => ipcRenderer.invoke('warmy:mimicWaiGuanShe', p),
+  mimicDongZuoCiQu: () => ipcRenderer.invoke('warmy:mimicDongZuoCiQu'),
+  mimicDongZuoCiShe: (p) => ipcRenderer.invoke('warmy:mimicDongZuoCiShe', p),
   onMimicOpenChat: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicOpenChat', h); return () => ipcRenderer.removeListener('warmy:mimicOpenChat', h); },
   modelCapsGet: () => ipcRenderer.invoke('warmy:moXingNengLiQu'),
   /** 模型额度（右键某个拉取到的模型）：读当前值 + 拉取默认值；写/恢复默认 */

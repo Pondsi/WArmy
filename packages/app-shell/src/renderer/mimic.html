@@ -37,6 +37,8 @@
     <div id="pet"><img id="tupian" alt=""/></div>
   </div>
   <audio id="yinPin" hidden></audio>
+  <script src="./vendor/three.bundle.min.js"></script>
+  <script src="./mimic-render.js"></script>
   <script>
     const pet = document.getElementById('pet');
     const tupian = document.getElementById('tupian');
@@ -94,7 +96,18 @@
     // 主进程推来的说话/状态
     window.warmyMimic?.onSay?.((d) => window.__shuo(d && d.text, d && d.ms));
     window.warmyMimic?.onDot?.((d) => window.__dian(d && d.on));
-    window.warmyMimic?.onSetTi?.((d) => window.__setTi(d && d.src));
+    window.warmyMimic?.onSetTi?.((d) => {
+      /* R218：外观对象（{xingTai, zhuSe, fuSe, ...} 或 {src} 旧格式） → 2D/3D 渲染 */
+      if (d && typeof d === 'object' && (d.xingTai || d.zhuSe || d.fuSe)) {
+        window.__mimicWaiGuan(d, tupian);
+      } else {
+        window.__setTi(d && d.src);
+      }
+    });
+    /* R218：动作触发（触发词 / AI 判断 / 事件） */
+    window.warmyMimic?.onDongZuo?.((d) => { if (d && d.id) window.__mimicDongZuo(String(d.id)); });
+    /* R218：说话口型（语音合成/ASR 期间） */
+    window.warmyMimic?.onKouXing?.((d) => window.__mimicKouXing(!!(d && d.on)));
     // 语音回复播放（主进程合成好的音频）
     window.warmyMimic?.onPlay?.((d) => {
       try {

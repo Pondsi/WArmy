@@ -2947,7 +2947,7 @@ html { font-weight: var(--fw-ui, 400); }
   }
 }
 
-/* ── 模型会在归档时自动改写的提示词（术 / 印象）：标题后的主题色牛头 + 悬停说明 ──
+/* ── 模型会在总结时自动改写的提示词（术 / 印象）：标题后的主题色牛头 + 悬停说明 ──
    图标用 mask + currentColor 的主题色（--accent），不引入第二套配色；
    说明放在图标下方，避免顶部卡片把提示裁掉。 */
 .tiShiAiGai {
@@ -2987,7 +2987,7 @@ html { font-weight: var(--fw-ui, 400); }
   pointer-events: none;
 }
 
-/* 第四列知识库权限（#103）：读/写/归档 三层勾选 */
+/* 第四列知识库权限（#103）：读/写/总结 三层勾选 */
 .kbPermBiao {
   margin: 4px 0 6px;
   padding: 6px 8px;

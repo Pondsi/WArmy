@@ -187,7 +187,7 @@ export function congGuiDangTiQuZhiShi(shuRu: {
  *
  * **v3 软门禁格式**（行业通行：Constitutional AI / guardrails 都是「引导 + 可修正」而非一票否决）：
  * - 所有规则都是 **soft**：注入提示词引导，默认不拦截；
- * - 模型判断「异常由此门禁导致」时可 **skip**（带原因），归档时复盘改/删；
+ * - 模型判断「异常由此门禁导致」时可 **skip**（带原因），归档时总结改/删；
  * - 每条规则有 id / match / action / severity / status / skipHistory。
  *
  * ```json
@@ -212,7 +212,7 @@ export function congGuiDangTiQuZhiShi(shuRu: {
  * }
  * ```
  * - action: advise（只提示） | warn（提示并记审计） | block（仍可被 skip 自愈）
- * - status: active | skipped（暂时跳过） | retired（归档复盘后删除）
+ * - status: active | skipped（暂时跳过） | retired（归档总结后删除）
  * - 归档时检查 skipped：分析 skipHistory，改 message/match 或 retired。
  */
 /** 第 38 轮 项 5：旧版 user-preferences 文件（只写不读的死路径）已废弃并删除；用户偏好统一进「印象」yinxiang.md。 */
@@ -249,7 +249,7 @@ export interface RuanMenJinGuiZe {
 /**
  * 模型自愈：把某条门禁标成「暂时跳过」（**不改原对象**，返回新的一条）。
  * v3 的关键就在这里：软门禁是可以被"这次先别管"的，但**必须留下痕迹**（谁跳的、为什么、什么时候），
- * 归档复盘时据此决定改规则还是删规则 —— 否则"软"就变成"没人再管"。
+ * 归档总结时据此决定改规则还是删规则 —— 否则"软"就变成"没人再管"。
  */
 export function biaoJiZanShiTiaoGuo(
   guiZe: RuanMenJinGuiZe,
@@ -264,7 +264,7 @@ export function biaoJiZanShiTiaoGuo(
   };
 }
 
-/** 归档复盘：把 skipped 的规则列出来供模型决定改/删（配 `skipHistory` 一起看） */
+/** 归档总结：把 skipped 的规则列出来供模型决定改/删（配 `skipHistory` 一起看） */
 export function guiDangFuPanRuanMenJin(guiZeJi: readonly RuanMenJinGuiZe[] | null | undefined): RuanMenJinGuiZe[] {
   return (guiZeJi || []).filter((g) => g && g.status === 'skipped');
 }
