@@ -1,13 +1,13 @@
 {
-  "version": "0.4.19",
-  "notes": "WArmy 0.4.19 — acceptance-feedback round (10 items): first-run screens no longer allow background/text selection (inputs and mnemonic words stay copyable); the running-avatar effect is redesigned as a softer flowing-light sweep with diffusion ripple while staying clearly visible; the in-progress thinking/execution block now reliably stays expanded while running and collapses after the final reply; fixed chat viewport jumping to the top when sending a message / starting execution / final reply (top-pinning removed: follow-bottom or keep position, new user message always returns to bottom); the appearance-model list no longer mixes in bundled defaults (builtin-default / RobotExpressive) and filters by 2D/3D form; the model-folder hint sits on one line with a folder icon and switches text with the 2D/3D toggle; the redundant format list line is removed; the actions area is one hint line + folder icon + a 3-row scrolling grid (click toggles enable with selected state, right-click menu: trigger word / disable / delete), and the separate trigger-word section is removed; fixed 3D models being completely invisible (the GLB render branch never called renderer.render) and stale canvas stacking, and redrew the 2D character as a cuter chibi; the mimic sub-window settings button now uses the same icon as the main rail. 10 new UI strings in all 27 locales, 7 obsolete keys removed. Verified by the full suite: 78 gates + 6 real-machine feature probes x 3 consecutive clean rounds. The in-app updater downloads only changed blocks with unchanged SHA-256 verification.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.19/WArmy-Setup-0.4.19.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.19/WArmy-Setup-0.4.19.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.19/WArmy-Setup-0.4.19.exe.warmyblocks",
-  "sha256": "726e239c1c74b7ccc34efc65626bcaf44366e2e3b61e821b803f1e1cf676b498",
-  "size": 305288204,
+  "version": "0.4.20",
+  "notes": "WArmy 0.4.20 — acceptance-feedback round (10 items): first-run screens no longer allow background/text selection (inputs and mnemonic words stay copyable); the running-avatar effect is redesigned as a softer flowing-light sweep with diffusion ripple while staying clearly visible; the in-progress thinking/execution block now reliably stays expanded while running and collapses after the final reply; fixed chat viewport jumping to the top when sending a message / starting execution / final reply (top-pinning removed: follow-bottom or keep position, new user message always returns to bottom); the appearance-model list no longer mixes in bundled defaults (builtin-default / RobotExpressive) and filters by 2D/3D form; the model-folder hint sits on one line with a folder icon and switches text with the 2D/3D toggle; the redundant format list line is removed; the actions area is one hint line + folder icon + a 3-row scrolling grid (click toggles enable with selected state, right-click menu: trigger word / disable / delete), and the separate trigger-word section is removed; fixed 3D models being completely invisible (the GLB render branch never called renderer.render) and stale canvas stacking, and redrew the 2D character as a cuter chibi; the mimic sub-window settings button now uses the same icon as the main rail. 10 new UI strings in all 27 locales, 7 obsolete keys removed. Verified by the full suite: 78 gates + 6 real-machine feature probes x 3 consecutive clean rounds. The in-app updater downloads only changed blocks with unchanged SHA-256 verification.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.20/WArmy-Setup-0.4.20.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.20/WArmy-Setup-0.4.20.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.20/WArmy-Setup-0.4.20.exe.warmyblocks",
+  "sha256": "42e35e7608f75ee4828646904d7f5da619ba8945b68eb5bc94764ea720916fcf",
+  "size": 305292162,
   "mandatory": false,
-  "publishedAt": "2026-11-16T20:35:14.388Z",
+  "publishedAt": "2026-11-16T21:05:20.746Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.19"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.20"
 }

@@ -15964,7 +15964,7 @@ async function renderDashboard(host) {
         <!-- R8：组网设置：混合公网地址列表（IP + 域名）+ 刷新本机/公网地址 + 逐条检测 + 开关（检测通过才能打开） -->
         <!-- R63：同一张卡承接「组网 / 联网 / 服务器」语义；「主机模式 = 别人连你时可用的地址」默认折叠。 -->
         <div class="sheZhiSection sheZhiKa" id="wangLuoKa" data-sec="func">
-          <h2>${escapeHtml(tOr('net.cardTitle', '网络与主机'))} <button type="button" class="anNiuXiao wangLuoHelpAnNiu" id="anNiuWangLuoHelp" aria-label="${escapeHtml(t('net.helpTitle'))}" title="${escapeHtml(t('net.helpTitle'))}&#10;${escapeHtml(tOr('net.cardHint', '组网、端口、地址与主机模式都在这里。主机模式列出的是「别人连你时」可用的地址；当前版本只保存配置与检测事实，尚未把主机模式接入协议层。'))}&#10;${escapeHtml(t('net.tiShi'))}">?</button></h2>
+          <h2>${escapeHtml(tOr('net.cardTitle', '网络与主机'))} <button type="button" class="anNiuXiao wangLuoHelpAnNiu" id="anNiuWangLuoHelp" aria-label="${escapeHtml(t('net.helpTitle'))}" title="${escapeHtml(t('net.helpTitle'))}&#10;${escapeHtml(tOr('net.cardHint', '组网地址、主机模式、主机服务商与 DHT组网都在这里。主机模式按凭证接受其他设备连接（先检测地址、再生成凭证）；服务商只需名称 + 凭证；DHT组网默认加入，启动自动宣告公网地址。'))}&#10;${escapeHtml(t('net.tiShi'))}">?</button></h2>
           <div id="wangLuoHelpHe" class="jingYin wangLuoHelpHe yinCang">${escapeHtml(t('net.helpBody'))}</div>
           <div hidden>
           <div class="shiLiHang">
@@ -29069,16 +29069,28 @@ async function renderDashboard(host) {
     ];
   }
 
-  /* R218：对接标记（牛马/项目右键「对接」；勾选后出现在其他设备的对接设备分组） */
+  /* R218：对接标记（牛马/项目右键「对接」；勾选后出现在其他设备的对接设备分组）
+     R225 项3/4：我的牛马/项目默认不勾；联系人/群聊默认勾（缺省=勾，显式取消写 duijie:false）。 */
   function shiDuiJieGou(nav, sid) {
-    return !!(state.duijieSessions && state.duijieSessions[nav] && state.duijieSessions[nav][String(sid)]);
+    const it = state.duijieSessions && state.duijieSessions[nav] && state.duijieSessions[nav][String(sid)];
+    if (nav === 'externalChat' || nav === 'externalGroup') return it ? it.duijie !== false : true;
+    return !!it;
   }
   async function qieDuiJie(nav, sid, name) {
     state.duijieSessions = state.duijieSessions || {};
     state.duijieSessions[nav] = state.duijieSessions[nav] || {};
-    const it = state.duijieSessions[nav][String(sid)];
-    if (it) { delete state.duijieSessions[nav][String(sid)]; if (!Object.keys(state.duijieSessions[nav]).length) delete state.duijieSessions[nav]; }
-    else state.duijieSessions[nav][String(sid)] = { nav, sid: String(sid), name: String(name || sid).slice(0, 120), duijie: true, ts: Date.now() };
+    const key = String(sid);
+    const it = state.duijieSessions[nav][key];
+    const moRenKai = (nav === 'externalChat' || nav === 'externalGroup'); /* R225 项4：默认勾 */
+    const xianZai = moRenKai ? (it ? it.duijie !== false : true) : !!it;
+    const jiLu = { nav, sid: key, name: String(name || sid).slice(0, 120), duijie: !xianZai, ts: Date.now() };
+    if (xianZai && !moRenKai) {
+      delete state.duijieSessions[nav][key];
+      if (!Object.keys(state.duijieSessions[nav]).length) delete state.duijieSessions[nav];
+    } else {
+      /* 默认勾的导航：取消也要落盘（dujie:false），否则缺省语义会让它弹回勾选 */
+      state.duijieSessions[nav][key] = jiLu;
+    }
     try { await window.warmy.settingsSave?.({ duijieSessions: state.duijieSessions }); } catch { /* noop */ }
     renderList();
   }
@@ -29613,16 +29625,21 @@ async function renderDashboard(host) {
         },
       } : null,
     ].concat(projectItems).concat([
-      /* R218：项目「对接」/ 群聊「同步」勾选 */
+      /* R218：项目「对接」勾选（默认不勾）；R225 项4：群聊「对接」默认勾选 */
       g.type === 'internal'
         ? {
             biaoQian: tOr('ctx.duijie', '对接') + (shiDuiJieGou('internalGroup', g.id) ? ' ✓' : ''),
             onClick: () => void qieDuiJie('internalGroup', g.id, xianShiMing(g)),
           }
         : {
-            biaoQian: tOr('ctx.sync', '同步') + (shiTongBuGou(g.id) ? ' ✓' : ''),
-            onClick: () => void qieTongBu(g.id, xianShiMing(g)),
+            biaoQian: tOr('ctx.duijie', '对接') + (shiDuiJieGou('externalGroup', g.id) ? ' ✓' : ''),
+            onClick: () => void qieDuiJie('externalGroup', g.id, xianShiMing(g)),
           },
+      /* R218 的「同步」保留（群聊内容定时同步到在线我的设备） */
+      g.type === 'internal' ? null : {
+        biaoQian: tOr('ctx.sync', '同步') + (shiTongBuGou(g.id) ? ' ✓' : ''),
+        onClick: () => void qieTongBu(g.id, xianShiMing(g)),
+      },
       g.type === 'internal'
         ? {
             /* 与「我的牛马」里那项同一套语义：✓ 后缀（不是强调色），默认勾选 */
@@ -29780,6 +29797,11 @@ async function renderDashboard(host) {
         biaoQian: shiZhiDing(c.id) ? t('list.unpin') : t('list.pin'),
         checked: shiZhiDing(c.id),
         onClick: () => sheZhiDing(c.id, !shiZhiDing(c.id)),
+      },
+      /* R225 项4：联系人「对接」默认勾选（与群聊同口径） */
+      {
+        biaoQian: tOr('ctx.duijie', '对接') + (shiDuiJieGou('externalChat', c.id) ? ' ✓' : ''),
+        onClick: () => void qieDuiJie('externalChat', c.id, xianShiMing(c)),
       },
       /* R218：同步勾选（联系人；默认不勾；勾选后定时同步该会话内容到所有在线我的设备） */
       {

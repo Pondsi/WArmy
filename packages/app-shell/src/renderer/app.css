@@ -274,10 +274,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   fill: currentColor;
   pointer-events: none;
 }
-/* R126 任务4：同步箭头 viewBox 1024 占满全幅（无留白），视觉比周边 18px 图标大 → 单独收小 */
+/* R225 项1：链接图标（24 viewBox 描边）与邻座 18px 同尺寸 */
 .biaoTiLanDongZuoJi #anNiuTongBu .biaoTiLansvg {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
 }
 .biaoTiLanDongZuoJi button:hover { background: var(--hover); }
 .biaoTiLanDongZuoJi button:active { filter: brightness(0.92); }
