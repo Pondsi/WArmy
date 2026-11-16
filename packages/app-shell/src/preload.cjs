@@ -272,6 +272,9 @@ contextBridge.exposeInMainWorld('warmy', {
   mimicPanDuanMoXingMoRen: () => ipcRenderer.invoke('warmy:mimicPanDuanMoXingMoRen'),
   mimicWaiGuanShe: (p) => ipcRenderer.invoke('warmy:mimicWaiGuanShe', p),
   mimicModelDirOpen: () => ipcRenderer.invoke('warmy:mimicMoXingMuLuKai'),
+  /* R222 项8：打开动作文件夹 / 删除动作包（仅用户目录） */
+  mimicActionsDirOpen: () => ipcRenderer.invoke('warmy:mimicDongZuoMuLuKai'),
+  mimicActionDelete: (p) => ipcRenderer.invoke('warmy:mimicDongZuoShanChu', p),
   daKaiGongZuoMuLuKongZhiTai: (p) => ipcRenderer.invoke('warmy:daKaiGongZuoMuLuKongZhiTai', p),
   daKaiNiTaiSheZhi: () => ipcRenderer.invoke('warmy:daKaiNiTaiSheZhi'),
   onGoNiTaiSheZhi: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:goNiTaiSheZhi', h); return () => ipcRenderer.removeListener('warmy:goNiTaiSheZhi', h); },

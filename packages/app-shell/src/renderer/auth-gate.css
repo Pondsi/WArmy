@@ -996,6 +996,16 @@
 .warmyAuthCard.warmyAuthCardScene .warmyAuthRecoveryGrid,
 .warmyAuthCard.warmyAuthCardScene .warmyAuthPinyinToggle { -webkit-app-region: no-drag; }
 
+/* R222 项1：首启各界面（语言/条款/助记词/PIN/用户名）一律禁止框选背景与文字；
+   输入框与助记词词格保留可选（助记词需要手动复制）。原来的语言页单页规则被这里统一覆盖。 */
+.warmyAuthGate, .warmyAuthGate * {
+  -webkit-user-select: none; user-select: none;
+}
+.warmyAuthGate input, .warmyAuthGate textarea,
+.warmyAuthGate .warmyAuthMnemonic, .warmyAuthGate .warmyAuthMnemonic * {
+  -webkit-user-select: text; user-select: text;
+}
+
 /* R145 项1：首启语言页禁止框选文字；卡片空白区与上边缘可拖动，交互元素除外 */
 .warmyAuthFirstCard.warmyAuthLangCard,
 .warmyAuthFirstCard.warmyAuthLangCard * {

@@ -12373,7 +12373,8 @@ function mimicSaoRenWu(): Array<{ id: string; name: string; file: string; kind: 
   const out: Array<{ id: string; name: string; file: string; kind: string; json?: string }> = [];
   const roots: string[] = [];
   try { roots.push(path.join(app.getPath('userData'), 'mimic', 'characters')); } catch { /* noop */ }
-  try { roots.push(path.join(__dirname, 'renderer', 'mimic', 'characters')); } catch { /* noop */ }
+  /* R222 项5：不再扫随包目录 —— builtin-default.svg / RobotExpressive.glb 是内置预设（2D 默认/3D 机器人），
+     混进外部模型列表会让用户困惑；它们仍随包存在，内置预设直接引用。 */
   for (const root of roots) {
     let names: string[] = [];
     try { names = fs.readdirSync(root); } catch { continue; }
@@ -12880,6 +12881,27 @@ chuliIpc('warmy:mimicMoXingMuLuKai', async () => {
   try { fs.mkdirSync(dir, { recursive: true }); } catch { /* noop */ }
   await shell.openPath(dir);
   return { ok: true, dir };
+});
+/* R222 项8：打开动作文件夹 */
+chuliIpc('warmy:mimicDongZuoMuLuKai', async () => {
+  const dir = path.join(app.getPath('userData'), 'mimic', 'actions');
+  try { fs.mkdirSync(dir, { recursive: true }); } catch { /* noop */ }
+  await shell.openPath(dir);
+  return { ok: true, dir };
+});
+/* R222 项8：删除动作包（只允许用户目录内的动作；内置动作删不到 ⇒ UI 提示不可删） */
+chuliIpc('warmy:mimicDongZuoShanChu', async (_e, p0?: { id?: string }) => {
+  try {
+    const id = String(p0?.id || '').trim();
+    if (!id || !/^[\w.\-]{1,64}$/.test(id)) return { ok: false, error: 'bad-id' };
+    const root = path.resolve(path.join(app.getPath('userData'), 'mimic', 'actions'));
+    const dir = path.resolve(path.join(root, id));
+    if (dir === root || !dir.startsWith(root + path.sep)) return { ok: false, error: 'outside-actions-dir' };
+    if (!fs.existsSync(dir)) return { ok: false, error: 'not-found' };
+    fs.rmSync(dir, { recursive: true, force: true });
+    try { audit?.log('mimic.action-deleted', { id }); } catch { /* noop */ }
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:mimicDongZuoCiQu', () => {
   try {

@@ -5475,12 +5475,7 @@ async function langDuWenBen(text, btnEl) {
       const stL = chatGunOf(sidLiu);
       /* R154 项13 修正: 暂停期不因新流式帧解除暂停/恢复跟随；只有用户滚回底部或点「回到底部」才恢复 */
       if (!chatRebuilding && !stL.pause) sheZhiGenDi(sidLiu, true);
-      /** 未勾选：限制1 —— 本次回复第一条内容顶部对齐聊天框顶部（首帧设锚点，后续流式更新保持） */
-      if (!genDiLiu && !stL.pause) {
-        stL.anchorEl = kuai.querySelector('.siKaoKuai, .zhongJianKa, .bubble') || kuai;
-        sheZhiChatGunDong(heZi, chatAnchorTop(heZi, stL), false);
-        baoHuTop = null;
-      }
+      /* R222 项4：废除限制1 钉顶 —— 新回复首帧恢复跟底（上一行），不再把内容钉到顶部（修「滚动到上面」抖动） */
     }
     /**
      * **悬停显示本轮模型路由**（产品要求）：中途的思考与回复都要能看到
@@ -5578,11 +5573,9 @@ async function langDuWenBen(text, btnEl) {
        *  未暂停：勾选贴底；未勾选把「本次回复第一条内容」顶部钉在聊天框顶部（限制1）。 */
       if (stL2.pause) {
         if (baoHuTop != null) sheZhiChatGunDong(heZi, baoHuTop, false);
-      } else if (genDiLiu) {
+      } else if (chatGenDi(sidLiu)) {
+        /* R222 项4：跟随底部 ⇒ 贴底；不跟随 ⇒ 保持位置（不再钉顶） */
         sheZhiChatGunDong(heZi, heZi.scrollHeight, false);
-        baoHuTop = null;
-      } else if (stL2.anchorEl) {
-        sheZhiChatGunDong(heZi, chatAnchorTop(heZi, stL2), false);
         baoHuTop = null;
       } else if (baoHuTop != null) {
         sheZhiChatGunDong(heZi, baoHuTop, false);
@@ -5600,10 +5593,8 @@ async function langDuWenBen(text, btnEl) {
     try { guiNaXingDong(heZi, true); } catch { /* noop */ }
     if (stL2.pause) {
       if (baoHuTop != null) sheZhiChatGunDong(heZi, Math.min(baoHuTop, Math.max(0, heZi.scrollHeight - heZi.clientHeight)), false);
-    } else if (genDiLiu) {
+    } else if (chatGenDi(sidLiu)) {
       sheZhiChatGunDong(heZi, heZi.scrollHeight, false);
-    } else if (stL2.anchorEl) {
-      sheZhiChatGunDong(heZi, chatAnchorTop(heZi, stL2), false);
     } else if (baoHuTop != null) {
       sheZhiChatGunDong(heZi, Math.min(baoHuTop, Math.max(0, heZi.scrollHeight - heZi.clientHeight)), false);
     }
@@ -5915,6 +5906,27 @@ async function langDuWenBen(text, btnEl) {
         if (i < states.length) d.open = states[i];
       });
     }
+    /* R222 项3：进行中「思考与执行」默认展开（修「有时没展开」）；最终回复生成后默认折叠。
+       用户本轮显式展开/折叠（guoChengKai/guoChengBi，新轮开始已清）仍是最高优先。 */
+    try {
+      const sidZt = String((state.selectedChat && state.selectedChat.id) || '');
+      const kaiZt = guoChengKai.get(sidZt);
+      const biZt = guoChengBi.get(sidZt);
+      const zuiHouThem = thems.length ? thems[thems.length - 1] : null;
+      for (const n of [...thems, ...(liuShiNode ? [liuShiNode] : [])]) {
+        const lieZt = n.querySelector('.guoChengLie');
+        if (!lieZt) continue;
+        const shiLiu = n === liuShiNode;
+        for (const d of lieZt.querySelectorAll(':scope > details.guoChengDuan')) {
+          const keyZt = String(d.dataset.key || '');
+          if (zaiPao && shiLiu) {
+            d.open = (biZt && biZt.has(keyZt)) ? false : true;
+          } else if (!zaiPao && n === zuiHouThem) {
+            if (!(kaiZt && kaiZt.has(keyZt))) d.open = false;
+          }
+        }
+      }
+    } catch { /* noop */ }
     if (baoHuTop != null) {
       chatZiGunTop = Math.min(baoHuTop, Math.max(0, heZi.scrollHeight - heZi.clientHeight));
       heZi.scrollTop = chatZiGunTop;
@@ -7442,8 +7454,22 @@ async function langDuWenBen(text, btnEl) {
     /** 是否跟随底部：**只由用户滚动/下箭头/自动滚动决定**，新内容不改变它 */
     if (diYiCiKai) sheZhiGenDi(sid, true);
     const genDi = chatZhuiDi(sid);
-    /** 勾选「滚动记录」= 滚到最新（底部）；未勾选 = 限制1/限制2 的顶部对齐 */
+    /** 勾选「滚动记录」= 滚到最新（底部）；未勾选 = 不自动滚动（保持位置，不再钉顶） */
     const zhuiDi = autoScrollChat;
+    /* R222 项4：用户发出新消息 ⇒ 永远回到底部并恢复跟随（修复「发新对话/开始执行/最终回复时滚动到上面」的抖动） */
+    let yongHuXinFa = false;
+    try {
+      let zuiYongTs = 0;
+      for (const m of xiaoXi) { if (m && m.role === 'wo' && !m.system && Number(m.ts) > zuiYongTs) zuiYongTs = Number(m.ts); }
+      if (youXinNeiRong && !o.keepScroll && zuiYongTs > Number(st.lastUserTs || 0)) {
+        st.lastUserTs = zuiYongTs;
+        yongHuXinFa = true;
+        sheZhiGenDi(sid, true);
+        st.pause = '';
+        /* R222 项3：新一轮开始 ⇒ 清上一轮的手动展开/折叠记录（本轮进行中默认展开） */
+        guoChengKai.delete(sid); guoChengBi.delete(sid);
+      }
+    } catch { /* noop */ }
     /**
      * R130 滚动规则（用户口径，取代 R129 的"新内容对齐新内容顶部"）：
      *  · 新内容（用户/牛马新回复、思考与执行、中间回复、最终回复、系统提示）触发自动滚动；
@@ -7473,15 +7499,12 @@ async function langDuWenBen(text, btnEl) {
       const zuiEl = zuiTs
         ? heZi.querySelector('.xiaoXi[data-ts="' + String(zuiTs).replace(/"/g, '\\"') + '"]')
         : null;
-      if (zhuiDi) {
-        /** 勾选 = 滚到最新内容（底部） */
+      if (zhuiDi || yongHuXinFa || genDi) {
+        /** R222 项4：勾选 / 用户刚发消息 / 正在跟随底部 ⇒ 滚到底；不再钉顶（修「滚动到上面」抖动） */
         gunDaoZuiXin();
-      } else if (wanCheng) {
-        /** 限制2：最终回复的开头第一行对齐聊天框顶部 */
-        gunDaoMaoDing(huiFuShouGeEl(heZi, zuiEl) || zuiEl);
       } else {
-        /** 限制1：本次回复第一条内容的开头第一行对齐聊天框顶部（流式气泡优先） */
-        gunDaoMaoDing(huiFuShouGeEl(heZi, zuiEl) || zuiEl);
+        /** 不跟随（用户上翻看历史）：保持位置，绝不钉顶/抢视口 */
+        if (prevScrollTop != null) sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
       }
     } else {
       /**
@@ -16393,37 +16416,28 @@ async function renderDashboard(host) {
               <label style="display:flex;align-items:center;gap:4px"><input type="radio" name="mimicXingTai" value="2d" id="mimicXt2d"/> ${escapeHtml(tOr('mimic.xt2d', '2D 形态'))}</label>
               <label style="display:flex;align-items:center;gap:4px"><input type="radio" name="mimicXingTai" value="3d" id="mimicXt3d"/> ${escapeHtml(tOr('mimic.xt3d', '3D 形态'))}</label>
             </div>
-            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('mimic.characterHint', '预设形象与你放进模型文件夹的形象都在这里，点选即用；也支持手捏参数。'))}</div>
+            <div class="jingYin" style="margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span id="mimicMoXingTiShi">${escapeHtml(tOr('mimic.characterHint2d', '把模型放进 resources/mimic/characters/ 会被自动识别（静态图 / 精灵图 / Live2D）。'))}</span>
+              <button class="anNiuXiao" id="anNiuMimicMoXingMuLu" title="${escapeHtml(tOr('mimic.openModelDir', '打开模型文件夹'))}" style="width:24px;height:24px;padding:0;display:inline-flex;align-items:center;justify-content:center;flex:none">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>
+              </button>
+            </div>
             <!-- 形象网格：预设 + 模型文件夹（3 行滚动） -->
             <div id="mimicNeiZhiJi" class="mimicMoXingKu"></div>
             <!-- 手捏参数 -->
             <div id="mimicShouNie" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
-            <!-- 格式与模型目录 -->
-            <div class="jingYin" style="margin-top:8px;line-height:1.7;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span>${escapeHtml(tOr('mimic.fmtDir2', '把模型放入仓库中将自动加载为可用模型（png / webp / gif / svg / 精灵图 JSON / Live2D / .glb / .gltf）。'))}</span>
-              <button class="anNiuXiao" id="anNiuMimicMoXingMuLu" title="${escapeHtml(tOr('mimic.openModelDir', '打开模型文件夹'))}" style="width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center">
-                <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>
-              </button>
-            </div>
           </div>
 
           <div class="field" style="margin-top:8px">
             <label>${escapeHtml(tOr('mimic.actions', '动作模型'))}</label>
-            <!-- R219：动作模型网格（3 行滚动）：点击=启用/禁用切换（默认启用），右键=设置触发词 -->
-            <div id="mimicDongZuoJi" class="mimicMoXingKu">${escapeHtml(tOr('mimic.actionsEmpty', '未发现动作。把动作放进模型文件夹的动作目录后会出现在这里。'))}</div>
-            <div class="jingYin" style="margin-top:6px">${escapeHtml(tOr('mimic.actionsHint2', '点选=启用（默认全部启用），再点=禁用；右键某个动作可设置它的触发词。'))}</div>
-          </div>
-
-          <!-- 动作触发词（词 → 动作）：在动作模型下方 -->
-          <div class="field" style="margin-top:8px">
-            <label>${escapeHtml(tOr('mimic.actionTriggers', '动作触发词'))}</label>
-            <div class="jingYin">${escapeHtml(tOr('mimic.actionTriggersHint', '语音或文字里说到某个词就会播放对应动作（如「摇尾巴」→ 摇尾）。'))}</div>
-            <div id="mimicDongZuoCiJi" class="mgrMoXingJi" style="margin:4px 0"></div>
-            <div class="shiLiHang" style="gap:6px;align-items:center">
-              <input id="mimicDzCiRu" style="flex:1;min-width:90px" maxlength="16" placeholder="${escapeHtml(tOr('mimic.actionCiPh', '触发词，如：摇尾巴'))}"/>
-              <select id="mimicDzDongZuo" style="min-width:120px"></select>
-              <button class="anNiuXiao" id="mimicDzTianJia">${escapeHtml(tOr('common.add', '添加'))}</button>
+            <!-- R222 项8：提示合并一行 + 文件夹图标；网格显示全部动作（3 行滚动）；点击=启用/禁用，右键=触发词/停用/删除；独立触发词区已删 -->
+            <div class="jingYin" style="margin:4px 0 6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span>${escapeHtml(tOr('mimic.actionsHintLine', '把动作放进 resources/mimic/actions/ 后在此启用。'))}</span>
+              <button class="anNiuXiao" id="anNiuMimicDongZuoMuLu" title="${escapeHtml(tOr('mimic.openActionsDir', '打开动作文件夹'))}" style="width:24px;height:24px;padding:0;display:inline-flex;align-items:center;justify-content:center;flex:none">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>
+              </button>
             </div>
+            <div id="mimicDongZuoJi" class="mimicMoXingKu">${escapeHtml(tOr('mimic.actionsEmpty', '未发现动作。把动作放进模型文件夹的动作目录后会出现在这里。'))}</div>
           </div>
 
           <!-- 音视频设备是**全局设置**（设置→功能→音视频）：拟态、聊天麦克风与喇叭都用那一套。 -->
@@ -17625,37 +17639,48 @@ async function renderDashboard(host) {
           ];
           const DONG_ZUO_ID = { '呼吸': 'huXi', '眨眼': 'zhaYan', '摇尾': 'yaoWei', '嘟嘴': 'duZui', '开心': 'kaiXin', '招手': 'zhaoshou', '点头': 'dianTou', '摇头': 'yaoTou', '歪头': 'waiTou', '蹦跳': 'bengTiao', '打瞌睡': 'keShui', '害羞': 'haiXiu', '生气': 'shengQi', '委屈': 'weiQu', '惊讶': 'jingYa', '思考': 'siKao', '转圈': 'zhuanQuan', '跳舞': 'tiaoWu', '鼓掌': 'guZhang', '挥手': 'huiShou', '欢迎': 'huanYing', '趴下': 'paXia', '起立': 'qiLi', '伸懒腰': 'shenLan', '打哈欠': 'daHaQian', '疑惑': 'yiHuo', '打滚': 'daGun', '睡觉': 'shuiJiao', '伸爪': 'shenZhua' };
           /** 2D 预览 SVG（与 mimic-render.js 同款） */
+          /* R222 项9：预览同步 mimic-render.js 新 Q 版造型（大头小身 + 高光眼睛 + 腮红 + w 嘴） */
           function hua2DSvg(a) {
             const zhu = a.zhuSe || '#f4a460', fu = a.fuSe || '#e8e0d0', yanSe = a.yanSe || '#2b2b2b', hong = a.hongSe || '#e05a5a';
+            const er = a.erDuo !== false, wei = a.weiBa !== false;
             const yan = {
-              yuan: '<circle cx="86" cy="112" r="7" fill="' + yanSe + '"/><circle cx="134" cy="112" r="7" fill="' + yanSe + '"/><circle cx="89" cy="109" r="2.4" fill="#fff"/><circle cx="137" cy="109" r="2.4" fill="#fff"/>',
-              xiao: '<circle cx="87" cy="112" r="5.5" fill="' + yanSe + '"/><circle cx="133" cy="112" r="5.5" fill="' + yanSe + '"/><circle cx="89.5" cy="110" r="2" fill="#fff"/><circle cx="135.5" cy="110" r="2" fill="#fff"/>',
-              qiao: '<path d="M80 116 q7 -9 14 0 q-3 2 -7 2 q-4 0 -7 -2z" fill="' + yanSe + '"/><path d="M126 116 q7 -9 14 0 q-3 2 -7 2 q-4 0 -7 -2z" fill="' + yanSe + '"/>',
-              hei: '<circle cx="88" cy="112" r="8" fill="' + yanSe + '"/><circle cx="132" cy="112" r="8" fill="' + yanSe + '"/><circle cx="91" cy="108" r="2.6" fill="#fff"/><circle cx="135" cy="108" r="2.6" fill="#fff"/>',
-              xing: '<path d="M88 103 l3 6 6 1 -4 4 1 6 -6 -3 -6 3 1 -6 -4 -4 6 -1z" fill="' + yanSe + '"/><path d="M132 103 l3 6 6 1 -4 4 1 6 -6 -3 -6 3 1 -6 -4 -4 6 -1z" fill="' + yanSe + '"/>',
+              yuan: '<circle cx="86" cy="96" r="8" fill="' + yanSe + '"/><circle cx="134" cy="96" r="8" fill="' + yanSe + '"/><circle cx="83.5" cy="93" r="2.8" fill="#fff"/><circle cx="131.5" cy="93" r="2.8" fill="#fff"/><circle cx="88" cy="99" r="1.2" fill="#fff" opacity=".8"/><circle cx="136" cy="99" r="1.2" fill="#fff" opacity=".8"/>',
+              xiao: '<circle cx="86" cy="96" r="6" fill="' + yanSe + '"/><circle cx="134" cy="96" r="6" fill="' + yanSe + '"/><circle cx="84" cy="94" r="2" fill="#fff"/><circle cx="132" cy="94" r="2" fill="#fff"/>',
+              qiao: '<path d="M78 97 q8 -9 16 0" stroke="' + yanSe + '" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M126 97 q8 -9 16 0" stroke="' + yanSe + '" stroke-width="3" fill="none" stroke-linecap="round"/>',
+              hei: '<circle cx="86" cy="96" r="9.5" fill="' + yanSe + '"/><circle cx="134" cy="96" r="9.5" fill="' + yanSe + '"/><circle cx="83" cy="92.5" r="3.2" fill="#fff"/><circle cx="131" cy="92.5" r="3.2" fill="#fff"/><circle cx="89" cy="99" r="1.5" fill="#fff" opacity=".85"/><circle cx="137" cy="99" r="1.5" fill="#fff" opacity=".85"/>',
+              xing: '<path d="M86 87 l2.6 5.4 6 .8 -4.4 4.2 1.1 5.9 -5.3 -2.9 -5.3 2.9 1.1 -5.9 -4.4 -4.2 6 -.8z" fill="' + yanSe + '"/><path d="M134 87 l2.6 5.4 6 .8 -4.4 4.2 1.1 5.9 -5.3 -2.9 -5.3 2.9 1.1 -5.9 -4.4 -4.2 6 -.8z" fill="' + yanSe + '"/>',
             };
             const zui = {
-              xiao: '<path d="M104 136 q6 5 12 0" stroke="' + hong + '" stroke-width="2.4" fill="none" stroke-linecap="round"/>',
-              wei: '<path d="M100 137 q10 8 20 0 q-3 -2 -6 -2 q-4 0 -8 2 q-3 -5 -6 -3z" fill="' + hong + '"/>',
-              kai: '<ellipse cx="110" cy="138" rx="8" ry="5" fill="' + hong + '"/><path d="M102 137 q8 4 16 0 q-8 -4 -16 0z" fill="#fff"/>',
-              qiao: '<path d="M102 138 q8 -6 16 0 q-1 3 -4 4 q-4 1 -8 0 q-3 -1 -4 -4z" fill="' + hong + '"/>',
-              ping: '<line x1="100" y1="139" x2="120" y2="139" stroke="' + hong + '" stroke-width="2.4" stroke-linecap="round"/>',
+              xiao: '<path d="M102 118 q4 5 8 0 q4 5 8 0" stroke="' + hong + '" stroke-width="2.2" fill="none" stroke-linecap="round"/>',
+              wei: '<path d="M101 116 q9 10 18 0 q-9 3 -18 0z" fill="' + hong + '"/><ellipse cx="110" cy="121" rx="4" ry="2.4" fill="#ff9d9d"/>',
+              kai: '<ellipse cx="110" cy="120" rx="7" ry="5.5" fill="' + hong + '"/><ellipse cx="110" cy="123" rx="4" ry="2.5" fill="#ff9d9d"/>',
+              qiao: '<path d="M103 118 q8 5 15 -2" stroke="' + hong + '" stroke-width="2.2" fill="none" stroke-linecap="round"/>',
+              ping: '<line x1="102" y1="119" x2="118" y2="119" stroke="' + hong + '" stroke-width="2.2" stroke-linecap="round"/>',
             };
             return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">' +
-              (a.erDuo !== false ? '<ellipse cx="52" cy="78" rx="14" ry="20" fill="' + fu + '" transform="rotate(-18 52 78)"/><ellipse cx="168" cy="78" rx="14" ry="20" fill="' + fu + '" transform="rotate(18 168 78)"/>' : '') +
-              '<ellipse cx="110" cy="118" rx="62" ry="58" fill="' + zhu + '"/>' +
-              '<ellipse cx="110" cy="96" rx="46" ry="40" fill="' + fu + '"/>' +
-              '<ellipse cx="110" cy="150" rx="54" ry="30" fill="' + zhu + '" opacity=".92"/>' +
+              (wei ? '<path d="M150 170 q30 4 36 -16 q5 -18 -16 -16 q-10 1 -12 8" fill="' + fu + '"/>' : '') +
+              '<ellipse cx="110" cy="164" rx="40" ry="30" fill="' + zhu + '"/>' +
+              '<ellipse cx="110" cy="170" rx="26" ry="20" fill="' + fu + '"/>' +
+              '<ellipse cx="88" cy="194" rx="12" ry="7" fill="' + zhu + '"/><ellipse cx="132" cy="194" rx="12" ry="7" fill="' + zhu + '"/>' +
+              (er ? '<path d="M60 64 Q50 14 96 40 Q74 46 66 66z" fill="' + zhu + '"/><path d="M64 56 Q60 28 88 44 Q74 48 68 60z" fill="' + fu + '"/><path d="M160 64 Q170 14 124 40 Q146 46 154 66z" fill="' + zhu + '"/><path d="M156 56 Q160 28 132 44 Q146 48 152 60z" fill="' + fu + '"/>' : '') +
+              '<circle cx="110" cy="96" r="56" fill="' + zhu + '"/>' +
+              '<ellipse cx="92" cy="66" rx="16" ry="9" fill="#ffffff" opacity=".16" transform="rotate(-18 92 66)"/>' +
+              '<ellipse cx="110" cy="114" rx="32" ry="24" fill="' + fu + '" opacity=".9"/>' +
               (yan[a.yanXing] || yan.yuan) +
-              '<ellipse cx="110" cy="102" rx="5" ry="3.4" fill="' + hong + '" opacity=".55"/>' +
+              '<circle cx="70" cy="112" r="7" fill="' + hong + '" opacity=".4"/><circle cx="150" cy="112" r="7" fill="' + hong + '" opacity=".4"/>' +
+              '<ellipse cx="110" cy="108" rx="4" ry="3" fill="' + hong + '"/>' +
               (zui[a.zuiXing] || zui.xiao) +
-              (a.weiBa !== false ? '<path d="M172 168 q24 2 30 -14 q6 -16 -14 -14 q-8 1 -10 6z" fill="' + fu + '"/>' : '') +
               '</svg>';
           }
           let wg = {};
           function cun() { try { window.warmy.mimicWaiGuanShe?.(wg); } catch { /* noop */ } }
           function hua() {
             const xt = String(wg.xingTai || '2d');
+            /* R222 项6：提示文案随 2D/3D 切换（文件夹按钮同一行，始终可用） */
+            const tiShi = $('mimicMoXingTiShi');
+            if (tiShi) tiShi.textContent = xt === '3d'
+              ? tOr('mimic.characterHint3d', '把模型放进 resources/mimic/characters/ 会被自动识别（.glb / .gltf）。')
+              : tOr('mimic.characterHint2d', '把模型放进 resources/mimic/characters/ 会被自动识别（静态图 / 精灵图 / Live2D）。');
             const r2 = document.querySelector('input[name="mimicXingTai"][value="' + xt + '"]');
             if (r2) r2.checked = true;
             const ji = $('mimicNeiZhiJi');
@@ -17708,7 +17733,7 @@ async function renderDashboard(host) {
                 if (!rc || !rc.ok || !ji2) return;
                 /* R220：hua() 可能重入 —— 先清旧外部卡，防止重复追加 */
                 ji2.querySelectorAll('[data-mimic-ext]').forEach((el) => el.remove());
-                (rc.items || []).forEach((x) => {
+                (rc.items || []).filter((x) => xt === '3d' ? (x.kind === 'glb' || x.kind === 'vrm') : (x.kind !== 'glb' && x.kind !== 'vrm')).forEach((x) => {
                   const xuan = String(wg.extId || '') === x.id;
                   const ka = document.createElement('span');
                   ka.className = 'mimicMoXingKa' + (xuan ? ' xuan' : '');
@@ -17727,43 +17752,11 @@ async function renderDashboard(host) {
                 });
               }).catch(() => { /* noop */ });
             } catch { /* noop */ }
-            huaDongZuoCi();
           }
           document.querySelectorAll('input[name="mimicXingTai"]').forEach((r) => {
             r.onchange = () => { wg.xingTai = r.value; delete wg.modelId; delete wg.imgSrc; delete wg.extId; delete wg.kind; delete wg.sheetJson; cun(); hua(); };
           });
-          async function huaDongZuoCi() {
-            const ji = $('mimicDongZuoCiJi');
-            const xuan = $('mimicDzDongZuo');
-            if (xuan) xuan.innerHTML = Object.keys(DONG_ZUO_ID).map((m) => '<option value="' + escapeHtml(DONG_ZUO_ID[m]) + '">' + escapeHtml(m) + '</option>').join('');
-            if (!ji) return;
-            let ci = {};
-            try { const r = await window.warmy.mimicDongZuoCiQu?.(); ci = (r && r.ci) || {}; } catch { ci = {}; }
-            ji.innerHTML = Object.keys(ci).length
-              ? Object.keys(ci).map((c) => '<span class="moXingChip">' + escapeHtml(c) + ' → ' + escapeHtml(ci[c] || '') + '<button class="x" data-mimic-dz-del="' + escapeHtml(c) + '" title="' + escapeHtml(tOr('common.remove', '移除')) + '">×</button></span>').join('')
-              : '<span class="jingYin">' + escapeHtml(tOr('mimic.actionCiEmpty', '还没有触发词。')) + '</span>';
-            ji.querySelectorAll('[data-mimic-dz-del]').forEach((b) => {
-              b.onclick = async () => {
-                const c = b.getAttribute('data-mimic-dz-del');
-                delete ci[c];
-                try { await window.warmy.mimicDongZuoCiShe?.({ ci }); } catch { /* noop */ }
-                huaDongZuoCi();
-              };
-            });
-          }
-          window.__huaDongZuoCi = huaDongZuoCi;
-          $('mimicDzTianJia')?.addEventListener('click', async () => {
-            const ciRu = $('mimicDzCiRu');
-            const dz = $('mimicDzDongZuo');
-            const c = String((ciRu && ciRu.value) || '').trim();
-            if (!c || !dz || !dz.value) return;
-            let biao = {};
-            try { const r = await window.warmy.mimicDongZuoCiQu?.(); biao = (r && r.ci) || {}; } catch { biao = {}; }
-            biao[c] = dz.value;
-            try { await window.warmy.mimicDongZuoCiShe?.({ ci: biao }); } catch { /* noop */ }
-            if (ciRu) ciRu.value = '';
-            huaDongZuoCi();
-          });
+          /* R222 项8：独立触发词区已删（触发词改由动作网格右键菜单设置）；旧渲染/添加绑定随之移除 */
           (async () => {
             try { const r = await window.warmy.settingsGet?.(); wg = (r && r.settings && r.settings.mimicAppearance) || {}; } catch { wg = {}; }
             if (!wg.xingTai) wg.xingTai = '2d';
@@ -18065,13 +18058,13 @@ async function renderDashboard(host) {
         huaZhuoPeiZhi();
         window.__huaZhuoPeiZhi = huaZhuoPeiZhi;
         // 人物模型 / 动作模型：从磁盘扫描（自动识别用户放进目录的文件）
-        void (async () => {
+        /* R222 项8：动作网格 = 命名函数（右键删除后可刷新）；点击=启用/禁用（选中效果），右键=触发词/停用/删除 */
+        async function huaDongZuoWangGe() {
           try {
             const ra = await window.warmy.mimicActions?.();
             const he = $('mimicDongZuoJi');
             if (he && ra && ra.ok) {
               const items = ra.items || [];
-              /* R219：动作模型格子化 —— 点击切换启用/禁用（默认启用=选中），右键设触发词 */
               he.innerHTML = items.length
                 ? items.map((x) => {
                     const pei = mimicDongZuoPeiZhi[x.id] || {};
@@ -18081,34 +18074,72 @@ async function renderDashboard(host) {
                   }).join('')
                 : escapeHtml(tOr('mimic.actionsEmpty', '未发现动作。把动作放进模型文件夹的动作目录后会出现在这里。'));
               he.querySelectorAll('[data-mimic-act]').forEach((ka) => {
-                ka.onclick = () => {
-                  const id = String(ka.getAttribute('data-mimic-act') || '');
+                const id = String(ka.getAttribute('data-mimic-act') || '');
+                const xiang = items.find((x) => x.id === id);
+                const sheQiYong = (qi) => {
                   const pei = mimicDongZuoPeiZhi[id] || {};
-                  const now = pei.enabled !== false;
-                  try {
-                    mimicDongZuoPeiZhi = Object.assign({}, mimicDongZuoPeiZhi, {
-                      [id]: { enabled: !now, trigger: String(pei.trigger || '') },
-                    });
-                    window.warmy.settingsSave?.({ mimicActions: mimicDongZuoPeiZhi });
-                  } catch { /* noop */ }
-                  ka.classList.toggle('xuan', !now);
+                  mimicDongZuoPeiZhi = Object.assign({}, mimicDongZuoPeiZhi, { [id]: { enabled: qi, trigger: String(pei.trigger || '') } });
+                  try { window.warmy.settingsSave?.({ mimicActions: mimicDongZuoPeiZhi }); } catch { /* noop */ }
+                  ka.classList.toggle('xuan', qi);
                 };
-                ka.oncontextmenu = async (e) => {
+                ka.onclick = () => {
+                  const pei = mimicDongZuoPeiZhi[id] || {};
+                  sheQiYong(pei.enabled === false);
+                };
+                ka.oncontextmenu = (e) => {
                   e.preventDefault();
-                  const id = String(ka.getAttribute('data-mimic-act') || '');
-                  const c = await uiPrompt(tOr('mimic.actionCiPh', '触发词，如：摇尾巴'), '');
-                  const ciRu = String(c || '').trim();
-                  if (!ciRu) return;
-                  let biao = {};
-                  try { const r = await window.warmy.mimicDongZuoCiQu?.(); biao = (r && r.ci) || {}; } catch { biao = {}; }
-                  biao[ciRu] = id;
-                  try { await window.warmy.mimicDongZuoCiShe?.({ ci: biao }); } catch { /* noop */ }
-                  try { (window.__huaDongZuoCi || (() => {}))(); } catch { /* noop */ }
+                  const jiu = document.getElementById('mimicActCaiDan'); if (jiu) jiu.remove();
+                  const pei = mimicDongZuoPeiZhi[id] || {};
+                  const qiYong = pei.enabled !== false;
+                  const cai = document.createElement('div');
+                  cai.id = 'mimicActCaiDan';
+                  cai.style.cssText = 'position:fixed;z-index:9999;min-width:128px;background:var(--card,#fff);border:1px solid var(--line,#ddd);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:4px;display:flex;flex-direction:column;gap:2px';
+                  cai.style.left = Math.min(e.clientX, window.innerWidth - 150) + 'px';
+                  cai.style.top = Math.min(e.clientY, window.innerHeight - 130) + 'px';
+                  const xiangMu = (biao, weiXian, fn) => {
+                    const b = document.createElement('button');
+                    b.textContent = biao;
+                    b.style.cssText = 'border:none;background:transparent;text-align:left;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:' + (weiXian ? 'var(--danger,#c0392b)' : 'var(--ink,#222)');
+                    b.onmouseenter = () => { b.style.background = 'var(--hover,rgba(0,0,0,.06))'; };
+                    b.onmouseleave = () => { b.style.background = 'transparent'; };
+                    b.onclick = async () => { cai.remove(); await fn(); };
+                    cai.appendChild(b);
+                  };
+                  xiangMu(tOr('mimic.actMenuTrigger', '触发词'), false, async () => {
+                    let biao = {};
+                    try { const r = await window.warmy.mimicDongZuoCiQu?.(); biao = (r && r.ci) || {}; } catch { biao = {}; }
+                    const jiuCi = Object.keys(biao).find((c) => biao[c] === id) || '';
+                    const c = await uiPrompt(tOr('mimic.actionCiPh', '触发词，如：摇尾巴'), jiuCi);
+                    const ciRu = String(c == null ? '' : c).trim();
+                    for (const c0 of Object.keys(biao)) { if (biao[c0] === id) delete biao[c0]; }
+                    if (ciRu) biao[ciRu] = id;
+                    try { await window.warmy.mimicDongZuoCiShe?.({ ci: biao }); } catch { /* noop */ }
+                  });
+                  xiangMu(qiYong ? tOr('mimic.actMenuDisable', '停用') : tOr('mimic.actMenuEnable', '启用'), false, async () => { sheQiYong(!qiYong); });
+                  xiangMu(tOr('mimic.actMenuDelete', '删除'), true, async () => {
+                    const mingCheng = String((xiang && xiang.name) || id);
+                    const que = await uiConfirm(tOr('mimic.actDeleteConfirm', '确定删除动作「{name}」？其模型文件将被移除。').replace('{name}', mingCheng));
+                    if (!que) return;
+                    try {
+                      const r = await window.warmy.mimicActionDelete?.({ id });
+                      if (r && r.ok) { void huaDongZuoWangGe(); }
+                      else { uiAlert(tOr('mimic.actDeleteBundled', '内置动作不可删除。')); }
+                    } catch { /* noop */ }
+                  });
+                  document.body.appendChild(cai);
+                  const guan = (ev) => { if (!cai.contains(ev.target)) { cai.remove(); document.removeEventListener('pointerdown', guan, true); } };
+                  setTimeout(() => document.addEventListener('pointerdown', guan, true), 0);
                 };
               });
             }
           } catch { /* noop */ }
-        })();
+        }
+        window.__huaDongZuoWangGe = huaDongZuoWangGe;
+        void huaDongZuoWangGe();
+        /* R222 项8：打开动作文件夹 */
+        $('anNiuMimicDongZuoMuLu')?.addEventListener('click', () => {
+          try { window.warmy.mimicActionsDirOpen?.(); } catch { /* noop */ }
+        });
 
 
       })();
@@ -27109,8 +27140,17 @@ async function renderDashboard(host) {
     nameInput?.addEventListener('input', syncCreate);
     if (isProject) {
       const envBar = $('erHeYiDevEnv');
+      /* R222 项12：无可用容器（或未探测）⇒ 容器选项置灰不可选 */
+      const eyRongBtn = envBar?.querySelector('[data-erheyi-devenv="container"]');
+      if (eyRongBtn && !rongQiKeXuan()) {
+        eyRongBtn.disabled = true;
+        eyRongBtn.style.opacity = '0.45';
+        eyRongBtn.style.cursor = 'not-allowed';
+        eyRongBtn.title = tOr('container.devEnv.noneReady', '没有可用容器：请先在 设置 → 功能 → 容器 探测并启动容器。');
+      }
       envBar?.querySelectorAll('[data-erheyi-devenv]').forEach((b) => {
         b.onclick = () => {
+          if (b.disabled) return;
           devEnv = String(b.getAttribute('data-erheyi-devenv') || '');
           envBar.querySelectorAll('[data-erheyi-devenv]').forEach((x) => x.classList.toggle('qiYong', x === b));
           syncCreate();
@@ -27246,8 +27286,16 @@ async function renderDashboard(host) {
           b.classList.toggle('qiYong', String(b.getAttribute('data-nm-devenv')) === devEnv);
         });
       };
+      /* R222 项12：无可用容器（或未探测）⇒ 容器选项置灰不可选 */
+      const nmRongBtn = envBar.querySelector('[data-nm-devenv="container"]');
+      if (nmRongBtn && !rongQiKeXuan()) {
+        nmRongBtn.disabled = true;
+        nmRongBtn.style.opacity = '0.45';
+        nmRongBtn.style.cursor = 'not-allowed';
+        nmRongBtn.title = tOr('container.devEnv.noneReady', '没有可用容器：请先在 设置 → 功能 → 容器 探测并启动容器。');
+      }
       envBar.querySelectorAll('[data-nm-devenv]').forEach((b) => {
-        b.onclick = () => { devEnv = String(b.getAttribute('data-nm-devenv') || 'host'); mark(); };
+        b.onclick = () => { if (b.disabled) return; devEnv = String(b.getAttribute('data-nm-devenv') || 'host'); mark(); };
       });
       mark();
       const dongZuoJi = $('duiHuaKuangDongZuoJi');
@@ -28612,12 +28660,9 @@ async function renderDashboard(host) {
         if (benDi) { if (shiNiuMa) openNiuMaSettings(benDi); else void kanQunKuang(benDi); }
         else showToast(tOr('list.duijieNoLocal', '本机还没有这个会话'));
       } },
+      /* R222 项11：对接牛马同样无「停止」；项目/群聊保留「停用」 */
       shiNiuMa
-        ? { biaoQian: t('ctx.stop'), onClick: async () => {
-            if (!zai) { showToast(tOr('list.duijieUnavailable', '来源设备离线，暂时不可用')); return; }
-            try { window.warmy.stopChat?.(sid); await window.warmy.stopInstance(sid); } catch { /* noop */ }
-            showToast(tOr('ctx.stopped', '已停止'));
-          } }
+        ? null
         : { biaoQian: tOr('ctx.groupDisable', '停用'), onClick: async () => {
             if (!zai) { showToast(tOr('list.duijieUnavailable', '来源设备离线，暂时不可用')); return; }
             const r = await window.warmy.qunTingYong?.({ groupId: sid, ting: true }).catch(() => null);
@@ -28666,8 +28711,9 @@ async function renderDashboard(host) {
         checked: shiZhiDing(inst.id),
         onClick: () => sheZhiDing(inst.id, !shiZhiDing(inst.id)),
       },
-      {
-        biaoQian: running ? t('ctx.stop') : t('ctx.enable'),
+      /* R222 项11：我的牛马右键去掉「停止」（停一轮用聊天区停止键）；仅停用时显示「启用」 */
+      running ? null : {
+        biaoQian: t('ctx.enable'),
         onClick: async () => {
           if (running) {
             const ok = await uiConfirm(t('ctx.closeConfirm'));
@@ -29135,6 +29181,20 @@ async function renderDashboard(host) {
         /** T15：原「查看」改名「设置」（打开会话设置/信息） */
         biaoQian: tOr('ctx.settings', '设置'),
         onClick: () => void kanQunKuang(g),
+      },
+      /* R222 项11：项目/群聊保留「停止」——停当前运行轮（区别于「停用」整个会话）；无任务时灰掉 */
+      {
+        biaoQian: t('ctx.stop'),
+        disabled: !blocked,
+        onClick: async () => {
+          try { window.warmy.stopChat?.(g.id); } catch { /* noop */ }
+          try { shouLiuShiKuai(); } catch { /* noop */ }
+          if (state.streamBuf) delete state.streamBuf[g.id];
+          queueRounds[g.id] = false;
+          try { yunXingZhuangTaiGuan(false, g.id); } catch { /* noop */ }
+          showToast(tOr('ctx.stopped', '已停止'));
+          renderList();
+        },
       },
       /** 群聊停用/启用（项目停用已在 projectMenuItems，避免重复）；停用后灰头像 + 圆形灰色停用图标 */
       (g.type === 'internal' ? null : {
@@ -29753,6 +29813,10 @@ async function renderDashboard(host) {
 
   const containerEntry = (id) => ((containerUi.report && containerUi.report.runtimes) || []).find((x) => x.id === id) || null;
   const containerReadyIds = () => ((containerUi.report && containerUi.report.usableIds) || []).slice();
+  /* R222 项12：容器可选 = 已探测且有可用容器；未探测/无可用 ⇒ 创建会话的容器选项置灰 */
+  function rongQiKeXuan() {
+    try { return ((containerUi.report && containerUi.report.usableIds) || []).length > 0; } catch { return false; }
+  }
 
   /**
    * 容器项目的开发面状态。传入的 facts 由调用方从**主进程**取（`warmy:xiangMuKaiFaTai`）；

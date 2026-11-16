@@ -157,7 +157,8 @@
                    诚实原因（见 app.js 的 refreshContainerConsoleGate / openContainerShell）。 -->
               <!-- R220：拟态设置图标（仅拟态独立窗显示）—— 点击回主界面 设置→拟态 -->
               <button id="anNiuNiTaiSheZhi" class="anNiuTuBiao yinCang" data-i18n-title="mimic.openSettings" aria-label="mimic settings" style="display:none">
-                <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="50" r="14"/><path d="M50 12v10M50 78v10M12 50h10M78 50h10M23 23l7 7M70 70l7 7M77 23l-7 7M30 70l-7 7"/></g></svg>
+                <!-- R222 项10：与主界面左下角设置按钮同款图标（mask id 独立避免冲突；尺寸随 .anNiuTuBiao .ico） -->
+                <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><defs><mask id="h2nt"><rect width="100" height="100" fill="white"/><polygon points="50,32 66,42 66,58 50,68 34,58 34,42" fill="black"/></mask></defs><g fill="currentColor" mask="url(#h2nt)"><circle cx="50" cy="50" r="30"/><g stroke="currentColor" stroke-width="14"><line x1="50" y1="20" x2="50" y2="6"/><line x1="50" y1="80" x2="50" y2="94"/><line x1="20" y1="50" x2="6" y2="50"/><line x1="80" y1="50" x2="94" y2="50"/><line x1="29" y1="29" x2="19" y2="19"/><line x1="71" y1="71" x2="81" y2="81"/><line x1="71" y1="29" x2="81" y2="19"/><line x1="29" y1="71" x2="19" y2="81"/></g></g></svg>
               </button>
               <button id="anNiuRongQiKongZhiTai" class="anNiuTuBiao" data-i18n-title="container.console.tip" aria-label="in-container shell console" disabled>
                 <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="24" width="84" height="56" rx="6"/><line x1="22" y1="48" x2="46" y2="48"/><circle cx="60" cy="48" r="5" fill="currentColor" stroke="none"/><circle cx="76" cy="48" r="5" fill="currentColor" stroke="none"/></g></svg>

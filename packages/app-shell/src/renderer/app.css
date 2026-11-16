@@ -466,81 +466,86 @@ body.liaoTianChuangKou .liaoTianBuJu {
   border-radius: 6px;
 }
 /**
- * R164：执行中头像 = **常驻旋转光环 + 流动扫光 + 呼吸光晕** 三层。
+ * R222 项2 重做（联网调研后定稿）：执行中头像 = **彗星故事环 + 反向流光晕 + 呼吸扩散** 三层。
  *
- * 旧版只有一条 45%/28% 透明度的扫光，还叠了 mix-blend-mode: screen。
- * 真机反证实测（把旧版 CSS 注回去逐像素量）：旧版浅色峰值只有 42，且只有一条窄带、
- * 扫过去就没了；screen 在浅色底上把主题色往白推，只有深色字母笔画上才有点差。
- * 现在：常驻光环任何时刻都在，新版**最弱时刻**峰值 181（≥ 旧版最强时刻的 4 倍），
- * 扫光按主题换深/暖色且不再用 screen，光晕负责余光。色相全部由 --accent 派生，不引入新颜色。
+ * 调研结论（公认优秀案例）：Telegram/Instagram 故事环、Kevin Powell / Gayane Gasparyan 的
+ * 旋转渐变发光边、Aceternity/Magic UI 的 Border Beam —— 头像「进行中」的最佳实践是
+ * **绕头像旋转的渐变环（带亮彗星头）**，而不是在头像表面扫硬光带（旧方案被用户多次否决）。
+ * 技术：@property 注册角度变量驱动 conic-gradient 旋转 + mask 挖环 + drop-shadow 随环发光；
+ * 第二层宽而柔的 conic 光晕反向慢转（blur）营造流光深度；本体呼吸光晕 + 涟漪负责余光。
+ * 色相全部由 --accent 派生；任何时刻环都在 ⇒ 像素门禁最弱时刻仍远高于旧版。
  */
 @property --yunXingJiao {
   syntax: '<angle>';
   inherits: false;
   initial-value: 0deg;
 }
+@property --yunXingJiao2 {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
 .lieBiaoTiaoMu .av, .lieBiaoTiaoMu .avTuPian { position: relative; }
-/* A. 常驻旋转光环：2px 圆角方环，紧贴头像外沿（inset -2px + padding 2px ⇒ 内缘正好落在头像边上） */
+/* A. 彗星故事环：锐利渐变环 + 白色彗星头，5s 匀速旋转；drop-shadow 沿环发光（故事环同款） */
 .lieBiaoTiaoMu .avKuang.yunXingZhong::before {
   content: '';
-  position: absolute; inset: -2px;
-  border-radius: 8px;
-  padding: 2px;
+  position: absolute; inset: -3px;
+  border-radius: 9px;
+  padding: 2.5px;
   background: conic-gradient(from var(--yunXingJiao, 0deg),
     transparent 0deg,
-    var(--yunXing-shen, #8a5a38) 45deg,
-    var(--accent, #A87654) 100deg,
-    var(--yunXing-liang, #f0c896) 165deg,
-    transparent 225deg,
+    var(--yunXing-shen, #8a5a38) 40deg,
+    var(--accent, #A87654) 90deg,
+    var(--yunXing-liang, #f0c896) 140deg,
+    #ffffff 168deg,
+    #ffffff 176deg,
+    var(--yunXing-liang, #f0c896) 200deg,
+    var(--accent, #A87654) 260deg,
+    transparent 320deg,
     transparent 360deg);
   /* 只留环、挖掉中间：content-box 与 border-box 两层掩码相减 */
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
-  animation: yunXingHuanZhuan 5s linear infinite; /* R218：加快（6s→5s） */
+  filter: drop-shadow(0 0 3px var(--yunXing-yun-qiang, rgba(168,118,84,.6)));
+  animation: yunXingHuanZhuan 5s linear infinite;
   pointer-events: none;
-  z-index: 1;   /* 角标是 2，不能被环盖住 */
+  z-index: 1;   /* 角标是 2/3，不能被环盖住 */
 }
 @keyframes yunXingHuanZhuan { to { --yunXingJiao: 360deg; } }
-/* B. 正负片对角流水（R218）：带沿 45° 方向（左下→右上），与头像像素做 difference 反色混合（正负片效果，对比更明显），用 transform: translate3d 驱动（GPU 合成，更流畅） */
+/* B. 反向流光晕：宽而柔的 conic 光晕，blur 后反向慢转（潮汐节奏），与锐环叠出流光深度 */
 .lieBiaoTiaoMu .avKuang.yunXingZhong::after {
   content: '';
-  position: absolute; inset: 0; border-radius: inherit;
-  /* R220：流水方向左右反调（右上角 → 左下角）、放慢（2.6s → 4.2s）、更像水流 ——
-     多道波峰（一主两副水纹）+ 柔和肩部过渡，观感是连续的水波扫过，不是一条硬光带。 */
-  background: linear-gradient(45deg,
-    transparent 0%,
-    transparent 26%,
-    var(--yunXing-liu-ruo, rgba(255,248,236,.14)) 33%,
-    var(--yunXing-liang, #f7dcae) 39%,
-    #fffdf7 43%,
-    var(--yunXing-liang, #f7dcae) 47%,
-    var(--yunXing-liu-qiang, rgba(255,248,236,.3)) 53%,
-    var(--yunXing-liang, #f7dcae) 58%,
-    var(--yunXing-liu-ruo, rgba(255,248,236,.14)) 64%,
-    transparent 71%,
-    transparent 100%);
-  background-size: 320% 320%;
-  opacity: .92;
-  animation: yunXingLiuDong 4.2s linear infinite;
+  position: absolute; inset: -7px;
+  border-radius: 13px;
+  background: conic-gradient(from calc(var(--yunXingJiao2, 0deg) * -1 + 180deg),
+    transparent 0deg,
+    var(--yunXing-liu-ruo, rgba(255,248,236,.14)) 50deg,
+    var(--yunXing-liu-qiang, rgba(255,248,236,.3)) 110deg,
+    var(--yunXing-liang, #f7dcae) 150deg,
+    var(--yunXing-liu-qiang, rgba(255,248,236,.3)) 190deg,
+    var(--yunXing-liu-ruo, rgba(255,248,236,.14)) 250deg,
+    transparent 310deg,
+    transparent 360deg);
+  filter: blur(4px);
+  opacity: .85;
+  animation: yunXingLiuDong 3.6s ease-in-out infinite;
   pointer-events: none;
-  z-index: 1;
+  z-index: 0;
 }
-@keyframes yunXingLiuDong {
-  0%   { background-position: 145% -45%; }  /* 右上角外（R220：方向左右反调） */
-  100% { background-position: -45% 145%; }  /* 左下角外 */
-}
-/* C. 呼吸光晕：扫光扫过去之后仍有余光，不至于「一片空白」 */
+@keyframes yunXingLiuDong { to { --yunXingJiao2: 360deg; } }
+/* C. 呼吸扩散：光晕呼吸 + 向外扩散的涟漪，环与晕之外仍有活水般的余韵 */
 .lieBiaoTiaoMu .avKuang.yunXingZhong {
-  animation: yunXingGuangYun 6s ease-in-out infinite; /* R218：加快（7s→6s） */
+  animation: yunXingGuangYun 3.6s ease-in-out infinite;
 }
 @keyframes yunXingGuangYun {
-  0%, 100% { box-shadow: 0 0 6px 1px var(--yunXing-yun-ruo, rgba(168,118,84,.18)); }
-  50%      { box-shadow: 0 0 20px 7px var(--yunXing-yun-qiang, rgba(168,118,84,.6)); } /* R218：余光略强 */
+  0%, 100% { box-shadow: 0 0 5px 1px var(--yunXing-yun-ruo, rgba(168,118,84,.18)), 0 0 0 0 var(--yunXing-yun-ruo, rgba(168,118,84,.18)); }
+  45%      { box-shadow: 0 0 18px 6px var(--yunXing-yun-qiang, rgba(168,118,84,.6)), 0 0 0 3px var(--yunXing-yun-ruo, rgba(168,118,84,.18)); }
+  70%      { box-shadow: 0 0 10px 3px var(--yunXing-yun-qiang, rgba(168,118,84,.6)), 0 0 0 7px transparent; }
 }
 /* R164：≥3200px 时 renderer.css 把 .av 放大到 44px，容器与图片必须同步，
-   否则挂在 .avKuang 上的光环/扫光盖不满头像。只写在 app.css：
+   否则挂在 .avKuang 上的光环/光晕盖不满头像。只写在 app.css：
    renderer.css 没有 .avKuang/.avTuPian 的大屏规则，不会与它打架（verify-css-consistency 已核）。 */
 @media (min-width: 3200px) {
   .lieBiaoTiaoMu .avKuang { width: 44px; height: 44px; }
@@ -549,7 +554,7 @@ body.liaoTianChuangKou .liaoTianBuJu {
 /* 无障碍：系统开了「减少动态效果」时三层都退成**静态可见**，不是退成没有 */
 @media (prefers-reduced-motion: reduce) {
   .lieBiaoTiaoMu .avKuang.yunXingZhong::before { --yunXingJiao: 135deg; }
-  .lieBiaoTiaoMu .avKuang.yunXingZhong::after { background-position: 50% 50%; mix-blend-mode: normal; }
+  .lieBiaoTiaoMu .avKuang.yunXingZhong::after { --yunXingJiao2: 200deg; filter: blur(3px); }
   .lieBiaoTiaoMu .avKuang.yunXingZhong {
     box-shadow: 0 0 0 2px var(--yunXing-yun-qiang, rgba(168,118,84,.52));
   }

@@ -24,38 +24,37 @@
   const ZUI_XING = ['xiao', 'wei', 'kai', 'qiao', 'ping'];
 
   /** 用外观参数生成 SVG（body 主色/副色 + 眼/嘴/耳/尾等部件） */
+  /* R222 项9：Q 版形象重绘 —— 大头小身 + 高光眼睛 + 腮红 + w 嘴 + 内耳/尾巴/脚掌，参数不变 */
   function hua2DSvg(a) {
-    const zhu = a.zhuSe || '#f4a460';
-    const fu = a.fuSe || '#e8e0d0';
-    const yan = a.yanXing || 'yuan';
-    const zui = a.zuiXing || 'xiao';
-    const er = a.erDuo !== false;
-    const wei = a.weiBa !== false;
-    const yanSe = a.yanSe || '#2b2b2b';
-    const hong = a.hongSe || '#e05a5a';
-    const yuanXing = {
-      yuan: '<circle cx="86" cy="112" r="7" fill="' + yanSe + '"/><circle cx="134" cy="112" r="7" fill="' + yanSe + '"/><circle cx="89" cy="109" r="2.4" fill="#fff"/><circle cx="137" cy="109" r="2.4" fill="#fff"/>',
-      xiao: '<circle cx="87" cy="112" r="5.5" fill="' + yanSe + '"/><circle cx="133" cy="112" r="5.5" fill="' + yanSe + '"/><circle cx="89.5" cy="110" r="2" fill="#fff"/><circle cx="135.5" cy="110" r="2" fill="#fff"/>',
-      qiao: '<path d="M80 116 q7 -9 14 0 q-3 2 -7 2 q-4 0 -7 -2z" fill="' + yanSe + '"/><path d="M126 116 q7 -9 14 0 q-3 2 -7 2 q-4 0 -7 -2z" fill="' + yanSe + '"/>',
-      hei: '<circle cx="88" cy="112" r="8" fill="' + yanSe + '"/><circle cx="132" cy="112" r="8" fill="' + yanSe + '"/><circle cx="91" cy="108" r="2.6" fill="#fff"/><circle cx="135" cy="108" r="2.6" fill="#fff"/>',
-      xing: '<path d="M88 103 l3 6 6 1 -4 4 1 6 -6 -3 -6 3 1 -6 -4 -4 6 -1z" fill="' + yanSe + '"/><path d="M132 103 l3 6 6 1 -4 4 1 6 -6 -3 -6 3 1 -6 -4 -4 6 -1z" fill="' + yanSe + '"/>',
+    const zhu = a.zhuSe || '#f4a460', fu = a.fuSe || '#e8e0d0', yanSe = a.yanSe || '#2b2b2b', hong = a.hongSe || '#e05a5a';
+    const er = a.erDuo !== false, wei = a.weiBa !== false;
+    const yan = {
+      yuan: '<circle cx="86" cy="96" r="8" fill="' + yanSe + '"/><circle cx="134" cy="96" r="8" fill="' + yanSe + '"/><circle cx="83.5" cy="93" r="2.8" fill="#fff"/><circle cx="131.5" cy="93" r="2.8" fill="#fff"/><circle cx="88" cy="99" r="1.2" fill="#fff" opacity=".8"/><circle cx="136" cy="99" r="1.2" fill="#fff" opacity=".8"/>',
+      xiao: '<circle cx="86" cy="96" r="6" fill="' + yanSe + '"/><circle cx="134" cy="96" r="6" fill="' + yanSe + '"/><circle cx="84" cy="94" r="2" fill="#fff"/><circle cx="132" cy="94" r="2" fill="#fff"/>',
+      qiao: '<path d="M78 97 q8 -9 16 0" stroke="' + yanSe + '" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M126 97 q8 -9 16 0" stroke="' + yanSe + '" stroke-width="3" fill="none" stroke-linecap="round"/>',
+      hei: '<circle cx="86" cy="96" r="9.5" fill="' + yanSe + '"/><circle cx="134" cy="96" r="9.5" fill="' + yanSe + '"/><circle cx="83" cy="92.5" r="3.2" fill="#fff"/><circle cx="131" cy="92.5" r="3.2" fill="#fff"/><circle cx="89" cy="99" r="1.5" fill="#fff" opacity=".85"/><circle cx="137" cy="99" r="1.5" fill="#fff" opacity=".85"/>',
+      xing: '<path d="M86 87 l2.6 5.4 6 .8 -4.4 4.2 1.1 5.9 -5.3 -2.9 -5.3 2.9 1.1 -5.9 -4.4 -4.2 6 -.8z" fill="' + yanSe + '"/><path d="M134 87 l2.6 5.4 6 .8 -4.4 4.2 1.1 5.9 -5.3 -2.9 -5.3 2.9 1.1 -5.9 -4.4 -4.2 6 -.8z" fill="' + yanSe + '"/>',
     };
-    const zuiXing = {
-      xiao: '<path d="M104 136 q6 5 12 0" stroke="' + hong + '" stroke-width="2.4" fill="none" stroke-linecap="round"/>',
-      wei: '<path d="M100 137 q10 8 20 0 q-3 -2 -6 -2 q-4 0 -8 2 q-3 -5 -6 -3z" fill="' + hong + '"/>',
-      kai: '<ellipse cx="110" cy="138" rx="8" ry="5" fill="' + hong + '"/><path d="M102 137 q8 4 16 0 q-8 -4 -16 0z" fill="#fff"/>',
-      qiao: '<path d="M102 138 q8 -6 16 0 q-1 3 -4 4 q-4 1 -8 0 q-3 -1 -4 -4z" fill="' + hong + '"/>',
-      ping: '<line x1="100" y1="139" x2="120" y2="139" stroke="' + hong + '" stroke-width="2.4" stroke-linecap="round"/>',
+    const zui = {
+      xiao: '<path d="M102 118 q4 5 8 0 q4 5 8 0" stroke="' + hong + '" stroke-width="2.2" fill="none" stroke-linecap="round"/>',
+      wei: '<path d="M101 116 q9 10 18 0 q-9 3 -18 0z" fill="' + hong + '"/><ellipse cx="110" cy="121" rx="4" ry="2.4" fill="#ff9d9d"/>',
+      kai: '<ellipse cx="110" cy="120" rx="7" ry="5.5" fill="' + hong + '"/><ellipse cx="110" cy="123" rx="4" ry="2.5" fill="#ff9d9d"/>',
+      qiao: '<path d="M103 118 q8 5 15 -2" stroke="' + hong + '" stroke-width="2.2" fill="none" stroke-linecap="round"/>',
+      ping: '<line x1="102" y1="119" x2="118" y2="119" stroke="' + hong + '" stroke-width="2.2" stroke-linecap="round"/>',
     };
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">' +
-      (er ? '<ellipse cx="52" cy="78" rx="14" ry="20" fill="' + fu + '" transform="rotate(-18 52 78)"/><ellipse cx="168" cy="78" rx="14" ry="20" fill="' + fu + '" transform="rotate(18 168 78)"/>' : '') +
-      '<ellipse cx="110" cy="118" rx="62" ry="58" fill="' + zhu + '"/>' +
-      '<ellipse cx="110" cy="96" rx="46" ry="40" fill="' + fu + '"/>' +
-      '<ellipse cx="110" cy="150" rx="54" ry="30" fill="' + zhu + '" opacity=".92"/>' +
-      (yuanXing[yan] || yuanXing.yuan) +
-      '<ellipse cx="110" cy="102" rx="5" ry="3.4" fill="' + hong + '" opacity=".55"/>' +
-      (zuiXing[zui] || zuiXing.xiao) +
-      (wei ? '<path d="M172 168 q24 2 30 -14 q6 -16 -14 -14 q-8 1 -10 6z" fill="' + fu + '"/>' : '') +
+      (wei ? '<path d="M150 170 q30 4 36 -16 q5 -18 -16 -16 q-10 1 -12 8" fill="' + fu + '"/>' : '') +
+      '<ellipse cx="110" cy="164" rx="40" ry="30" fill="' + zhu + '"/>' +
+      '<ellipse cx="110" cy="170" rx="26" ry="20" fill="' + fu + '"/>' +
+      '<ellipse cx="88" cy="194" rx="12" ry="7" fill="' + zhu + '"/><ellipse cx="132" cy="194" rx="12" ry="7" fill="' + zhu + '"/>' +
+      (er ? '<path d="M60 64 Q50 14 96 40 Q74 46 66 66z" fill="' + zhu + '"/><path d="M64 56 Q60 28 88 44 Q74 48 68 60z" fill="' + fu + '"/><path d="M160 64 Q170 14 124 40 Q146 46 154 66z" fill="' + zhu + '"/><path d="M156 56 Q160 28 132 44 Q146 48 152 60z" fill="' + fu + '"/>' : '') +
+      '<circle cx="110" cy="96" r="56" fill="' + zhu + '"/>' +
+      '<ellipse cx="92" cy="66" rx="16" ry="9" fill="#ffffff" opacity=".16" transform="rotate(-18 92 66)"/>' +
+      '<ellipse cx="110" cy="114" rx="32" ry="24" fill="' + fu + '" opacity=".9"/>' +
+      (yan[a.yanXing] || yan.yuan) +
+      '<circle cx="70" cy="112" r="7" fill="' + hong + '" opacity=".4"/><circle cx="150" cy="112" r="7" fill="' + hong + '" opacity=".4"/>' +
+      '<ellipse cx="110" cy="108" rx="4" ry="3" fill="' + hong + '"/>' +
+      (zui[a.zuiXing] || zui.xiao) +
       '</svg>';
   }
 
@@ -405,7 +404,12 @@
 
   /** 每帧更新：idle 自动 + 当前动作 + 口型 */
   function gengXin(t) {
-    if (gltfMixer) { try { gltfMixer.update(1 / 60); } catch { /* noop */ } return; }
+    if (gltfMixer) {
+      try { gltfMixer.update(1 / 60); } catch { /* noop */ }
+      /* R222 项9 真缺陷：原来更新完 mixer 直接 return，从不 renderer.render ⇒ GLB 3D 模型完全看不到 */
+      if (renderer && scene && camera) { try { renderer.render(scene, camera); } catch { /* noop */ } }
+      return;
+    }
     if (!BONE.root) return;
     // idle 自动：呼吸 + 眨眼（概率）+ 随机小动作
     const miao = t / 1000;
@@ -511,14 +515,16 @@
       /* R220：.glb 现成模型走 GLTFLoader（动画剪辑）；否则程序化骨骼 */
       if (glbSrc && init3DGlTF(glbSrc)) {
         img.style.display = 'none';
-        if (san) san.style.display = 'block';
+        const sanXin = document.getElementById('tiSanD');
+        if (sanXin) sanXin.style.display = 'block';
         kaiShi3D();
         kaiShiAutoDongZuo();
         return;
       }
       if (init3D(a || {})) {
         img.style.display = 'none';
-        if (san) san.style.display = 'block';
+        const sanXin = document.getElementById('tiSanD');
+        if (sanXin) sanXin.style.display = 'block';
         jiLuJiZhun();
         kaiShi3D();
         kaiShiAutoDongZuo();
@@ -535,6 +541,9 @@
       try { clearTimeout(autoXunHuan); autoXunHuan = 0; } catch { /* noop */ }
       if (san) san.style.display = 'none';
       if (renderer) { renderer.dispose(); renderer = null; scene = null; camera = null; sanD = null; boneRoot = null; }
+      /* R222 项9：旧 canvas 必须从 DOM 移除（原来只置空引用 ⇒ 重复画布叠在一起）；GLB 残留一并清 */
+      const jiuCanvas = document.getElementById('tiSanD'); if (jiuCanvas) jiuCanvas.remove();
+      gltfRoot = null; gltfMixer = null; gltfClips = {};
       img.style.display = '';
       /* R221：精灵图模型 → 读 JSON 走帧动画（__mimicSheet 此前有实现无调用方）；失败回退整图，不留空白 */
       if (a && a.kind === 'sheet' && a.sheetJson && window.warmyMimic && window.warmyMimic.sheetJson) {
