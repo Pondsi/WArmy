@@ -353,6 +353,28 @@
     return null;
   }
 
+  /**
+   * R224 项1：解析 FWArmy 凭证。
+   *  · 被扩网凭证 v2 = fwnexp_v2_<b64url(JSON{h,p,r})> —— 自带地址/端口，本地可解析；
+   *  · 中继凭证 = 43 位 b64url 随机 token —— 不透明，地址存在服务端凭证记录里，本地解析不出（如实回 not-v2）。
+   */
+  function parseFwCredential(text) {
+    var t = String(text == null ? '' : text).trim();
+    if (t.indexOf('fwnexp_v2_') !== 0) return { ok: false, code: 'not-v2' };
+    try {
+      var b64 = t.slice('fwnexp_v2_'.length).replace(/-/g, '+').replace(/_/g, '/');
+      var bin = atob(b64);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var j = JSON.parse(new TextDecoder('utf-8').decode(bytes));
+      var host = String(j.h || '').trim();
+      var port = Number(j.p);
+      if (!host || /[\s/?#]/.test(host) || !Number.isInteger(port) || port < 1 || port > 65535) return { ok: false, code: 'bad-payload' };
+      var p = parseHostEntry(host + ':' + port, port);
+      return { ok: true, host: host, port: port, address: p.ok ? p.canonical : host + ':' + port };
+    } catch (e) { return { ok: false, code: 'bad-payload' }; }
+  }
+
   function normalizeProviderRecord(rec, defaultPort) {
     var r = rec && typeof rec === 'object' ? rec : {};
     var id = String(r.id || '').trim() || makeId('np');
@@ -362,13 +384,17 @@
     var hasCredential = r.hasCredential === true;
     var credentialState = hasCredential ? 'stored' : 'none';
     if (r.credentialState === 'pending') credentialState = 'pending';
+    /* R224 项1：地址栏已删 —— 不透明凭证（地址在服务端）允许空地址，标「地址待解析」 */
+    var addressPending = !p.ok && !address && (r.addressPending === true || hasCredential);
     return {
       id: id,
       name: name,
       address: p.ok ? p.canonical : address,
       hasCredential: hasCredential,
       credentialState: credentialState,
-      invalidAddress: !p.ok,
+      invalidAddress: !p.ok && !addressPending,
+      addressPending: addressPending,
+      builtin: r.builtin === true,
     };
   }
 
@@ -382,10 +408,19 @@
     var f = input && typeof input === 'object' ? input : {};
     var nameCheck = validateProviderName(f.name);
     if (!nameCheck.ok) return { ok: false, code: nameCheck.code, providers: cur, record: null };
-    var p = parseHostEntry(f.address, defaultPort);
-    if (!p.ok) return { ok: false, code: 'invalid-address', providers: cur, record: null, parseCode: p.code };
+    /* R224 项1：地址不再手填 —— 优先从凭证解析（fwnexp_v2_ 自带地址端口）；
+       不透明凭证（地址在服务端）+ allowPendingAddress ⇒ 空地址登记，标「地址待解析」。 */
+    var addrRaw = String(f.address == null ? '' : f.address).trim();
+    if (!addrRaw && f.credential) {
+      var pc = parseFwCredential(f.credential);
+      if (pc.ok) addrRaw = pc.address;
+    }
+    var p = parseHostEntry(addrRaw, defaultPort);
+    var pending = !p.ok && !addrRaw && f.allowPendingAddress === true;
+    if (!p.ok && !pending) return { ok: false, code: 'invalid-address', providers: cur, record: null, parseCode: p.code };
     var editId = f.id ? String(f.id) : '';
-    var dup = findProviderByAddress(cur, p.canonical, defaultPort, editId);
+    var canonical = p.ok ? p.canonical : '';
+    var dup = canonical ? findProviderByAddress(cur, canonical, defaultPort, editId) : null;
     if (dup) return { ok: false, code: 'duplicate', providers: cur, record: null };
 
     if (editId) {
@@ -396,10 +431,12 @@
         var updated = {
           id: editId,
           name: nameCheck.name,
-          address: p.canonical,
+          address: canonical,
           hasCredential: f.hasCredential === true ? true : prev.hasCredential,
           credentialState: f.credentialState || prev.credentialState,
           invalidAddress: false,
+          addressPending: pending,
+          builtin: prev.builtin === true || f.builtin === true,
         };
         var next = cur.slice();
         next[found] = updated;
@@ -411,10 +448,12 @@
     var record = {
       id: makeId('np'),
       name: nameCheck.name,
-      address: p.canonical,
+      address: canonical,
       hasCredential: f.hasCredential === true,
       credentialState: f.hasCredential === true ? 'stored' : (f.credentialState === 'pending' ? 'pending' : 'none'),
       invalidAddress: false,
+      addressPending: pending,
+      builtin: f.builtin === true,
     };
     return { ok: true, code: 'added', providers: cur.concat([record]), record: record };
   }
@@ -440,6 +479,7 @@
     isUsablePublicIp: isUsablePublicIp,
     classifyHostReachability: classifyHostReachability,
     validateProviderName: validateProviderName,
+    parseFwCredential: parseFwCredential,
     providerAddressKey: providerAddressKey,
     findProviderByAddress: findProviderByAddress,
     normalizeProviderRecord: normalizeProviderRecord,

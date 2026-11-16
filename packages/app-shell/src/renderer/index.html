@@ -263,7 +263,7 @@
               <span id="ctgKongZhiTaiTiShi" class="kongZhiTaiTiShi"></span>
               <!-- 状态行：就绪/未就绪 + 运行时 + 门禁原因（全走 i18n） -->
               <span id="ctgKongZhiTaiZhuangTai" class="kongZhiTaiTiShi ctgDim" data-shell-state="unknown"></span>
-              <button type="button" id="ctgKongZhiTaiGuanBi" class="kongZhiTaiQingChu" data-i18n-title="common.close"></button>
+              <button type="button" id="ctgKongZhiTaiGuanBi" class="kongZhiTaiQingChu" data-i18n-title="common.close">✕</button>
             </div>
             <pre id="ctgKongZhiTaiShuChu" class="kongZhiTaiShuChu" role="log" aria-live="polite"></pre>
             <!-- 只有本机的人手动输入；远程对端/群成员/智能体没有任何注入路径；
@@ -273,6 +273,8 @@
               <button type="button" id="ctgKongZhiTaiFaSong" data-i18n="container.console.run" disabled></button>
               <span id="ctgKongZhiTaiNote" class="ctgDim" data-shell-note="none"></span>
             </div>
+            <!-- R224 项11：overlay 底部拖高把手 -->
+            <div id="ctgKongZhiTaiLaShen" class="kongZhiTaiTiaoZhengTiao" data-i18n-title="tip.dragHeight"></div>
           </div>
           <!-- 牛马在跑的动态小字（发出后到回包前）：轮换文案，让用户知道它没卡死 -->
           <div id="yunXingZhuangTai" class="yunXingZhuangTai yinCang" aria-live="polite"></div>

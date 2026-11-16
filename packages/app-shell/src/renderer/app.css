@@ -581,6 +581,13 @@ body.liaoTianChuangKou .liaoTianBuJu {
 }
 .lieBiaoKa h4 { margin: 0 0 8px; font-size: var(--fs-base); }
 
+/* R224 项10：设置跳转高亮（主题色描边 + 三次呼吸闪烁，4.2s 后自动摘） */
+.sheZhiGaoLiang { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius); animation: sheZhiGaoLiangShan 1.2s ease-in-out 3; }
+@keyframes sheZhiGaoLiangShan {
+  0%, 100% { outline-color: var(--accent); }
+  50% { outline-color: color-mix(in srgb, var(--accent) 25%, transparent); }
+}
+
 /* Resizer between list and main */
 #lanTiaoZhengTiao {
   position: absolute; right: -3px; top: 0; bottom: 0;
@@ -5416,3 +5423,26 @@ html { font-weight: var(--fw-ui, 400); }
 .mimicMoXingKa:hover { border-color: var(--accent); }
 .mimicMoXingKa.xuan { outline: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--card)); }
 #mimicNeiZhiJi { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ══ R224 项11：内置控制台 overlay ══ */
+/* 从聊天框顶部（聊天头 56px 正下方）往下展开，叠加在聊天内容上，宽度 = 聊天框 */
+#ctgKongZhiTaiMianBan {
+  position: absolute; top: 56px; left: 0; right: 0; z-index: 45;
+  margin: 0; border-radius: 0 0 10px 10px;
+  min-height: 120px; max-height: none; height: 300px;
+  border: 1px solid #333; border-top: none;
+  box-shadow: 0 14px 30px rgba(0,0,0,.38);
+}
+#ctgKongZhiTaiMianBan:not(.yinCang) { animation: kztZhanKai .22s ease-out; }
+@keyframes kztZhanKai { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+#ctgKongZhiTaiMianBan .kongZhiTaiHead { align-items: center; }
+#ctgKongZhiTaiLaShen { height: 7px; cursor: row-resize; flex-shrink: 0; background: transparent; }
+#ctgKongZhiTaiLaShen:hover { background: var(--accent); opacity: .45; }
+
+/* ══ R224 项12/13：主机模式 / DHT组网 ══ */
+.wangLuoHostEnableHang { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.wangLuoHostNoConfirm { margin-left: 4px; }
+.wangLuoHostIpWarn { color: var(--danger, #c0392b); font-size: var(--fs-sm); margin-top: 6px; }
+.wangLuoHostIpWarn[data-show="0"] { display: none; }
+.wangLuoDiscoveryJoinState { font-size: var(--fs-sm); color: var(--muted); }
+.wangLuoDiscoveryJoinState.on { color: var(--accent); font-weight: 600; }

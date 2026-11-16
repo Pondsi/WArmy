@@ -2489,8 +2489,31 @@
     f.srcdoc = '<!doctype html><html><head><meta charset="utf-8">' + yang + '</head><body>'
       + (zt.fenLan === 'md' ? markdownToHtml(wen) : linkifyCunWen(wen)) + '</body></html>';
     /** R138：每次重绘后重绑链接点击（Ctrl+开新窗） */
-    f.onload = () => bangDingYuLanLianJie(f);
+    f.onload = () => {
+      bangDingYuLanLianJie(f);
+      /* R224 项7：滚轮手动滚动（同源可访问）——保证效果区滚轮一定滚得动 */
+      try {
+        const doc = f.contentDocument;
+        if (doc && !doc.__nmWheelBang) {
+          doc.__nmWheelBang = true;
+          doc.addEventListener('wheel', (ev) => {
+            const sc = doc.scrollingElement || doc.documentElement;
+            if (sc) { sc.scrollTop += ev.deltaY; ev.preventDefault(); }
+          }, { passive: false });
+        }
+      } catch { /* 跨源拿不到就不动 */ }
+    };
   }
+  /* R224 项7：光标在预览容器（非 iframe）上时滚轮也转发进 iframe */
+  el('yuLanNei').addEventListener('wheel', (e) => {
+    const f = el('yuLanNei').querySelector('iframe');
+    if (!f) return;
+    try {
+      const doc = f.contentDocument;
+      const sc = doc && (doc.scrollingElement || doc.documentElement);
+      if (sc) { sc.scrollTop += e.deltaY; e.preventDefault(); }
+    } catch { /* noop */ }
+  }, { passive: false });
   function anPaiYuLan() {
     if (!zt.fenLan) return;
     if (anPaiYuLan.ding) clearTimeout(anPaiYuLan.ding);
@@ -4561,14 +4584,33 @@
   el('anNiuBuBaoCunGuanBi').addEventListener('click', () => { zt.zang = false; guanBiQueRen(); });
   el('anNiuQuXiaoGuanBi').addEventListener('click', () => xianShiGuanBi(false));
 
-  el('anNiuYuLanQuanPing').addEventListener('click', () => { void qieHuanQuanPing(el('yuLanLie')); });
+  /* R224 项7：预览全屏改 body 类方案 —— 祖先 contain:layout/paint 会把 fixed 兜底关在内容区，
+     Fullscreen API 在无边框子窗也不可靠；body 类临时解除 contain + fixed 铺满视口，确定性生效。 */
+  function qieHuanYuLanQuanPing() {
+    const lie = el('yuLanLie');
+    if (!lie) return;
+    const kai = document.body.classList.contains('yuLanQuanPing');
+    if (kai) {
+      document.body.classList.remove('yuLanQuanPing');
+      lie.classList.remove('quanPing');
+      zt.quanPingEl = null;
+    } else {
+      if (zt.quanPingEl) { zt.quanPingEl.classList.remove('quanPing'); zt.quanPingEl = null; }
+      document.body.classList.add('yuLanQuanPing');
+      lie.classList.add('quanPing');
+      zt.quanPingEl = lie;
+    }
+    const an = el('anNiuYuLanQuanPing');
+    if (an) { an.textContent = kai ? '全屏' : '恢复'; an.title = kai ? '全屏 / 恢复（也可以双击预览）' : '恢复窗口（Esc）'; }
+  }
+  el('anNiuYuLanQuanPing').addEventListener('click', () => qieHuanYuLanQuanPing());
   el('yuLanBiao').addEventListener('dblclick', (e) => {
     if (e.target && e.target.closest && e.target.closest('button')) return;
-    void qieHuanQuanPing(el('yuLanLie'));
+    qieHuanYuLanQuanPing();
   });
   el('yuLanLie').addEventListener('dblclick', (e) => {
     if (e.target && (e.target.tagName === 'IFRAME' || (e.target.closest && e.target.closest('button')))) return;
-    void qieHuanQuanPing(el('yuLanLie'));
+    qieHuanYuLanQuanPing();
   });
   el('kuaiLie').addEventListener('dblclick', (e) => {
     if (e.target && e.target.closest && e.target.closest('a.luJing')) return;
@@ -5001,6 +5043,7 @@
 
   document.addEventListener('keydown', (e) => {
     const ctrl = e.ctrlKey || e.metaKey;
+    if (e.key === 'Escape' && document.body.classList.contains('yuLanQuanPing')) { e.preventDefault(); qieHuanYuLanQuanPing(); return; } /* R224 项7 */
     if (e.key === 'Escape' && !el('guanBiZheZhao').hidden) { xianShiGuanBi(false); return; }
     if (ctrl && !e.shiftKey && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();

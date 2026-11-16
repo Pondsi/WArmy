@@ -932,6 +932,49 @@
     });
   }
 
+  /** R224 项10：跳转指定设置分区并高亮目标卡片（指引用户完成配置） */
+  function tiaoZhuanSheZhiGaoLiang(sec, kaId) {
+    try {
+      setNav('settings');
+      const an = document.querySelector('#peiZhiDaoHang button[data-sec="' + sec + '"]');
+      if (an) an.click();
+      requestAnimationFrame(() => {
+        const ka = kaId ? document.getElementById(kaId) : null;
+        if (ka) {
+          ka.scrollIntoView({ block: 'start' });
+          ka.classList.add('sheZhiGaoLiang');
+          setTimeout(() => ka.classList.remove('sheZhiGaoLiang'), 4200);
+        }
+      });
+    } catch { /* noop */ }
+  }
+  /** R224 项10：语音未配置引导框 —— 取消（关闭什么都不做）/ 设置（跳转对应设置并高亮） */
+  function yuYinSheZhiYinDao(message) {
+    return new Promise((resolve) => {
+      const root = $('duiHuaKuangGen');
+      root.classList.remove('niuMaSheZhi');
+      $('duiHuaKuangBiaoTi').textContent = tOr('chat.voiceNeedAsrTitle', '语音转文字还没配置');
+      $('duiHuaKuangTi').textContent = String(message ?? '');
+      const dongZuoJi = $('duiHuaKuangDongZuoJi');
+      dongZuoJi.innerHTML = '';
+      const cancel = document.createElement('button');
+      cancel.className = 'anNiuXiao';
+      cancel.textContent = t('common.cancel');
+      root._waiBu = () => cancel.click();
+      cancel.onclick = () => { root._waiBu = null; root.classList.add('yinCang'); resolve(false); huiFuNiuMaSheZhi(); };
+      const go = document.createElement('button');
+      go.className = 'anNiuZhuYao';
+      go.textContent = tOr('chat.voiceGoSettings', '设置');
+      go.onclick = () => {
+        root._waiBu = null; root.classList.add('yinCang'); resolve(true); huiFuNiuMaSheZhi();
+        tiaoZhuanSheZhiGaoLiang('func', 'benDiYuYinKa');
+      };
+      dongZuoJi.append(cancel, go);
+      root.classList.remove('yinCang');
+      go.focus();
+    });
+  }
+
   /**
    * 三按钮删除确认（产品要求）：
    *   入库 = 界面删掉、内容保留待后台总结
@@ -3892,6 +3935,7 @@ async function langDuWenBen(text, btnEl) {
       /* 分组右键：重命名 / 建分组 / 删分组（对接设备分组不可改不可删） */
       tou.addEventListener('contextmenu', (e) => {
         e.preventDefault();
+        e.stopPropagation(); /* R224 项4：不与空白处排序菜单重叠 */
         if (z.fixed) return;
         openContextMenu(e.clientX, e.clientY, [
           { biaoQian: tOr('list.zuRename', '重命名'), onClick: async () => {
@@ -3972,7 +4016,7 @@ async function langDuWenBen(text, btnEl) {
         /* 对接设备分组：内容来自其他设备的对接会话（T15） */
         const keys = duijieKeys;
         if (!keys.length) {
-          nei.innerHTML = '<div class="lieBiaoFenZuKong jingYin">' + escapeHtml(tOr('list.zuDuijieEmpty', '还没有对接会话。在「我的牛马/项目」会话右键勾选「对接」后，会在这里出现。')) + '</div>';
+          nei.innerHTML = '<div class="lieBiaoFenZuKong jingYin">—</div>'; /* R224 项5：说明文字已删 */
         } else {
           keys.forEach((sid) => {
             const it = duijie[sid] || {};
@@ -5108,6 +5152,16 @@ async function langDuWenBen(text, btnEl) {
         return true;
       } catch { return false; }
     },
+    /** R224 项2：走真实滚动分支（非 keepScroll）的新回复，供滚动语义探针 */
+    xinHuiFuGun: (text) => {
+      try {
+        const sid = String((state.selectedChat && state.selectedChat.id) || '');
+        if (!sid) return false;
+        tuisongXiaoxi(sid, 'them', String(text || ''), { noLog: true, ts: Date.now() });
+        renderChat();
+        return true;
+      } catch { return false; }
+    },
   };
 
   function msgsOf(chatId) {
@@ -5507,8 +5561,16 @@ async function langDuWenBen(text, btnEl) {
        */
       const stL = chatGunOf(sidLiu);
       /* R154 项13 修正: 暂停期不因新流式帧解除暂停/恢复跟随；只有用户滚回底部或点「回到底部」才恢复 */
-      if (!chatRebuilding && !stL.pause) sheZhiGenDi(sidLiu, true);
-      /* R222 项4：废除限制1 钉顶 —— 新回复首帧恢复跟底（上一行），不再把内容钉到顶部（修「滚动到上面」抖动） */
+      if (!chatRebuilding && !stL.pause) {
+        if (autoScrollChat || isAtBottom(heZi)) {
+          sheZhiGenDi(sidLiu, true);
+        } else {
+          /* R224 项2：限制1 恢复 —— 未勾选且不在底部 ⇒ 钉本次回复首内容顶部（从头读），退出跟随 */
+          stL.anchorEl = kuai.querySelector('.siKaoKuai, .zhongJianKa, .bubble') || kuai;
+          sheZhiGenDi(sidLiu, false);
+          sheZhiChatGunDong(heZi, chatAnchorTop(heZi, stL), false);
+        }
+      }
     }
     /**
      * **悬停显示本轮模型路由**（产品要求）：中途的思考与回复都要能看到
@@ -5606,9 +5668,13 @@ async function langDuWenBen(text, btnEl) {
        *  未暂停：勾选贴底；未勾选把「本次回复第一条内容」顶部钉在聊天框顶部（限制1）。 */
       if (stL2.pause) {
         if (baoHuTop != null) sheZhiChatGunDong(heZi, baoHuTop, false);
-      } else if (chatGenDi(sidLiu)) {
-        /* R222 项4：跟随底部 ⇒ 贴底；不跟随 ⇒ 保持位置（不再钉顶） */
+      } else if (autoScrollChat || isAtBottom(heZi)) {
+        /* 勾选 ⇒ 贴底；未勾选但用户滚回底部 ⇒ 看尾 */
         sheZhiChatGunDong(heZi, heZi.scrollHeight, false);
+        baoHuTop = null;
+      } else if (stL2.anchorEl && stL2.anchorEl.isConnected) {
+        /* R224 项2：限制1 维持 —— 钉回复首内容顶部（锚点稳定，不抖） */
+        sheZhiChatGunDong(heZi, chatAnchorTop(heZi, stL2), false);
         baoHuTop = null;
       } else if (baoHuTop != null) {
         sheZhiChatGunDong(heZi, baoHuTop, false);
@@ -5626,8 +5692,10 @@ async function langDuWenBen(text, btnEl) {
     try { guiNaXingDong(heZi, true); } catch { /* noop */ }
     if (stL2.pause) {
       if (baoHuTop != null) sheZhiChatGunDong(heZi, Math.min(baoHuTop, Math.max(0, heZi.scrollHeight - heZi.clientHeight)), false);
-    } else if (chatGenDi(sidLiu)) {
+    } else if (autoScrollChat || isAtBottom(heZi)) {
       sheZhiChatGunDong(heZi, heZi.scrollHeight, false);
+    } else if (stL2.anchorEl && stL2.anchorEl.isConnected) {
+      sheZhiChatGunDong(heZi, chatAnchorTop(heZi, stL2), false);
     } else if (baoHuTop != null) {
       sheZhiChatGunDong(heZi, Math.min(baoHuTop, Math.max(0, heZi.scrollHeight - heZi.clientHeight)), false);
     }
@@ -7487,7 +7555,7 @@ async function langDuWenBen(text, btnEl) {
     /** 是否跟随底部：**只由用户滚动/下箭头/自动滚动决定**，新内容不改变它 */
     if (diYiCiKai) sheZhiGenDi(sid, true);
     const genDi = chatZhuiDi(sid);
-    /** 勾选「滚动记录」= 滚到最新（底部）；未勾选 = 不自动滚动（保持位置，不再钉顶） */
+    /** 勾选「滚动记录」= 滚到最新（底部）；未勾选 = R130 限制1/2：牛马回复首内容顶部对齐（R224 恢复） */
     const zhuiDi = autoScrollChat;
     /* R222 项4：用户发出新消息 ⇒ 永远回到底部并恢复跟随（修复「发新对话/开始执行/最终回复时滚动到上面」的抖动） */
     let yongHuXinFa = false;
@@ -7532,12 +7600,27 @@ async function langDuWenBen(text, btnEl) {
       const zuiEl = zuiTs
         ? heZi.querySelector('.xiaoXi[data-ts="' + String(zuiTs).replace(/"/g, '\\"') + '"]')
         : null;
-      if (zhuiDi || yongHuXinFa || genDi) {
-        /** R222 项4：勾选 / 用户刚发消息 / 正在跟随底部 ⇒ 滚到底；不再钉顶（修「滚动到上面」抖动） */
+      if (zhuiDi || yongHuXinFa) {
+        /** 勾选 / 用户刚发消息 ⇒ 滚到底（R222 防抖动保留：用户消息永远回底） */
         gunDaoZuiXin();
       } else {
-        /** 不跟随（用户上翻看历史）：保持位置，绝不钉顶/抢视口 */
-        if (prevScrollTop != null) sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
+        /**
+         * R224 项2：恢复 R130 限制1/2 —— 未勾选 ⇒ 牛马回复（含流式块）首内容顶部对齐，从头读。
+         * 只钉牛马回复，绝不钉用户消息/系统小字（R222 抖动的真因是把用户消息也钉顶）；
+         * 钉后退出跟随 ⇒ 后续重画/流式不再抢视口；用户滚回底部即恢复跟随。
+         */
+        const zuiObj = xiaoXi[xiaoXi.length - 1] || null;
+        const youLiuKuai = !!heZi.querySelector('[data-streaming="1"]');
+        const shiHuiFu = (!!zuiObj && zuiObj.role === 'them' && !zuiObj.system) || youLiuKuai;
+        const maoEl = huiFuShouGeEl(heZi, zuiEl) || zuiEl;
+        if (shiHuiFu && maoEl) {
+          gunDaoMaoDing(maoEl);
+          sheZhiGenDi(sid, false);
+        } else if (genDi) {
+          gunDaoZuiXin();
+        } else if (prevScrollTop != null) {
+          sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
+        }
       }
     } else {
       /**
@@ -8784,7 +8867,7 @@ async function langDuWenBen(text, btnEl) {
       if (!list.length) return '<div class="bz-zu"><div class="bz-zuTou">' + escapeHtml(title) + '</div><div class="bz-kong">' + escapeHtml(tOr('help.empty', '（暂无）')) + '</div></div>';
       return '<div class="bz-zu"><div class="bz-zuTou">' + escapeHtml(title) + '<span class="bz-zuShu">' + list.length + '</span></div>' + list.map(row).join('') + '</div>';
     }
-    x.innerHTML = group(tOr('help.reqIn', '别人想加入'), inn) + group(tOr('help.reqOut', '你申请加入'), out);
+    x.innerHTML = group(tOr('help.reqIn', '申请者'), inn) + group(tOr('help.reqOut', '待批复'), out);
   }
   async function bzXuanRanSystem() {
     var x = bzXiangQingView(tOr('help.system', '系统消息'));
@@ -15929,16 +16012,28 @@ async function renderDashboard(host) {
             </summary>
             <div class="wangLuoHostBody">
               <p class="jingYin wangLuoHostHint">${escapeHtml(tOr('net.host.hint', '主机模式 = 别人连你时可用的地址。下面每一条都可以是 IP、域名或 host:port；不写端口时使用 59599，IPv6 要写成 [::1]:59599。'))}</p>
-              <label class="wangLuoHostEnable">
-                <input type="checkbox" id="wangLuoHostEnabled"/>
-                <span>${escapeHtml(tOr('net.host.enable', '启用主机模式（只保存配置）'))}</span>
-              </label>
-              <p class="jingYin wangLuoHostNote">${escapeHtml(tOr('net.host.enableNote', '注意：这个勾选只保存“我希望别人用这些地址连我”的意图。当前版本尚未把主机模式接入协议层，不能据此认为端口已在监听或别人一定能连入。'))}</p>
+              <div class="wangLuoHostEnableHang">
+                <label class="wangLuoHostEnable">
+                  <input type="checkbox" id="wangLuoHostEnabled"/>
+                  <span>${escapeHtml(tOr('net.host.enable', '启用主机模式'))}</span>
+                </label>
+                <label class="wangLuoHostEnable wangLuoHostNoConfirm" title="${escapeHtml(tOr('net.host.noConfirmHint', '勾选后对方持凭证可直接连接；不勾选则本机收到申请，需在申请记录里同意。'))}">
+                  <input type="checkbox" id="wangLuoHostNoConfirm"/>
+                  <span>${escapeHtml(tOr('net.host.noConfirm', '无需确认'))}</span>
+                </label>
+              </div>
+              <p class="jingYin wangLuoHostNote">${escapeHtml(tOr('net.host.enableNote', '启用后本机按主机凭证接受其他设备连接（类似简易 FWArmy）。先检测本机与公网地址，成功后才能启用；凭证在下方生成。'))}</p>
               <div class="wangLuoHostToolbar">
                 <button type="button" class="anNiuZhuYao wangLuoHostDetectBtn" id="anNiuHostDetect">${escapeHtml(tOr('net.host.detect', '检测本机与公网地址'))}</button>
                 <span class="jingYin" id="wangLuoHostDetectState" role="status" aria-live="polite"></span>
               </div>
               <div class="wangLuoHostDetectResult" id="wangLuoHostDetectResult" role="status" aria-live="polite"></div>
+              <!-- R224 项12：主机凭证（同一时间仅一个；再次生成需二次确认；明文只显示一次） -->
+              <div class="wangLuoHostToolbar">
+                <button type="button" class="anNiuZhuYao" id="anNiuHostCredGen">${escapeHtml(tOr('net.host.credGen', '生成凭证'))}</button>
+                <span class="jingYin" id="wangLuoHostCredState" role="status" aria-live="polite"></span>
+              </div>
+              <div class="wangLuoHostIpWarn" id="wangLuoHostIpWarn" role="alert"></div>
               <div class="wangLuoHostListHead">
                 <span id="wangLuoHostListTitle">${escapeHtml(tOr('net.host.listTitle', '主机地址（最多 {max} 条）'))}</span>
                 <span class="jingYin" id="wangLuoHostCount"></span>
@@ -15962,7 +16057,7 @@ async function renderDashboard(host) {
               <span class="jingYin wangLuoFoldSummary" id="wangLuoProviderSummary" aria-live="polite"></span>
             </summary>
             <div class="wangLuoProviderBody">
-              <p class="jingYin wangLuoProviderHint">${escapeHtml(tOr('net.provider.hint', '这里登记“提供主机接入的服务商”。名称与地址会落盘；凭证只交给主进程的 SecureKeyStore，界面不回显明文。'))}</p>
+              <p class="jingYin wangLuoProviderHint">${escapeHtml(tOr('net.provider.hint', '这里登记“提供主机接入的服务商”。只需名称 + 凭证（地址从凭证解析）；凭证只交给主进程的 SecureKeyStore，界面不回显明文。'))}</p>
               <div class="wangLuoProviderList" id="wangLuoProviderList" role="list"
                    aria-label="${escapeHtml(tOr('net.provider.listAria', '主机服务商列表'))}"
                    data-max="1000" data-visible-rows="7" data-row-height="46"></div>
@@ -15971,9 +16066,7 @@ async function renderDashboard(host) {
                 <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.provider.name', '名称'))}</span>
                   <input id="wangLuoProviderName" type="text" maxlength="80" autocomplete="off" spellcheck="false"
                          placeholder="${escapeHtml(tOr('net.provider.namePlaceholder', '例如：家里主机'))}"/></label>
-                <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.provider.address', '地址'))}</span>
-                  <input id="wangLuoProviderAddress" type="text" autocomplete="off" spellcheck="false"
-                         placeholder="host:port"/></label>
+                <!-- R224 项1：地址栏已删 —— FWArmy 凭证自带地址端口（fwnexp_v2_ 自动解析） -->
                 <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.provider.credential', '凭证'))}</span>
                   <input id="wangLuoProviderCredential" type="password" autocomplete="new-password" spellcheck="false"/></label>
                 <div class="jingYin" id="wangLuoProviderCredentialHint"></div>
@@ -15987,36 +16080,37 @@ async function renderDashboard(host) {
                 <button type="button" class="anNiuXiao" id="anNiuProviderAdd">${escapeHtml(tOr('net.provider.add', '添加主机服务商'))}</button>
               </div>
               <div class="wangLuoHostMsg" id="wangLuoProviderMsg" role="status" aria-live="polite"></div>
-              <div class="jingYin wangLuoProviderAddressHint">${escapeHtml(tOr('net.provider.addressHint', '地址写 host:port；不写端口时使用 59599，IPv6 写成 [::1]:59599。地址不能重复。'))}</div>
+              <div class="jingYin wangLuoProviderAddressHint">${escapeHtml(tOr('net.provider.addressHint', '只需名称 + 凭证：fwnexp_v2_ 凭证自带地址端口，自动解析；其他格式凭证的地址在服务商侧，解析前显示「地址待解析」。'))}</div>
             </div>
           </details>
 
           <!-- C 方案：发现开放 + 消息走自选服务器；公开可发现默认关。
                打开后只发布「地址/端口/指纹/在线时间」，聊天内容永不进入发现层。 -->
           <details class="wangLuoHostDetails" id="wangLuoDiscoveryMode">
-            <summary title="${escapeHtml(tOr('net.discovery.hint', '公开可发现 = 把你的地址记录发布到发现网络，让别人能找到你。默认打开，每个设备都是发现网络的节点：公网可达即完整节点（存证/路由），入站进不来即弱节点（发布/查询），直连不可行时由中继站兜底。记录内容是地址、端口、身份指纹和在线时间；聊天内容永远不会进入发现层，消息仍走你自选的服务器。打开后任何人都能读到这些元数据。'))}">
-              <span class="wangLuoFoldTitle">${escapeHtml(tOr('net.discovery.title', '公开可发现（默认开）'))}</span>
+            <summary title="${escapeHtml(tOr('net.discovery.hint', 'DHT组网 = 把你的地址记录发布到发现网络，让别人能找到你。默认加入，每个设备都是发现网络的节点：公网可达即完整节点（存证/路由），入站进不来即弱节点（发布/查询），直连不可行时由中继站兜底。记录内容是地址、端口、身份指纹和在线时间；聊天内容永远不会进入发现层，消息仍走你自选的服务器。加入后任何人都能读到这些元数据。'))}">
+              <span class="wangLuoFoldTitle">${escapeHtml(tOr('net.discovery.title', 'DHT组网'))}</span>
               <span class="jingYin wangLuoFoldSummary" id="wangLuoDiscoverySummary" aria-live="polite"></span>
             </summary>
             <div class="wangLuoHostBody">
-              <label class="wangLuoHostEnable">
-                <input type="checkbox" id="wangLuoDiscoveryEnabled"/>
-                <span>${escapeHtml(tOr('net.discovery.enable', '允许公开发现我的地址'))}</span>
-              </label>
+              <div class="wangLuoHostEnableHang">
+                <label class="wangLuoHostEnable">
+                  <input type="checkbox" id="wangLuoDiscoveryEnabled"/>
+                  <span>${escapeHtml(tOr('net.discovery.enable', '加入DHT组网'))}</span>
+                </label>
+                <span class="wangLuoDiscoveryJoinState" id="wangLuoDiscoveryJoinState" role="status" aria-live="polite"></span>
+              </div>
               <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.discovery.bootstrap', '引导节点'))}</span>
                 <textarea id="wangLuoDiscoveryBootstrap" rows="3" spellcheck="false"
                           placeholder="${escapeHtml(tOr('net.discovery.bootstrapPlaceholder', 'host 或 host:port，每行一个（默认端口 7800，最多 10 个）'))}"></textarea></label>
-              <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.discovery.port', '本机 UDP 端口'))}</span>
-                <input id="wangLuoDiscoveryPort" type="number" min="0" max="65535" step="1"
-                       placeholder="7800"/></label>
-              <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.discovery.advertiseHost', '对外宣告地址'))}</span>
-                <input id="wangLuoDiscoveryAdvertiseHost" type="text" spellcheck="false"
-                       placeholder="${escapeHtml(tOr('net.discovery.advertiseHostPlaceholder', '留空自动选：公网地址 → 主机地址 → 本机地址'))}"/></label>
+              <!-- R224 项13：对外地址（一行一个 host:port，默认端口 62666）；本机UDP端口/对外宣告地址两行已删 -->
+              <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.discovery.advertiseList', '对外地址'))}</span>
+                <textarea id="wangLuoDiscoveryAdvertiseList" rows="3" spellcheck="false"
+                          placeholder="${escapeHtml(tOr('net.discovery.advertiseListPlaceholder', '地址或IP + 端口，每行一个（默认端口 62666）；有公网IP时自动填入'))}"></textarea></label>
               <div class="wangLuoHostToolbar">
                 <button type="button" class="anNiuZhuYao" id="anNiuDiscoverySave">${escapeHtml(tOr('net.discovery.save', '保存并应用'))}</button>
                 <span class="jingYin" id="wangLuoDiscoveryState" role="status" aria-live="polite"></span>
               </div>
-              <div class="jingYin wangLuoHostNote">${escapeHtml(tOr('net.discovery.note', '需要先打开组网。引导节点留空时使用默认锚点（域名待定，定后自动生效）；关闭本项会停止发布；已发布的记录最多保留 30 分钟后自然过期。'))}</div>
+              <div class="jingYin wangLuoHostNote">${escapeHtml(tOr('net.discovery.note', '启动时自动检测公网IP并自动宣告（默认端口 62666）。引导节点留空时使用默认锚点；取消勾选会停止发布并退出DHT；已发布的记录最多保留 30 分钟后自然过期。'))}</div>
               <div class="wangLuoHostMsg" id="wangLuoDiscoveryMsg" role="status" aria-live="polite"></div>
             </div>
           </details>
@@ -21309,6 +21403,8 @@ async function renderDashboard(host) {
      */
     hostMode: {
       enabled: false,
+      noConfirm: false,
+      credential: null,
       hosts: [],
       detecting: false,
       startedAt: 0,
@@ -21316,15 +21412,17 @@ async function renderDashboard(host) {
       msg: '',
       msgKind: '',
     },
+    autoDetect: null, /* R224：启动自动检测事实（主进程落盘，界面只读） */
     /**
      * 公开可发现（C 方案，默认开）：只发布地址记录，聊天仍走自选服务器。
      * bootstrap 在界面用逗号/换行分隔的文本编辑，保存时拆成数组。
      */
     discovery: {
-      enabled: false,
+      enabled: true, /* R224 项13：加入DHT组网默认勾选 */
       bootstrap: '',
       port: 7800,
       advertiseHost: '',
+      advertiseList: '',
       status: null,
       msg: '',
       msgKind: '',
@@ -21652,6 +21750,28 @@ async function renderDashboard(host) {
   const NET_HOST_DETECT_MIN_MS = 1300;
   const NET_HOST_DETECT_TIMEOUT_MS = 8000;
   const NET_PROVIDER_CRED_PREFIX = 'net-provider:';
+  /* R224 项1：内置默认中继（预设服务商）。该凭证是 FWArmy 中继 token（43 位 b64url 不透明 token，
+     地址/端口存在服务端凭证记录里，本地解析不出）⇒ 以「地址待解析」登记，如实显示。 */
+  const YUSHE_PROVIDER_ID = 'np-yushe-fuwushang';
+  const YUSHE_PROVIDER_TOKEN = 'hNN0IYEchH-_CB10hYG-H1jFqpW_SP4FBqXiW-ml6So';
+  function queBaoYuSheProvider() {
+    const arr = netState.providers || (netState.providers = []);
+    let rec = arr.find((p) => p && String(p.id) === YUSHE_PROVIDER_ID);
+    if (!rec) {
+      rec = {
+        id: YUSHE_PROVIDER_ID, name: tOr('net.provider.presetName', '预设服务商'), address: '',
+        hasCredential: true, credentialState: 'stored', invalidAddress: false, addressPending: true, builtin: true,
+      };
+      arr.unshift(rec);
+    }
+    rec.builtin = true;
+    if (!rec.name) rec.name = tOr('net.provider.presetName', '预设服务商');
+    /* 凭证进 SecureKeyStore（幂等覆盖；界面绝不读回明文） */
+    try {
+      const sv = window.warmy && window.warmy.secureKeySave;
+      if (typeof sv === 'function') Promise.resolve(sv({ providerId: NET_PROVIDER_CRED_PREFIX + YUSHE_PROVIDER_ID, apiKey: YUSHE_PROVIDER_TOKEN })).catch(() => {});
+    } catch { /* noop */ }
+  }
 
   function netHostPure() {
     return typeof window !== 'undefined' && window.WarmyNetHost ? window.WarmyNetHost : null;
@@ -21757,6 +21877,12 @@ async function renderDashboard(host) {
         // R63：主机模式只保存“意图 + 地址 + 服务商元数据”，与旧 publicAddresses 分开读。
         const hm = saved.hostMode;
         netState.hostMode.enabled = hm === true || !!(hm && typeof hm === 'object' && hm.enabled === true);
+        /* R224 项12/13：主机模式新字段 + 对外地址列表 + 自动检测事实 */
+        netState.hostMode.noConfirm = saved.hostNoConfirm === true;
+        netState.hostMode.credential = (saved.hostCredential && typeof saved.hostCredential === 'object') ? saved.hostCredential : null;
+        if (saved.hostDetect && typeof saved.hostDetect === 'object') netState.hostMode.detect = saved.hostDetect;
+        if (saved.autoDetect && typeof saved.autoDetect === 'object') netState.autoDetect = saved.autoDetect;
+        if (Array.isArray(saved.discoveryAdvertiseList)) netState.discovery.advertiseList = saved.discoveryAdvertiseList.map(String).join('\n');
         if (Array.isArray(saved.hosts)) {
           const pure = netHostPure();
           netState.hostMode.hosts = pure && typeof pure.normalizeStoredHosts === 'function'
@@ -21781,6 +21907,7 @@ async function renderDashboard(host) {
     } catch {
       /* 预览桩/旧主进程没有该字段：保持默认 */
     }
+    queBaoYuSheProvider(); /* R224 项1：内置预设服务商永远在（含首启） */
     void netLoadDiscoveryStatus();
     try {
       const st = await netIpc('netStatus');
@@ -21839,7 +21966,7 @@ async function renderDashboard(host) {
     return { local: weiZhi, publicIp, LieBiao: (netState.addr.publicAddresses || []).slice() };
   }
 
-  function netPersist() {
+  async function netPersist() {
     const LieBiao = (netState.addr.publicAddresses || []).slice();
     // R63：同一份 net 里带上主机模式/主机地址/服务商元数据。**凭证明文永不进入这里**：
     // 只会留下 hasCredential 与 credentialState，密钥本体在 SecureKeyStore。
@@ -21852,16 +21979,23 @@ async function renderDashboard(host) {
       credentialState: p.credentialState === 'pending'
         ? 'pending'
         : (p.hasCredential === true ? 'stored' : 'none'),
+      addressPending: p.addressPending === true,
+      builtin: p.builtin === true,
     }));
+    /* R224：读-改-写合并 —— 主进程落盘的字段（hostCredential/hostDetect/autoDetect 等）不被界面覆盖 */
+    let curNet = {};
+    try { const s = await window.warmy.settingsGet(); curNet = (s && s.settings && s.settings.net) || {}; } catch { curNet = {}; }
     window.warmy
       .settingsSave({
         net: {
+          ...curNet,
           port: netState.addr.port,
           publicAddresses: LieBiao,
           // legacy mirrors for any older readers of the settings blob
           ip: LieBiao[0] || '',
           domains: LieBiao.slice(),
           hostMode: !!netState.hostMode.enabled,
+          hostNoConfirm: !!netState.hostMode.noConfirm,
           hosts,
           providers,
           publicDiscoverable: !!netState.discovery.enabled,
@@ -21869,6 +22003,8 @@ async function renderDashboard(host) {
             .split(/[\s,;，；]+/).map((x) => x.trim()).filter(Boolean).slice(0, 10),
           discoveryPort: Number(netState.discovery.port) || 0,
           discoveryAdvertiseHost: String(netState.discovery.advertiseHost || '').trim(),
+          discoveryAdvertiseList: String(netState.discovery.advertiseList || '')
+            .split(/[\s,;，；]+/).map((x) => x.trim()).filter(Boolean).slice(0, 16),
         },
       })
       .catch(() => {});
@@ -21887,6 +22023,9 @@ async function renderDashboard(host) {
           }
           if (document.activeElement?.id !== 'wangLuoDiscoveryPort') {
             netState.discovery.port = Number.isInteger(r.config.port) ? r.config.port : netState.discovery.port;
+          }
+          if (document.activeElement?.id !== 'wangLuoDiscoveryAdvertiseList') {
+            netState.discovery.advertiseList = Array.isArray(r.config.advertiseList) ? r.config.advertiseList.join('\n') : netState.discovery.advertiseList;
           }
         }
       }
@@ -21920,6 +22059,7 @@ async function renderDashboard(host) {
         bootstrap,
         port,
         advertiseHost: String(st.advertiseHost || '').trim(),
+        advertiseList: String(st.advertiseList || '').split(/[\s,;，；]+/).map((x) => x.trim()).filter(Boolean).slice(0, 16),
       });
       if (!r) {
         st.msg = tOr('net.discovery.unavailable', '当前版本没有公开可发现接口');
@@ -21931,6 +22071,7 @@ async function renderDashboard(host) {
         st.enabled = !!r.config.enabled;
         st.bootstrap = Array.isArray(r.config.bootstrap) ? r.config.bootstrap.join('\n') : st.bootstrap;
         st.port = Number.isInteger(r.config.port) ? r.config.port : st.port;
+        if (Array.isArray(r.config.advertiseList)) st.advertiseList = r.config.advertiseList.join('\n');
       }
       st.status = r.status || null;
       if (r.ok) {
@@ -21971,6 +22112,16 @@ async function renderDashboard(host) {
     if (port && document.activeElement !== port) port.value = String(st.port ?? 7800);
     const adv = $('wangLuoDiscoveryAdvertiseHost');
     if (adv && document.activeElement !== adv && adv.value !== String(st.advertiseHost || '')) adv.value = String(st.advertiseHost || '');
+    const al = $('wangLuoDiscoveryAdvertiseList');
+    if (al && document.activeElement !== al && al.value !== String(st.advertiseList || '')) al.value = String(st.advertiseList || '');
+    /* R224 项13：勾选右侧主题色状态 = 是否真的加入了 DHT（勾选只是意愿） */
+    const join = $('wangLuoDiscoveryJoinState');
+    if (join) {
+      const jiaRu = !!(s.enabled && s.listening);
+      join.textContent = jiaRu ? tOr('net.discovery.joined', '已加入DHT组网') : tOr('net.discovery.notJoined', '未加入DHT组网');
+      join.classList.toggle('on', jiaRu);
+      join.dataset.joined = jiaRu ? '1' : '0';
+    }
     const stateEl = $('wangLuoDiscoveryState');
     if (stateEl) {
       stateEl.textContent = s.enabled
@@ -22184,6 +22335,7 @@ async function renderDashboard(host) {
 
     netState.hostMode.detecting = false;
     netState.hostMode.detect = {
+      ok: !!(local && local.ip) && !failed && !timedOut, /* R224 项12：检测成功才允许启用主机模式 */
       at: Date.now(),
       startedAt: started,
       elapsedMs: Date.now() - started,
@@ -22277,10 +22429,8 @@ async function renderDashboard(host) {
       ? t('net.provider.editTitle')
       : t('net.provider.addTitle');
     const name = $('wangLuoProviderName');
-    const addr = $('wangLuoProviderAddress');
     const cred = $('wangLuoProviderCredential');
     if (name) name.value = rec ? rec.name : '';
-    if (addr) addr.value = rec ? rec.address : '';
     if (cred) cred.value = '';
     const hint = $('wangLuoProviderCredentialHint');
     if (hint) hint.textContent = rec && rec.hasCredential
@@ -22304,14 +22454,24 @@ async function renderDashboard(host) {
 
   async function netProviderSave() {
     const nameEl = $('wangLuoProviderName');
-    const addrEl = $('wangLuoProviderAddress');
     const credEl = $('wangLuoProviderCredential');
-    const cred = credEl ? String(credEl.value || '') : '';
-    const input = {
-      id: netState.providerForm.mode === 'edit' ? netState.providerForm.id : '',
-      name: nameEl ? nameEl.value : '',
-      address: addrEl ? addrEl.value : '',
-    };
+    const cred = credEl ? String(credEl.value || '').trim() : '';
+    /* R224 项1：地址栏已删 —— 地址从凭证解析（fwnexp_v2_ 自带地址端口）；
+       不透明凭证：编辑保留原地址，新增标「地址待解析」。新增必填凭证。 */
+    const editId = netState.providerForm.mode === 'edit' ? netState.providerForm.id : '';
+    const rec0 = editId ? netProviderFind(editId) : null;
+    if (!cred && !editId) {
+      netSetProviderMsg(tOr('net.provider.credRequired', '请填写凭证（地址从凭证解析，不再单独填写）'), 'bad', true);
+      renderNetProviderForm();
+      return { ok: false, code: 'credential-required' };
+    }
+    const input = { id: editId, name: nameEl ? nameEl.value : '', address: '', credential: cred };
+    const pure0 = netHostPure();
+    const pc = pure0 && typeof pure0.parseFwCredential === 'function' ? pure0.parseFwCredential(cred) : null;
+    if (pc && pc.ok) input.address = pc.address;
+    else if (rec0 && rec0.address) input.address = rec0.address;
+    if (!input.address && (cred || (rec0 && rec0.addressPending))) input.allowPendingAddress = true;
+    if (rec0 && rec0.builtin) input.builtin = true;
     const r = netProviderUpsert(input);
     if (!r.ok) {
       const key = r.code === 'duplicate'
@@ -22371,6 +22531,7 @@ async function renderDashboard(host) {
   async function netProviderDelete(id) {
     const rec = netProviderFind(id);
     if (!rec) return false;
+    if (rec.builtin) { showToast(tOr('net.provider.presetNoDelete', '预设服务商是内置默认中继，不可删除')); return false; }
     const ok = await uiConfirm(
       fmtKey('net.provider.deleteConfirm', { name: rec.name || rec.address || rec.id }),
       t('net.provider.detailsTitle')
@@ -23392,6 +23553,25 @@ async function renderDashboard(host) {
     }
     const cb = $('wangLuoHostEnabled');
     if (cb && cb.checked !== !!st.enabled) cb.checked = !!st.enabled;
+    /* R224 项12：检测成功才能启用；无需确认同步；凭证状态与IP变更红字 */
+    const jianOk = !!(st.detect && st.detect.ok);
+    if (cb) cb.disabled = !jianOk || !!st.detecting;
+    const nc = $('wangLuoHostNoConfirm');
+    if (nc && nc.checked !== !!st.noConfirm) nc.checked = !!st.noConfirm;
+    const credState = $('wangLuoHostCredState');
+    if (credState) {
+      credState.textContent = st.credential
+        ? fmtKey('net.host.credCreatedAt', { t: TZ.locTime(Number(st.credential.createdAt) || Date.now()), n: String((st.credential.hosts || []).length) })
+        : tOr('net.host.credNone', '凭证未生成');
+    }
+    const warn = $('wangLuoHostIpWarn');
+    if (warn) {
+      const gong = String((netState.autoDetect && netState.autoDetect.publicIp) || (st.detect && st.detect.publicIp) || '');
+      const jiu = String((st.credential && st.credential.publicIp) || '');
+      const bian = !!(st.credential && st.credential.ipOnly && gong && jiu && gong !== jiu);
+      warn.textContent = bian ? fmtKey('net.host.ipChanged', { jiu, xin: gong }) : '';
+      warn.dataset.show = bian ? '1' : '0';
+    }
     const btn = $('anNiuHostDetect');
     if (btn) {
       btn.classList.toggle('isBusy', !!st.detecting);
@@ -23638,17 +23818,17 @@ async function renderDashboard(host) {
             ? 'net.provider.credentialStored'
             : (credState === 'pending' ? 'net.provider.credentialPending' : 'net.provider.credentialNone');
           return '<div class="wangLuoProviderHang" data-pid="' + escapeHtml(String(p.id || '')) + '"' +
-            ' data-valid="' + (p.invalidAddress ? '0' : '1') + '" role="listitem">' +
+            ' data-valid="' + (p.invalidAddress ? '0' : '1') + '" data-builtin="' + (p.builtin ? '1' : '0') + '" role="listitem">' +
             '<div class="wangLuoProviderMain">' +
             '<div class="wangLuoProviderName" title="' + escapeHtml(p.name || '') + '">' + escapeHtml(p.name || t('net.provider.unnamed')) + '</div>' +
-            '<div class="wangLuoProviderAddr" title="' + escapeHtml(p.address || '') + '">' + escapeHtml(p.address || '—') + '</div>' +
+            '<div class="wangLuoProviderAddr" title="' + escapeHtml(p.address || '') + '"' + (p.addressPending ? ' data-pending="1"' : '') + '>' + escapeHtml(p.address || (p.addressPending ? tOr('net.provider.addressPending', '地址待解析') : '—')) + '</div>' +
             '</div>' +
             '<span class="wangLuoCredBadge" data-state="' + credState + '">' + escapeHtml(t(credKey)) + '</span>' +
             '<span class="wangLuoTlsBadge" data-tls="' + zhongJiTlsBadge(String(p.id || '')).state + '">' + escapeHtml(t(zhongJiTlsBadge(String(p.id || '')).key)) + '</span>' +
             '<div class="wangLuoProviderActions">' +
             '<button type="button" class="anNiuXiao" data-ptls="' + escapeHtml(String(p.id || '')) + '">' + escapeHtml(t('relayTls.verifyBtn')) + '</button>' +
             '<button type="button" class="anNiuXiao" data-pedit="' + escapeHtml(String(p.id || '')) + '">' + escapeHtml(t('common.edit')) + '</button>' +
-            '<button type="button" class="anNiuXiao" data-pdel="' + escapeHtml(String(p.id || '')) + '">' + escapeHtml(t('common.delete')) + '</button>' +
+            (p.builtin ? '' : '<button type="button" class="anNiuXiao" data-pdel="' + escapeHtml(String(p.id || '')) + '">' + escapeHtml(t('common.delete')) + '</button>') +
             '</div></div>';
         }).join('')
       : '<div class="jingYin">' + escapeHtml(t('net.provider.empty')) + '</div>';
@@ -23659,7 +23839,11 @@ async function renderDashboard(host) {
       b.onclick = () => void netProviderDelete(b.dataset.pdel);
     });
     list.querySelectorAll('[data-ptls]').forEach((b) => {
-      b.onclick = () => void zhongJiTlsHeDui(b.dataset.ptls);
+      b.onclick = () => {
+        const rec = netProviderFind(b.dataset.ptls);
+        if (rec && !rec.address) { showToast(tOr('net.provider.addressPending', '地址待解析')); return; }
+        void zhongJiTlsHeDui(b.dataset.ptls);
+      };
     });
     if (!netState.tlsPinsLoaded) { netState.tlsPinsLoaded = true; zhongJiTlsShuaXinPins(); }
     const msg = $('wangLuoProviderMsg');
@@ -24077,7 +24261,15 @@ async function renderDashboard(host) {
     if (hostEnable && hostEnable.dataset.bound !== '1') {
       hostEnable.dataset.bound = '1';
       hostEnable.onchange = () => {
+        /* R224 项12：检测成功才能启用（主进程也再拒一次） */
+        if (hostEnable.checked && !(netState.hostMode.detect && netState.hostMode.detect.ok)) {
+          hostEnable.checked = false;
+          netSetHostMsg(tOr('net.host.detectRequired', '请先检测本机与公网地址，成功后才能启用主机模式'), 'warn');
+          renderNetHostMode();
+          return;
+        }
         netState.hostMode.enabled = !!hostEnable.checked;
+        void window.warmy.zhuJiMoShiShe?.({ enabled: netState.hostMode.enabled }).catch(() => {});
         netPersist();
         renderNetHostMode();
       };
@@ -24085,7 +24277,54 @@ async function renderDashboard(host) {
     const hostDetect = $('anNiuHostDetect');
     if (hostDetect && hostDetect.dataset.bound !== '1') {
       hostDetect.dataset.bound = '1';
-      hostDetect.onclick = () => { void netHostDetect(); };
+      hostDetect.onclick = () => {
+        void netHostDetect();
+        /* R224 项12：主进程同步落盘检测事实（启用门控/凭证/IP变更警告都读它） */
+        void window.warmy.zhuJiJianCe?.().then((f) => {
+          if (f && f.ok) {
+            netState.hostMode.detect = { ...(netState.hostMode.detect || {}), ...f };
+            netState.autoDetect = f;
+            renderNetHostMode();
+          }
+        }).catch(() => {});
+      };
+    }
+    /* R224 项12：无需确认 + 生成凭证（二次确认；明文只显示一次） */
+    const hostNoConfirm = $('wangLuoHostNoConfirm');
+    if (hostNoConfirm && hostNoConfirm.dataset.bound !== '1') {
+      hostNoConfirm.dataset.bound = '1';
+      hostNoConfirm.onchange = () => {
+        netState.hostMode.noConfirm = !!hostNoConfirm.checked;
+        void window.warmy.zhuJiMoShiShe?.({ noConfirm: netState.hostMode.noConfirm }).catch(() => {});
+        netPersist();
+      };
+    }
+    const credGen = $('anNiuHostCredGen');
+    if (credGen && credGen.dataset.bound !== '1') {
+      credGen.dataset.bound = '1';
+      credGen.onclick = async () => {
+        if (!(netState.hostMode.detect && netState.hostMode.detect.ok)) {
+          netSetHostMsg(tOr('net.host.detectRequired', '请先检测本机与公网地址，成功后才能启用主机模式'), 'warn');
+          renderNetHostMode();
+          return;
+        }
+        if (netState.hostMode.credential) {
+          const go = await uiConfirm(tOr('net.host.credRegenConfirm', '将删除旧凭证并生成新凭证，旧凭证随即失效。继续？'), tOr('net.host.credRegenTitle', '重新生成主机凭证'));
+          if (!go) return;
+        }
+        let r = null;
+        try { r = await window.warmy.zhuJiPingZhengShengCheng?.({}); } catch (e) { r = { ok: false, error: String((e && e.message) || e) }; }
+        if (r && r.ok && r.token) {
+          netState.hostMode.credential = r.meta || { createdAt: Date.now() };
+          netPersist();
+          renderNetHostMode();
+          try { await navigator.clipboard.writeText(String(r.token)); } catch { /* noop */ }
+          await uiAlert(String(r.token) + '\n\n' + tOr('net.host.credOnceNote', '凭证已复制。明文只显示这一次，请妥善保存；遗失请重新生成。'), tOr('net.host.credTitle', '主机凭证'));
+        } else {
+          netSetHostMsg(fmtKey('net.host.credGenFailed', { err: String((r && r.error) || 'unknown') }), 'bad');
+          renderNetHostMode();
+        }
+      };
     }
     const hostAdd = $('anNiuHostAdd');
     if (hostAdd && hostAdd.dataset.bound !== '1') {
@@ -24161,6 +24400,24 @@ async function renderDashboard(host) {
       dAdv.dataset.bound = '1';
       dAdv.oninput = () => { netState.discovery.advertiseHost = dAdv.value; };
       dAdv.onchange = () => { void netSaveDiscovery(); };
+    }
+    const dList = $('wangLuoDiscoveryAdvertiseList');
+    if (dList && dList.dataset.bound !== '1') {
+      dList.dataset.bound = '1';
+      dList.oninput = () => { netState.discovery.advertiseList = dList.value; };
+      dList.onchange = () => { void netSaveDiscovery(); };
+    }
+    /* R224 项12：打开设置时读主进程主机状态（检测事实/凭证元数据/无需确认） */
+    if (!window.__zhuJiDuQuGuo) {
+      window.__zhuJiDuQuGuo = true;
+      void window.warmy.zhuJiMoShiDu?.().then((r) => {
+        if (!r || !r.ok) return;
+        netState.hostMode.noConfirm = !!r.noConfirm;
+        netState.hostMode.credential = r.credential || null;
+        if (r.detect) netState.hostMode.detect = { ...(netState.hostMode.detect || {}), ...r.detect };
+        if (r.autoDetect) netState.autoDetect = r.autoDetect;
+        renderNetHostMode();
+      }).catch(() => {});
     }
     renderNetCard();
   }
@@ -25304,7 +25561,7 @@ async function renderDashboard(host) {
     const st = await window.warmy.tingHuaZhuangTai?.().catch(() => null);
     if (!st || !st.ready) {
       /** 两条路都给出口：调用链（云端 ASR 模型）或**本机 sherpa-onnx**（不用网、不用配模型） */
-      uiAlert(tOr('chat.voiceNeedAsr', '还没能语音转文字：可以在「设置 → 功能 → 本地语音与文字互转」点「安装」（本机跑，不联网），或在「设置 → 模型 → 听话模型」里配一个云端模型。'));
+      await yuYinSheZhiYinDao(tOr('chat.voiceNeedAsr', '还没能语音转文字：可以在「设置 → 功能 → 本地语音与文字互转」点「安装」（本机跑，不联网），或在「设置 → 模型 → 听话模型」里配一个云端模型。'));
       yuYinJinZhi = false;
       yuYinTongBuFaSongAnNiu();
       return;
@@ -25721,7 +25978,20 @@ async function renderDashboard(host) {
   // 本机的人敲回车 / 点「执行」→ 走 submitShellLine（主进程未就绪则**不执行任何东西**）
   $('ctgKongZhiTaiFaSong')?.addEventListener('click', () => { void submitShellLine(); });
   $('ctgKongZhiTaiShuRu')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); void submitShellLine(); }
+    if (e.key === 'Enter') { e.preventDefault(); void submitShellLine(); return; }
+    /* R224 项11：本机档上下箭头翻命令历史 */
+    const st = state.neiZhiKzt;
+    if (!st || st.mode !== 'local' || !Array.isArray(st.liShi) || !st.liShi.length) return;
+    const shuRu = $('ctgKongZhiTaiShuRu');
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      st.liShiZhi = Math.max(0, (st.liShiZhi < 0 ? st.liShi.length : st.liShiZhi) - 1);
+      if (shuRu) shuRu.value = st.liShi[st.liShiZhi] || '';
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      st.liShiZhi = Math.min(st.liShi.length, (st.liShiZhi < 0 ? st.liShi.length : st.liShiZhi) + 1);
+      if (shuRu) shuRu.value = st.liShiZhi >= st.liShi.length ? '' : (st.liShi[st.liShiZhi] || '');
+    }
   });
 
   /* ══════════════════════════════════════════════════════════════════════════
@@ -26091,7 +26361,9 @@ async function renderDashboard(host) {
     try { window.warmy.daKaiNiTaiSheZhi?.(); } catch { /* noop */ }
   });
   $('anNiuRongQiKongZhiTai')?.addEventListener('click', async () => {
-    /* R220：按会话环境分流 —— 容器会话开容器控制台；本机会话开该会话工作目录的控制台 */
+    /* R224 项11：内置控制台 —— 点图标在聊天框顶部展开/收起 overlay（不再开外部终端窗口） */
+    const mianBan = $('ctgKongZhiTaiMianBan');
+    if (mianBan && !mianBan.classList.contains('yinCang')) { guanBiNeiZhiKongZhiTai(); return; }
     try {
       const sel = state.selectedChat;
       if (!sel) return;
@@ -26105,11 +26377,104 @@ async function renderDashboard(host) {
         const inst = (state.instances || []).find((x) => x.id === sel.id);
         shiRongQi = !!(inst && String(inst.devEnv || '') === 'container');
       }
-      if (shiRongQi) { void openContainerShell(); return; }
-      await window.warmy.daKaiGongZuoMuLuKongZhiTai?.({ sessionId: String(sel.id || ''), dir });
+      if (shiRongQi) { await openContainerShell(); }
+      else { await daKaiBenJiKongZhiTai(String(sel.id || ''), dir); }
     } catch { void openContainerShell(); }
+    neiZhiKztChiCun();
+    $('anNiuRongQiKongZhiTai')?.classList.add('biaoTiLanQiYong');
   });
-  $('ctgKongZhiTaiGuanBi')?.addEventListener('click', () => { $('ctgKongZhiTaiMianBan')?.classList.add('yinCang'); });
+  /** R224 项11：收起内置控制台（再点图标 / 关闭按钮 / 切到无控制台的聊天） */
+  function guanBiNeiZhiKongZhiTai() {
+    $('ctgKongZhiTaiMianBan')?.classList.add('yinCang');
+    $('anNiuRongQiKongZhiTai')?.classList.remove('biaoTiLanQiYong');
+    state.neiZhiKzt = null;
+  }
+  /** R224 项11：overlay 默认高度 = 聊天列 45%（夹 180..460）；拖过把手后记住用户的高度 */
+  function neiZhiKztChiCun() {
+    const mianBan = $('ctgKongZhiTaiMianBan');
+    const lan = $('liaoTianLan');
+    if (!mianBan || !lan) return;
+    if (!mianBan.dataset.gao) {
+      const gao = Math.max(180, Math.min(460, Math.round(lan.clientHeight * 0.45)));
+      mianBan.style.height = gao + 'px';
+    }
+  }
+  /** R224 项11：本机档 —— 内置控制台（命令在本机执行，目录限定会话工作区；不再弹外部终端） */
+  async function daKaiBenJiKongZhiTai(sid, dir) {
+    const mianBan = $('ctgKongZhiTaiMianBan');
+    if (!mianBan) return false;
+    state.neiZhiKzt = { mode: 'local', sid: String(sid || ''), dir: String(dir || ''), liShi: [], liShiZhi: -1, mang: false };
+    mianBan.classList.remove('yinCang');
+    const tiShi = $('ctgKongZhiTaiTiShi');
+    if (tiShi) tiShi.textContent = tOr('container.console.localTitle', '本机控制台');
+    let r = null;
+    try { r = await window.warmy.benJiKongZhiTai?.({ action: 'daKai', sessionId: String(sid || ''), dir: String(dir || '') }); } catch { r = null; }
+    const cwd = String((r && r.ok && r.dir) || dir || '');
+    state.neiZhiKzt.dir = cwd;
+    const zt = $('ctgKongZhiTaiZhuangTai');
+    if (zt) { zt.dataset.shellState = 'local'; zt.textContent = tOr('container.console.envLocal', '本机') + (cwd ? ' · ' + cwd : ''); }
+    const note = $('ctgKongZhiTaiNote');
+    if (note) { note.dataset.shellNote = 'local'; note.textContent = tOr('container.console.localNote', '命令在本机执行 · 目录限定会话工作区'); }
+    const shuRu = $('ctgKongZhiTaiShuRu');
+    const faSong = $('ctgKongZhiTaiFaSong');
+    if (shuRu) { shuRu.disabled = false; shuRu.dataset.shellInput = 'enabled'; }
+    if (faSong) faSong.disabled = false;
+    const out = $('ctgKongZhiTaiShuChu');
+    if (out) {
+      out.textContent = tOr('container.console.localIntro', '本机控制台：输入命令回车执行，命令跑在本会话工作区里。cls 清屏；cd 切换目录（不能离开工作区）。') + '\n';
+      out.scrollTop = out.scrollHeight;
+    }
+    try { shuRu?.focus(); } catch { /* noop */ }
+    return true;
+  }
+  /** R224 项11：本机档提交一行命令（回显 + 输出 + 退出码；忙时拒绝第二条） */
+  async function tiJiaoBenJiKztHang() {
+    const st = state.neiZhiKzt;
+    const shuRu = $('ctgKongZhiTaiShuRu');
+    const out = $('ctgKongZhiTaiShuChu');
+    if (!st || st.mode !== 'local' || !shuRu || !out) return false;
+    const Hang = String(shuRu.value || '');
+    if (!Hang.trim()) return false;
+    if (st.mang) {
+      out.textContent += tOr('container.console.localBusy', '上一条命令还在执行，等它结束再输入…') + '\n';
+      out.scrollTop = out.scrollHeight;
+      return false;
+    }
+    if (/^(cls|clear)$/i.test(Hang.trim())) { out.textContent = ''; shuRu.value = ''; return true; }
+    st.liShi.push(Hang); if (st.liShi.length > 100) st.liShi.shift();
+    st.liShiZhi = st.liShi.length;
+    shuRu.value = '';
+    out.textContent += (st.dir || '.') + '> ' + Hang + '\n';
+    out.scrollTop = out.scrollHeight;
+    st.mang = true;
+    const faSong = $('ctgKongZhiTaiFaSong');
+    if (faSong) faSong.disabled = true;
+    let r = null;
+    try { r = await window.warmy.benJiKongZhiTai?.({ action: 'write', sessionId: st.sid, dir: st.dir, data: Hang }); }
+    catch (e) { r = { ok: false, error: String((e && e.message) || e) }; }
+    st.mang = false;
+    if (faSong) faSong.disabled = false;
+    if (r && r.cwd) {
+      st.dir = String(r.cwd);
+      const zt = $('ctgKongZhiTaiZhuangTai');
+      if (zt) zt.textContent = tOr('container.console.envLocal', '本机') + ' · ' + st.dir;
+    }
+    if (r && r.ok) {
+      if (r.shuChu) out.textContent += String(r.shuChu);
+      if (r.timedOut) out.textContent += tOr('container.console.localTimeout', '命令超时（30 秒），已终止') + '\n';
+      else if (typeof r.tuiMa === 'number' && r.tuiMa !== 0) out.textContent += fmtKey('container.console.localExit', { code: String(r.tuiMa) }) + '\n';
+    } else {
+      const err = String((r && r.error) || 'unknown');
+      out.textContent += (err === 'dir-outside-userdata' ? tOr('container.console.localOutside', '目录超出会话工作区边界，已拒绝')
+        : err === 'cd-not-found' ? tOr('container.console.localCdErr', '目录不存在')
+        : err === 'busy' ? tOr('container.console.localBusy', '上一条命令还在执行，等它结束再输入…')
+        : err) + '\n';
+    }
+    out.scrollTop = out.scrollHeight;
+    try { shuRu.focus(); } catch { /* noop */ }
+    return !!(r && r.ok);
+  }
+  $('ctgKongZhiTaiGuanBi')?.addEventListener('click', () => { guanBiNeiZhiKongZhiTai(); });
   // 诊断事件流：**自己展开/收起**（不再依赖已从聊天头移除的 #anNiuKongZhiTai）
   function toggleDiagPanel(forceOpen) {
     const host = $('diagHost');
@@ -26178,6 +26543,28 @@ async function renderDashboard(host) {
     };
     const onUp = () => { drag = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
     yuanSu.addEventListener('mousedown', (e) => {
+      drag = true; y0 = e.clientY; h0 = mianBan.getBoundingClientRect().height;
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+      e.preventDefault();
+    });
+  })();
+  /* R224 项11：内置控制台底部把手 —— 拖动调整 overlay 高度（往下拖 = 变高） */
+  (function bindNeiZhiKztResize() {
+    const tiao = $('ctgKongZhiTaiLaShen');
+    const mianBan = $('ctgKongZhiTaiMianBan');
+    if (!tiao || !mianBan) return;
+    let y0 = 0, h0 = 0, drag = false;
+    const onMove = (e) => {
+      if (!drag) return;
+      const lan = $('liaoTianLan');
+      const shangXian = Math.max(200, (lan ? lan.clientHeight : 600) - 56 - 24);
+      const h = Math.min(shangXian, Math.max(140, h0 + (e.clientY - y0)));
+      mianBan.style.height = h + 'px';
+      mianBan.dataset.gao = String(h);
+    };
+    const onUp = () => { drag = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    tiao.addEventListener('mousedown', (e) => {
       drag = true; y0 = e.clientY; h0 = mianBan.getBoundingClientRect().height;
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
@@ -29490,7 +29877,7 @@ async function renderDashboard(host) {
 
   // 列表空白处右键：按时间 / 按名称排序（我的牛马、项目、联系人、群聊）
   $('lieBiaoTi')?.addEventListener('contextmenu', (e) => {
-    if (e.target.closest && e.target.closest('.lieBiaoTiaoMu, .lieBiaoKa, .enterHqBaoGuo')) return;
+    if (e.target.closest && e.target.closest('.lieBiaoTiaoMu, .lieBiaoKa, .enterHqBaoGuo, .lieBiaoFenZu')) return; /* R224 项4：组头有自己的菜单，不重叠 */
     if (!['singleAi', 'internalGroup', 'externalGroup', 'externalChat'].includes(state.nav)) return;
     e.preventDefault();
     openContextMenu(e.clientX, e.clientY, [
@@ -31254,9 +31641,16 @@ async function renderDashboard(host) {
     btn.classList.toggle('benJiHuanJing', huanJing === 'local');
     btn.classList.toggle('rongQiHuanJing', huanJing === 'container');
     btn.title = (huanJing === 'local' ? tOr('container.console.envLocal', '本机') : tOr('container.console.envContainer', '容器'))
-      + ' · ' + (menjin.openable ? t('container.console.tip') : t('container.console.' + menjin.reason));
+      + ' · ' + tOr('container.console.tipBuiltin', '内置控制台：点击展开/收起')
+      + (huanJing === 'container' && !menjin.openable ? ' · ' + t('container.console.' + menjin.reason) : '');
     const mianBan = $('ctgKongZhiTaiMianBan');
-    if (mianBan && !mianBan.classList.contains('yinCang')) applyShellAvailability(menjin);
+    /* R224 项11：切到别的会话 ⇒ 收起（面板内容属于旧会话）；本机档不套容器门禁 */
+    if (mianBan && !mianBan.classList.contains('yinCang')) {
+      const stKzt = state.neiZhiKzt;
+      const selKzt = state.selectedChat;
+      if (stKzt && selKzt && stKzt.sid && stKzt.sid !== String(selKzt.id || '')) guanBiNeiZhiKongZhiTai();
+      else if (!stKzt || stKzt.mode !== 'local') applyShellAvailability(menjin);
+    }
     return btn.dataset.menjin;
   }
 
@@ -31287,8 +31681,9 @@ async function renderDashboard(host) {
     const mianBan = $('ctgKongZhiTaiMianBan');
     if (!mianBan) return false;
     const menjin = await currentShellGate();
-    if (!menjin.openable) return false;
+    /* R224 项11：门禁未开也展开 overlay 并如实说明原因（输入行禁用），不再静默拒开 */
     mianBan.classList.remove('yinCang');
+    state.neiZhiKzt = { mode: 'container', sid: String((state.selectedChat && state.selectedChat.id) || ''), dir: '', liShi: [], liShiZhi: -1, mang: false };
     const tiShi = $('ctgKongZhiTaiTiShi');
     if (tiShi) tiShi.textContent = t('container.console.biaoTi');
     const out = $('ctgKongZhiTaiShuChu');
@@ -31374,6 +31769,8 @@ async function renderDashboard(host) {
    * 并且**不会**在本机执行、也**不会**把内容塞进事件日志（那是另一个面板）。
    */
   async function submitShellLine() {
+    /* R224 项11：本机档走内置执行通道（不问容器门禁） */
+    if (state.neiZhiKzt && state.neiZhiKzt.mode === 'local') return await tiJiaoBenJiKztHang();
     const menjin = await currentShellGate();
     const shuRu = $('ctgKongZhiTaiShuRu');
     const out = $('ctgKongZhiTaiShuChu');
@@ -31699,7 +32096,7 @@ async function renderDashboard(host) {
     // 控制台（容器壳）只在「项目 / 我的牛马」出现 —— 与 ADR 004 §一.7 一致
     const shellBtn = $('anNiuRongQiKongZhiTai');
     if (shellBtn) shellBtn.classList.toggle('yinCang', !showRunEnv);
-    if (!showRunEnv) $('ctgKongZhiTaiMianBan')?.classList.add('yinCang');
+    if (!showRunEnv) guanBiNeiZhiKongZhiTai();
     // 容器项目停止态 ⇒ 开发入口（输入 + 发送）禁用 + 说明（成员侧与"创建者下线"一致）
     void yingYongXiangMuKaiFaMen();
     void refreshContainerConsoleGate();

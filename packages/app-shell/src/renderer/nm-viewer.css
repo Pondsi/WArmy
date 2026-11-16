@@ -873,6 +873,17 @@ img:fullscreen, video:fullscreen { object-fit: contain; max-width: 100vw; max-he
 img.quanPing { display: block !important; object-fit: contain !important; }
 #yuLanLie.quanPing { display: flex !important; background: var(--panel-bg) !important; }
 #yuLanLie.quanPing #yuLanBiao { position: sticky; top: 0; z-index: 2; }
+/* R224 项7：预览全屏 —— 解除祖先 contain（否则 fixed 被关在内容区），铺满视口 */
+body.yuLanQuanPing #zhengWen { contain: none !important; overflow: visible !important; }
+body.yuLanQuanPing #neiRongHang { contain: none !important; overflow: visible !important; }
+body.yuLanQuanPing #yuLanLie {
+  position: fixed !important; inset: 0 !important; z-index: 9999 !important;
+  width: 100vw !important; height: 100vh !important; max-width: none !important;
+  display: flex !important; flex-direction: column !important;
+  background: var(--panel-bg) !important;
+}
+body.yuLanQuanPing #yuLanLie #yuLanBiao { position: sticky; top: 0; z-index: 2; flex: 0 0 auto; }
+body.yuLanQuanPing #yuLanLie #yuLanNei { flex: 1 1 auto; min-height: 0; }
 :fullscreen video { max-height: calc(100vh - 60px) !important; }
 
 /* 关闭确认 */

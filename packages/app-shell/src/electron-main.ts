@@ -11927,6 +11927,10 @@ if (dedaoDangeSuo) {
       } catch { /* 取不到就按 home 下的惯例名 */ }
       chuangjianChuangkou();
       qidong('window created');
+      /* R224 项12/13：每次启动自动检测本机与公网地址；有公网地址就自动宣告加入 DHT（默认） */
+      setTimeout(() => {
+        void ziDongJianCeGongWang().then((f) => { if (f.ok) void ziDongRuDht(); }).catch(() => { /* noop */ });
+      }, 4000);
       /**
        * **窗口保底**（用户反馈"突然停止/闪退"）：
        * 上面任何一步抛错、或窗口被意外销毁，都会让用户看到"程序不见了"。
@@ -12935,6 +12939,98 @@ chuliIpc('warmy:daKaiGongZuoMuLuKongZhiTai', async (_e, p0?: { sessionId?: strin
       catch { spawn('xterm', ['-e', 'cd ' + resolved + '; exec $SHELL'], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); }
     }
     return { ok: true, dir: resolved };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/* R224 项11：内置控制台（本机档）—— 本机用户手敲的命令在会话工作目录里执行。
+   安全边界与 daKaiGongZuoMuLuKongZhiTai 一致：只允许 userData 及其子目录；chuliIpc 白名单保证
+   只有主窗口本机手动输入，远程/群成员/智能体没有注入路径；输出截断 + 30 秒杀进程树 + 每会话单飞。 */
+const benJiKztCwd = new Map<string, string>();
+const benJiKztMang = new Set<string>();
+chuliIpc('warmy:benJiKongZhiTai', async (_e, p0?: { action?: string; sessionId?: string; dir?: string; data?: string }) => {
+  try {
+    const dongZuo = String((p0 && p0.action) || 'daKai');
+    const sid = String((p0 && p0.sessionId) || '').trim();
+    const ud = path.resolve(app.getPath('userData'));
+    const jieXi = (d: string): string | null => {
+      const r = path.resolve(d);
+      return (r === ud || r.startsWith(ud + path.sep)) ? r : null;
+    };
+    let dir = String((p0 && p0.dir) || '').trim();
+    if (dongZuo === 'daKai') {
+      if (!dir && sid) dir = workspaceDirOf(app.getPath('userData'), sid);
+      const resolved = jieXi(dir || ud);
+      if (!resolved) return { ok: false, error: 'dir-outside-userdata' };
+      try { fs.mkdirSync(resolved, { recursive: true }); } catch { /* noop */ }
+      if (sid) benJiKztCwd.set(sid, resolved);
+      return { ok: true, dir: resolved };
+    }
+    if (dongZuo !== 'write') return { ok: false, error: 'bad-action' };
+    const hang = String((p0 && p0.data) || '').replace(/\r?\n+$/, '');
+    if (!hang.trim()) return { ok: false, error: 'empty' };
+    if (sid && benJiKztMang.has(sid)) return { ok: false, error: 'busy' };
+    let cwd = (sid && benJiKztCwd.get(sid)) || '';
+    if (!cwd) {
+      if (!dir && sid) dir = workspaceDirOf(app.getPath('userData'), sid);
+      cwd = jieXi(dir || ud) || ud;
+      try { fs.mkdirSync(cwd, { recursive: true }); } catch { /* noop */ }
+      if (sid) benJiKztCwd.set(sid, cwd);
+    }
+    /* cd 在进程内处理（不起子进程）；不能离开工作区边界 */
+    const cdPi = /^\s*cd(?:\s+(.*?))?\s*$/i.exec(hang);
+    if (cdPi) {
+      const muBiao = String(cdPi[1] || '').trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+      if (!muBiao) return { ok: true, executed: true, shuChu: cwd + '\n', cwd, tuiMa: 0 };
+      const xia = jieXi(path.resolve(cwd, muBiao));
+      if (!xia) return { ok: false, error: 'dir-outside-userdata', cwd };
+      let cunZai = false;
+      try { cunZai = fs.statSync(xia).isDirectory(); } catch { cunZai = false; }
+      if (!cunZai) return { ok: false, error: 'cd-not-found', cwd };
+      if (sid) benJiKztCwd.set(sid, xia);
+      return { ok: true, executed: true, shuChu: '', cwd: xia, tuiMa: 0 };
+    }
+    if (sid) benJiKztMang.add(sid);
+    const kaiShi = Date.now();
+    const jieGuo = await new Promise<{ shuChu: string; tuiMa: number | null; timedOut: boolean }>((resolve) => {
+      let ziJie = 0;
+      const buf: string[] = [];
+      let chaoShi = false;
+      let yiJie = false;
+      const SHANG_XIAN = 200000;
+      const shou = (s: { on: (ev: string, cb: (d: Buffer) => void) => void } | null) => {
+        if (!s) return;
+        s.on('data', (d: Buffer) => {
+          if (ziJie >= SHANG_XIAN) return;
+          const wen = d.toString('utf8');
+          ziJie += wen.length;
+          buf.push(wen);
+        });
+      };
+      const wan = (tuiMa: number | null) => {
+        if (yiJie) return;
+        yiJie = true;
+        let wen = buf.join('');
+        if (ziJie > SHANG_XIAN) wen += '\n…（输出过长，已截断）\n';
+        resolve({ shuChu: wen, tuiMa, timedOut: chaoShi });
+      };
+      try {
+        const hai = spawn(hang, [], { cwd, shell: true, windowsHide: true });
+        shou(hai.stdout); shou(hai.stderr);
+        const sha = setTimeout(() => {
+          chaoShi = true;
+          try {
+            if (process.platform === 'win32' && hai.pid) spawn('taskkill', ['/pid', String(hai.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+            else hai.kill('SIGKILL');
+          } catch { /* noop */ }
+        }, 30000);
+        hai.on('error', (e) => { clearTimeout(sha); buf.push(String((e && e.message) || e)); wan(null); });
+        hai.on('close', (code) => { clearTimeout(sha); wan(typeof code === 'number' ? code : null); });
+      } catch (e) {
+        resolve({ shuChu: String((e && (e as Error).message) || e), tuiMa: null, timedOut: false });
+      }
+    });
+    if (sid) benJiKztMang.delete(sid);
+    try { audit?.log('console.local-exec', { sid, ms: Date.now() - kaiShi, timedOut: jieGuo.timedOut }); } catch { /* noop */ }
+    return { ok: true, executed: true, shuChu: jieGuo.shuChu, tuiMa: jieGuo.tuiMa, timedOut: jieGuo.timedOut, cwd };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:mimicWaiGuanShe', (_e, p0?: Record<string, unknown>) => {
@@ -29539,8 +29635,8 @@ async function qiDongAnQuanWangZhuang(port: number, opts: { discovery?: boolean;
     touDiFuWu().start();
     void touDiFuWu().flush();
   } catch { /* 发件箱不可用不影响组网本身 */ }
-  // 公开可发现默认关；只有用户显式打开时才启动 DHT 发布（失败如实审计，不假装在线）
-  if (settingsStore?.load()?.net?.publicDiscoverable === true) {
+  // R224 项13：DHT 组网默认加入（publicDiscoverable 缺省 = 开）；失败如实审计，不假装在线
+  if (settingsStore?.load()?.net?.publicDiscoverable !== false) {
     void qiDongGongKaiFaXian().then((g) => {
       if (!g.ok) audit?.log('net.discovery-start-failed', { error: g.error });
     });
@@ -29566,11 +29662,20 @@ function gongKaiFaXianPeiZhiKuai() {
     discoveryBootstrap?: string[];
     discoveryPort?: number;
     discoveryAdvertiseHost?: string;
+    discoveryAdvertiseList?: string[];
+    autoDetect?: { publicIp?: string };
     publicAddresses?: string[];
     hosts?: string[];
   };
   return {
     enabled: net.publicDiscoverable !== false,
+    /* R224 项13：对外地址（一行一个 host:port，默认端口 62666）；未保存过时用自动检测的公网IP */
+    advertiseList: (() => {
+      const saved = Array.isArray(net.discoveryAdvertiseList) ? net.discoveryAdvertiseList.map(String).filter((x) => x.trim()) : [];
+      if (saved.length) return saved.slice(0, 16);
+      const auto = String(net.autoDetect?.publicIp || '');
+      return auto ? [auto + ':62666'] : [];
+    })(),
     // R195：默认锚点不可改删——恒在最前；用户追加项去重默认后补后，上限 16（6 默认 + 10 自有）
     bootstrap: (() => {
       const moRen = new Set(MO_REN_MAO_DIAN.map((x) => x.toLowerCase()));
@@ -29586,7 +29691,7 @@ function gongKaiFaXianPeiZhiKuai() {
 }
 
 /** 从地址清单/本机网卡里选一个对外宣告的 host（端口由 mesh 决定） */
-function xuanGongKaiFaXianHost(net: { publicAddresses?: string[]; hosts?: string[]; discoveryAdvertiseHost?: string }): string {
+function xuanGongKaiFaXianHost(net: { publicAddresses?: string[]; hosts?: string[]; discoveryAdvertiseHost?: string; discoveryAdvertiseList?: string[] }): string {
   const quHost = (raw: string): string => {
     const s = String(raw || '').trim();
     if (!s) return '';
@@ -29598,6 +29703,11 @@ function xuanGongKaiFaXianHost(net: { publicAddresses?: string[]; hosts?: string
     const a = jieXiFaXianDiZhi(s);
     return a ? a.host : '';
   };
+  /* R224 项13：对外地址列表优先（用户在「对外地址」里写的第一条） */
+  for (const x of (Array.isArray(net.discoveryAdvertiseList) ? net.discoveryAdvertiseList : [])) {
+    const h = quHost(String(x || ''));
+    if (h) return h;
+  }
   const explicit = quHost(String(net.discoveryAdvertiseHost || ''));
   if (explicit) return explicit;
   for (const x of [...(net.publicAddresses || []), ...(net.hosts || [])]) {
@@ -29668,6 +29778,7 @@ chuliIpc('warmy:gongKaiFaXianShe', async (_e, p0?: {
   bootstrap?: unknown;
   port?: unknown;
   advertiseHost?: unknown;
+  advertiseList?: unknown;
 }) => {
   try {
     if (!settingsStore) return { ok: false, error: 'settings-unavailable' };
@@ -29676,6 +29787,9 @@ chuliIpc('warmy:gongKaiFaXianShe', async (_e, p0?: {
     const portRaw = Number(p0?.port);
     const port = Number.isInteger(portRaw) && portRaw >= 0 && portRaw <= 65535 ? portRaw : GONG_KAI_FA_XIAN_DEFAULT_PORT;
     const advertiseHost = String(p0?.advertiseHost || '').trim().slice(0, 255);
+    const advertiseList = Array.isArray(p0?.advertiseList)
+      ? (p0?.advertiseList as unknown[]).map(String).map((x) => x.trim()).filter(Boolean).slice(0, 16)
+      : null;
     const cur = (settingsStore.load().net || {}) as Record<string, unknown>;
     settingsStore.save({
       net: {
@@ -29684,6 +29798,7 @@ chuliIpc('warmy:gongKaiFaXianShe', async (_e, p0?: {
         discoveryBootstrap: bootstrap,
         discoveryPort: port,
         discoveryAdvertiseHost: advertiseHost,
+        ...(advertiseList ? { discoveryAdvertiseList: advertiseList } : {}),
       },
     } as never);
     if (!enabled) {
@@ -29706,6 +29821,113 @@ chuliIpc('warmy:gongKaiFaXianShe', async (_e, p0?: {
   }
 });
 
+/* ══ R224 项12/13：主机模式（简易 FWArmy）+ 启动自动检测 / 自动加入 DHT ══ */
+const ZHU_JI_DEFAULT_PORT = 59599;
+const DHT_XUAN_GAO_DEFAULT_PORT = 62666;
+function zhuJiPeiZhiKuai() {
+  const net = (settingsStore?.load()?.net || {}) as {
+    hostMode?: unknown; hostNoConfirm?: boolean; hosts?: string[];
+    hostCredential?: Record<string, unknown>; hostDetect?: Record<string, unknown>; autoDetect?: Record<string, unknown>;
+  };
+  const hm = net.hostMode;
+  return {
+    enabled: hm === true || !!(hm && typeof hm === 'object' && (hm as { enabled?: boolean }).enabled === true),
+    noConfirm: net.hostNoConfirm === true,
+    hosts: Array.isArray(net.hosts) ? net.hosts.map(String) : [],
+    credential: net.hostCredential || null,
+    detect: net.hostDetect || null,
+    autoDetect: net.autoDetect || null,
+  };
+}
+/** 检测本机 + 公网地址（主机模式与 DHT 宣告共用）；事实落盘，界面只读 */
+async function ziDongJianCeGongWang(): Promise<{ ok: boolean; localIp: string; publicIp: string; behindNat: boolean; at: number }> {
+  let r: Awaited<ReturnType<typeof benjiDizhiXinxi>> | null = null;
+  try { r = await benjiDizhiXinxi({ timeoutMs: 5000 }); } catch { r = null; }
+  const facts = {
+    ok: !!(r && r.localIp),
+    localIp: String(r?.localIp || ''),
+    publicIp: String(r?.publicIp || ''),
+    behindNat: !!(r?.behindNat),
+    at: Date.now(),
+  };
+  try {
+    const cur = (settingsStore?.load()?.net || {}) as Record<string, unknown>;
+    settingsStore?.save({ net: { ...cur, hostDetect: facts, autoDetect: facts } } as never);
+  } catch { /* 检测事实尽力而为 */ }
+  try { audit?.log('net.auto-detect', { ok: facts.ok, local: facts.localIp, public: facts.publicIp }); } catch { /* noop */ }
+  return facts;
+}
+/** 启动自动加入 DHT：有公网地址就自动对外宣告（端口默认 62666）；mesh 没起先起 mesh */
+async function ziDongRuDht(): Promise<void> {
+  const net = (settingsStore?.load()?.net || {}) as { publicDiscoverable?: boolean; discoveryAdvertiseList?: string[] };
+  if (net.publicDiscoverable === false) return;
+  const list = Array.isArray(net.discoveryAdvertiseList) ? net.discoveryAdvertiseList.map(String).filter((x) => x.trim()) : [];
+  let firstPort = DHT_XUAN_GAO_DEFAULT_PORT;
+  for (const x of list) {
+    const a = jieXiFaXianDiZhi(x, DHT_XUAN_GAO_DEFAULT_PORT);
+    if (a) { firstPort = a.port; break; }
+  }
+  if (!secureMesh?.enabled) {
+    const r = await qiDongAnQuanWangZhuang(firstPort, { discovery: true, announce: true });
+    if (!r.ok) { try { audit?.log('net.auto-dht-mesh-failed', { error: String((r as { error?: string }).error || '') }); } catch { /* noop */ } return; }
+    return; /* mesh 起来后由既有钩子自动启动发布 */
+  }
+  const g = await qiDongGongKaiFaXian();
+  if (!g.ok) { try { audit?.log('net.auto-dht-failed', { error: g.error || '' }); } catch { /* noop */ } }
+}
+chuliIpc('warmy:zhuJiMoShiDu', () => ({ ok: true, ...zhuJiPeiZhiKuai() }));
+chuliIpc('warmy:zhuJiMoShiShe', (_e, p0?: { enabled?: boolean; noConfirm?: boolean }) => {
+  try {
+    const cur = (settingsStore?.load()?.net || {}) as Record<string, unknown>;
+    const jian = cur.hostDetect as { ok?: boolean } | undefined;
+    /* R224 项12：检查本机与公网地址成功后才能启用 */
+    if (p0?.enabled === true && !(jian && jian.ok === true)) return { ok: false, error: 'detect-required' };
+    settingsStore?.save({
+      net: {
+        ...cur,
+        ...(p0?.enabled !== undefined ? { hostMode: p0.enabled === true } : {}),
+        ...(p0?.noConfirm !== undefined ? { hostNoConfirm: p0.noConfirm === true } : {}),
+      },
+    } as never);
+    try { audit?.log('host.mode-set', { enabled: p0?.enabled, noConfirm: p0?.noConfirm }); } catch { /* noop */ }
+    return { ok: true, ...zhuJiPeiZhiKuai() };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:zhuJiJianCe', async () => {
+  const facts = await ziDongJianCeGongWang();
+  return { ...facts };
+});
+/** 生成主机凭证：fwnexp_v2_ 格式（自带地址端口；多地址全装进 hs）；明文只显示一次（与 FWArmy 同口径） */
+chuliIpc('warmy:zhuJiPingZhengShengCheng', async (_e, p0?: { port?: number }) => {
+  try {
+    const pz = zhuJiPeiZhiKuai();
+    const jian = pz.detect as { ok?: boolean; publicIp?: string } | null;
+    if (!(jian && jian.ok === true)) return { ok: false, error: 'detect-required' };
+    const portRaw = Number(p0?.port);
+    const port = Number.isInteger(portRaw) && portRaw > 0 && portRaw <= 65535 ? portRaw : ZHU_JI_DEFAULT_PORT;
+    const rawHosts = pz.hosts.length ? pz.hosts : (jian.publicIp ? [jian.publicIp] : []);
+    const entries: string[] = [];
+    for (const h of rawHosts) {
+      const a = jieXiFaXianDiZhi(String(h || ''), port);
+      if (a) entries.push((String(a.host).includes(':') ? '[' + a.host + ']' : a.host) + ':' + a.port);
+    }
+    if (!entries.length) return { ok: false, error: 'no-hosts' };
+    const first = jieXiFaXianDiZhi(entries[0]!, port);
+    if (!first) return { ok: false, error: 'no-hosts' };
+    const payload = Buffer.from(JSON.stringify({ h: first.host, p: first.port, r: crypto.randomBytes(16).toString('base64url'), hs: entries }), 'utf8').toString('base64url');
+    const token = 'fwnexp_v2_' + payload;
+    await secureKeys?.save('host-credential:current', token);
+    const ipOnly = entries.every((x) => {
+      const a = jieXiFaXianDiZhi(x, port);
+      return !!a && (/^\d{1,3}(\.\d{1,3}){3}$/.test(a.host) || a.host.includes(':'));
+    });
+    const meta = { createdAt: Date.now(), port, hosts: entries, ipOnly, publicIp: String(jian.publicIp || '') };
+    const cur = (settingsStore?.load()?.net || {}) as Record<string, unknown>;
+    settingsStore?.save({ net: { ...cur, hostCredential: meta } } as never);
+    try { audit?.log('host.credential-generated', { hosts: entries.length, port, ipOnly }); } catch { /* noop */ }
+    return { ok: true, token, meta };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 chuliIpc('warmy:gongKaiFaXianCha', async (_e, zhiWen: string) => {
   try {
     const fp = String(zhiWen || '').trim();
@@ -35634,13 +35856,24 @@ chuliIpc('warmy:zhenDuanNmDaKai', () => {
   try {
     if (!nmChaJianQiYong()) return { ok: false, error: 'nm-disabled' };
     if (!zhenDuan) return { ok: false, error: 'diag-unavailable' };
-    let lu = zhenDuan.wenJianLu;
-    let you = false;
-    try { you = fs.existsSync(lu) && fs.statSync(lu).size > 0; } catch { you = false; }
-    if (!you) {
-      lu = path.join(path.dirname(lu), 'diag-nm-view.json');
-      fs.writeFileSync(lu, JSON.stringify(zhenDuan.daoChu(), null, 2), 'utf8');
-    }
+    /* R224 项9：原始 jsonl 是机器格式（seq/boot/枚举码），用户看像乱码 ⇒
+       导出可读 markdown 快照（时间/级别/模块/事件码/指标/脱敏栈帧）再开。 */
+    const bundle = zhenDuan.daoChu();
+    const hang = bundle.entries.map((it) => {
+      const wei = [it.ts, it.ji, it.mo, it.code].filter(Boolean).join('  ');
+      const gu = (it.lei || it.dai) ? '  [' + [it.lei, it.dai].filter(Boolean).join('/') + ']' : '';
+      const zhi = it.zhi ? '  ' + JSON.stringify(it.zhi) : '';
+      const zhan = it.zhan ? '\n  - ' + String(it.zhan).split('\n').join('\n  - ') : '';
+      return '- **' + wei + '**' + gu + zhi + zhan;
+    });
+    const md = '# 诊断日志\n\n'
+      + '> ' + String(bundle.manifest.privacy || '') + '\n\n'
+      + '- 生成时间：' + String(bundle.manifest.generatedAt || '') + '\n'
+      + '- 记录条数：' + bundle.entries.length + '\n'
+      + '- 运行环境：' + JSON.stringify(bundle.manifest.huanJing || {}) + '\n\n'
+      + '## 事件\n\n' + (hang.length ? hang.join('\n') : '（暂无记录）') + '\n';
+    const lu = path.join(path.dirname(zhenDuan.wenJianLu), 'diag-nm-view.md');
+    fs.writeFileSync(lu, md, 'utf8');
     nmShiTuKai({ luJing: lu, zhuTi: nmShiTuZhuTi() });
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
@@ -36305,6 +36538,16 @@ function shouDaoJiaRuQingQiu(p0: Partial<JiaRuJiLu>, peerFp: string): void {
     cunJoinQingQiu();
     audit?.log('join.inbound-pending', { groupId, subjectFp });
     try { broadcastToWindows('warmy:joinPendingChanged', { count: youXiaoJiaRu().length }); } catch { /* noop */ }
+    /* R224 项12：主机模式 + 无需确认 ⇒ 自动批准（与申请记录里手动「同意」同一条内核） */
+    try {
+      const net = (settingsStore?.load()?.net || {}) as { hostMode?: unknown; hostNoConfirm?: boolean };
+      const hm = net.hostMode;
+      const zhuJiKai = hm === true || !!(hm && typeof hm === 'object' && (hm as { enabled?: boolean }).enabled === true);
+      if (zhuJiKai && net.hostNoConfirm === true) {
+        const xin = joinRequests[joinRequests.length - 1];
+        if (xin && xin.status === 'pending') void jiaRuHuiYingNeiHe({ id: xin.id, action: 'agree' });
+      }
+    } catch { /* 自动批准失败不影响手动批准 */ }
   } catch { /* 入站坏包不影响其它通道 */ }
 }
 /** 申请人侧收到批准：验签 + 落本地群 + 通知渲染层。 */
@@ -36453,7 +36696,7 @@ chuliIpc('warmy:jiaRuPending', () => {
     return { ok: true, items: valid, count: valid.length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:jiaRuHuiYing', async (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => {
+async function jiaRuHuiYingNeiHe(payload: { id: string; action: 'agree' | 'reject' | 'block' }) {
   try {
     youXiaoJiaRu();
     const suoYin = joinRequests.findIndex((r) => r.id === payload.id);
@@ -36514,7 +36757,8 @@ chuliIpc('warmy:jiaRuHuiYing', async (_e, payload: { id: string; action: 'agree'
     audit?.log('join.respond', { id: Qiu.id, action: payload.action });
     return { ok: true, changed: true, shengYu: youXiaoJiaRu().length };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
+}
+chuliIpc('warmy:jiaRuHuiYing', async (_e, payload: { id: string; action: 'agree' | 'reject' | 'block' }) => jiaRuHuiYingNeiHe(payload));
 chuliIpc('warmy:heiMingDanLieBiao', () => anQuanChuLi(() => ({ ok: true, items: blacklist }), { ok: true, items: [] }))
 chuliIpc('warmy:heiMingDanYiChu', (_e, id: string) => {
   try {

@@ -276,6 +276,13 @@ contextBridge.exposeInMainWorld('warmy', {
   mimicActionsDirOpen: () => ipcRenderer.invoke('warmy:mimicDongZuoMuLuKai'),
   mimicActionDelete: (p) => ipcRenderer.invoke('warmy:mimicDongZuoShanChu', p),
   daKaiGongZuoMuLuKongZhiTai: (p) => ipcRenderer.invoke('warmy:daKaiGongZuoMuLuKongZhiTai', p),
+  /* R224 项11：内置控制台（本机档）—— action 枚举 daKai/write；目录限定 userData 子树 */
+  benJiKongZhiTai: (p) => ipcRenderer.invoke('warmy:benJiKongZhiTai', p),
+  /* R224 项12：主机模式（读状态/保存/检测/生成凭证；凭证明文只在生成响应里出现一次） */
+  zhuJiMoShiDu: () => ipcRenderer.invoke('warmy:zhuJiMoShiDu'),
+  zhuJiMoShiShe: (p) => ipcRenderer.invoke('warmy:zhuJiMoShiShe', p),
+  zhuJiJianCe: () => ipcRenderer.invoke('warmy:zhuJiJianCe'),
+  zhuJiPingZhengShengCheng: (p) => ipcRenderer.invoke('warmy:zhuJiPingZhengShengCheng', p),
   daKaiNiTaiSheZhi: () => ipcRenderer.invoke('warmy:daKaiNiTaiSheZhi'),
   onGoNiTaiSheZhi: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:goNiTaiSheZhi', h); return () => ipcRenderer.removeListener('warmy:goNiTaiSheZhi', h); },
   mimicDongZuoCiQu: () => ipcRenderer.invoke('warmy:mimicDongZuoCiQu'),
