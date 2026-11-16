@@ -84,7 +84,7 @@
       if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(lab)) return false;
       if (!/^\d+$/.test(lab)) allNumeric = false;
     }
-    // 全是数字标签的“域名”只会是写错的 IPv4，按非法处理，避免 999.1.1.1 混进来。
+    // 全是数字标签的“域名”只会是写错的 IPv4，按非法处理，避免 203.0.113.1 混进来。
     return !allNumeric;
   }
 

@@ -2889,7 +2889,7 @@ function shouQuanJian(t?: unknown, d?: unknown): string {
   const a = String(t ?? '').replace(/\s+/g, ' ').trim();
   /**
    * **路径归一到「末级目录/文件名」**（硬门禁）：
-   * ① `Desktop/x.txt` 与 `C:\Users\…\Desktop\x.txt` 归一成同一键（写法不同不重弹）。
+   * ① `Desktop/x.txt` 与 `<用户目录>\Desktop\x.txt` 归一成同一键（写法不同不重弹）。
    * ② **保留斜杠**：旧正则只认以 `/` 或盘符开头的片段，`Desktop/x.txt` 被啃成
    *    `Desktopx.txt`，授权键永远对不上。现在把「相对/绝对路径」整段识别出来再归一。
    * ③ **不同文件不合并**：`Desktop/a.txt` 与 `Desktop/b.txt` 是两个键（硬门禁：逐文件授权）。
@@ -5010,7 +5010,7 @@ async function yunXingLiaoTianXunHuan(
             || (aA as { cmd?: unknown }).cmd || (aA as { script?: unknown }).script || '');
           if (pA) {
             /**
-             * 台账里显示**完整绝对路径**（用户要求的样例：创建文件 F:\XZM\牛马演示.docx）。
+             * 台账里显示**完整绝对路径**（用户要求的样例：创建文件 示例路径\牛马演示.docx）。
              * 这里复用主进程同一套「工作区 + Desktop/Documents 映射」，相对路径也能落到真实位置。
              */
             try {
@@ -34836,7 +34836,7 @@ chuliIpc('warmy:wenJianDaXiao', (_e, p0?: { path?: string }) => {
  * 第 35 轮 项 11：**批量问"这些路径真的存在吗"**。
  *
  * 聊天里凡是长得像路径的字符串都会被渲染成超链接；但模型经常写出
- * `C:\Users\你\Desktop\xxx.txt` 这种**占位/虚拟路径**（或者只是文档里的举例），
+ * `<用户目录>\Desktop\xxx.txt` 这种**占位/虚拟路径**（或者只是文档里的举例），
  * 对它弹"复制/复制路径/打开目录"菜单是错的 —— 用户点了只会报错。
  * 所以渲染完成后向主进程核一遍真实存在性，**只有存在的才挂右键菜单**。
  */

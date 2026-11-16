@@ -598,7 +598,7 @@ export function workReadFile(baseDir: string, args: { path?: string; maxChars?: 
     /**
      * 第 36 轮【项 7】：**"查看这个文件是什么"必须能靠 read_file 得到答案**。
      *
-     * 真机反馈：用户让牛马"看看 `F:\XXZ\Qoder-win-x64-user.exe` 和 `视频.svg` 是什么"，
+     * 真机反馈：用户让牛马"看看 `示例路径\Qoder-win-x64-user.exe` 和 `视频.svg` 是什么"，
      * 行动明细里显示的是**编辑**而不是**读取** —— 因为 read_file 这里只说"倒不出内容"，
      * 模型只好换别的工具（换到 edit_file 去了）。
      * 现在把**能确定的元信息一次说完**（类型判定 + 大小 + 修改时间 + 一句结论），
@@ -1301,7 +1301,7 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
         name: 'read_file',
         /**
          * 第 36 轮【项 7】：**查看就用它**。旧文案写"路径必须是工作区内的相对路径"，
-         * 模型看到工作区外的路径（F:\XXZ\…）就不敢用它，转而去调 edit_file —— 于是
+         * 模型看到工作区外的路径（示例路径\…）就不敢用它，转而去调 edit_file —— 于是
          * 用户看到"查看文件"被记成**编辑**。这里把口径写清楚：
          * 绝对路径也可以用（工作区外会先征求用户同意）；非文本文件会回"它是什么"的元信息。
          */

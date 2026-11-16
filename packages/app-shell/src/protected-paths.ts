@@ -169,7 +169,7 @@ export function protectedCommandReason(cmd: string, cwd: string, baseDir: string
       if (!t) continue;
       /**
        * R163 #6：命令开关不是路径。`dir /b`、`/S`、`/quiet` 这类单字母/单词开关
-       * 会被 `path.resolve(cwd, '/b')` 解成**盘符根**（`C:\b`），既无意义又容易误判。
+       * 会被 `path.resolve(cwd, '/b')` 解成**盘符根**（`<盘>:\b`），既无意义又容易误判。
        * Unix 绝对路径（`/etc/hosts`）仍要查，所以只排除「没有第二个分隔符的短开关」。
        */
       if (/^\/[A-Za-z][A-Za-z0-9_-]*$/.test(t) && process.platform === 'win32') continue;
