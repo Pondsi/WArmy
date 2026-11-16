@@ -1,13 +1,13 @@
 {
-  "version": "0.4.22",
-  "notes": "WArmy 0.4.22 — settings cleanup & relay provider round (4 items): removed the \"Prompt proofread & rollback\" card from Settings > Features (card, bindings, its four dedicated IPC handlers and styles deleted; the automatic pre-overwrite backup mechanism beiFenTiShi is kept on every prompt save path); the host-provider form is back to THREE explicit fields — address + port (default 59599) + credential (scheme auto-stripped, bare IPv6 auto-bracketed, fwnexp_v2_ credentials can still auto-fill address/port when the address is left empty); the built-in preset provider now carries the real address www.numumu.com:59599 (older empty-address preset records are upgraded in place); a real-network probe (probe-r227-net.mjs) tested DHT join against the default anchors and the preset relay: from the build environment the relay port 59599 is firewalled (only 443 open, serving a website, /api/health 404) and DHT anchors returned no contacts — the app-side DHT stack starts/listens/publishes correctly, so the remaining step is server-side: open TCP 59599 (relay) and UDP 62666 (DHT) on the host and ensure the FWArmy relay + DHT node are running; re-run the probe to verify. 2 new + 4 updated UI strings across all 27 locales. Verified by the scoped suite: 14 gates/probes x 3 consecutive clean rounds covering exactly the changed surfaces plus R224/R225/R226 contract regressions.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.22/WArmy-Setup-0.4.22.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.22/WArmy-Setup-0.4.22.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.22/WArmy-Setup-0.4.22.exe.warmyblocks",
-  "sha256": "78d775571666a32e79c0b6256649b07410e3d8c3a57b67b55533dbd326de069f",
-  "size": 305311017,
+  "version": "0.4.23",
+  "notes": "WArmy 0.4.23 — mimic touch & right-click menu round (3 items): old WArmyData backups are deleted and the acceptance flow no longer keeps backups (owner decision); double-clicking the transformed mimic NO LONGER opens the chat window — a double click is simply two pats, and holding the mouse down (continuous petting, with duration) or holding and dragging from one spot to another (stroke with start/end coordinates) are all reported to the model via an interaction queue that survives the anti-spam throttle; right-clicking the mimic now does nothing on press, holding and dragging rotates the 3D form, and releasing WITHOUT having rotated opens a menu with exactly five entries — Dialog on/off (the subtitle bubble switch, now actually effective), Hide, Window (the mimic independent chat window), Voice-interaction mode (off/wake/always/smart radio submenu) and Settings (main UI Settings > Mimic); the menu is rendered inside the mimic window (native menus cannot take keyboard focus on a focusable:false transparent window) with a union body-rect so it stays clickable, ESC/outside-click/auto-close dismiss it, and every touch/menu action lands in the audit log. 5 new UI strings across all 27 locales. Verified by a 34-assertion real-machine probe (independent launch per case: tap/double-tap/hold/stroke semantics, menu open/ESC, all five menu actions with settings/window facts, 2D/3D rotation suppressing the menu) plus the scoped suite: 15 gates x 3 consecutive clean rounds covering exactly the changed surfaces plus R224-R227 contract regressions.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.23/WArmy-Setup-0.4.23.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.23/WArmy-Setup-0.4.23.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.23/WArmy-Setup-0.4.23.exe.warmyblocks",
+  "sha256": "e231468afd11f32d1f9b1e449a6467f2bbeb45b9de08707dc1cc39ba99ea4e5b",
+  "size": 305315348,
   "mandatory": false,
-  "publishedAt": "2026-11-16T22:28:36.251Z",
+  "publishedAt": "2026-11-16T23:35:37.047Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.22"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.23"
 }

@@ -28,6 +28,14 @@
     width: 8px; height: 8px; border-radius: 50%; background: #6fd18f; display: none; }
   #dot.kai { display: block; animation: tan 1.2s ease-in-out infinite; }
   @keyframes tan { 0%,100% { opacity:.35 } 50% { opacity:1 } }
+  /* R228 项3：右键 HTML 菜单（拟态窗内；展开时上报并集矩形防穿透） */
+  #caiDan { position: absolute; z-index: 9; min-width: 150px; max-width: 224px;
+    background: rgba(24,28,38,.96); border: 1px solid rgba(120,190,255,.35); border-radius: 10px;
+    padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.45); color: #e8ecf4; font-size: 12px; }
+  #caiDan .xiang { padding: 6px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #caiDan .xiang:hover { background: rgba(120,190,255,.22); }
+  #caiDan .zi { padding: 2px 0 2px 10px; border-left: 2px solid rgba(120,190,255,.35); margin-left: 8px; }
+  #caiDan .zi .xiang.on { color: #7ec8ff; }
 
   /* ══ R220：拟态动起来 —— 2D 常驻 idle（呼吸浮动 + 周期眨眼）+ 触发动作动画 ══ */
   @keyframes dzIdleHuXi {
@@ -88,6 +96,7 @@
     <div id="dot"></div>
     <div id="bubble"></div>
     <div id="pet"><img id="tupian" alt=""/></div>
+    <div id="caiDan" hidden></div>
   </div>
   <audio id="yinPin" hidden></audio>
   <script src="./vendor/three.bundle.min.js"></script>
@@ -103,6 +112,8 @@
     // 字幕：显示一段回复（漫画气泡），到时自动收起
     let zmTimer = 0;
     window.__shuo = (wen, ms) => {
+      /* R228 项3：空文本 = 对话框关，立即收起气泡 */
+      if (!String(wen || '').trim()) { bubble.classList.remove('kai'); return; }
       bubble.textContent = String(wen || '');
       bubble.classList.add('kai');
       clearTimeout(zmTimer);
@@ -110,19 +121,47 @@
     };
     window.__dian = (on) => { dot.classList.toggle('kai', !!on); };
 
-    // 拖动：按住拟态移动整个窗口（主进程用 win.setBounds）
+    // 拖动：按住拟态移动整个窗口（主进程用 win.setBounds，R226 跨屏保留）
+    // R228 项2：左键单击=1次抚摸、双击=2次抚摸（不再开聊天）；按住不动=持续摸；按住移动=拖着摸(stroke)，都上报模型
     let dragging = false, sx = 0, sy = 0;
+    let djX = 0, djY = 0, djShi = 0, holdMo = false, holdTimer = 0, yiDong = false;
+    function moPartBu(e) {
+      try {
+        if (e && window.__mimicIs3D && window.__mimicIs3D()) {
+          const bu = window.__mimicRaycast?.(e.clientX, e.clientY);
+          if (bu) return bu;
+        }
+      } catch { /* noop */ }
+      return '身体';
+    }
     pet.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return; /* R223 项9：右键留给 3D 旋转，不触发窗口拖动 */
+      if (e.button !== 0) return; /* 右键留给 3D 旋转/右键菜单 */
       dragging = true; sx = e.screenX; sy = e.screenY;
+      djX = e.screenX; djY = e.screenY; djShi = Date.now(); holdMo = false; yiDong = false;
+      clearTimeout(holdTimer);
+      holdTimer = setTimeout(() => {
+        if (dragging && !yiDong) { holdMo = true; try { window.warmyMimic?.moPart?.({ part: moPartBu(), kind: 'hold', ms: 0 }); } catch { /* noop */ } }
+      }, 600);
       window.warmyMimic?.dragStart?.({ x: e.screenX, y: e.screenY });
       e.preventDefault();
     });
     window.addEventListener('mousemove', (e) => {
       if (!dragging) return;
+      if (Math.abs(e.screenX - djX) >= 5 || Math.abs(e.screenY - djY) >= 5) { yiDong = true; clearTimeout(holdTimer); }
       window.warmyMimic?.dragMove?.({ x: e.screenX, y: e.screenY });
     });
-    window.addEventListener('mouseup', () => { dragging = false; window.warmyMimic?.dragEnd?.(); });
+    window.addEventListener('mouseup', (e) => {
+      if (e.button !== 0 || !dragging) return;
+      dragging = false; clearTimeout(holdTimer);
+      window.warmyMimic?.dragEnd?.();
+      const ms = Date.now() - djShi;
+      try {
+        if (yiDong) window.warmyMimic?.moPart?.({ part: '身体', kind: 'stroke', ms, from: { x: djX, y: djY }, to: { x: e.screenX, y: e.screenY } });
+        else if (holdMo) window.warmyMimic?.moPart?.({ part: moPartBu(), kind: 'hold', ms });
+        else if (ms <= 600) window.warmyMimic?.moPart?.({ part: moPartBu(e), kind: 'tap' }); /* 双击的两次 mouseup 各报一次 = 2 次抚摸 */
+      } catch { /* noop */ }
+      holdMo = false;
+    });
 
     // 透传：主进程按 50ms 轮询屏幕光标 + 我们上报的"本体矩形"做命中测试
     // （**不用 mousemove/forward**：Windows 上 forward 的 hover 不可靠，见 electron #30808/#15376）
@@ -131,6 +170,11 @@
       const shang = d && d.inside;
       chuanTou = !shang;
       pet.classList.toggle('xuanTing', !!shang);
+      /* R228：菜单展开且光标真到过并集矩形后，离开 1.2s 自动收（穿透态收不到外部点击） */
+      if (caiDanKaiZhe) {
+        if (shang) { caiDanNeiGuo = true; clearTimeout(caiDanWaiTimer); }
+        else if (caiDanNeiGuo) { clearTimeout(caiDanWaiTimer); caiDanWaiTimer = setTimeout(guanCaiDan, 1200); }
+      }
     });
     function shangBaoBenTi() {
       try {
@@ -144,39 +188,91 @@
     shangBaoBenTi();
     setTimeout(shangBaoBenTi, 300);
 
-    // 双击拟态 = 打开主窗口聊天
-    pet.addEventListener('dblclick', () => { window.warmyMimic?.openChat?.(); });
+    // R228 项2：双击不再打开聊天（设定取消），两次 mouseup 各报一次抚摸（见上面左键逻辑）
 
-    // ── R223 项9：3D 右键拖动旋转 + 左键点击部位反馈（AI 决定是否/如何回应） ──
+    // ── R228 项3：右键按下无反应；按住可旋转 3D；松开时若没旋转 → 主进程弹原生菜单 ──
     pet.addEventListener('contextmenu', (e) => e.preventDefault());
-    let xuanZhuanZhong = false, xzX = 0, xzY = 0;
-    let djX = 0, djY = 0, djShi = 0;
+    let xuanZhuanZhong = false, xzX = 0, xzY = 0, xuanZhuanGuo = false, youJian = false, yjX0 = 0, yjY0 = 0;
     pet.addEventListener('mousedown', (e) => {
-      if (e.button === 2 && window.__mimicIs3D && window.__mimicIs3D()) {
-        xuanZhuanZhong = true; xzX = e.screenX; xzY = e.screenY;
-        e.preventDefault(); e.stopPropagation();
-      } else if (e.button === 0) { djX = e.screenX; djY = e.screenY; djShi = Date.now(); }
+      if (e.button === 2) {
+        youJian = true; xuanZhuanGuo = false; yjX0 = e.screenX; yjY0 = e.screenY; xzX = e.screenX; xzY = e.screenY;
+        if (window.__mimicIs3D && window.__mimicIs3D()) xuanZhuanZhong = true;
+        e.preventDefault();
+      }
     }, true);
     window.addEventListener('mousemove', (e) => {
+      if (youJian && (Math.abs(e.screenX - yjX0) >= 5 || Math.abs(e.screenY - yjY0) >= 5)) xuanZhuanGuo = true;
       if (!xuanZhuanZhong) return;
       try { window.__mimicXuanZhuanBy?.(e.screenX - xzX, e.screenY - xzY); } catch { /* noop */ }
       xzX = e.screenX; xzY = e.screenY;
     });
     window.addEventListener('mouseup', (e) => {
-      if (xuanZhuanZhong) {
-        xuanZhuanZhong = false;
-        try { window.__mimicXuanZhuanJieShu?.(); } catch { /* noop */ }
-        return;
-      }
-      if (e.button !== 0 || e.detail >= 2) return; /* 双击留给打开聊天 */
-      if (!(window.__mimicIs3D && window.__mimicIs3D())) return;
-      /* 位移 ≥5px 或按住 >600ms = 拖窗口，不算触摸 */
-      if (Math.abs(e.screenX - djX) >= 5 || Math.abs(e.screenY - djY) >= 5 || Date.now() - djShi > 600) return;
-      try {
-        const bu = window.__mimicRaycast?.(e.clientX, e.clientY);
-        if (bu) window.warmyMimic?.moPart?.({ part: bu });
-      } catch { /* noop */ }
+      if (e.button !== 2 || !youJian) return;
+      youJian = false;
+      if (xuanZhuanZhong) { xuanZhuanZhong = false; try { window.__mimicXuanZhuanJieShu?.(); } catch { /* noop */ } }
+      /* R228：旋转过 → 不出菜单；没旋转 → HTML 菜单（对话框开关/隐身/窗口/语音互动模式/设置） */
+      if (!xuanZhuanGuo) { void openCaiDan(e.clientX, e.clientY); }
     });
+
+    // ── R228 项3：HTML 右键菜单 ──
+    const caiDan = document.getElementById('caiDan');
+    let caiDanKaiZhe = false, caiDanWaiTimer = 0, caiDanNeiGuo = false;
+    let caiDanZt = { zmKai: true, moShi: 'smart', wen: null };
+    function guanCaiDan() {
+      if (!caiDanKaiZhe) return;
+      caiDanKaiZhe = false; caiDan.hidden = true; caiDan.innerHTML = '';
+      clearTimeout(caiDanWaiTimer);
+      shangBaoBenTi();
+    }
+    function shangBaoLianHe() {
+      try {
+        const a = pet.getBoundingClientRect(), b = caiDan.getBoundingClientRect();
+        const x = Math.min(a.left, b.left), y = Math.min(a.top, b.top);
+        window.warmyMimic?.setBodyRect?.({ x, y, w: Math.max(a.right, b.right) - x, h: Math.max(a.bottom, b.bottom) - y });
+      } catch { /* noop */ }
+    }
+    function huaCaiDan() {
+      const w = caiDanZt.wen; caiDan.innerHTML = '';
+      const xiang = (wen, dong) => {
+        const d = document.createElement('div'); d.className = 'xiang'; d.textContent = wen;
+        d.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); dong(); });
+        caiDan.appendChild(d); return d;
+      };
+      xiang(w.duiHua + ': ' + (caiDanZt.zmKai ? w.kai : w.guan), async () => {
+        const r = await window.warmyMimic?.caiDanDong?.({ item: 'duiHua' });
+        if (r && r.ok) caiDanZt.zmKai = !!r.zmKai;
+        guanCaiDan();
+      });
+      xiang(w.yinShen, async () => { await window.warmyMimic?.caiDanDong?.({ item: 'yinShen' }); guanCaiDan(); });
+      xiang(w.chuangKou, async () => { await window.warmyMimic?.caiDanDong?.({ item: 'chuangKou' }); guanCaiDan(); });
+      xiang(w.yuYin + ' ▸', () => {
+        const jiu = caiDan.querySelector('.zi');
+        if (jiu) { jiu.remove(); shangBaoLianHe(); return; }
+        const z = document.createElement('div'); z.className = 'zi';
+        for (const m of ['off', 'wake', 'always', 'smart']) {
+          const dd = document.createElement('div'); dd.className = 'xiang' + (caiDanZt.moShi === m ? ' on' : '');
+          dd.textContent = (caiDanZt.moShi === m ? '✓ ' : '') + (w.modes[m] || m);
+          dd.addEventListener('mousedown', async (e) => { e.preventDefault(); e.stopPropagation(); await window.warmyMimic?.caiDanDong?.({ item: 'yuYin', value: m }); guanCaiDan(); });
+          z.appendChild(dd);
+        }
+        caiDan.appendChild(z); shangBaoLianHe();
+      });
+      xiang(w.sheZhi, async () => { await window.warmyMimic?.caiDanDong?.({ item: 'sheZhi' }); guanCaiDan(); });
+    }
+    async function openCaiDan(x, y) {
+      const r = await window.warmyMimic?.caiDanKai?.();
+      if (!r || !r.ok || !r.wen) return;
+      caiDanZt = { zmKai: !!r.zmKai, moShi: String(r.moShi || 'smart'), wen: r.wen };
+      huaCaiDan();
+      caiDan.hidden = false; caiDanKaiZhe = true; caiDanNeiGuo = false;
+      const w = caiDan.offsetWidth, h = caiDan.offsetHeight;
+      const left = Math.max(4, Math.min(x - 24, window.innerWidth - w - 4));
+      let top = y - h - 6; if (top < 4) top = Math.min(y + 6, window.innerHeight - h - 4);
+      caiDan.style.left = left + 'px'; caiDan.style.top = Math.max(4, top) + 'px';
+      shangBaoLianHe();
+    }
+    window.addEventListener('mousedown', (e) => { if (caiDanKaiZhe && !caiDan.contains(e.target)) guanCaiDan(); }, true);
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') guanCaiDan(); });
 
     // 主进程推来的说话/状态
     window.warmyMimic?.onSay?.((d) => window.__shuo(d && d.text, d && d.ms));

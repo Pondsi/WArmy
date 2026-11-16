@@ -12512,6 +12512,8 @@ chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
     // 初始整窗穿透（**不带 forward**）；命中测试由主进程轮询接管，见 mimicStartHoverPoll
     try { mimicWin.setIgnoreMouseEvents(true); } catch { /* noop */ }
     await mimicWin.loadFile(path.join(__dirname, 'renderer', 'mimic.html'));
+    /* R228：唯一标题（无边框不占任务栏，用户不可见）——诊断/真机探针按标题聚焦本体窗 */
+    try { mimicWin.setTitle('WArmy-Mimic-Body'); } catch { /* noop */ }
     const cap = String(p0?.character || '');
     /* R218：外观对象（2D/3D 形态 + 手捏参数 + 模型选择）随启动下发 */
     const wg = (() => {
@@ -12541,7 +12543,8 @@ chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
-chuliIpc('warmy:mimicStop', () => {
+/** R228 项3：隐身动作提取成函数 —— 菜单「隐身」与 IPC 共用同一路径（含主界面按钮状态广播） */
+function mimicStopShiXian(): { ok: boolean; error?: string } {
   try {
     mimicStopHoverPoll();
     if (mimicWin && !mimicWin.isDestroyed()) mimicWin.close();
@@ -12550,7 +12553,8 @@ chuliIpc('warmy:mimicStop', () => {
     audit?.log('mimic.stop', {});
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
+}
+chuliIpc('warmy:mimicStop', () => mimicStopShiXian());
 
 chuliIpc('warmy:mimicZhuangTai', () => ({ ok: true, on: !!(mimicWin && !mimicWin.isDestroyed()) }));
 
@@ -12583,30 +12587,46 @@ const MO_FAN_YING: Record<string, string> = {
 };
 let mimicMoZt: { part: string; ts: number; ci: number; zuiHouHui: string } | null = null;
 let mimicMoAiZuiHou = 0;
-chuliIpc('warmy:mimicMoPart', async (_e, p0?: { part?: string }) => {
+/** R228 项2：互动队列 —— tap/hold/stroke 全入队，AI 说话时一并注入再清空。
+ *  节流只限说话频率、不丢事件：双击=2次摸、按住持续摸、拖着摸 都会到达模型。 */
+let mimicHuDongDuiLie: Array<{ kind: string; part: string; ms: number; ts: number }> = [];
+chuliIpc('warmy:mimicMoPart', async (_e, p0?: { part?: string; kind?: string; ms?: number; from?: { x?: number; y?: number }; to?: { x?: number; y?: number } }) => {
   try {
-    const part = String(p0?.part || '').trim().slice(0, 20);
-    if (!part || !mimicWin || mimicWin.isDestroyed()) return { ok: false };
+    const part = String(p0?.part || '').trim().slice(0, 20) || '身体';
+    const kind = p0?.kind === 'hold' || p0?.kind === 'stroke' ? p0.kind : 'tap';
+    const ms = Math.max(0, Math.min(600000, Number(p0?.ms) || 0));
+    if (!mimicWin || mimicWin.isDestroyed()) return { ok: false };
     const now = Date.now();
+    mimicHuDongDuiLie.push({ kind, part, ms, ts: now });
+    if (mimicHuDongDuiLie.length > 10) mimicHuDongDuiLie = mimicHuDongDuiLie.slice(-10);
+    try { audit?.log('mimic.touch', { kind, part, ms, from: p0?.from, to: p0?.to }); } catch { /* noop */ }
     const jiu = mimicMoZt;
     const tongPart = !!(jiu && jiu.part === part && now - jiu.ts < 30000);
     const ci = jiu && tongPart ? jiu.ci + 1 : 1;
     const shangHui = jiu && tongPart ? jiu.zuiHouHui : '';
     mimicMoZt = { part, ts: now, ci, zuiHouHui: shangHui };
-    /* 即时动作反馈（禁用的动作不播，与 AI/触发词路径同口径） */
-    const dzId = MO_FAN_YING[part] || 'kaiXin';
+    /* 即时动作反馈（禁用的动作不播，与 AI/触发词路径同口径）：tap 按部位映射，hold/stroke=开心 */
+    const dzId = kind === 'tap' ? (MO_FAN_YING[part] || 'kaiXin') : 'kaiXin';
     try {
       const pei = ((settingsStore?.load() as { mimicActions?: Record<string, { enabled?: boolean }> } | undefined)?.mimicActions) || {};
       if (!(pei[dzId] && pei[dzId].enabled === false)) {
         mimicWin.webContents.send('warmy:mimicDongZuo', { id: dzId });
       }
     } catch { /* noop */ }
-    /* AI 回应节流：6s 内只给动作不重复说话（ rapid 点击不机械刷屏） */
+    /* AI 回应节流：6s 内只给动作不重复说话（连摸不机械刷屏）；事件入队下次一并注入 */
     if (now - mimicMoAiZuiHou < 6000) return { ok: true, action: dzId, ai: 'throttled' };
     mimicMoAiZuiHou = now;
-    const tiShi = ci > 1
-      ? '【触摸互动】用户又摸了摸你的「' + part + '」——短时间内第' + ci + '次摸这里。自行决定是否回应；若回应，换个自然的新反应（可以无奈/撒娇/躲开/调侃），绝不重复上次说过的话。上次回应：' + (shangHui || '（无）').slice(0, 60)
-      : '【触摸互动】用户摸了摸你的「' + part + '」。自行决定是否回应、如何回应（结合部位特点，自然亲切，80字以内）；不想说话可以只回一个【动作:名字】。';
+    const duiLieWen = mimicHuDongDuiLie.length > 1
+      ? '（最近互动还有：' + mimicHuDongDuiLie.slice(0, -1).map((h) => h.kind === 'tap' ? '摸了「' + h.part + '」' : h.kind === 'hold' ? '按住持续摸' + (h.ms ? Math.round(h.ms / 1000) + '秒' : '') : '按住从一处摸到另一处').join('、') + '）'
+      : '';
+    mimicHuDongDuiLie = [];
+    const tiShi = kind === 'hold'
+      ? '【触摸互动】用户按住鼠标持续摸你' + (ms ? '（已持续' + Math.round(ms / 1000) + '秒）' : '') + duiLieWen + '。自行决定是否回应（享受/撒娇/蹭蹭等自然反应，80字以内）；不想说话可以只回一个【动作:名字】。'
+      : kind === 'stroke'
+        ? '【触摸互动】用户按住鼠标从一处摸到另一处（像顺着毛摸/拖着玩）' + duiLieWen + '。自行决定是否回应、如何回应（自然亲切，80字以内）；不想说话可以只回一个【动作:名字】。'
+        : ci > 1
+          ? '【触摸互动】用户又摸了摸你的「' + part + '」——短时间内第' + ci + '次摸这里' + duiLieWen + '。自行决定是否回应；若回应，换个自然的新反应（可以无奈/撒娇/躲开/调侃），绝不重复上次说过的话。上次回应：' + (shangHui || '（无）').slice(0, 60)
+          : '【触摸互动】用户摸了摸你的「' + part + '」' + duiLieWen + '。自行决定是否回应、如何回应（结合部位特点，自然亲切，80字以内）；不想说话可以只回一个【动作:名字】。';
     const r = await zhenZhengFaSong(null, {
       sessionId: MIMIC_SID,
       content: tiShi,
@@ -12789,7 +12809,9 @@ async function mimicHuiHuaShuo(text: string): Promise<void> {
     }
     const wenBen = String(text || '').replace(/【动作[:：][^】]*】/g, '').trim();
     if (!wenBen) return;
-    mimicWin.webContents.send('warmy:mimicSay', { text: wenBen.slice(0, 400), ms: 0 });
+    /* R228 项3：对话框（字幕气泡）开/关真生效 —— mimicSubtitle=false 不发气泡；语音与主窗同步不受影响 */
+    const zmKai = (() => { try { return (settingsStore?.load() as { mimicSubtitle?: boolean } | undefined)?.mimicSubtitle !== false; } catch { return true; } })();
+    if (zmKai) { try { mimicWin.webContents.send('warmy:mimicSay', { text: wenBen.slice(0, 400), ms: 0 }); } catch { /* noop */ } }
     try { broadcastToWindows('warmy:mimicShuo', { text: wenBen.slice(0, 400) }); } catch { /* noop */ }
   } catch { /* noop */ }
   // 语音：只在配置了说话模型或本地语音启用时尝试；合成期间给拟态开「说话口型」
@@ -12936,6 +12958,72 @@ chuliIpc('warmy:daKaiNiTaiSheZhi', () => {
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:mimicPanDuanMoXingMoRen', () => ({ ok: true, model: mimicDangQianMoXing() }));
+
+/** R228 项3：拟态右键菜单（HTML 版，拟态窗内渲染 —— 原生 Menu 在 focusable:false 透明窗上拿不到键盘焦点，真机探针实证后改）。
+ *  caiDanKai = 开菜单：审计 + 返回当前状态与 27 语文案；caiDanDong = 五项动作分发（对话框开关/隐身/窗口/语音模式/设置）。 */
+chuliIpc('warmy:mimicCaiDanKai', () => {
+  try {
+    if (!mimicWin || mimicWin.isDestroyed()) return { ok: false };
+    const s = (settingsStore?.load() as { mimicSubtitle?: boolean; mimicVoiceMode?: string } | undefined) || {};
+    try { audit?.log('mimic.menu', {}); } catch { /* noop */ }
+    const modes: Record<string, string> = {};
+    for (const m of ['off', 'wake', 'always', 'smart']) modes[m] = tMain('mimic.mode.' + m, m).split(/[（(]/)[0] || m;
+    return {
+      ok: true,
+      zmKai: s.mimicSubtitle !== false,
+      moShi: String(s.mimicVoiceMode || 'smart'),
+      wen: {
+        duiHua: tMain('mimic.menu.duiHua', '对话框'), kai: tMain('mimic.menu.kai', '开'), guan: tMain('mimic.menu.guan', '关'),
+        yinShen: tMain('mimic.yinShen', '隐身'), chuangKou: tMain('mimic.menu.chuangKou', '窗口'),
+        yuYin: tMain('mimic.voiceMode', '语音互动模式'), sheZhi: tMain('mimic.menu.sheZhi', '设置'),
+        modes,
+      },
+    };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+}, ['mimic.html']);
+chuliIpc('warmy:mimicCaiDanDong', (_e, p0?: { item?: string; value?: string }) => {
+  try {
+    const item = String(p0?.item || '');
+    if (!mimicWin || mimicWin.isDestroyed()) return { ok: false };
+    if (item === 'duiHua') {
+      const s = (settingsStore?.load() as { mimicSubtitle?: boolean } | undefined) || {};
+      const zmKai = s.mimicSubtitle !== false;
+      settingsStore?.save({ mimicSubtitle: !zmKai } as never);
+      try { audit?.log('mimic.menu-action', { item: 'duiHua', on: !zmKai }); } catch { /* noop */ }
+      /* 关的瞬间收起当前气泡（渲染层 __shuo 空文本=收起） */
+      if (zmKai) mimicWin.webContents.send('warmy:mimicSay', { text: '', ms: 0 });
+      return { ok: true, zmKai: !zmKai };
+    }
+    if (item === 'yinShen') {
+      try { audit?.log('mimic.menu-action', { item: 'yinShen' }); } catch { /* noop */ }
+      mimicStopShiXian();
+      return { ok: true };
+    }
+    if (item === 'chuangKou') {
+      try { audit?.log('mimic.menu-action', { item: 'chuangKou' }); } catch { /* noop */ }
+      daKaiLiaoTianChuangKouShi({ id: MIMIC_SID, biaoTi: tMain('mimic.petDefaultName', '拟态'), kind: 'single' });
+      return { ok: true };
+    }
+    if (item === 'yuYin') {
+      const m = ['off', 'wake', 'always', 'smart'].includes(String(p0?.value || '')) ? String(p0?.value) : 'smart';
+      settingsStore?.save({ mimicVoiceMode: m } as never);
+      try { audit?.log('mimic.menu-action', { item: 'yuYin', moShi: m }); } catch { /* noop */ }
+      mimicWin.webContents.send('warmy:mimicDot', { on: m !== 'off' });
+      return { ok: true, moShi: m };
+    }
+    if (item === 'sheZhi') {
+      try { audit?.log('mimic.menu-action', { item: 'sheZhi' }); } catch { /* noop */ }
+      if (win && !win.isDestroyed()) {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+        win.webContents.send('warmy:goNiTaiSheZhi', {});
+      }
+      return { ok: true };
+    }
+    return { ok: false, error: 'bad-item' };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+}, ['mimic.html']);
 
 /* R218：保存拟态外观（2D/3D 形态 + 手捏参数）并下发到拟态窗口 */
 chuliIpc('warmy:daKaiGongZuoMuLuKongZhiTai', async (_e, p0?: { sessionId?: string; dir?: string }) => {
@@ -32006,7 +32094,7 @@ chuliIpc('warmy:asrZhuanXie', async (_e, payload: { dataUrl: string; ext?: strin
 // 产品定稿：独立会话窗 = **可拖动顶栏** + 聊天（第3列）+ 右侧事项（第4列）。
 // 不要再做成「完整主界面」；不要无边框导致无法拖动。
 const chatWindows = new Map<string, BrowserWindow>();
-chuliIpc('warmy:daKaiLiaoTianChuangKou', (_e, payload: { id: string; biaoTi?: string; title?: string; ming?: string; kind?: string; mode?: string; iconDataUrl?: string }) => {
+function daKaiLiaoTianChuangKouShi(payload: { id: string; biaoTi?: string; title?: string; ming?: string; kind?: string; mode?: string; iconDataUrl?: string }): { ok: boolean; error?: string } {
   const biaoTi = String(payload.biaoTi || payload.title || payload.ming || payload.id || 'WArmy');
   try {
     if (chatWindows.has(payload.id)) {
@@ -32056,7 +32144,8 @@ chuliIpc('warmy:daKaiLiaoTianChuangKou', (_e, payload: { id: string; biaoTi?: st
     chatWindows.set(payload.id, w);
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
+}
+chuliIpc('warmy:daKaiLiaoTianChuangKou', (_e, payload: { id: string; biaoTi?: string; title?: string; ming?: string; kind?: string; mode?: string; iconDataUrl?: string }) => daKaiLiaoTianChuangKouShi(payload));
 
 /* ══════════════════════════════════════════════════════════════════════════
    L. **内置插件 `nm-file`（nm 文件查看器）** —— 独立窗口 + 吸附

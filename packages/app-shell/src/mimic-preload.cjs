@@ -24,8 +24,11 @@ contextBridge.exposeInMainWorld('warmyMimic', {
   /** R221：精灵图 JSON 读取（帧动画）/ 动作模型列表（外部动作注册） */
   sheetJson: (p) => ipcRenderer.invoke('warmy:mimicSheetJson', p),
   dongZuoLieBiao: () => ipcRenderer.invoke('warmy:mimicDongZuoLieBiao'),
-  /** R223 项9：3D 部位触摸上报（AI 决定是否/如何回应） */
+  /** R223 项9：3D 部位触摸上报（AI 决定是否/如何回应）；R228 扩展 kind=tap/hold/stroke */
   moPart: (p) => ipcRenderer.invoke('warmy:mimicMoPart', p),
+  /** R228 项3：右键松手且未旋转 → HTML 菜单（开菜单拿状态+文案 / 五项动作分发） */
+  caiDanKai: () => ipcRenderer.invoke('warmy:mimicCaiDanKai'),
+  caiDanDong: (p) => ipcRenderer.invoke('warmy:mimicCaiDanDong', p),
   /** R218：动作触发与说话口型 */
   onDongZuo: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicDongZuo', h); return () => ipcRenderer.removeListener('warmy:mimicDongZuo', h); },
   onKouXing: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicKouXing', h); return () => ipcRenderer.removeListener('warmy:mimicKouXing', h); },
