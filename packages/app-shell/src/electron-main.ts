@@ -12622,7 +12622,23 @@ chuliIpc('warmy:mimicMoPart', async (_e, p0?: { part?: string }) => {
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 }, ['mimic.html']);
 
-/** 拖动拟态：用屏幕坐标差移动窗口（不是 CSS 位移，拟态不会跑出屏幕） */
+/** R226 项1：所有显示器工作区的并集包围盒 —— 拟态跨屏移动的活动范围（不再锁主屏） */
+function mimicPingMuFanWei(): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  try {
+    for (const d of screen.getAllDisplays()) {
+      const w = d.workArea;
+      minX = Math.min(minX, w.x); minY = Math.min(minY, w.y);
+      maxX = Math.max(maxX, w.x + w.width); maxY = Math.max(maxY, w.y + w.height);
+    }
+  } catch { /* 拿不到就退回主屏 */ }
+  if (!Number.isFinite(minX)) {
+    try { const w = screen.getPrimaryDisplay().workArea; minX = w.x; minY = w.y; maxX = w.x + w.width; maxY = w.y + w.height; }
+    catch { minX = 0; minY = 0; maxX = 1920; maxY = 1080; }
+  }
+  return { minX, minY, maxX, maxY };
+}
+/** 拖动拟态：用屏幕坐标差移动窗口（不是 CSS 位移）；R226 项1：可在所有屏幕间移动 */
 ipcMain.on('warmy:mimicDragStart', (_e, p0?: { x?: number; y?: number }) => {
   try {
     if (!mimicWin || mimicWin.isDestroyed()) return;
@@ -12637,9 +12653,10 @@ ipcMain.on('warmy:mimicDragMove', (_e, p0?: { x?: number; y?: number }) => {
     const dx = (Number(p0?.x) || 0) - mimicDragCun.x;
     const dy = (Number(p0?.y) || 0) - mimicDragCun.y;
     const b = mimicWin.getBounds();
-    const wa = screen.getPrimaryDisplay().workAreaSize;
-    const nx = Math.max(-b.width / 3, Math.min(wa.width - b.width * 2 / 3, mimicDragCun.bx + dx));
-    const ny = Math.max(0, Math.min(wa.height - b.height / 3, mimicDragCun.by + dy));
+    /* R226 项1：钳制范围 = 全部显示器工作区并集（保留边缘 1/3 容差，不会整个拖出视野） */
+    const fw = mimicPingMuFanWei();
+    const nx = Math.max(fw.minX - b.width / 3, Math.min(fw.maxX - b.width * 2 / 3, mimicDragCun.bx + dx));
+    const ny = Math.max(fw.minY, Math.min(fw.maxY - b.height / 3, mimicDragCun.by + dy));
     mimicWin.setBounds({ x: Math.round(nx), y: Math.round(ny), width: b.width, height: b.height });
   } catch { /* noop */ }
 });
@@ -12723,7 +12740,10 @@ const MIMIC_YUYIN_JIANGE_MS = 4000;
  */
 async function mimicZhuoMianJieTu(): Promise<{ ok: boolean; dataUrl?: string; width?: number; height?: number; error?: string }> {
   try {
-    const disp = screen.getPrimaryDisplay();
+    /* R226 项1：拟态在哪块屏就看哪块屏（多屏）；拿不到窗口才退回主屏 */
+    const disp = (mimicWin && !mimicWin.isDestroyed())
+      ? (screen.getDisplayMatching(mimicWin.getBounds()) || screen.getPrimaryDisplay())
+      : screen.getPrimaryDisplay();
     const { width, height } = disp.size;
     const scale = disp.scaleFactor || 1;
     const sources = await Promise.race([

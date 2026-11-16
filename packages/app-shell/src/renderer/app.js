@@ -4135,7 +4135,17 @@ async function langDuWenBen(text, btnEl) {
     }
   }
 
+  /* R226 项7：列表重建同样不许重置滚动（与设置页同一类问题）；同一导航内才恢复，切导航从头开始。 */
+  let renderListShangCiNav = '';
   function renderListInner() {
+    const heZi0 = $('lieBiaoTi');
+    const jiuTop = (heZi0 && state.nav === renderListShangCiNav) ? heZi0.scrollTop : 0;
+    renderListShangCiNav = String(state.nav || '');
+    renderListInnerNeiHe();
+    const heZi1 = $('lieBiaoTi');
+    if (heZi1 && jiuTop > 0) heZi1.scrollTop = jiuTop;
+  }
+  function renderListInnerNeiHe() {
     const q = ($('lieBiaoSouSuo').value || '').trim().toLowerCase();
     const heZi = $('lieBiaoTi');
     heZi.innerHTML = '';
@@ -15000,7 +15010,22 @@ async function renderDashboard(host) {
   window.addEventListener('scroll', yinCangTiShi, true);
   window.addEventListener('resize', yinCangTiShi);
 
+  /* R226 项7：页面重建不许偷滚动位置。settingsChanged 广播/跨窗口同步会整体重建 innerHTML，
+     以前停在功能页一段时间就被弹回顶部。重建前记下各滚动容器位置，重建后恢复（分区由 settingsSection 恢复）。 */
   function renderPage() {
+    const nr = $('peiZhiNeiRong');
+    const pt = $('pageTi');
+    const dh = $('peiZhiDaoHang');
+    const jiu = { nr: nr ? nr.scrollTop : 0, pt: pt ? pt.scrollTop : 0, dh: dh ? dh.scrollTop : 0 };
+    renderPageNeiHe();
+    const nr2 = $('peiZhiNeiRong');
+    const pt2 = $('pageTi');
+    const dh2 = $('peiZhiDaoHang');
+    if (nr2 && jiu.nr > 0) nr2.scrollTop = jiu.nr;
+    if (pt2 && jiu.pt > 0) pt2.scrollTop = jiu.pt;
+    if (dh2 && jiu.dh > 0) dh2.scrollTop = jiu.dh;
+  }
+  function renderPageNeiHe() {
     const heZi = $('pageTi');
     /**
      * **模型占用表**（模型 → 谁在用）。
@@ -27411,16 +27436,16 @@ async function renderDashboard(host) {
     const joinLabel = isProject ? t('nav.addProject') : t('nav.addGroup');
     const createLabel = isProject ? t('list.createProject') : t('list.createGroupChat');
     const ka = await myCard();
+    try { await probeContainers(false); } catch { /* 探测失败也开弹窗（只有本机可选） */ }
     title.textContent = isProject ? t('nav.internalGroup') : t('nav.externalGroup');
     const createForm = isProject
       ? '<div class="jingYin" style="margin:0 0 8px">' + escapeHtml(t('container.devEnv.required')) + '</div>' +
         '<label class="jingYin" for="erHeYiMing">' + escapeHtml(t('container.devEnv.nameLabel')) + '</label>' +
         '<input id="erHeYiMing" class="erHeYiInput" placeholder="' + escapeHtml(t('placeholder.groupName')) + '" autocomplete="off"/>' +
         '<div class="jingYin" style="margin:10px 0 4px">' + escapeHtml(t('container.devEnv.biaoTi')) + '</div>' +
-        '<div class="ctgSeg" id="erHeYiDevEnv">' +
-        '<button type="button" data-erheyi-devenv="host">' + escapeHtml(t('container.devEnv.host')) + '</button>' +
-        '<button type="button" data-erheyi-devenv="container">' + escapeHtml(t('container.devEnv.container')) + '</button>' +
-        '</div>' +
+        '<select id="erHeYiDevEnv" class="erHeYiInput" title="' + escapeHtml(tOr('container.devEnv.pickHint', '默认本机。下拉里列出本机与所有可用容器；没有可用容器时请先在 设置 → 功能 → 容器 安装并启动。')) + '">' +
+        rongQiXiaLaXuanXiang() +
+        '</select>' +
         '<div class="jingYin" style="margin-top:8px">' + escapeHtml(t('container.devEnv.note')) + '</div>'
       : '<input id="erHeYiMing" class="erHeYiInput" placeholder="' + escapeHtml(t('placeholder.groupNameExt')) + '" autocomplete="off"/>';
     body.innerHTML =
@@ -27503,13 +27528,10 @@ async function renderDashboard(host) {
       if (r?.ok) setTimeout(() => root.classList.add('yinCang'), 800);
     }, $('jiaRuLinkShuRu'));
 
-    // 右列：创建（项目默认选“本机”）
+    // 右列：创建（R226 项6：单下拉，默认本机，列出本机+所有可用容器）
     let devEnv = isProject ? 'host' : '';
+    let runtimeId = '';
     const nameInput = $('erHeYiMing');
-    if (isProject) {
-      const envBtn = $('erHeYiDevEnv')?.querySelector('[data-erheyi-devenv="host"]');
-      if (envBtn) envBtn.classList.add('qiYong');
-    }
     const createBtn = $('erHeYiCreateBtn');
     const createMsg = $('erHeYiCreateMsg');
     const syncCreate = () => {
@@ -27521,23 +27543,15 @@ async function renderDashboard(host) {
     };
     nameInput?.addEventListener('input', syncCreate);
     if (isProject) {
-      const envBar = $('erHeYiDevEnv');
-      /* R222 项12：无可用容器（或未探测）⇒ 容器选项置灰不可选 */
-      const eyRongBtn = envBar?.querySelector('[data-erheyi-devenv="container"]');
-      if (eyRongBtn && !rongQiKeXuan()) {
-        eyRongBtn.disabled = true;
-        eyRongBtn.style.opacity = '0.45';
-        eyRongBtn.style.cursor = 'not-allowed';
-        eyRongBtn.title = tOr('container.devEnv.noneReady', '没有可用容器：请先在 设置 → 功能 → 容器 探测并启动容器。');
-      }
-      envBar?.querySelectorAll('[data-erheyi-devenv]').forEach((b) => {
-        b.onclick = () => {
-          if (b.disabled) return;
-          devEnv = String(b.getAttribute('data-erheyi-devenv') || '');
-          envBar.querySelectorAll('[data-erheyi-devenv]').forEach((x) => x.classList.toggle('qiYong', x === b));
-          syncCreate();
-        };
-      });
+      const envSel = $('erHeYiDevEnv');
+      const duQu = () => {
+        const v = String(envSel ? envSel.value : 'host');
+        if (v.startsWith('container:')) { devEnv = 'container'; runtimeId = v.slice(10); }
+        else { devEnv = 'host'; runtimeId = ''; }
+        syncCreate();
+      };
+      if (envSel) envSel.onchange = duQu;
+      duQu();
     }
     syncCreate();
     if (createBtn) {
@@ -27564,6 +27578,10 @@ async function renderDashboard(host) {
               map[id] = devEnv;
               await window.warmy.settingsSave({ containerDev: map });
             } catch { /* 镜像写不进也不挡创建 */ }
+            /* R226 项6：创建时选了容器 ⇒ 记住运行时（与右键「切换容器…」同一通道） */
+            if (devEnv === 'container' && runtimeId) {
+              try { await window.warmy.projectSetContainer?.({ sessionId: id, runtimeId }); } catch { /* noop */ }
+            }
           }
           await syncGroupsFromStore();
           /* R218：新建会话默认进第二个分组（默认分组位置） */
@@ -27635,11 +27653,25 @@ async function renderDashboard(host) {
     state.instances = [...Suoyin.values()];
   }
 
+  /* R226 项6：创建时运行时下拉选项 = 本机 + 所有可用容器（用户选项 B：单下拉，默认本机）。
+     没有可用容器 ⇒ 一个禁用占位项，悬停说明要先安装（与置灰语义等价）。 */
+  function rongQiXiaLaXuanXiang() {
+    const usable = ((containerUi.report && containerUi.report.usableIds) || []);
+    let html = '<option value="host">' + escapeHtml(t('container.devEnv.host')) + '</option>';
+    for (const id of usable) {
+      html += '<option value="container:' + escapeHtml(String(id)) + '">' + escapeHtml(t('container.rt.' + id + '.name')) + '</option>';
+    }
+    if (!usable.length) {
+      html += '<option value="" disabled>' + escapeHtml(tOr('container.devEnv.noneReadyOption', '容器（先安装可用容器）')) + '</option>';
+    }
+    return html;
+  }
   /**
-   * 创建牛马：名称 + 运行环境（本机 / 容器中，默认本机）。
-   * 返回 { ming, devEnv } 或 null（取消）。运行环境与项目创建用同一套 `host|container` 语义。
+   * 创建牛马：名称 + 运行环境（R226 项6：单下拉，默认本机，列出所有可用容器）。
+   * 返回 { ming, devEnv, runtimeId } 或 null（取消）。
    */
-  function openCreateInstanceDialog(defaultMing) {
+  async function openCreateInstanceDialog(defaultMing) {
+    try { await probeContainers(false); } catch { /* 探测失败也开弹窗（只有本机可选） */ }
     return new Promise((resolve) => {
       const root = $('duiHuaKuangGen');
       if (!root) { resolve(null); return; }
@@ -27651,35 +27683,26 @@ async function renderDashboard(host) {
         '<label class="jingYin" for="nmMing">' + escapeHtml(t('instances.name')) + '</label>' +
         '<input id="nmMing" class="erHeYiInput" autocomplete="off"/>' +
         '<div class="jingYin" style="margin:12px 0 4px">' + escapeHtml(tOr('instances.devEnv', '运行环境')) + '</div>' +
-        '<div class="ctgSeg" id="nmDevEnv">' +
-        '<button type="button" data-nm-devenv="host">' + escapeHtml(t('container.devEnv.host')) + '</button>' +
-        '<button type="button" data-nm-devenv="container">' + escapeHtml(t('container.devEnv.container')) + '</button>' +
-        '</div>' +
-        '<div class="jingYin" style="margin-top:8px">' + escapeHtml(tOr('instances.devEnvHint', '默认本机。选「容器中」需要先在 设置 → 功能 → 容器 里装好并启动容器，再选一个容器。')) + '</div>' +
+        '<select id="nmDevEnv" class="erHeYiInput" title="' + escapeHtml(tOr('container.devEnv.pickHint', '默认本机。下拉里列出本机与所有可用容器；没有可用容器时请先在 设置 → 功能 → 容器 安装并启动。')) + '">' +
+        rongQiXiaLaXuanXiang() +
+        '</select>' +
+        '<div class="jingYin" style="margin-top:8px">' + escapeHtml(tOr('instances.devEnvHint', '默认本机。选容器需要先在 设置 → 功能 → 容器 里装好并启动容器；创建后会记住这个选择。')) + '</div>' +
         '<div class="jingYin" id="nmErr" style="color:var(--danger,#c33);margin-top:6px;display:none"></div>';
       ti.appendChild(wrap);
       const inp = $('nmMing');
       inp.value = String(defaultMing || '');
       let devEnv = 'host';
-      const envBar = $('nmDevEnv');
+      let runtimeId = '';
+      const envSel = $('nmDevEnv');
       const err = $('nmErr');
-      const mark = () => {
-        envBar.querySelectorAll('[data-nm-devenv]').forEach((b) => {
-          b.classList.toggle('qiYong', String(b.getAttribute('data-nm-devenv')) === devEnv);
-        });
+      /* R226 项6：单下拉读取（container:<id> = 容器档；无可用容器时占位项禁用，选不到） */
+      const duQu = () => {
+        const v = String(envSel ? envSel.value : 'host');
+        if (v.startsWith('container:')) { devEnv = 'container'; runtimeId = v.slice(10); }
+        else { devEnv = 'host'; runtimeId = ''; }
       };
-      /* R222 项12：无可用容器（或未探测）⇒ 容器选项置灰不可选 */
-      const nmRongBtn = envBar.querySelector('[data-nm-devenv="container"]');
-      if (nmRongBtn && !rongQiKeXuan()) {
-        nmRongBtn.disabled = true;
-        nmRongBtn.style.opacity = '0.45';
-        nmRongBtn.style.cursor = 'not-allowed';
-        nmRongBtn.title = tOr('container.devEnv.noneReady', '没有可用容器：请先在 设置 → 功能 → 容器 探测并启动容器。');
-      }
-      envBar.querySelectorAll('[data-nm-devenv]').forEach((b) => {
-        b.onclick = () => { if (b.disabled) return; devEnv = String(b.getAttribute('data-nm-devenv') || 'host'); mark(); };
-      });
-      mark();
+      if (envSel) envSel.onchange = duQu;
+      duQu();
       const dongZuoJi = $('duiHuaKuangDongZuoJi');
       dongZuoJi.innerHTML = '';
       const cancel = document.createElement('button');
@@ -27703,7 +27726,7 @@ async function renderDashboard(host) {
       ok.onclick = () => {
         const ming = String(inp.value || '').trim();
         if (!ming || mingYiZhanYong(ming)) return;
-        finish({ ming, devEnv });
+        finish({ ming, devEnv, runtimeId });
       };
       inp.addEventListener('input', sync);
       inp.addEventListener('keydown', (e) => {
@@ -27768,6 +27791,10 @@ async function renderDashboard(host) {
       void (async () => {
         try {
           const r = await window.warmy.spawnInstance({ id, ming, dutyEligible: true, devEnv });
+          /* R226 项6：创建时选了容器 ⇒ 记住运行时（与设置里「选择容器…」同一通道） */
+          if (r && r.ok !== false && devEnv === 'container' && pick.runtimeId) {
+            try { await window.warmy.projectSetContainer?.({ sessionId: id, runtimeId: String(pick.runtimeId) }); } catch { /* noop */ }
+          }
           if (r && (r.ok === false || r.error)) {
             state.instances = (state.instances || []).filter((x) => x.id !== id);
             state.selectedInstance = (state.instances || [])[0] || null;
@@ -30394,7 +30421,13 @@ async function renderDashboard(host) {
   function renderContainerGuide() {
     const heZi = $('rongQiGuide');
     if (!heZi) return;
-    heZi.innerHTML = CONTAINER_GUIDE_ORDER.map((id) => {
+    /* R226 项6：先讲「怎么选」「在 WArmy 里怎么用」，再给每个容器的安装步骤 */
+    const touBu =
+      '<div class="ctgTiShiHe"><div class="ctgTiShiBiaoTi">' + escapeHtml(tOr('container.guide.whichTitle', '怎么选（按你的系统）')) + '</div>' +
+      '<div class="ctgDim">' + escapeHtml(tOr('container.guide.whichBody', 'Windows：Docker Desktop 或 Podman Desktop（都需要 WSL2，安装时勾选）；想要免费开源选 Podman Desktop / Rancher Desktop。macOS：Podman Desktop 或 Colima。Linux：Podman 或 Docker Engine 直接装。只要轻量命令行：containerd + nerdctl。装哪个都行，WArmy 探测到就能用。')) + '</div></div>' +
+      '<div class="ctgTiShiHe"><div class="ctgTiShiBiaoTi">' + escapeHtml(tOr('container.guide.useTitle', '在 WArmy 里怎么用')) + '</div>' +
+      '<div class="ctgDim">' + escapeHtml(tOr('container.guide.useBody', '① 安装并启动容器软件；② 回到本页点「探测」，可用容器会进列表；③ 创建牛马/项目时在「运行环境」下拉里选那个容器（默认本机）；④ 之后该会话的命令跑在容器里，聊天头控制台图标可打开内置控制台手动执行。容器没启动时该会话暂不可用，启动后即恢复。')) + '</div></div>';
+    heZi.innerHTML = touBu + CONTAINER_GUIDE_ORDER.map((id) => {
       const links = CONTAINER_LINKS[id] || {};
       const linkRows = CONTAINER_LINK_KEYS.map((k) =>
         '<a class="ctgLink" href="' + escapeHtml(links[k] || '') + '" target="_blank" rel="noreferrer noopener"' +
@@ -30416,6 +30449,9 @@ async function renderDashboard(host) {
         field('cost', 'container.guideCost') +
         field('os', 'container.guideOs') +
         field('size', 'container.guideSize') +
+        /* R226 项6：安装步骤（常用容器有专门步骤；其余指向官方安装链接） */
+        '<div class="ctgGuideField" data-field="steps"><span class="ctgGuideBiaoQian">' + escapeHtml(tOr('container.guide.stepsLabel', '安装步骤')) + '</span><span class="ctgGuideValue">' +
+        escapeHtml(state.t['container.rt.' + id + '.steps'] || tOr('container.guide.stepsGeneric', '按上方「安装」链接的官方步骤安装；装好后回到本页点「探测」。')) + '</span></div>' +
         '<div class="ctgLinks">' + linkRows + '</div>' +
         '</div></details>';
     }).join('');
