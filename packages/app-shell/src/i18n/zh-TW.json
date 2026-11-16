@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "刪除",
   "mimic.actDeleteConfirm": "確定刪除動作「{name}」？其模型檔案將被移除。",
   "mimic.actDeleteBundled": "內建動作不可刪除。",
-  "container.devEnv.noneReady": "沒有可用容器：請先在 設定 → 功能 → 容器 探測並啟動容器。"
+  "container.devEnv.noneReady": "沒有可用容器：請先在 設定 → 功能 → 容器 探測並啟動容器。",
+  "mimic.actBuiltinTip": "內建動作（隨程式提供，不可刪除）",
+  "mimic.actExternalTip": "動作模型（來自資料夾，可刪除）",
+  "mimic.faceSculpt": "捏臉定制",
+  "mimic.faceSculptTip": "調顏色/眼型/嘴型/耳朵/尾巴（2D）或頭大小/胖瘦（3D），捏出專屬形象；動任一參數即脫離預設成品。",
+  "mimic.characterTip": "點選預設或資料夾模型即用；下方「捏臉定制」可調參數捏出專屬形象。",
+  "mimic.actionsTip": "預設動作 2D/3D 通用；資料夾動作模型為 2D 精靈動畫（3D 下對應到預設動作）。點擊=啟用/停用，右鍵=觸發詞/刪除。",
+  "mimic.subtitleShort": "顯示字幕",
+  "rc.mianQueRen": "免確認",
+  "rc.mianQueRenTip": "勾選後連接自己的裝置不再彈確認；不勾選則每次連接前詢問。",
+  "rc.connectConfirm": "連接並控制裝置「{m}」？",
+  "rc.myDevicesNew": "自己的裝置"
 }

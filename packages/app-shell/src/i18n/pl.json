@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Usuń",
   "mimic.actDeleteConfirm": "Usunąć akcję «{name}»? Jej pliki modelu zostaną usunięte.",
   "mimic.actDeleteBundled": "Wbudowanych akcji nie można usunąć.",
-  "container.devEnv.noneReady": "Brak dostępnego kontenera: najpierw wykryj i uruchom go w Ustawienia → Funkcje → Kontenery."
+  "container.devEnv.noneReady": "Brak dostępnego kontenera: najpierw wykryj i uruchom go w Ustawienia → Funkcje → Kontenery.",
+  "mimic.actBuiltinTip": "Wbudowana akcja (dostarczana z aplikacją, nie można usunąć)",
+  "mimic.actExternalTip": "Model akcji (z Twojego folderu, można usunąć)",
+  "mimic.faceSculpt": "Rzeźbienie twarzy",
+  "mimic.faceSculptTip": "Dostosuj kolory / kształt oczu / usta / uszy / ogon (2D) lub rozmiar głowy / pełność (3D), aby wyrzeźbić własną postać; zmiana dowolnego parametru odłącza od presetu.",
+  "mimic.characterTip": "Kliknij preset lub model z folderu, aby użyć; «Rzeźbienie twarzy» poniżej dostosuje parametry.",
+  "mimic.actionsTip": "Akcje presetowe działają w 2D i 3D; modele akcji z folderu to animacje sprite 2D (w 3D mapowane na akcje presetowe). Klik = włącz/wyłącz, prawy klik = słowo wyzwalające/usuń.",
+  "mimic.subtitleShort": "Pokazuj napisy",
+  "rc.mianQueRen": "Bez potwierdzenia",
+  "rc.mianQueRenTip": "Po zaznaczeniu łączenie z własnymi urządzeniami nie pyta o potwierdzenie; w przeciwnym razie pyta przed każdym połączeniem.",
+  "rc.connectConfirm": "Połączyć i sterować urządzeniem «{m}»?",
+  "rc.myDevicesNew": "Moje urządzenia"
 }

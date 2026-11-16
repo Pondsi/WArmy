@@ -698,6 +698,7 @@ contextBridge.exposeInMainWorld('warmy', {
   diagClear: () => ipcRenderer.invoke('warmy:zhenDuanQingChu'),
   diagToggle: (on) => ipcRenderer.invoke('warmy:zhenDuanKaiGuan', on),
   diagExport: () => ipcRenderer.invoke('warmy:zhenDuanDaoChu'),
+diagNmKai: () => ipcRenderer.invoke('warmy:zhenDuanNmDaKai'), // R223 项2
   joinRecords: () => ipcRenderer.invoke('warmy:jiaRuJiLuLieBiao'),
   systemMessages: () => ipcRenderer.invoke('warmy:xiTongXiaoXiLieBiao'),
   systemMessageRead: (id) => ipcRenderer.invoke('warmy:xiTongXiaoXiYiDu', id),

@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Delete",
   "mimic.actDeleteConfirm": "Delete action \"{name}\"? Its model files will be removed.",
   "mimic.actDeleteBundled": "Built-in actions cannot be deleted.",
-  "container.devEnv.noneReady": "No container available: probe and start one in Settings → Features → Containers first."
+  "container.devEnv.noneReady": "No container available: probe and start one in Settings → Features → Containers first.",
+  "mimic.actBuiltinTip": "Built-in action (ships with the app, cannot be deleted)",
+  "mimic.actExternalTip": "Action model (from your folder, can be deleted)",
+  "mimic.faceSculpt": "Face sculpting",
+  "mimic.faceSculptTip": "Tune colors / eye shape / mouth shape / ears / tail (2D) or head size / plumpness (3D) to sculpt your own character; changing any parameter detaches from the preset artwork.",
+  "mimic.characterTip": "Click a preset or a folder model to use it; use \"Face sculpting\" below to tune parameters into your own character.",
+  "mimic.actionsTip": "Preset actions work in both 2D and 3D; folder action models are 2D sprite animations (mapped to preset actions in 3D). Click = enable/disable, right-click = trigger word/delete.",
+  "mimic.subtitleShort": "Show subtitles",
+  "rc.mianQueRen": "Skip confirmation",
+  "rc.mianQueRenTip": "When checked, connecting to your own devices no longer asks for confirmation; otherwise you are asked before each connection.",
+  "rc.connectConfirm": "Connect and control device \"{m}\"?",
+  "rc.myDevicesNew": "My devices"
 }

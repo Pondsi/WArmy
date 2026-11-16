@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "删除",
   "mimic.actDeleteConfirm": "确定删除动作「{name}」？其模型文件将被移除。",
   "mimic.actDeleteBundled": "内置动作不可删除。",
-  "container.devEnv.noneReady": "没有可用容器：请先在 设置 → 功能 → 容器 探测并启动容器。"
+  "container.devEnv.noneReady": "没有可用容器：请先在 设置 → 功能 → 容器 探测并启动容器。",
+  "mimic.actBuiltinTip": "内置动作（随程序提供，不可删除）",
+  "mimic.actExternalTip": "动作模型（来自文件夹，可删除）",
+  "mimic.faceSculpt": "捏脸定制",
+  "mimic.faceSculptTip": "调颜色/眼型/嘴型/耳朵/尾巴（2D）或头大小/胖瘦（3D），捏出专属形象；动任一参数即脱离预设成品。",
+  "mimic.characterTip": "点选预设或文件夹模型即用；下方「捏脸定制」可调参数捏出专属形象。",
+  "mimic.actionsTip": "预设动作 2D/3D 通用；文件夹动作模型为 2D 精灵动画（3D 下映射到预设动作）。点击=启用/禁用，右键=触发词/删除。",
+  "mimic.subtitleShort": "显示字幕",
+  "rc.mianQueRen": "免确定",
+  "rc.mianQueRenTip": "勾选后连接自己的设备不再弹确认；不勾选则每次连接前询问。",
+  "rc.connectConfirm": "连接并控制设备「{m}」？",
+  "rc.myDevicesNew": "自己的设备"
 }

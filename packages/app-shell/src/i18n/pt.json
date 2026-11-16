@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Excluir",
   "mimic.actDeleteConfirm": "Excluir a ação «{name}»? Os arquivos de modelo dela serão removidos.",
   "mimic.actDeleteBundled": "Ações integradas não podem ser excluídas.",
-  "container.devEnv.noneReady": "Nenhum contêiner disponível: primeiro detecte e inicie um em Configurações → Funções → Contêineres."
+  "container.devEnv.noneReady": "Nenhum contêiner disponível: primeiro detecte e inicie um em Configurações → Funções → Contêineres.",
+  "mimic.actBuiltinTip": "Ação integrada (vem com o app, não pode ser excluída)",
+  "mimic.actExternalTip": "Modelo de ação (da sua pasta, pode ser excluído)",
+  "mimic.faceSculpt": "Escultura de rosto",
+  "mimic.faceSculptTip": "Ajuste cores / formato dos olhos / boca / orelhas / cauda (2D) ou tamanho da cabeça / arredondamento (3D) para esculpir seu personagem; alterar qualquer parâmetro desvincula do preset.",
+  "mimic.characterTip": "Clique num preset ou modelo da pasta para usar; «Escultura de rosto» abaixo para ajustar parâmetros.",
+  "mimic.actionsTip": "Ações preset valem em 2D e 3D; modelos de ação da pasta são animações sprite 2D (mapeadas para ações preset em 3D). Clique = ativar/desativar, clique direito = palavra-gatilho/excluir.",
+  "mimic.subtitleShort": "Mostrar legendas",
+  "rc.mianQueRen": "Sem confirmação",
+  "rc.mianQueRenTip": "Se marcado, conectar aos seus dispositivos não pede mais confirmação; caso contrário, pergunta antes de cada conexão.",
+  "rc.connectConfirm": "Conectar e controlar o dispositivo «{m}»?",
+  "rc.myDevicesNew": "Meus dispositivos"
 }

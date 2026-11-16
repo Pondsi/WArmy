@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Slet",
   "mimic.actDeleteConfirm": "Slet handlingen «{name}»? Dens modelfiler fjernes.",
   "mimic.actDeleteBundled": "Indbyggede handlinger kan ikke slettes.",
-  "container.devEnv.noneReady": "Ingen container tilgængelig: registrer og start en i Indstillinger → Funktioner → Containere først."
+  "container.devEnv.noneReady": "Ingen container tilgængelig: registrer og start en i Indstillinger → Funktioner → Containere først.",
+  "mimic.actBuiltinTip": "Indbygget handling (følger med appen, kan ikke slettes)",
+  "mimic.actExternalTip": "Handlingsmodel (fra din mappe, kan slettes)",
+  "mimic.faceSculpt": "Ansigtsformning",
+  "mimic.faceSculptTip": "Justér farver / øjenform / mund / ører / hale (2D) eller hovedstørrelse / fylde (3D) for at forme din egen figur; ændring af en parameter frigør fra preset.",
+  "mimic.characterTip": "Klik et preset eller en mappemodel for at bruge den; «Ansigtsformning» nedenfor justerer parametre.",
+  "mimic.actionsTip": "Preset-handlinger gælder i 2D og 3D; mappehandlingsmodeller er 2D sprite-animationer (mappet til preset-handlinger i 3D). Klik = aktivér/deaktivér, højreklik = udløserord/slet.",
+  "mimic.subtitleShort": "Vis undertekster",
+  "rc.mianQueRen": "Uden bekræftelse",
+  "rc.mianQueRenTip": "Hvis afkrydset, forbindes til dine egne enheder uden bekræftelse; ellers spørges før hver forbindelse.",
+  "rc.connectConfirm": "Forbind og styr enheden «{m}»?",
+  "rc.myDevicesNew": "Mine enheder"
 }

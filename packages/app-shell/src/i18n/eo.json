@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Forigi",
   "mimic.actDeleteConfirm": "Ĉu forigi la agon «{name}»? Ĝiaj modeldosieroj estos forigitaj.",
   "mimic.actDeleteBundled": "Enkonstruitaj agoj ne forigeblas.",
-  "container.devEnv.noneReady": "Neniu kontainero disponebla: unue detektu kaj startu ĝin en Agordoj → Funkcioj → Kontaineroj."
+  "container.devEnv.noneReady": "Neniu kontainero disponebla: unue detektu kaj startu ĝin en Agordoj → Funkcioj → Kontaineroj.",
+  "mimic.actBuiltinTip": "Enkonstruita ago (venas kun la aplikaĵo, ne forigebla)",
+  "mimic.actExternalTip": "Agomodelo (el via dosierujo, forigebla)",
+  "mimic.faceSculpt": "Vizaĝo skulptado",
+  "mimic.faceSculptTip": "Agordu kolorojn / okulformon / buŝon / orelojn / voston (2D) aŭ kapgrandon / plenecon (3D) por skulpti vian propran figuron; ŝanĝo de iu parametro malkroĉas de la antaŭagordo.",
+  "mimic.characterTip": "Alklaku antaŭagordon aŭ dosierujmodelon por uzi ĝin; «Vizaĝo skulptado» sube agordas parametrojn.",
+  "mimic.actionsTip": "Antaŭagorditaj agoj validas en 2D kaj 3D; dosierujaj agomodeloj estas 2D sprite-animacioj (mapitaj al antaŭagorditaj agoj en 3D). Alklako = ebligi/malebligi, dekstra alklako = ekigvorto/forigi.",
+  "mimic.subtitleShort": "Montri subtekstojn",
+  "rc.mianQueRen": "Sen konfirmo",
+  "rc.mianQueRenTip": "Se markita, konekto al viaj propraj aparatoj ne plu petas konfirmon; alie estas petate antaŭ ĉiu konekto.",
+  "rc.connectConfirm": "Ĉu konekti kaj kontroli la aparaton «{m}»?",
+  "rc.myDevicesNew": "Miaj aparatoj"
 }

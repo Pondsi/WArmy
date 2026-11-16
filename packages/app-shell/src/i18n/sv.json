@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Ta bort",
   "mimic.actDeleteConfirm": "Ta bort åtgärden «{name}»? Dess modellfiler tas bort.",
   "mimic.actDeleteBundled": "Inbyggda åtgärder kan inte tas bort.",
-  "container.devEnv.noneReady": "Ingen container tillgänglig: sök och starta en i Inställningar → Funktioner → Containrar först."
+  "container.devEnv.noneReady": "Ingen container tillgänglig: sök och starta en i Inställningar → Funktioner → Containrar först.",
+  "mimic.actBuiltinTip": "Inbyggd åtgärd (följer med appen, kan inte tas bort)",
+  "mimic.actExternalTip": "Åtgärdsmodell (från din mapp, kan tas bort)",
+  "mimic.faceSculpt": "Ansiktsformning",
+  "mimic.faceSculptTip": "Justera färger / ögonform / mun / öron / svans (2D) eller huvudstorlek / fyllighet (3D) för att forma din egen figur; ändring av en parameter kopplar loss från preset.",
+  "mimic.characterTip": "Klicka på ett preset eller en mappmodell för att använda den; «Ansiktsformning» nedan justerar parametrar.",
+  "mimic.actionsTip": "Preset-åtgärder gäller i 2D och 3D; mappåtgärdsmodeller är 2D sprite-animationer (mappas till preset-åtgärder i 3D). Klick = aktivera/inaktivera, högerklick = utlösningsord/ta bort.",
+  "mimic.subtitleShort": "Visa undertexter",
+  "rc.mianQueRen": "Utan bekräftelse",
+  "rc.mianQueRenTip": "Om ikryssad ansluts till dina egna enheter utan bekräftelse; annars frågas före varje anslutning.",
+  "rc.connectConfirm": "Anslut och styr enheten «{m}»?",
+  "rc.myDevicesNew": "Mina enheter"
 }

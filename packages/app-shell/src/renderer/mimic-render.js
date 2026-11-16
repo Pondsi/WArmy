@@ -26,6 +26,8 @@
   /** 用外观参数生成 SVG（body 主色/副色 + 眼/嘴/耳/尾等部件） */
   /* R222 项9：Q 版形象重绘 —— 大头小身 + 高光眼睛 + 腮红 + w 嘴 + 内耳/尾巴/脚掌，参数不变 */
   function hua2DSvg(a) {
+    /* R223 项8：预设角色成品 SVG 直通（主窗口下发 a.svg） */
+    if (a && a.svg) return a.svg;
     const zhu = a.zhuSe || '#f4a460', fu = a.fuSe || '#e8e0d0', yanSe = a.yanSe || '#2b2b2b', hong = a.hongSe || '#e05a5a';
     const er = a.erDuo !== false, wei = a.weiBa !== false;
     const yan = {
@@ -141,6 +143,62 @@
     weiG.add(weiM);
     weiG.position.set(0, -0.2, 0.62);
     if (a.weiBa !== false) body.add(weiG);
+    /* R223 项8：角色特征 —— logo牛马（鬃毛/吻部/蹄子/深色尾）与牛马娘（发盖刘海双马尾/连衣裙/马耳）。
+       附加网格全部挂头/身/腿骨骼 ⇒ 动作系统照常驱动。 */
+    if (String(a.teZheng || '') === 'niuMa') {
+      const zong = a.zongSe ? parseInt(String(a.zongSe).replace('#', ''), 16) : 0x3E2723;
+      const wen = a.wenSe ? parseInt(String(a.wenSe).replace('#', ''), 16) : 0xC19A6B;
+      const ti = a.tiSe ? parseInt(String(a.tiSe).replace('#', ''), 16) : 0x1A1A1A;
+      const zongM = new THREE.MeshStandardMaterial({ color: zong });
+      [[0, 1.18, -0.34], [0, 1.22, -0.12], [0, 1.2, 0.1], [0, 1.1, 0.3], [0, 0.98, 0.48]].forEach((p) => {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), zongM);
+        m.position.set(p[0], p[1], p[2]); m.scale.set(1, 0.85, 1); m.userData.buWei = '鬃毛'; tou.add(m);
+      });
+      const wenM = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 10), new THREE.MeshStandardMaterial({ color: wen }));
+      wenM.position.set(0, 0.3, 0.6); wenM.scale.set(1.25, 0.8, 0.85); tou.add(wenM);
+      const biKong = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), zongM);
+      biKong.position.set(-0.08, 0.32, 0.78);
+      const biKong2 = biKong.clone(); biKong2.position.x = 0.08;
+      tou.add(biKong, biKong2);
+      wenM.userData.buWei = '鼻子'; biKong.userData.buWei = '鼻子'; biKong2.userData.buWei = '鼻子';
+      zui.visible = false; /* 马脸用吻部+鼻孔，不收红嘴 */
+      const tiM = new THREE.MeshStandardMaterial({ color: ti });
+      const hoofL = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), tiM);
+      hoofL.position.set(0, -0.3, 0); hoofL.scale.set(1.2, 0.7, 1.2); hoofL.userData.buWei = '蹄子'; legL.add(hoofL);
+      const hoofR = hoofL.clone(); hoofR.userData.buWei = '蹄子'; legR.add(hoofR);
+      earL.material = new THREE.MeshStandardMaterial({ color: bodyColor });
+      earL.scale.set(0.6, 1.7, 0.5);
+      earR.material = earL.material; earR.scale.set(0.6, 1.7, 0.5);
+      weiM.material = zongM;
+    }
+    if (String(a.teZheng || '') === 'niuMaNiang') {
+      const fa = a.faSe ? parseInt(String(a.faSe).replace('#', ''), 16) : 0x5a3a22;
+      const qun = a.qunSe ? parseInt(String(a.qunSe).replace('#', ''), 16) : 0xA0522D;
+      const faM = new THREE.MeshStandardMaterial({ color: fa });
+      const faMao = new THREE.Mesh(new THREE.SphereGeometry(0.72 * (a.touDa || 1), 20, 16), faM);
+      faMao.position.set(0, 0.72, -0.14); faMao.scale.set(1.04, 1.02, 1); faMao.userData.buWei = '头发'; tou.add(faMao);
+      [[-0.26, 1.02, 0.52], [0, 1.08, 0.56], [0.26, 1.02, 0.52]].forEach((p) => {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), faM);
+        m.position.set(p[0], p[1], p[2]); m.scale.set(1.15, 0.8, 0.7); m.userData.buWei = '头发'; tou.add(m);
+      });
+      const binL = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), faM);
+      binL.position.set(-0.72, 0.28, -0.05); binL.scale.set(0.55, 1.9, 0.55); binL.userData.buWei = '头发'; tou.add(binL);
+      const binR = binL.clone(); binR.position.x = 0.72; binR.userData.buWei = '头发'; tou.add(binR);
+      earL.material = faM; earL.position.set(-0.42, 1.28, -0.05); earL.scale.set(0.55, 1.5, 0.45);
+      earR.material = faM; earR.position.set(0.42, 1.28, -0.05); earR.scale.set(0.55, 1.5, 0.45);
+      const qunM = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.88, 1.15, 18), new THREE.MeshStandardMaterial({ color: qun }));
+      qunM.position.y = -0.82; qunM.userData.buWei = '裙子'; body.add(qunM);
+      const qunBian = new THREE.Mesh(new THREE.CylinderGeometry(0.88, 0.9, 0.12, 18), faM);
+      qunBian.position.y = -1.36; qunBian.userData.buWei = '裙子'; body.add(qunBian);
+      armL.material = new THREE.MeshStandardMaterial({ color: bodyColor });
+      armR.material = armL.material;
+      legL.material = armL.material; legR.material = armL.material;
+      const xieL = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), faM);
+      xieL.position.set(0, -0.3, 0); xieL.scale.set(1.2, 0.7, 1.2); xieL.userData.buWei = '鞋子'; legL.add(xieL);
+      const xieR = xieL.clone(); xieR.userData.buWei = '鞋子'; legR.add(xieR);
+      weiM.material = faM;
+      yanM.scale.set(1.15, 1.25, 1); yanR.scale.set(1.15, 1.25, 1);
+    }
     body.add(tou, armL, armR, legL, legR);
     boneRoot.add(body);
     scene.add(boneRoot);
@@ -149,6 +207,11 @@
     BONE.legL = legL; BONE.legR = legR; BONE.wei = weiG; BONE.zui = zui;
     BONE.yanL = yanM; BONE.yanR = yanR; BONE.earL = earL; BONE.earR = earR;
     BONE.root = boneRoot;
+    /* R223 项9：部位标签 —— 左键射线反馈用（细部位优先，粗部位按骨骼归属兜底） */
+    yanM.userData.buWei = '眼睛'; yanR.userData.buWei = '眼睛';
+    tong.userData.buWei = '眼睛'; tong2.userData.buWei = '眼睛';
+    earL.userData.buWei = '耳朵'; earR.userData.buWei = '耳朵';
+    zui.userData.buWei = '嘴巴';
     return true;
   }
 
@@ -165,6 +228,20 @@
 
   /** 动作定义表：id → { ming, lei, shi: {骨骼/图层目标} 或 函数, ms, fanFu?, zhiLing? } */
   const DONG_ZUO = {};
+  /* R223 项7：禁用（未选中）动作表 —— 主窗口网格切换后随轮询跟上，内置/外部同口径 */
+  let jinYongDongZuo = {};
+  function gengXinJinYongBiao() {
+    try {
+      if (!window.warmyMimic || !window.warmyMimic.dongZuoLieBiao) return;
+      window.warmyMimic.dongZuoLieBiao().then((r) => {
+        try {
+          const biao = {};
+          for (const x of ((r && r.items) || [])) { if (x && x.enabled === false) biao[String(x.id)] = true; }
+          jinYongDongZuo = biao;
+        } catch { /* noop */ }
+      }).catch(() => { /* noop */ });
+    } catch { /* noop */ }
+  }
 
   /** 注册动作（程序化：关键帧目标） */
   function dingDongZuo(id, ming, lei, targets, ms, zhiLing) {
@@ -357,6 +434,8 @@
       if (!hit) return false;
       k = hit;
     }
+    /* R223 项7：禁用（未选中）的动作不播（主进程也拦，这里是兜底；auto idle 同样生效） */
+    if (jinYongDongZuo[k]) return false;
     /* R221：外部动作 —— 2D 换动作图 + 通用摆动，播完还原；3D 无骨骼数据，映射到内置蹦跳（诚实可用） */
     if (DONG_ZUO[k] && DONG_ZUO[k].lei === 'ext') {
       if (xingTai !== '2d') return boFang('bengTiao');
@@ -605,10 +684,58 @@
   window.__mimicKouXing = (on) => { kouXingOn = !!on; };
   window.__mimicTingZhi = tingZhi;
   window.__mimicDongZuoBiao = DONG_ZUO;
+  /* R223 项9：3D 交互 —— 右键拖动旋转 / 左键部位射线（反馈 AI） */
+  function buWeiOf(obj) {
+    let n = obj;
+    while (n) {
+      if (n.userData && n.userData.buWei) return String(n.userData.buWei);
+      if (n === BONE.tou) return '头';
+      if (n === BONE.armL) return '左手';
+      if (n === BONE.armR) return '右手';
+      if (n === BONE.legL) return '左腿';
+      if (n === BONE.legR) return '右腿';
+      if (n === BONE.wei) return '尾巴';
+      if (n === BONE.body) return '身体';
+      n = n.parent;
+    }
+    return '身体';
+  }
+  window.__mimicIs3D = () => xingTai === '3d' && !!(boneRoot || gltfRoot);
+  window.__mimicXuanZhuanBy = (dx, dy) => {
+    const mu = gltfRoot || boneRoot;
+    if (!mu) return;
+    mu.rotation.y += Number(dx || 0) * 0.01;
+    mu.rotation.x = Math.max(-0.5, Math.min(0.5, mu.rotation.x + Number(dy || 0) * 0.008));
+  };
+  /* 旋转结束重录基准 —— 否则转圈等动作的关键帧会把模型拍回旧朝向 */
+  window.__mimicXuanZhuanJieShu = () => { try { jiLuJiZhun(); } catch { /* noop */ } };
+  window.__mimicRaycast = (clientX, clientY) => {
+    try {
+      if (xingTai !== '3d' || !renderer || !scene || !camera || !sanD || !window.THREE) return '';
+      const mu = gltfRoot || boneRoot;
+      if (!mu) return '';
+      const r = sanD.getBoundingClientRect();
+      if (!r.width || !r.height) return '';
+      const nx = ((Number(clientX) - r.left) / r.width) * 2 - 1;
+      const ny = -((Number(clientY) - r.top) / r.height) * 2 + 1;
+      const rc = new window.THREE.Raycaster();
+      rc.setFromCamera({ x: nx, y: ny }, camera);
+      const hits = rc.intersectObject(mu, true);
+      for (const h of hits) {
+        if (gltfRoot) return String((h.object && h.object.name) || '模型');
+        const w = buWeiOf(h.object);
+        if (w) return w;
+      }
+      return '';
+    } catch { return ''; }
+  };
   /* R220：GLB 状态暴露（探针/调试用） */
   window.__mimicGltfZhuangTai = () => ({ loaded: !!gltfRoot, mixer: !!gltfMixer, clips: Object.keys(gltfClips), dongZuo: dongZuoZhengZai ? String(dongZuoZhengZai.ming || '') : '' });
   jiChuDongZuo();
   zhuCeWaiBuDongZuo();
+  /* R223 项7：禁用表起手拉一次 + 10s 轮询（主窗口切换启用/禁用后及时生效） */
+  gengXinJinYongBiao();
+  setInterval(gengXinJinYongBiao, 10000);
 
   /* 精灵图支持：sheet JSON（帧动画）—— R221：fps 时基步进（原来每 RAF 换帧=60fps 闪瞎）+ 相对帧路径解析 + 可停止 */
   let sheetZt = null;

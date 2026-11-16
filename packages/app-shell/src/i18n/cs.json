@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Smazat",
   "mimic.actDeleteConfirm": "Smazat akci «{name}»? Její soubory modelu budou odstraněny.",
   "mimic.actDeleteBundled": "Vestavěné akce nelze smazat.",
-  "container.devEnv.noneReady": "Žádný kontejner není k dispozici: nejprve jej v Nastavení → Funkce → Kontejnery ověřte a spusťte."
+  "container.devEnv.noneReady": "Žádný kontejner není k dispozici: nejprve jej v Nastavení → Funkce → Kontejnery ověřte a spusťte.",
+  "mimic.actBuiltinTip": "Vestavěná akce (součást aplikace, nelze smazat)",
+  "mimic.actExternalTip": "Model akce (z vaší složky, lze smazat)",
+  "mimic.faceSculpt": "Tvarování obličeje",
+  "mimic.faceSculptTip": "Upravte barvy / tvar očí / ústa / uši / ocas (2D) nebo velikost hlavy / plnost (3D) a vytvarujte si vlastní postavu; změna jakéhokoli parametru oddělí od presetu.",
+  "mimic.characterTip": "Klikněte na preset nebo model ze složky a hned jej použijte; «Tvarování obličeje» níže upraví parametry.",
+  "mimic.actionsTip": "Presetové akce platí v 2D i 3D; modely akcí ze složky jsou 2D sprite animace (ve 3D mapované na presetové akce). Klik = povolit/zakázat, pravý klik = spouštěcí slovo/smazat.",
+  "mimic.subtitleShort": "Zobrazit titulky",
+  "rc.mianQueRen": "Bez potvrzení",
+  "rc.mianQueRenTip": "Pokud je zaškrtnuto, připojení k vlastním zařízením se už neptá na potvrzení; jinak se ptá před každým připojením.",
+  "rc.connectConfirm": "Připojit a ovládat zařízení «{m}»?",
+  "rc.myDevicesNew": "Moje zařízení"
 }

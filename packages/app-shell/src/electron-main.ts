@@ -12409,6 +12409,21 @@ function mimicSaoRenWu(): Array<{ id: string; name: string; file: string; kind: 
   return [...jian.values()];
 }
 
+/** R223 项7：内置动作表（与 mimic-render.js jiChuDongZuo 逐一对应）——
+ *  动作网格把预设动作和文件夹动作一起显示；启用/禁用同口径。 */
+const MIMIC_NEI_ZHI_DONG_ZUO: Array<{ id: string; ming: string }> = [
+  { id: 'huXi', ming: '呼吸' }, { id: 'zhaYan', ming: '眨眼' }, { id: 'yaoWei', ming: '摇尾' },
+  { id: 'duZui', ming: '嘟嘴' }, { id: 'kaiXin', ming: '开心' }, { id: 'zhaoshou', ming: '招手' },
+  { id: 'dianTou', ming: '点头' }, { id: 'yaoTou', ming: '摇头' }, { id: 'waiTou', ming: '歪头' },
+  { id: 'bengTiao', ming: '蹦跳' }, { id: 'keShui', ming: '打瞌睡' }, { id: 'haiXiu', ming: '害羞' },
+  { id: 'shengQi', ming: '生气' }, { id: 'weiQu', ming: '委屈' }, { id: 'jingYa', ming: '惊讶' },
+  { id: 'siKao', ming: '思考' }, { id: 'zhuanQuan', ming: '转圈' }, { id: 'tiaoWu', ming: '跳舞' },
+  { id: 'guZhang', ming: '鼓掌' }, { id: 'huiShou', ming: '挥手' }, { id: 'huanYing', ming: '欢迎' },
+  { id: 'paXia', ming: '趴下' }, { id: 'qiLi', ming: '起立' }, { id: 'shenLan', ming: '伸懒腰' },
+  { id: 'daHaQian', ming: '打哈欠' }, { id: 'yiHuo', ming: '疑惑' }, { id: 'daGun', ming: '打滚' },
+  { id: 'shuiJiao', ming: '睡觉' }, { id: 'shenZhua', ming: '伸爪' },
+];
+
 /** 扫描动作模型（每个子目录一个 action.json） */
 function mimicSaoDongZuo(): Array<{ id: string; name: string; desc: string; trigger: string; duration: number; cooldown: number; priority: number; file: string }> {
   const out: Array<{ id: string; name: string; desc: string; trigger: string; duration: number; cooldown: number; priority: number; file: string }> = [];
@@ -12442,7 +12457,13 @@ function mimicSaoDongZuo(): Array<{ id: string; name: string; desc: string; trig
 }
 
 chuliIpc('warmy:mimicRenWuLieBiao', () => ({ ok: true, items: mimicSaoRenWu() }));
-chuliIpc('warmy:mimicDongZuoLieBiao', () => ({ ok: true, items: mimicSaoDongZuo() }), ['mimic.html']);
+chuliIpc('warmy:mimicDongZuoLieBiao', () => {
+  /* R223 项7：预设动作 + 文件夹动作一起返回；enabled 随配置（默认启用） */
+  const pei = ((settingsStore?.load() as { mimicActions?: Record<string, { enabled?: boolean }> } | undefined)?.mimicActions) || {};
+  const nei = MIMIC_NEI_ZHI_DONG_ZUO.map((x) => { const p = pei[x.id]; return { id: x.id, name: x.ming, desc: '内置动作', trigger: '', duration: 0, cooldown: 0, priority: 0, file: '', builtin: true, enabled: !(p && p.enabled === false) }; });
+  const wai = mimicSaoDongZuo().map((x) => { const p = pei[x.id]; return { ...x, builtin: false, enabled: !(p && p.enabled === false) }; });
+  return { ok: true, items: [...nei, ...wai] };
+}, ['mimic.html']);
 /* R221：精灵图 JSON 读取 —— 渲染层帧动画用；只允许拟态模型目录内的文件（不开放任意路径） */
 chuliIpc('warmy:mimicSheetJson', (_e, p0?: { src?: string }) => {
   try {
@@ -12546,6 +12567,56 @@ chuliIpc('warmy:mimicDian', (_e, p0?: { on?: boolean }) => {
     return { ok: true };
   } catch { return { ok: false }; }
 });
+
+/* R223 项9：3D 部位触摸 → 即时动作反馈 + AI 自行决定是否/如何回应。
+ * 防机械重复：6s 内不重复调用 AI（只给动作）；同部位 30s 内累计次数与上次回应一起注入，
+ * 模型被明确要求换新反应。触摸与语音模式无关（化形后即可互动）。 */
+const MO_FAN_YING: Record<string, string> = {
+  '头': 'waiTou', '耳朵': 'waiTou', '眼睛': 'zhaYan', '嘴巴': 'duZui', '鼻子': 'duZui',
+  '鬃毛': 'waiTou', '头发': 'waiTou', '左手': 'zhaoshou', '右手': 'zhaoshou',
+  '左腿': 'bengTiao', '右腿': 'bengTiao', '蹄子': 'bengTiao', '鞋子': 'bengTiao',
+  '尾巴': 'yaoWei', '身体': 'kaiXin', '裙子': 'haiXiu',
+};
+let mimicMoZt: { part: string; ts: number; ci: number; zuiHouHui: string } | null = null;
+let mimicMoAiZuiHou = 0;
+chuliIpc('warmy:mimicMoPart', async (_e, p0?: { part?: string }) => {
+  try {
+    const part = String(p0?.part || '').trim().slice(0, 20);
+    if (!part || !mimicWin || mimicWin.isDestroyed()) return { ok: false };
+    const now = Date.now();
+    const jiu = mimicMoZt;
+    const tongPart = !!(jiu && jiu.part === part && now - jiu.ts < 30000);
+    const ci = jiu && tongPart ? jiu.ci + 1 : 1;
+    const shangHui = jiu && tongPart ? jiu.zuiHouHui : '';
+    mimicMoZt = { part, ts: now, ci, zuiHouHui: shangHui };
+    /* 即时动作反馈（禁用的动作不播，与 AI/触发词路径同口径） */
+    const dzId = MO_FAN_YING[part] || 'kaiXin';
+    try {
+      const pei = ((settingsStore?.load() as { mimicActions?: Record<string, { enabled?: boolean }> } | undefined)?.mimicActions) || {};
+      if (!(pei[dzId] && pei[dzId].enabled === false)) {
+        mimicWin.webContents.send('warmy:mimicDongZuo', { id: dzId });
+      }
+    } catch { /* noop */ }
+    /* AI 回应节流：6s 内只给动作不重复说话（ rapid 点击不机械刷屏） */
+    if (now - mimicMoAiZuiHou < 6000) return { ok: true, action: dzId, ai: 'throttled' };
+    mimicMoAiZuiHou = now;
+    const tiShi = ci > 1
+      ? '【触摸互动】用户又摸了摸你的「' + part + '」——短时间内第' + ci + '次摸这里。自行决定是否回应；若回应，换个自然的新反应（可以无奈/撒娇/躲开/调侃），绝不重复上次说过的话。上次回应：' + (shangHui || '（无）').slice(0, 60)
+      : '【触摸互动】用户摸了摸你的「' + part + '」。自行决定是否回应、如何回应（结合部位特点，自然亲切，80字以内）；不想说话可以只回一个【动作:名字】。';
+    const r = await zhenZhengFaSong(null, {
+      sessionId: MIMIC_SID,
+      content: tiShi,
+      source: 'touch',
+      internal: false,
+    } as never);
+    const reply = String((r && r.reply) || '').trim();
+    if (reply) {
+      if (mimicMoZt && mimicMoZt.part === part) mimicMoZt.zuiHouHui = reply;
+      await mimicHuiHuaShuo(reply);
+    }
+    return { ok: true, action: dzId, ai: reply ? 'replied' : 'silent' };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+}, ['mimic.html']);
 
 /** 拖动拟态：用屏幕坐标差移动窗口（不是 CSS 位移，拟态不会跑出屏幕） */
 ipcMain.on('warmy:mimicDragStart', (_e, p0?: { x?: number; y?: number }) => {
@@ -12679,10 +12750,13 @@ async function mimicHuiHuaShuo(text: string): Promise<void> {
       /* R221：外部动作（动作模型）被禁用时不播放 —— 与语音触发词路径同口径；内置动作无启用概念不受影响 */
       let beiJinYong = false;
       try {
+        const pei = ((settingsStore?.load() as { mimicActions?: Record<string, { enabled?: boolean }> } | undefined)?.mimicActions) || {};
+        /* R223 项7：内置动作与外部动作同口径 —— 禁用（未选中）的都不播 */
         const wai = mimicSaoDongZuo().find((x) => x.name === dzMing || x.id === dzMing);
-        if (wai) {
-          const pei = ((settingsStore?.load() as { mimicActions?: Record<string, { enabled?: boolean }> } | undefined)?.mimicActions) || {};
-          const peiXiang = pei[wai.id];
+        const nei = MIMIC_NEI_ZHI_DONG_ZUO.find((x) => x.ming === dzMing || x.id === dzMing);
+        const pid = wai ? wai.id : nei ? nei.id : '';
+        if (pid) {
+          const peiXiang = pei[pid];
           if (peiXiang && peiXiang.enabled === false) beiJinYong = true;
         }
       } catch { /* 查不到配置按启用 */ }
@@ -15857,13 +15931,16 @@ async function zhenZhengFaSongBen(
             const renZhi = String((inst && (inst as { persona?: string }).persona) || '').trim();
             const guiFan = duYaoQiu(MIMIC_SID).trim();
             const sj = ((inst && (inst as { sheJiao?: { niCheng?: string } }).sheJiao) || {}) as { niCheng?: string };
+            /* R223 项7：禁用的内置动作不进提示（模型不知道就不会写） */
+            const pei0 = ((settingsStore?.load() as { mimicActions?: Record<string, { enabled?: boolean }> } | undefined)?.mimicActions) || {};
+            const neiMing = MIMIC_NEI_ZHI_DONG_ZUO.filter((x) => { const p = pei0[x.id]; return !(p && p.enabled === false); }).map((x) => x.ming).join('、');
             const zhuo = [
               '【拟态 · 本体】你是用户桌面上的 AI 拟态「' + ming + '」，不是普通助手，语气自然亲切、像桌面上的小宠物。',
               renZhi ? '【拟态 · 认知】' + renZhi : '',
               guiFan ? '【拟态 · 规范（模型自动总结执行）】' + guiFan : '',
               (sj && sj.niCheng) ? '【拟态 · 社交昵称】' + sj.niCheng : '',
               '【拟态 · 看屏幕】你可以**只在确实需要看屏幕时**在回复里单独写一行【看屏幕】：宿主会把当前屏幕截图放进你的下一轮输入，之后你能描述看到的内容。不需要看屏幕就别写。',
-              '【拟态 · 动作】你可以在回复里单独写一行【动作:名字】来表达情绪/行为（如【动作:开心】【动作:摇尾】【动作:点头】【动作:疑惑】【动作:挥手】）。可用的动作名：呼吸、眨眼、摇尾、嘟嘴、开心、招手、点头、摇头、歪头、蹦跳、打瞌睡、害羞、生气、委屈、惊讶、思考、转圈、跳舞、鼓掌、挥手、欢迎、趴下、起立、伸懒腰、打哈欠、疑惑、打滚、睡觉、伸爪。不写就不动（宿主不会自己猜）。',
+              '【拟态 · 动作】你可以在回复里单独写一行【动作:名字】来表达情绪/行为（如【动作:开心】【动作:摇尾】【动作:点头】【动作:疑惑】【动作:挥手】）。可用的动作名：' + neiMing + '。不写就不动（宿主不会自己猜）。',
               (() => {
                 /* R221：外部动作包（启用者）与用户触发词注入 —— 之前模型根本不知道有这些动作（R218 遗留） */
                 try {
@@ -31390,6 +31467,9 @@ chuliIpc('warmy:taiBaoCun', (_e, state: { chaJianJi?: unknown[]; instances?: unk
     }
     const next = { ...cur, ...xie, sheJiao: cur.sheJiao } as never;
     settingsStore.save(next as never);
+    /* R223 项6：实例定义（名称/认知/模型链…）落盘也要播给其它窗口 ——
+       独立窗以前只在打开时读一次，主界面改名后它永远显示旧名。跳过发起方。 */
+    try { broadcastToWindows('warmy:peiZhiChanged', { keys: Object.keys(xie || {}) }, _e?.sender?.id); } catch { /* noop */ }
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
@@ -35515,6 +35595,7 @@ chuliIpc('warmy:zhenDuanRiZhi', (_e, limit?: number) => ({
   ok: true,
   enabled: zhenDuan?.enabled ?? false,
   entries: zhenDuan?.read(limit || 200) || [],
+  nmQiYong: nmChaJianQiYong(), /* R223 项2：nm 未启用 ⇒ 诊断窗「用 nm 查看器打开」灰 */
 }), ['diag.html']);
 chuliIpc('warmy:zhenDuanZiJian', async () => {
   try {
@@ -35545,6 +35626,23 @@ chuliIpc('warmy:zhenDuanDaoChu', async () => {
     fs.writeFileSync(r.filePath, JSON.stringify(bundle, null, 2), 'utf8');
     zhenDuan.jiLu('diag.export', 'info', 'diag', { zhi: { entries: bundle.entries.length } });
     return { ok: true, path: r.filePath, entries: bundle.entries.length };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+}, ['diag.html']);
+/** R223 项2：用 nm 查看器打开诊断日志（nm 未启用 ⇒ nm-disabled，界面按钮灰）。
+ *  优先开活日志 diag.jsonl；无文件/空 ⇒ 落一份脱敏快照 JSON 再开。 */
+chuliIpc('warmy:zhenDuanNmDaKai', () => {
+  try {
+    if (!nmChaJianQiYong()) return { ok: false, error: 'nm-disabled' };
+    if (!zhenDuan) return { ok: false, error: 'diag-unavailable' };
+    let lu = zhenDuan.wenJianLu;
+    let you = false;
+    try { you = fs.existsSync(lu) && fs.statSync(lu).size > 0; } catch { you = false; }
+    if (!you) {
+      lu = path.join(path.dirname(lu), 'diag-nm-view.json');
+      fs.writeFileSync(lu, JSON.stringify(zhenDuan.daoChu(), null, 2), 'utf8');
+    }
+    nmShiTuKai({ luJing: lu, zhuTi: nmShiTuZhuTi() });
+    return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 }, ['diag.html']);
 

@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Verwijderen",
   "mimic.actDeleteConfirm": "Actie «{name}» verwijderen? De modelbestanden worden verwijderd.",
   "mimic.actDeleteBundled": "Ingebouwde acties kunnen niet worden verwijderd.",
-  "container.devEnv.noneReady": "Geen container beschikbaar: detecteer en start er eerst een via Instellingen → Functies → Containers."
+  "container.devEnv.noneReady": "Geen container beschikbaar: detecteer en start er eerst een via Instellingen → Functies → Containers.",
+  "mimic.actBuiltinTip": "Ingebouwde actie (meegeleverd met de app, niet verwijderbaar)",
+  "mimic.actExternalTip": "Actiemodel (uit uw map, verwijderbaar)",
+  "mimic.faceSculpt": "Gezicht boetseren",
+  "mimic.faceSculptTip": "Pas kleuren / oogvorm / mond / oren / staart (2D) of hoofdgrootte / volheid (3D) aan om uw eigen figuur te boetseren; elke parameterwijziging maakt los van het preset.",
+  "mimic.characterTip": "Klik een preset of mapmodel om het te gebruiken; «Gezicht boetseren» hieronder past parameters aan.",
+  "mimic.actionsTip": "Preset-acties gelden in 2D en 3D; mapactiemodellen zijn 2D sprite-animaties (in 3D toegewezen aan preset-acties). Klik = in-/uitschakelen, rechtsklik = triggerwoord/verwijderen.",
+  "mimic.subtitleShort": "Ondertiteling tonen",
+  "rc.mianQueRen": "Zonder bevestiging",
+  "rc.mianQueRenTip": "Indien aangevinkt, wordt bij verbinden met uw eigen apparaten geen bevestiging meer gevraagd; anders vóór elke verbinding.",
+  "rc.connectConfirm": "Apparaat «{m}» verbinden en besturen?",
+  "rc.myDevicesNew": "Mijn apparaten"
 }

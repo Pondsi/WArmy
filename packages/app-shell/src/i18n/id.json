@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Hapus",
   "mimic.actDeleteConfirm": "Hapus aksi «{name}»? Berkas modelnya akan dihapus.",
   "mimic.actDeleteBundled": "Aksi bawaan tidak dapat dihapus.",
-  "container.devEnv.noneReady": "Tidak ada kontainer tersedia: periksa dan jalankan dulu di Pengaturan → Fitur → Kontainer."
+  "container.devEnv.noneReady": "Tidak ada kontainer tersedia: periksa dan jalankan dulu di Pengaturan → Fitur → Kontainer.",
+  "mimic.actBuiltinTip": "Aksi bawaan (disertakan dengan aplikasi, tidak dapat dihapus)",
+  "mimic.actExternalTip": "Model aksi (dari folder Anda, dapat dihapus)",
+  "mimic.faceSculpt": "Pahat wajah",
+  "mimic.faceSculptTip": "Atur warna / bentuk mata / mulut / telinga / ekor (2D) atau ukuran kepala / kepenuhan (3D) untuk memahat karakter Anda; mengubah parameter apa pun melepas dari preset.",
+  "mimic.characterTip": "Klik preset atau model folder untuk memakai; «Pahat wajah» di bawah untuk menyetel parameter.",
+  "mimic.actionsTip": "Aksi preset berlaku di 2D dan 3D; model aksi folder adalah animasi sprite 2D (dipetakan ke aksi preset di 3D). Klik = aktifkan/nonaktifkan, klik kanan = kata pemicu/hapus.",
+  "mimic.subtitleShort": "Tampilkan subtitle",
+  "rc.mianQueRen": "Tanpa konfirmasi",
+  "rc.mianQueRenTip": "Jika dicentang, koneksi ke perangkat Anda sendiri tidak lagi meminta konfirmasi; jika tidak, ditanya sebelum setiap koneksi.",
+  "rc.connectConfirm": "Sambungkan dan kendalikan perangkat «{m}»?",
+  "rc.myDevicesNew": "Perangkat saya"
 }

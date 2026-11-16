@@ -113,6 +113,7 @@
     // 拖动：按住拟态移动整个窗口（主进程用 win.setBounds）
     let dragging = false, sx = 0, sy = 0;
     pet.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; /* R223 项9：右键留给 3D 旋转，不触发窗口拖动 */
       dragging = true; sx = e.screenX; sy = e.screenY;
       window.warmyMimic?.dragStart?.({ x: e.screenX, y: e.screenY });
       e.preventDefault();
@@ -145,6 +146,37 @@
 
     // 双击拟态 = 打开主窗口聊天
     pet.addEventListener('dblclick', () => { window.warmyMimic?.openChat?.(); });
+
+    // ── R223 项9：3D 右键拖动旋转 + 左键点击部位反馈（AI 决定是否/如何回应） ──
+    pet.addEventListener('contextmenu', (e) => e.preventDefault());
+    let xuanZhuanZhong = false, xzX = 0, xzY = 0;
+    let djX = 0, djY = 0, djShi = 0;
+    pet.addEventListener('mousedown', (e) => {
+      if (e.button === 2 && window.__mimicIs3D && window.__mimicIs3D()) {
+        xuanZhuanZhong = true; xzX = e.screenX; xzY = e.screenY;
+        e.preventDefault(); e.stopPropagation();
+      } else if (e.button === 0) { djX = e.screenX; djY = e.screenY; djShi = Date.now(); }
+    }, true);
+    window.addEventListener('mousemove', (e) => {
+      if (!xuanZhuanZhong) return;
+      try { window.__mimicXuanZhuanBy?.(e.screenX - xzX, e.screenY - xzY); } catch { /* noop */ }
+      xzX = e.screenX; xzY = e.screenY;
+    });
+    window.addEventListener('mouseup', (e) => {
+      if (xuanZhuanZhong) {
+        xuanZhuanZhong = false;
+        try { window.__mimicXuanZhuanJieShu?.(); } catch { /* noop */ }
+        return;
+      }
+      if (e.button !== 0 || e.detail >= 2) return; /* 双击留给打开聊天 */
+      if (!(window.__mimicIs3D && window.__mimicIs3D())) return;
+      /* 位移 ≥5px 或按住 >600ms = 拖窗口，不算触摸 */
+      if (Math.abs(e.screenX - djX) >= 5 || Math.abs(e.screenY - djY) >= 5 || Date.now() - djShi > 600) return;
+      try {
+        const bu = window.__mimicRaycast?.(e.clientX, e.clientY);
+        if (bu) window.warmyMimic?.moPart?.({ part: bu });
+      } catch { /* noop */ }
+    });
 
     // 主进程推来的说话/状态
     window.warmyMimic?.onSay?.((d) => window.__shuo(d && d.text, d && d.ms));

@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Xóa",
   "mimic.actDeleteConfirm": "Xóa hành động «{name}»? Các tệp mô hình của nó sẽ bị gỡ.",
   "mimic.actDeleteBundled": "Không thể xóa hành động tích hợp.",
-  "container.devEnv.noneReady": "Không có container khả dụng: hãy dò và khởi động trong Cài đặt → Tính năng → Container trước."
+  "container.devEnv.noneReady": "Không có container khả dụng: hãy dò và khởi động trong Cài đặt → Tính năng → Container trước.",
+  "mimic.actBuiltinTip": "Hành động tích hợp (đi kèm ứng dụng, không thể xóa)",
+  "mimic.actExternalTip": "Mô hình hành động (từ thư mục của bạn, có thể xóa)",
+  "mimic.faceSculpt": "Điêu khắc khuôn mặt",
+  "mimic.faceSculptTip": "Chỉnh màu / dáng mắt / miệng / tai / đuôi (2D) hoặc cỡ đầu / độ đầy (3D) để điêu khắc nhân vật của bạn; đổi bất kỳ tham số nào sẽ tách khỏi preset.",
+  "mimic.characterTip": "Nhấp preset hoặc mô hình thư mục để dùng; «Điêu khắc khuôn mặt» bên dưới để chỉnh tham số.",
+  "mimic.actionsTip": "Hành động preset dùng cho cả 2D/3D; mô hình hành động thư mục là hoạt hình sprite 2D (ánh xạ sang hành động preset trong 3D). Nhấp = bật/tắt, nhấp phải = từ kích hoạt/xóa.",
+  "mimic.subtitleShort": "Hiện phụ đề",
+  "rc.mianQueRen": "Không cần xác nhận",
+  "rc.mianQueRenTip": "Nếu đánh dấu, kết nối thiết bị của bạn không hỏi xác nhận nữa; nếu không, sẽ hỏi trước mỗi lần kết nối.",
+  "rc.connectConfirm": "Kết nối và điều khiển thiết bị «{m}»?",
+  "rc.myDevicesNew": "Thiết bị của tôi"
 }

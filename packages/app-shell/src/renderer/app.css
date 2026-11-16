@@ -474,6 +474,9 @@ body.liaoTianChuangKou .liaoTianBuJu {
  * 技术：@property 注册角度变量驱动 conic-gradient 旋转 + mask 挖环 + drop-shadow 随环发光；
  * 第二层宽而柔的 conic 光晕反向慢转（blur）营造流光深度；本体呼吸光晕 + 涟漪负责余光。
  * 色相全部由 --accent 派生；任何时刻环都在 ⇒ 像素门禁最弱时刻仍远高于旧版。
+ * R223 项1：三层 animation-delay 全由墙钟相位变量驱动（--fxHuan/--fxLiu/--fxYun，
+ * 见 app.js sheZhiTeXiaoXiangWei）—— renderList 每秒级重建行 DOM 而相位不归零，
+ * 特效完全连续；流光层改 linear 匀速（接缝无速度跳变）。
  */
 @property --yunXingJiao {
   syntax: '<angle>';
@@ -510,11 +513,12 @@ body.liaoTianChuangKou .liaoTianBuJu {
   mask-composite: exclude;
   filter: drop-shadow(0 0 3px var(--yunXing-yun-qiang, rgba(168,118,84,.6)));
   animation: yunXingHuanZhuan 5s linear infinite;
+  animation-delay: var(--fxHuan, 0s); /* R223 项1：墙钟相位 ⇒ DOM 重建也连续 */
   pointer-events: none;
   z-index: 1;   /* 角标是 2/3，不能被环盖住 */
 }
 @keyframes yunXingHuanZhuan { to { --yunXingJiao: 360deg; } }
-/* B. 反向流光晕：宽而柔的 conic 光晕，blur 后反向慢转（潮汐节奏），与锐环叠出流光深度 */
+/* B. 反向流光晕：宽而柔的 conic 光晕，blur 后反向匀速慢转，与锐环叠出流光深度 */
 .lieBiaoTiaoMu .avKuang.yunXingZhong::after {
   content: '';
   position: absolute; inset: -7px;
@@ -530,7 +534,8 @@ body.liaoTianChuangKou .liaoTianBuJu {
     transparent 360deg);
   filter: blur(4px);
   opacity: .85;
-  animation: yunXingLiuDong 3.6s ease-in-out infinite;
+  animation: yunXingLiuDong 3.6s linear infinite;
+  animation-delay: var(--fxLiu, 0s); /* R223 项1：墙钟相位 + 匀速 ⇒ 接缝无跳变 */
   pointer-events: none;
   z-index: 0;
 }
@@ -538,6 +543,7 @@ body.liaoTianChuangKou .liaoTianBuJu {
 /* C. 呼吸扩散：光晕呼吸 + 向外扩散的涟漪，环与晕之外仍有活水般的余韵 */
 .lieBiaoTiaoMu .avKuang.yunXingZhong {
   animation: yunXingGuangYun 3.6s ease-in-out infinite;
+  animation-delay: var(--fxYun, 0s); /* R223 项1：墙钟相位（呼吸节奏保留，相位连续） */
 }
 @keyframes yunXingGuangYun {
   0%, 100% { box-shadow: 0 0 5px 1px var(--yunXing-yun-ruo, rgba(168,118,84,.18)), 0 0 0 0 var(--yunXing-yun-ruo, rgba(168,118,84,.18)); }

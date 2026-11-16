@@ -320,6 +320,8 @@ export class ZhenDuanRiZhi {
 
   get enabled(): boolean { return this.qiYong; }
   set enabled(v: boolean) { this.qiYong = !!v; }
+  /** R223 项2：活日志文件路径（供「用 nm 查看器打开」） */
+  get wenJianLu(): string { return this.file; }
 
   /** 记一条。**只接受白名单字段**；未知 code / 模块直接拒绝（返回 false），不写脏数据 */
   jiLu(code: ShiJianMa, ji: YanZhong, mo: MoKuai, fu?: {

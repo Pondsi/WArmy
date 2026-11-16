@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Eliminar",
   "mimic.actDeleteConfirm": "¿Eliminar la acción «{name}»? Se quitarán sus archivos de modelo.",
   "mimic.actDeleteBundled": "Las acciones integradas no se pueden eliminar.",
-  "container.devEnv.noneReady": "No hay contenedores disponibles: primero detecta e inicia uno en Ajustes → Funciones → Contenedores."
+  "container.devEnv.noneReady": "No hay contenedores disponibles: primero detecta e inicia uno en Ajustes → Funciones → Contenedores.",
+  "mimic.actBuiltinTip": "Acción integrada (incluida con la app, no se puede eliminar)",
+  "mimic.actExternalTip": "Modelo de acción (de tu carpeta, se puede eliminar)",
+  "mimic.faceSculpt": "Esculpido de cara",
+  "mimic.faceSculptTip": "Ajusta colores / forma de ojos / boca / orejas / cola (2D) o tamaño de cabeza / redondez (3D) para esculpir tu personaje; cambiar cualquier parámetro te separa del preset.",
+  "mimic.characterTip": "Haz clic en un preset o modelo de carpeta para usarlo; «Esculpido de cara» abajo para ajustar parámetros.",
+  "mimic.actionsTip": "Las acciones preset sirven en 2D y 3D; los modelos de acción de carpeta son animaciones sprite 2D (mapeadas a acciones preset en 3D). Clic = activar/desactivar, clic derecho = palabra disparadora/eliminar.",
+  "mimic.subtitleShort": "Mostrar subtítulos",
+  "rc.mianQueRen": "Sin confirmación",
+  "rc.mianQueRenTip": "Si está marcado, conectar con tus dispositivos ya no pide confirmación; si no, se pregunta antes de cada conexión.",
+  "rc.connectConfirm": "¿Conectar y controlar el dispositivo «{m}»?",
+  "rc.myDevicesNew": "Mis dispositivos"
 }

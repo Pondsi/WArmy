@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "삭제",
   "mimic.actDeleteConfirm": "동작 \"{name}\"을(를) 삭제할까요? 모델 파일도 제거됩니다.",
   "mimic.actDeleteBundled": "내장 동작은 삭제할 수 없습니다.",
-  "container.devEnv.noneReady": "사용 가능한 컨테이너가 없습니다: 먼저 설정 → 기능 → 컨테이너에서 감지하고 시작하세요."
+  "container.devEnv.noneReady": "사용 가능한 컨테이너가 없습니다: 먼저 설정 → 기능 → 컨테이너에서 감지하고 시작하세요.",
+  "mimic.actBuiltinTip": "내장 동작(앱 제공, 삭제 불가)",
+  "mimic.actExternalTip": "동작 모델(폴더에서 가져옴, 삭제 가능)",
+  "mimic.faceSculpt": "얼굴 커스텀",
+  "mimic.faceSculptTip": "색상/눈형/입형/귀/꼬리(2D) 또는 머리 크기/통통함(3D)을 조정해 나만의 캐릭터를 만드세요; 아무 파라미터나 변경하면 프리셋 완성본에서 벗어납니다.",
+  "mimic.characterTip": "프리셋이나 폴더 모델을 클릭하면 바로 사용; 아래 '얼굴 커스텀'에서 파라미터 조정.",
+  "mimic.actionsTip": "프리셋 동작은 2D/3D 공용; 폴더 동작 모델은 2D 스프라이트 애니메이션(3D에서는 프리셋 동작으로 매핑). 클릭=활성화/비활성화, 우클릭=트리거 단어/삭제.",
+  "mimic.subtitleShort": "자막 표시",
+  "rc.mianQueRen": "확인 생략",
+  "rc.mianQueRenTip": "체크하면 내 기기 연결 시 확인 창이 뜨지 않습니다; 체크하지 않으면 매번 연결 전에 묻습니다.",
+  "rc.connectConfirm": "기기 '{m}'에 연결하여 제어할까요?",
+  "rc.myDevicesNew": "내 기기"
 }

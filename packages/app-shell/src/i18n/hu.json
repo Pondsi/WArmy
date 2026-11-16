@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Törlés",
   "mimic.actDeleteConfirm": "Törli a(z) «{name}» műveletet? A modellfájljai is törlődnek.",
   "mimic.actDeleteBundled": "A beépített műveletek nem törölhetők.",
-  "container.devEnv.noneReady": "Nincs elérhető konténer: először ellenőrizze és indítsa el a Beállítások → Funkciók → Konténerek alatt."
+  "container.devEnv.noneReady": "Nincs elérhető konténer: először ellenőrizze és indítsa el a Beállítások → Funkciók → Konténerek alatt.",
+  "mimic.actBuiltinTip": "Beépített művelet (az appal érkezik, nem törölhető)",
+  "mimic.actExternalTip": "Műveletmodell (a mappádból, törölhető)",
+  "mimic.faceSculpt": "Arcformázás",
+  "mimic.faceSculptTip": "Állítsd a színeket / szemformát / szájat / füleket / farkat (2D) vagy a fej méretét / teltségét (3D), hogy saját alakot formázz; bármely paraméter változtatása leválaszt a presetről.",
+  "mimic.characterTip": "Kattints egy presetre vagy mappamodellre a használathoz; az «Arcformázás» lent állítja a paramétereket.",
+  "mimic.actionsTip": "A preset műveletek 2D-ben és 3D-ben is érvényesek; a mappás műveletmodellek 2D sprite-animációk (3D-ben preset műveletekre képezve). Kattintás = engedélyezés/tiltás, jobb kattintás = kiváltó szó/törlés.",
+  "mimic.subtitleShort": "Feliratok megjelenítése",
+  "rc.mianQueRen": "Megerősítés nélkül",
+  "rc.mianQueRenTip": "Ha be van jelölve, a saját eszközeidhez csatlakozás nem kér megerősítést; egyébként minden csatlakozás előtt rákérdez.",
+  "rc.connectConfirm": "Csatlakozol és irányítod a(z) «{m}» eszközt?",
+  "rc.myDevicesNew": "Saját eszközeim"
 }

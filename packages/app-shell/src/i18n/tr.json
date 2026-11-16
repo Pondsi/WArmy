@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Sil",
   "mimic.actDeleteConfirm": "«{name}» eylemi silinsin mi? Model dosyaları da kaldırılacak.",
   "mimic.actDeleteBundled": "Yerleşik eylemler silinemez.",
-  "container.devEnv.noneReady": "Kullanılabilir konteyner yok: önce Ayarlar → Özellikler → Konteyner bölümünde algılayıp başlatın."
+  "container.devEnv.noneReady": "Kullanılabilir konteyner yok: önce Ayarlar → Özellikler → Konteyner bölümünde algılayıp başlatın.",
+  "mimic.actBuiltinTip": "Yerleşik eylem (uygulamayla gelir, silinemez)",
+  "mimic.actExternalTip": "Eylem modeli (klasörünüzden, silinebilir)",
+  "mimic.faceSculpt": "Yüz şekillendirme",
+  "mimic.faceSculptTip": "Renkleri / göz şeklini / ağız / kulaklar / kuyruk (2D) veya kafa boyutu / dolgunluk (3D) ayarlayarak kendi karakterinizi şekillendirin; herhangi bir parametreyi değiştirmek hazır tasarımdan ayırır.",
+  "mimic.characterTip": "Bir hazır tasarıma veya klasör modeline tıklayıp kullanın; aşağıdaki «Yüz şekillendirme» ile parametreleri ayarlayın.",
+  "mimic.actionsTip": "Hazır eylemler 2D ve 3D'de geçerli; klasör eylem modelleri 2D sprite animasyonlarıdır (3D'de hazır eylemlere eşlenir). Tık = etkinleştir/devre dışı, sağ tık = tetikleyici kelime/sil.",
+  "mimic.subtitleShort": "Alt yazıları göster",
+  "rc.mianQueRen": "Onaysız",
+  "rc.mianQueRenTip": "İşaretlenirse kendi cihazlarınıza bağlanırken onay sorulmaz; işaretlenmezse her bağlantıdan önce sorulur.",
+  "rc.connectConfirm": "«{m}» cihazına bağlanıp kontrol edilsin mi?",
+  "rc.myDevicesNew": "Cihazlarım"
 }

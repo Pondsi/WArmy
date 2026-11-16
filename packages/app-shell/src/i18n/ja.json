@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "削除",
   "mimic.actDeleteConfirm": "アクション「{name}」を削除しますか？モデルファイルも削除されます。",
   "mimic.actDeleteBundled": "内蔵アクションは削除できません。",
-  "container.devEnv.noneReady": "利用可能なコンテナがありません：先に 設定 → 機能 → コンテナ で検出して起動してください。"
+  "container.devEnv.noneReady": "利用可能なコンテナがありません：先に 設定 → 機能 → コンテナ で検出して起動してください。",
+  "mimic.actBuiltinTip": "内蔵アクション（アプリ同梱、削除不可）",
+  "mimic.actExternalTip": "アクションモデル（フォルダ由来、削除可）",
+  "mimic.faceSculpt": "顔づくりカスタム",
+  "mimic.faceSculptTip": "色/目型/口型/耳/尻尾（2D）や頭の大きさ/太め（3D）を調整して自分だけの姿に；いずれかのパラメータを変えるとプリセット成品から離れます。",
+  "mimic.characterTip": "プリセットかフォルダモデルをクリックで即使用；下の「顔づくりカスタム」でパラメータ調整。",
+  "mimic.actionsTip": "プリセットアクションは 2D/3D 共通；フォルダのアクションモデルは 2D スプライトアニメ（3D ではプリセットアクションに対応）。クリック=有効/無効、右クリック=トリガーワード/削除。",
+  "mimic.subtitleShort": "字幕を表示",
+  "rc.mianQueRen": "確認不要",
+  "rc.mianQueRenTip": "チェックすると自分のデバイスへの接続で確認ダイアログが出ません；未チェック時は毎回接続前に確認します。",
+  "rc.connectConfirm": "デバイス「{m}」に接続して制御しますか？",
+  "rc.myDevicesNew": "自分のデバイス"
 }

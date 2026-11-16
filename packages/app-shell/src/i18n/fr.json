@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Supprimer",
   "mimic.actDeleteConfirm": "Supprimer l’action « {name} » ? Ses fichiers de modèle seront retirés.",
   "mimic.actDeleteBundled": "Les actions intégrées ne peuvent pas être supprimées.",
-  "container.devEnv.noneReady": "Aucun conteneur disponible : lancez d’abord une détection et un conteneur dans Paramètres → Fonctionnalités → Conteneurs."
+  "container.devEnv.noneReady": "Aucun conteneur disponible : lancez d’abord une détection et un conteneur dans Paramètres → Fonctionnalités → Conteneurs.",
+  "mimic.actBuiltinTip": "Action intégrée (fournie avec l'app, non supprimable)",
+  "mimic.actExternalTip": "Modèle d'action (dossier utilisateur, supprimable)",
+  "mimic.faceSculpt": "Sculpture de visage",
+  "mimic.faceSculptTip": "Réglez couleurs / forme des yeux / bouche / oreilles / queue (2D) ou taille de tête / rondeur (3D) pour sculpter votre personnage ; modifier un paramètre détache du preset.",
+  "mimic.characterTip": "Cliquez un preset ou un modèle du dossier pour l'utiliser ; « Sculpture de visage » ci-dessous pour régler les paramètres.",
+  "mimic.actionsTip": "Les actions preset valent en 2D et 3D ; les modèles d'action du dossier sont des animations sprite 2D (mappées aux actions preset en 3D). Clic = activer/désactiver, clic droit = mot déclencheur/supprimer.",
+  "mimic.subtitleShort": "Afficher les sous-titres",
+  "rc.mianQueRen": "Sans confirmation",
+  "rc.mianQueRenTip": "Si coché, la connexion à vos appareils ne demande plus de confirmation ; sinon une confirmation est demandée avant chaque connexion.",
+  "rc.connectConfirm": "Connecter et contrôler l'appareil « {m} » ?",
+  "rc.myDevicesNew": "Mes appareils"
 }

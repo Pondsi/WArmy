@@ -1548,7 +1548,7 @@ body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
   background: rgba(15,18,26,.5);
 }
 .scZheZhao {
-  position: fixed; inset: 0; z-index: 80;
+  position: fixed; inset: 0; z-index: 86; /* R223 项3：高于暗化铺底(85)，选项不再被挡 */
   background: rgba(0,0,0,.42);
   display: flex; align-items: center; justify-content: center; padding: 20px;
 }

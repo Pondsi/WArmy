@@ -3526,6 +3526,21 @@ async function langDuWenBen(text, btnEl) {
     }
   }
 
+  /**
+   * R223 项1：运行中特效的**墙钟相位**（「动1秒突然变回原位重新动」的根因修复）。
+   * 真因：onChatUpdated → loadSessionMessages → renderList 每秒级重建行 DOM，
+   * 新 .avKuang 上的 CSS 动画相位归零 ⇒ 特效每次都从头开始。
+   * 修复：按墙钟计算负 animation-delay（--fxHuan 5s / --fxLiu 3.6s / --fxYun 3.6s），
+   * 无论元素何时创建，动画都落在「本该运行到的相位」⇒ 视觉完全连续。
+   */
+  function sheZhiTeXiaoXiangWei(av) {
+    if (!av || !av.style) return;
+    const miao = (Date.now() % 3600000) / 1000;
+    av.style.setProperty('--fxHuan', (-(miao % 5)).toFixed(3) + 's');
+    av.style.setProperty('--fxLiu', (-(miao % 3.6)).toFixed(3) + 's');
+    av.style.setProperty('--fxYun', (-(miao % 3.6)).toFixed(3) + 's');
+  }
+
   function hang(ming, fu, ch, onClick, jiHuo, avatarSrc) {
     const yuanSu = document.createElement('div');
     yuanSu.className = 'lieBiaoTiaoMu' + (jiHuo ? ' jiHuo' : '');
@@ -3538,6 +3553,8 @@ async function langDuWenBen(text, btnEl) {
      * （只有纯字母头像的 div 才有效）。角标与动画一律挂到这层容器上。
      */
     yuanSu.innerHTML = `<span class="avKuang">${avatarSrc ? `<img class="avTuPian" src="${escapeHtml(avatarSrc)}" alt=""/>` : `<div class="av">${escapeHtml(ch || '?')}</div>`}</span><div class="meta"><div class="name">${escapeHtml(ming)}</div><div class="fu">${escapeHtml(fu)}</div></div>`;
+    /* R223 项1：建行即钉墙钟相位 —— renderList 重建 DOM 也不归零 */
+    sheZhiTeXiaoXiangWei(yuanSu.querySelector('.avKuang'));
     yuanSu.title = `${ming}\n${fu}`;
     yuanSu.onclick = onClick;
     return yuanSu;
@@ -3700,7 +3717,12 @@ async function langDuWenBen(text, btnEl) {
       const av = hangYuanSu.querySelector('.avKuang') || hangYuanSu.querySelector('.av,.avTuPian');
       /* R149 主人定稿：执行中会话的头像叠加流动主题色动画 */
       const yunXing = !!(state.sessionRuns && state.sessionRuns[String(sid)] && state.sessionRuns[String(sid)].running);
-      if (av) av.classList.toggle('yunXingZhong', yunXing);
+      if (av) {
+        const yuanYou = av.classList.contains('yunXingZhong');
+        av.classList.toggle('yunXingZhong', yunXing);
+        /* R223 项1：只在「灭→亮」重钉墙钟相位；运行中不动 delay（避免重启动画） */
+        if (yunXing && !yuanYou) sheZhiTeXiaoXiangWei(av);
+      }
       const tingYong = !!hangYuanSu.querySelector('.hangJiaoBiao.tingYong');
       /* R147 项7（用户定稿语义）：第二列会话图标上三种标记彼此独立 ——
        *   待决策 / 待选择卡 ⇒ 问号；异常 ⇒ 感叹号；未读 ⇒ 红色未读字数。
@@ -4028,7 +4050,11 @@ async function langDuWenBen(text, btnEl) {
     document.querySelectorAll('.lieBiaoTiaoMu').forEach((row) => {
       if (String(row.dataset.sid || '') !== sid) return;
       const av = row.querySelector('.avKuang') || row.querySelector('.av,.avTuPian');
-      if (av) av.classList.toggle('yunXingZhong', yunXing);
+      if (av) {
+        const yuanYou = av.classList.contains('yunXingZhong');
+        av.classList.toggle('yunXingZhong', yunXing);
+        if (yunXing && !yuanYou) sheZhiTeXiaoXiangWei(av); /* R223 项1：墙钟相位 */
+      }
     });
   }
 
@@ -4519,7 +4545,11 @@ async function langDuWenBen(text, btnEl) {
   const chatUnreadNewest = new Map();
   function clearUnreadNewest(sid0) {
     const k = String(sid0 || '');
-    if (k) chatUnreadNewest.delete(k);
+    if (!k) return false;
+    const you = chatUnreadNewest.delete(k);
+    /* R223 项5：清掉即同步全局摘要 —— 否则未读已清横幅还拿旧内容显示 */
+    if (you && state.selectedChat && String(state.selectedChat.id) === k) pendingNewest = null;
+    return you;
   }
   function setUnreadNewest(sid0, text, role, ts) {
     const k = String(sid0 || '');
@@ -5141,12 +5171,15 @@ async function langDuWenBen(text, btnEl) {
     const bub = $('newXiaoXiBubble');
     positionScrollAffordances(heZi);
     const zaiDiBu = heZi ? isAtBottom(heZi) : true;
+    /* R223 项5：横幅 = 仍有未读 且 不在底部（两条件都要）；下箭头只看不在底部 */
+    const sidDang = String((state.selectedChat && state.selectedChat.id) || '');
+    const youWeiDu = !!(sidDang && state.unread && Number(state.unread[sidDang] || 0) > 0);
     /* R154 项12: 防抖更新箭头可见性，防止流式更新时闪烁 */
     clearTimeout(updateScrollAffordances._timer);
     updateScrollAffordances._timer = setTimeout(() => {
       if (btn) btn.classList.toggle('yinCang', zaiDiBu);
       if (bub) {
-        if (zaiDiBu || !pendingNewest) {
+        if (zaiDiBu || !pendingNewest || !youWeiDu) {
           bub.classList.add('yinCang');
         } else {
           bub.classList.remove('yinCang');
@@ -13432,16 +13465,14 @@ async function renderDashboard(host) {
         </div>
 
         <!-- 运行环境：与项目创建同一套 host|container 语义；容器模式需要先选一个运行时 -->
-        <div class="shiLiHang" style="margin-top:10px;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="shiLiHang" style="margin-top:10px;align-items:center;gap:10px;flex-wrap:wrap" title="${escapeHtml(tOr('instances.devEnvHint', '默认本机。选「容器中」需要先在 设置 → 功能 → 容器 里装好并启动容器，再选一个容器。'))}">
           <span class="jingYin">${escapeHtml(tOr('instances.devEnv', '运行环境'))}</span>
           <span id="iKaiFaHuanJing" data-dev-env="${inst.devEnv === 'container' ? 'container' : 'host'}">${escapeHtml(inst.devEnv === 'container' ? t('container.devEnv.container') : t('container.devEnv.host'))}</span>
           <span class="jingYin" id="iRongQiMing"></span>
           ${inst.devEnv === 'container' ? '<button class="anNiuXiao" id="iRongQiXuanZe" type="button">' + escapeHtml(tOr('instances.containerPick', '选择容器…')) + '</button>' : ''}
         </div>
-        <div class="jingYin" id="iRongQiTiShi" style="margin-top:4px;${inst.devEnv === 'container' ? '' : 'display:none'}">${escapeHtml(tOr('instances.devEnvHint', '默认本机。选「容器中」需要先在 设置 → 功能 → 容器 里装好并启动容器，再选一个容器。'))}</div>
 
-        <h3 style="margin:14px 0 8px;font-size:13px">${escapeHtml(t('instances.cognition'))}</h3>
-        <div class="jingYin" style="margin-bottom:8px">${escapeHtml(t('instances.cognitionHint'))}</div>
+        <h3 title="${escapeHtml(t('instances.cognitionHint'))}" style="margin:14px 0 8px;font-size:13px">${escapeHtml(t('instances.cognition'))}</h3>
         <div id="iCogLieBiao"></div>
         <div style="margin-top:8px">
           <button class="anNiuXiao" id="iCogTianJia">${escapeHtml(t('instances.cognitionAdd'))}</button>
@@ -13471,14 +13502,12 @@ async function renderDashboard(host) {
 
           <!-- 当前模型（与第四列「模型管理」同一功能） -->
           <div class="modelZiXiang" id="iCurMoXingHang" ${String(inst.currentModel || '').trim() ? '' : 'style="display:none"'}>
-            <h4>${escapeHtml(tOr('model.currentModel', '当前模型'))}</h4>
-            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.currentHint', '本轮中途换过模型，之后这段对话一直用它；点右侧 × 恢复按调用链选择'))}</div>
+            <h4 title="${escapeHtml(tOr('model.currentHint', '本轮中途换过模型，之后这段对话一直用它；点右侧 × 恢复按调用链选择'))}">${escapeHtml(tOr('model.currentModel', '当前模型'))}</h4>
             <div class="mgrMoXingJi" id="iCurMoXingJi"></div>
           </div>
           <!-- 子项 1：可用模型（只有这里的模型，才能被「默认模型」和「模型调用链」使用） -->
           <div class="modelZiXiang">
-            <h4>${escapeHtml(tOr('model.available', '可用模型'))}</h4>
-            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.availableHint', '只有这里选中的模型，才能被「默认模型」和「模型调用链」使用。'))}</div>
+            <h4 title="${escapeHtml(tOr('model.availableHint', '只有这里选中的模型，才能被「默认模型」和「模型调用链」使用。'))}">${escapeHtml(tOr('model.available', '可用模型'))}</h4>
             <label style="display:block;margin-bottom:8px">
               <input type="checkbox" id="iAllMoXingJi" ${inst.allModels !== false ? 'checked' : ''}/> ${escapeHtml(t('instances.allAvailable'))}
             </label>
@@ -13498,12 +13527,10 @@ async function renderDashboard(host) {
 
           <!-- 子项 2：调用链（默认模型已并入：智能模式 = 自动安排；否则第一个未禁用的就是默认模型） -->
           <div class="modelZiXiang">
-            <h4>${escapeHtml(tOr('model.chain', '调用链'))}</h4>
-            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.chainHint', '按顺序尝试；禁用的模型不会被调用。'))}</div>
-            <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <h4 title="${escapeHtml(tOr('model.chainHint', '按顺序尝试；禁用的模型不会被调用。'))}">${escapeHtml(tOr('model.chain', '调用链'))}</h4>
+            <label title="${escapeHtml(tOr('model.smartHint', '勾选后由系统自动安排调用链；取消勾选可手动排序/禁用。'))}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
               <input type="checkbox" id="iSmartMoXing" ${smartMoXing ? 'checked' : ''}/>
               <span>${escapeHtml(tOr('model.smart', '智能模式'))}</span>
-              <span class="jingYin">${escapeHtml(tOr('model.smartHint', '勾选后由系统自动安排调用链；取消勾选可手动排序/禁用。'))}</span>
             </label>
             <div id="iChain" class="${smartMoXing ? 'yinCang' : ''}"></div>
           </div>
@@ -13511,8 +13538,7 @@ async function renderDashboard(host) {
           <!-- 子项 3/4/5：思考级别、小弟数量、上下文预算同一行（产品要求） -->
           <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
           <div class="modelZiXiang" style="flex:1 1 240px;min-width:0">
-            <h4>${escapeHtml(tOr('model.think', '默认思考级别'))}</h4>
-            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.thinkHint', '控制模型思考的深度。拉取模型时会读取它实际支持的思考档位，并按比例映射到 7 个档位；选「自然」时由系统按任务挑最合适的档位。'))}</div>
+            <h4 title="${escapeHtml(tOr('model.thinkHint', '控制模型思考的深度。拉取模型时会读取它实际支持的思考档位，并按比例映射到 7 个档位；选「自然」时由系统按任务挑最合适的档位。'))}">${escapeHtml(tOr('model.think', '默认思考级别'))}</h4>
             <div class="shiLiHang" style="align-items:center">
               <input type="range" id="iThinkLevel" min="0" max="7" step="1" list="iThinkTicks" style="flex:1;min-width:200px"
                      value="${Math.max(0, THINK_STOPS.indexOf(inst.thinkLevel || 'auto'))}"/>
@@ -13525,8 +13551,7 @@ async function renderDashboard(host) {
 
           <!-- 子项 4：小弟数量（派生小弟的上限；默认自适应） -->
           <div class="modelZiXiang" style="flex:1 1 180px;min-width:0">
-            <h4>${escapeHtml(tOr('model.xiaoDi', '小弟数量'))}</h4>
-            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.xiaoDiHint', '这只牛马最多同时派几个小弟干活。自适应 = 系统按任务自己定；0 = 不许派小弟。'))}</div>
+            <h4 title="${escapeHtml(tOr('model.xiaoDiHint', '这只牛马最多同时派几个小弟干活。自适应 = 系统按任务自己定；0 = 不许派小弟。'))}">${escapeHtml(tOr('model.xiaoDi', '小弟数量'))}</h4>
             <select id="iXiaoDiShu">
               <option value="auto"${(inst.xiaoDiShuLiang === undefined || inst.xiaoDiShuLiang === 'auto' || inst.xiaoDiShuLiang === '') ? ' selected' : ''}>${escapeHtml(tOr('model.xiaoDiAuto', '自适应'))}</option>
               ${[0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 30, 40, 50].map((n) => `<option value="${n}"${String(inst.xiaoDiShuLiang) === String(n) ? ' selected' : ''}>${n}</option>`).join('')}
@@ -13535,8 +13560,7 @@ async function renderDashboard(host) {
           </div>
           <!-- 子项 5（第 51 轮）：这只牛马自己的上下文预算 —— 与聊天框下方的滑块同一套样式与算法 -->
           <div class="modelZiXiang" style="flex:1 1 260px;min-width:0">
-            <h4>${escapeHtml(tOr('model.ctxBudget', '上下文预算（%）'))}</h4>
-            <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.ctxBudgetHint', '这只牛马干活时能用多少上下文窗口。分身与执行者按这里算；默认 60%，最低按 32K 词元兜底。'))}</div>
+            <h4 title="${escapeHtml(tOr('model.ctxBudgetHint', '这只牛马干活时能用多少上下文窗口。分身与执行者按这里算；默认 60%，最低按 32K 词元兜底。'))}">${escapeHtml(tOr('model.ctxBudget', '上下文预算（%）'))}</h4>
             <div class="shiLiHang" style="align-items:center;gap:10px;flex-wrap:nowrap">
               <input id="iCtxBudget" class="shangXiaWenSlider" type="range" min="10" max="100" step="5" value="60" style="flex:1;min-width:200px"/>
               <div class="shangXiaWenPopYuanShuju" style="margin:0;min-width:150px">
@@ -14958,12 +14982,10 @@ async function renderDashboard(host) {
         <div id="dashHost"></div>
         <!-- T19：会话类型与用途（一眼看懂四类会话各是什么） -->
         <div class="sheZhiKa" style="margin-top:14px" id="woHuiHuaYongTuKa">
-          <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.sessionKinds', '会话类型与用途'))}</h3>
-          <p class="jingYin" style="margin:0 0 4px">${escapeHtml(tOr('wo.sessionKindsHint', '我的牛马：你一个人的助手，私密层知识只在这里可见。项目：多人协作，带授权 / 项目状态 / 值班者 / 回退点。群聊：对外交流，不进容器、没有项目四件套。公开可发现：联系人可通过组网发现并申请加入。'))}</p>
+          <h3 title="${escapeHtml(tOr('wo.sessionKindsHint', '我的牛马：你一个人的助手，私密层知识只在这里可见。项目：多人协作，带授权 / 项目状态 / 值班者 / 回退点。群聊：对外交流，不进容器、没有项目四件套。公开可发现：联系人可通过组网发现并申请加入。'))}" style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.sessionKinds', '会话类型与用途'))}</h3>
         </div>
         <div class="sheZhiKa" style="margin-top:14px" id="daoKa">
-          <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.dao', '道'))}</h3>
-          <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.daoHint', '全局最高优先级的提示词：强制发给每一个牛马，**高于「规矩」与其它任何指示**，有冲突一律以这里为准。内容单独保存在配置文件夹的 dao.md。'))}</p>
+          <h3 title="${escapeHtml(tOr('wo.daoHint', '全局最高优先级的提示词：强制发给每一个牛马，**高于「规矩」与其它任何指示**，有冲突一律以这里为准。内容单独保存在配置文件夹的 dao.md。'))}" style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.dao', '道'))}</h3>
           <textarea id="daoTi" rows="5" style="width:100%;max-width:100%;resize:vertical;box-sizing:border-box" placeholder="${escapeHtml(tOr('wo.daoPlaceholder', '例如：先胜后战；知行合一；诚实报告不确定；服务人类且永不作恶…'))}"></textarea>
           <div class="shiLiHang" style="margin-top:8px;align-items:center">
             <button class="anNiuZhuYao" id="anNiuDaoQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
@@ -14973,8 +14995,7 @@ async function renderDashboard(host) {
         </div>
         <!-- 「术」（第 51 轮）：方法论层，仅次于「道」 -->
         <div class="sheZhiKa" style="margin-top:14px" id="shuKa">
-          <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.shu', '术'))}${moXingGaiBiaoQian('shu')}</h3>
-          <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.shuHint', '做事的章法与技巧：优先级**仅次于「道」**，高于教条与束缚。单独保存在配置文件夹的 shu.md。'))}</p>
+          <h3 title="${escapeHtml(tOr('wo.shuHint', '做事的章法与技巧：优先级**仅次于「道」**，高于教条与束缚。单独保存在配置文件夹的 shu.md。'))}" style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.shu', '术'))}${moXingGaiBiaoQian('shu')}</h3>
           <textarea id="shuTi" rows="5" style="width:100%;max-width:100%;resize:vertical;box-sizing:border-box" placeholder="${escapeHtml(tOr('wo.shuPlaceholder', '例如：先查后问；一次只解决一个真问题；交付给结论/证据/风险/下一步…'))}"></textarea>
           <div class="shiLiHang" style="margin-top:8px;align-items:center">
             <button class="anNiuZhuYao" id="anNiuShuQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
@@ -14985,8 +15006,7 @@ async function renderDashboard(host) {
         <!-- 「印象」：第 37 轮 项 2 —— 牛马在后台总结时自行整理的"它对用户的长期理解"，单独文件 yinxiang.md；
              优先级**低于「规矩」**（规矩是用户明说的，印象是牛马归纳的），可由用户随时改写/否认 -->
         <div class="sheZhiKa" style="margin-top:14px" id="yinXiangKa">
-          <h3 style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.yinXiang', '印象'))}${moXingGaiBiaoQian('yinXiang')}</h3>
-          <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.yinXiangHint', '牛马在后台总结时，会把你**喜欢什么、习惯怎么做事、长期要求、想让它记住的事**归纳到这里（单独文件 yinxiang.md）。优先级排在这套阶梯的最后：硬门禁 > 道 > 术 > 要求 > 短记忆 > 印象 > 工具 > 软门禁 > 教条 > 束缚 > 认知。你可以随时改、删、或整段清空 —— 改完之后牛马就按新的来。若某条你根本没说过，直接否认它即可，它会去查这条是从哪条对话归纳出来的，并改掉归纳规则。'))}</p>
+          <h3 title="${escapeHtml(tOr('wo.yinXiangHint', '牛马在后台总结时，会把你**喜欢什么、习惯怎么做事、长期要求、想让它记住的事**归纳到这里（单独文件 yinxiang.md）。优先级排在这套阶梯的最后：硬门禁 > 道 > 术 > 要求 > 短记忆 > 印象 > 工具 > 软门禁 > 教条 > 束缚 > 认知。你可以随时改、删、或整段清空 —— 改完之后牛马就按新的来。若某条你根本没说过，直接否认它即可，它会去查这条是从哪条对话归纳出来的，并改掉归纳规则。'))}" style="margin:0 0 6px;font-size:14px">${escapeHtml(tOr('wo.yinXiang', '印象'))}${moXingGaiBiaoQian('yinXiang')}</h3>
           <textarea id="yinXiangTi" rows="6" style="width:100%;max-width:100%;resize:vertical;box-sizing:border-box" placeholder="${escapeHtml(tOr('wo.yinXiangPlaceholder', '（空）牛马还没归纳出关于你的印象。它会在后台总结时自动补充。'))}"></textarea>
           <div class="shiLiHang" style="margin-top:8px;align-items:center">
             <button class="anNiuZhuYao" id="anNiuYinXiangQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
@@ -14997,8 +15017,7 @@ async function renderDashboard(host) {
         <!-- 「教条」：单独文件 agents.md；仅次于「术」；**默认折叠**（第 51 轮） -->
         <details class="sheZhiKa" style="margin-top:14px" id="zuiGaoXinNianKa">
           <summary style="cursor:pointer;font-size:14px;font-weight:600">${escapeHtml(tOr('wo.belief', '教条'))}</summary>
-          <h3 style="display:none">${escapeHtml(tOr('wo.belief', '教条'))}</h3>
-          <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.beliefHint', '这里写下的提示词会强制发给每一个牛马，优先级**仅次于「道」**：与其它指示冲突时以这里为准（与「道」冲突时以「道」为准）。可以写什么：提示词、规矩、长期要求都可以写在这里。内容单独保存在配置文件夹的 agents.md。'))}</p>
+          <h3 title="${escapeHtml(tOr('wo.beliefHint', '这里写下的提示词会强制发给每一个牛马，优先级**仅次于「道」**：与其它指示冲突时以这里为准（与「道」冲突时以「道」为准）。可以写什么：提示词、规矩、长期要求都可以写在这里。内容单独保存在配置文件夹的 agents.md。'))}" style="display:none">${escapeHtml(tOr('wo.belief', '教条'))}</h3>
           <textarea id="zuiGaoXinNianTi" rows="5" style="width:100%;max-width:100%;resize:vertical;box-sizing:border-box" placeholder="${escapeHtml(tOr('wo.beliefPlaceholder', '例如：永远说真话；不确定就问；不要做不可逆的操作…'))}"></textarea>
           <div class="shiLiHang" style="margin-top:8px;align-items:center">
             <button class="anNiuZhuYao" id="anNiuZuiGaoQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
@@ -15009,8 +15028,7 @@ async function renderDashboard(host) {
         <!-- 「束缚」（第 51 轮）：教条之下的补充约束；沿用 Memory.md 文件名；**默认折叠** -->
         <details class="sheZhiKa" style="margin-top:14px" id="shuFuKa">
           <summary style="cursor:pointer;font-size:14px;font-weight:600">${escapeHtml(tOr('wo.shuFu', '束缚'))}</summary>
-          <h3 style="display:none">${escapeHtml(tOr('wo.shuFu', '束缚'))}</h3>
-          <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('wo.shuFuHint', '补充约束：优先级**低于「教条」**。单独保存在配置文件夹的 Memory.md（与常见智能体同名，方便移植）。'))}</p>
+          <h3 title="${escapeHtml(tOr('wo.shuFuHint', '补充约束：优先级**低于「教条」**。单独保存在配置文件夹的 Memory.md（与常见智能体同名，方便移植）。'))}" style="display:none">${escapeHtml(tOr('wo.shuFu', '束缚'))}</h3>
           <textarea id="shuFuTi" rows="5" style="width:100%;max-width:100%;resize:vertical;box-sizing:border-box" placeholder="${escapeHtml(tOr('wo.shuFuPlaceholder', '例如：不要自动 commit；改完源码要跑门禁；回复先给结论…'))}"></textarea>
           <div class="shiLiHang" style="margin-top:8px;align-items:center">
             <button class="anNiuZhuYao" id="anNiuShuFuQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
@@ -15349,11 +15367,10 @@ async function renderDashboard(host) {
             ${localeOptionsHtml(state.yuYan)}
           </select>
           <!-- 加强 AI 语言约束：思考过程与回复都严格用上面选的语言 -->
-          <label style="display:flex;align-items:center;gap:6px;margin-top:10px;cursor:pointer">
+          <label title="${escapeHtml(tOr('settings.strictAiLanguageHint', '勾选后，AI 的思考过程与回复会更严格地使用上面设置的语言。'))}" style="display:flex;align-items:center;gap:6px;margin-top:10px;cursor:pointer">
             <input type="checkbox" id="yanGeYuYan" ${state.strictAiLanguage ? 'checked' : ''}/>
             <span>${escapeHtml(tOr('settings.strictAiLanguage', '加强 AI 语言约束（AI 将更少地使用其他语言）'))}</span>
           </label>
-          <div class="jingYin" style="margin-top:4px">${escapeHtml(tOr('settings.strictAiLanguageHint', '勾选后，AI 的思考过程与回复会更严格地使用上面设置的语言。'))}</div>
           <!-- T10（R127）：翻译目标语言（自动 = 跟随原文语言；选具体语言则按它翻译） -->
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px">
             <label for="xuanZeFanYiYuYan">${escapeHtml(tOr('settings.translateTarget', '翻译目标语言'))}</label>
@@ -15365,8 +15382,7 @@ async function renderDashboard(host) {
           </div>
         </div>
         <div class="sheZhiSection sheZhiKa" id="shiQuKa">
-          <h2>${escapeHtml(tOr('settings.timezone', '时区'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('settings.timezoneHint', '所有记录都以时间戳保存；界面、导出和聊天里的时间按这里选定的时区显示。'))}</p>
+          <h2 title="${escapeHtml(tOr('settings.timezoneHint', '所有记录都以时间戳保存；界面、导出和聊天里的时间按这里选定的时区显示。'))}">${escapeHtml(tOr('settings.timezone', '时区'))}</h2>
           <select id="xuanZeShiQu" title="${escapeHtml(tOr('settings.timezone', '时区'))}">
             ${timezoneOptionsHtml(state.timezone)}
           </select>
@@ -15390,8 +15406,7 @@ async function renderDashboard(host) {
           <button type="button" id="anNiuZiTiYanSeCustom" class="zhuTiSeKuai" style="display:none" title="${escapeHtml(tOr('settings.customColorTitle', '自定义主题色'))}" aria-label="${escapeHtml(tOr('settings.customColorTitle', '自定义主题色'))}"></button>
         </div>
         <div class="sheZhiSection sheZhiKa" id="wenZiKa">
-          <h2>${escapeHtml(tOr('settings.text', '文字'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('settings.textHint', '字体、粗细与大小。安装包不内置字体：这里列出系统已装字体，也可自行安装你有权使用的字体。'))}</p>
+          <h2 title="${escapeHtml(tOr('settings.textHint', '字体、粗细与大小。安装包不内置字体：这里列出系统已装字体，也可自行安装你有权使用的字体。'))}">${escapeHtml(tOr('settings.text', '文字'))}</h2>
           <div class="field" style="margin-top:10px">
             <label>${escapeHtml(tOr('settings.fontFamily', '字体'))}</label>
             <div class="shiLiHang">
@@ -15408,11 +15423,10 @@ async function renderDashboard(host) {
               <input type="range" id="ziTiCuXi" min="100" max="900" step="50" style="width:100%"/>
             </div>
             <div class="field" style="flex:1;min-width:180px;max-width:320px">
-              <label>${escapeHtml(tOr('settings.fontSize', '大小'))} <span class="jingYin" id="ziTiDaXiaoShu"></span></label>
+              <label title="${escapeHtml(tOr('settings.fontWeightHint', '粗细向左更细、向右更粗（100–900）；大小统一放大或缩小程序里所有可见文字。'))}">${escapeHtml(tOr('settings.fontSize', '大小'))} <span class="jingYin" id="ziTiDaXiaoShu"></span></label>
               <input type="range" id="ziTiDaXiao" min="15" max="650" step="5" style="width:100%"/>
             </div>
           </div>
-          <div class="jingYin" style="font-size:11px">${escapeHtml(tOr('settings.fontWeightHint', '粗细向左更细、向右更粗（100–900）；大小统一放大或缩小程序里所有可见文字。'))}</div>
           <div class="shiLiHang" style="margin-top:12px;align-items:center">
             <button type="button" class="anNiuZhuYao" id="anNiuWenZiQueDing">${escapeHtml(tOr('common.ok', '确定'))}</button>
             <span class="jingYin" id="ziTiQueDingTiShi">${escapeHtml(tOr('settings.fontApplyHint', '改完点「确定」后生效。'))}</span>
@@ -15444,21 +15458,18 @@ async function renderDashboard(host) {
             <button class="anNiuXiao" data-clear="error">${escapeHtml(t('settings.soundClear'))}</button><button class="anNiuXiao" data-try="error">${escapeHtml(tOr('sound.try', '试听'))}</button><span class="jingYin" style="font-size:11px">${escapeHtml(tOr('sound.builtin', '留空则用内置默认音效'))}</span></div></div>
         </div>
                 <div class="sheZhiSection sheZhiKa" id="tongZhiYouJianKa">
-          <h2>${escapeHtml(t('settings.emailNotify'))}</h2>
-          <p class="jingYin">${escapeHtml(t('settings.emailNotifyHint'))}</p>
+          <h2 title="${escapeHtml(t('settings.emailNotifyHint'))}">${escapeHtml(t('settings.emailNotify'))}</h2>
           <div style="font-weight:600;font-size:13px;margin:10px 0 4px">${escapeHtml(t('settings.emailWhen'))}</div>
           <div id="smtpYouJianNotify2">
             ${['complete', 'request', 'error']
               .map(
                 (k) =>
-                  '<label style="margin-right:14px"><input type="checkbox" data-email-k="' + k + '" ' +
+                  '<label title="' + escapeHtml(t('settings.emailHint')) + '" style="margin-right:14px"><input type="checkbox" data-email-k="' + k + '" ' +
                   (state.emailNotify && state.emailNotify[k] ? 'checked' : '') + '/> ' + t('settings.sound' + k.charAt(0).toUpperCase() + k.slice(1)) + '</label>'
               )
               .join('')}
-            <div class="jingYin">${escapeHtml(t('settings.emailHint'))}</div>
           </div>
-          <h3 style="font-size:13px;margin:12px 0 4px">${escapeHtml(t('smtp.biaoTi'))} <span class="jingYin">(${escapeHtml(t('smtp.count'))} <span id="smtpN">0</span>/10 · ${escapeHtml(t('smtp.max10'))})</span></h3>
-          <p class="jingYin">${escapeHtml(t('smtp.tiShi'))}</p>
+          <h3 title="${escapeHtml(t('smtp.tiShi'))}" style="font-size:13px;margin:12px 0 4px">${escapeHtml(t('smtp.biaoTi'))} <span class="jingYin">(${escapeHtml(t('smtp.count'))} <span id="smtpN">0</span>/10 · ${escapeHtml(t('smtp.max10'))})</span></h3>
           <div id="smtpAccounts"></div>
           <div class="shiLiHang" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:10px">
             <div class="field"><label>${escapeHtml(t('smtp.biaoQian'))}</label><input id="smtpBiaoQian" placeholder="${escapeHtml(t('placeholder.email'))}"/></div>
@@ -15498,8 +15509,7 @@ async function renderDashboard(host) {
              拟态拟态、聊天输入框的麦克风、回复旁的喇叭，以及以后任何要用麦克风/播放器的地方都用这一套。
              id 与原来一致，所以既有逻辑照旧可用。 -->
         <div class="sheZhiSection sheZhiKa" id="yinPinSheBeiKa" data-sec="func">
-          <h2>${escapeHtml(tOr('audio.title', '音频设备'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('audio.hint', '这里是**全局**的音频设置：拟态、聊天框的麦克风、回复旁的喇叭，以及以后其它用到麦克风/播放器的地方，都按这里的设备与音量来。'))}</p>
+          <h2 title="${escapeHtml(tOr('audio.hint', '这里是**全局**的音频设置：拟态、聊天框的麦克风、回复旁的喇叭，以及以后其它用到麦克风/播放器的地方，都按这里的设备与音量来。'))}">${escapeHtml(tOr('audio.title', '音频设备'))}</h2>
           <div class="yinPinHang">
             <div class="yinPinLie">
               <span class="jingYin">${escapeHtml(tOr('mimic.mic', '麦克风'))}</span>
@@ -15565,12 +15575,11 @@ async function renderDashboard(host) {
         <div class="sheZhiSection sheZhiKa" id="benDiYuYinKa" data-sec="func">
           <div style="display:flex;align-items:center;gap:12px">
             <h2 style="margin:0">${escapeHtml(tOr('localSpeech.title', '本地语音与文字互转'))}</h2>
-            <label style="display:flex;align-items:center;gap:6px;margin:0">
+            <label title="${escapeHtml(tOr('localSpeech.hint', '启用后会使用本地的语音识别转文字的功能，让你的语音留在本地，更安全。否则，将使用模型中的听话模型来进行语音识别。'))}" style="display:flex;align-items:center;gap:6px;margin:0">
               <input type="checkbox" id="benDiYuYinKaiGuan" disabled/>
               <span>${escapeHtml(tOr('localSpeech.enable', '启用'))}</span>
             </label>
           </div>
-          <p class="jingYin">${escapeHtml(tOr('localSpeech.hint', '启用后会使用本地的语音识别转文字的功能，让你的语音留在本地，更安全。否则，将使用模型中的听话模型来进行语音识别。'))}</p>
           <div class="jingYin" id="benDiYuYinZhuangTai"></div>
           <div class="jingYin" id="benDiYuYinJinDu" style="color:var(--accent)"></div>
           <div class="jinDu" id="benDiYuYinJinDuGui" hidden><div class="jinDuTiao" id="benDiYuYinJinDuTiao" role="progressbar" aria-label="${escapeHtml(tOr('localSpeech.progress', '进度'))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%"></div></div>
@@ -15581,14 +15590,12 @@ async function renderDashboard(host) {
             <button class="anNiuXiao" id="anNiuBenDiYuYinZiJian" type="button" title="${escapeHtml(tOr('localSpeech.testTip', '自检：用本机语音合成一句话，再交给本机识别转回文字，跑通一圈才算真能用（不联网、不烧 token）'))}">${escapeHtml(tOr('localSpeech.test', '自检'))}</button>
             <!-- 第 37 轮：**话筒自检** —— 录 3 秒、把音频统计与"听到什么"一起摊开，用于定位"识别明显是错的" -->
             <button class="anNiuXiao" id="anNiuHuaTongZiJian" type="button" title="${escapeHtml(tOr('localSpeech.micTestTip', '话筒自检：录 3 秒，显示采样率/时长/音量峰值，并把转写结果一起给你（用来判断是麦克风问题还是模型问题）'))}">${escapeHtml(tOr('localSpeech.micTest', '话筒自检'))}</button>
-            <button class="anNiuXiao" id="anNiuBenDiYuYinShua" type="button" title="${escapeHtml(tOr('localSpeech.refreshTip', '刷新状态：重新读取安装进度、运行环境与模型是否就绪（不会重新下载）'))}">${escapeHtml(tOr('localSpeech.refresh', '刷新状态'))}</button>
+            <button class="anNiuXiao" id="anNiuBenDiYuYinShua" type="button" title="${escapeHtml(tOr('localSpeech.refreshTip', '刷新状态：重新读取安装进度、运行环境与模型是否就绪（不会重新下载）'))}&#10;${escapeHtml(tOr('localSpeech.btnHelp', '自检 = 本机合成一句中文再识别回来，验证「能装、能跑、能用」；刷新状态 = 只重新读一遍安装/运行状态，不下载任何东西。'))}">${escapeHtml(tOr('localSpeech.refresh', '刷新状态'))}</button>
           </div>
-          <p class="jingYin" style="font-size:11px;margin:6px 0 0">${escapeHtml(tOr('localSpeech.btnHelp', '自检 = 本机合成一句中文再识别回来，验证「能装、能跑、能用」；刷新状态 = 只重新读一遍安装/运行状态，不下载任何东西。'))}</p>
         </div>
         <!-- 搜索（原「网络搜索」，用户要求改名并移到「本地语音与文字互转」下方）：默认全部关闭。启用至少一个供应商后模型才能联网。 -->
         <div class="sheZhiSection sheZhiKa" id="souSuoPeiZhiKa" data-sec="func">
-          <h2>${escapeHtml(tOr('souSuo.title', '搜索'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('souSuo.hint', '默认全部关闭。启用至少一个搜索供应商后，模型才能使用「联网搜索 / 抓正文」；Jina Reader 只负责抓取，不能搜索。'))}</p>
+          <h2 title="${escapeHtml(tOr('souSuo.hint', '默认全部关闭。启用至少一个搜索供应商后，模型才能使用「联网搜索 / 抓正文」；Jina Reader 只负责抓取，不能搜索。'))}">${escapeHtml(tOr('souSuo.title', '搜索'))}</h2>
           <!-- T5（R127）：预设下拉 + 待测区/搜索调用链两分区；供应商先测试通过才进链 -->
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
             <label for="souSuoYuSheXuan">${escapeHtml(tOr('souSuo.preset', '预设'))}</label>
@@ -15616,45 +15623,43 @@ async function renderDashboard(host) {
         <div class="sheZhiSection sheZhiKa" id="nmKaiWenJianKa" data-sec="func">
           <h2>${escapeHtml(tOr('settings.nmOpenTitle', '使用 nm 查看器打开项目内文件'))}</h2>
           <div style="display:flex;align-items:center;gap:12px;margin:4px 0;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:6px">
+            <label title="${escapeHtml(tOr('settings.nmOpenHint', '启用后：左键项目内文件用 nm 打开，右键「打开」用系统默认程序；未启用时相反。'))}" style="display:flex;align-items:center;gap:6px">
               <input type="checkbox" id="nmKaiWenJianKaiGuan"/>
               <span>${escapeHtml(tOr('settings.nmOpenEnable', '启用'))}</span>
             </label>
             <!-- 第 100 轮：nm 查看器是插件，可卸载/重装；未安装时在这里装回来 -->
             <button class="anNiuXiao" id="anNiuNmChaJianAnZhuang" type="button"></button>
           </div>
-          <p class="jingYin" style="margin:0">${escapeHtml(tOr('settings.nmOpenHint', '启用后：左键项目内文件用 nm 打开，右键「打开」用系统默认程序；未启用时相反。'))}</p>
           <p class="jingYin" id="nmKaiWenJianZhuangTai" style="font-size:11px;margin:4px 0 0"></p>
         </div>
         <!-- P0-6 白名单 D：自动加入的能力类别可审计、可一键撤销 -->
         <div class="sheZhiSection sheZhiKa" id="nengLiWaiKa" data-sec="func">
-          <h2>${escapeHtml(tOr('settings.nengLiWaiTitle', '能力白名单（自动提案）'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('settings.nengLiWaiHint', '模型可以提案新的能力类别；宿主校验后自动生效。下面是自动加入的条目，发现问题可一键撤销。'))}</p>
+          <h2 title="${escapeHtml(tOr('settings.nengLiWaiHint', '模型可以提案新的能力类别；宿主校验后自动生效。下面是自动加入的条目，发现问题可一键撤销。'))}">${escapeHtml(tOr('settings.nengLiWaiTitle', '能力白名单（自动提案）'))}</h2>
           <p class="jingYin" id="nengLiWaiJiShu" style="font-size:11px;margin:4px 0"></p>
           <div id="nengLiWaiLieBiao"></div>
         </div>
         <!-- 第 34 轮 项 4：信任文件夹独立成块，排在 音频设备 → 本地语音与文字互转 之后 -->
         <div class="sheZhiSection sheZhiKa" id="xinRenWenJianJiaKa" data-sec="func">
-          <h2>${escapeHtml(tOr('settings.trustedFoldersTitle', '信任文件夹'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('settings.trustedFoldersHint', '牛马可以读取这些文件夹及其子目录；写入和执行仍按安全档位审批。'))}</p>
+          <h2 title="${escapeHtml(tOr('settings.trustedFoldersHint', '牛马可以读取这些文件夹及其子目录；写入和执行仍按安全档位审批。'))}">${escapeHtml(tOr('settings.trustedFoldersTitle', '信任文件夹'))}</h2>
           <div id="xinRenWenJianJiaJi"></div>
           <button class="anNiuXiao" id="xinRenWenJianJiaTianJia" style="margin-top:6px">${escapeHtml(tOr('settings.addTrustedFolder', '添加文件夹'))}</button>
         </div>
         <!-- R218：远程设备（合并旧「SSH 远程设备」+「远程控制设备」；三种连接方式） -->
         <div class="sheZhiSection sheZhiKa" id="yuanChengSheBeiKa" data-sec="func">
-          <h2>${escapeHtml(tOr('rc.titleNew', '远程设备'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('rc.hintNew', '三种方式连接远程设备：① 自己的设备（同账号已配对，在线可直连、免对方确认，支持复制粘贴文字/文件）；② 装有 WArmy 的设备（在联系人列表右键发起请求，等对方允许）；③ 其他设备（SSH 直连，登记后可从历史列表发起）。'))}</p>
+          <h2 title="${escapeHtml(tOr('rc.hintNew', '三种方式连接远程设备：① 自己的设备（同账号已配对，在线可直连、免对方确认，支持复制粘贴文字/文件）；② 装有 WArmy 的设备（在联系人列表右键发起请求，等对方允许）；③ 其他设备（SSH 直连，登记后可从历史列表发起）。'))}">${escapeHtml(tOr('rc.titleNew', '远程设备'))}</h2>
 
-          <h3 style="font-size:13px;margin:10px 0 4px">${escapeHtml(tOr('rc.myDevicesNew', '自己的设备（免确认直连）'))}</h3>
+          <h3 style="font-size:13px;margin:10px 0 4px" title="${escapeHtml(tOr('rc.myHintNew', '连接时无需对方确认（对方就是自己的设备），直接控制；支持复制粘贴文字（把本机剪贴板内容粘到对方设备）。'))}">${escapeHtml(tOr('rc.myDevicesNew', '自己的设备'))}</h3>
           <div class="shiLiHang" style="gap:8px;align-items:center;flex-wrap:wrap">
             <select id="rcMyXuanZe" style="min-width:220px"><option value="">${escapeHtml(tOr('rc.mySelectHint', '选择在线已配对的设备'))}</option></select>
             <button class="anNiuZhuYao" id="rcMyLianJie" type="button">${escapeHtml(tOr('rc.connect', '连接并控制'))}</button>
+            <!-- R223 项11：免确定勾选（默认不勾；勾选后连接不再弹确认） -->
+            <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer" title="${escapeHtml(tOr('rc.mianQueRenTip', '勾选后连接自己的设备不再弹确认；不勾选则每次连接前询问。'))}">
+              <input type="checkbox" id="rcMianQueRen"/> ${escapeHtml(tOr('rc.mianQueRen', '免确定'))}
+            </label>
             <span class="jingYin" id="rcMyXiaoXi"></span>
           </div>
-          <div class="jingYin" style="margin-top:4px">${escapeHtml(tOr('rc.myHintNew', '连接时无需对方确认（对方就是自己的设备），直接控制；支持复制粘贴文字（把本机剪贴板内容粘到对方设备）。'))}</div>
 
-          <h3 style="font-size:13px;margin:12px 0 4px">${escapeHtml(tOr('rc.wamyDevicesNew', '安装了 WArmy 的设备（不同账号）'))}</h3>
-          <div class="jingYin">${escapeHtml(tOr('rc.wamyHintNew', '在联系人列表中鼠标右击该联系人，选择「远程控制」，等待对方确认即可。对方允许后即可开始控制。'))}</div>
+          <h3 title="${escapeHtml(tOr('rc.wamyHintNew', '在联系人列表中鼠标右击该联系人，选择「远程控制」，等待对方确认即可。对方允许后即可开始控制。'))}" style="font-size:13px;margin:12px 0 4px">${escapeHtml(tOr('rc.wamyDevicesNew', '安装了 WArmy 的设备（不同账号）'))}</h3>
 
           <h3 style="font-size:13px;margin:12px 0 4px">${escapeHtml(tOr('ssh.title', '其他设备（SSH）'))}</h3>
           <div class="shiLiHang" style="flex-direction:column;gap:6px;align-items:stretch">
@@ -15670,9 +15675,8 @@ async function renderDashboard(host) {
                 <option value="password">${escapeHtml(tOr('ssh.authPw', '口令认证'))}</option>
               </select>
               <input id="sshPingZheng" placeholder="${escapeHtml(tOr('ssh.credential', '私钥全文或口令（加密保存）'))}" style="min-width:280px" type="password"/>
-              <button class="anNiuXiao" id="sshBaoCun" type="button">${escapeHtml(tOr('ssh.save', '保存目标'))}</button>
+              <button title="${escapeHtml(tOr('rc.sshHintNew', '曾经连接成功的记录在下方列表里（默认展开、限高滚动）：单击选中，双击发起远程控制，右键可连接 / 编辑 / 删除。'))}" class="anNiuXiao" id="sshBaoCun" type="button">${escapeHtml(tOr('ssh.save', '保存目标'))}</button>
             </div>
-            <div class="jingYin" style="margin-top:4px">${escapeHtml(tOr('rc.sshHintNew', '曾经连接成功的记录在下方列表里（默认展开、限高滚动）：单击选中，双击发起远程控制，右键可连接 / 编辑 / 删除。'))}</div>
             <div id="sshMuBiaoLieBiao" class="rcLiShiLieBiao"></div>
             <div class="jingYin" id="sshXiaoXi" style="font-size:11px"></div>
           </div>
@@ -15692,22 +15696,19 @@ async function renderDashboard(host) {
         </div>
         <!-- R218：安全 —— 我的设备（同一账号的设备；在线可远程退出登录） -->
         <div class="sheZhiSection sheZhiKa" id="anQuanSheBeiKa" data-sec="func">
-          <h2>${escapeHtml(tOr('settings.securityDevices', '安全'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('sec.devicesHint', '所有登录了当前账号的我的设备（无论是否在线都列出，在线状态有区分）。点击在线设备后的「退出」可让该设备上的 WArmy 直接退出登录，之后需要用助记词才能重新登录。'))}</p>
+          <h2 title="${escapeHtml(tOr('sec.devicesHint', '所有登录了当前账号的我的设备（无论是否在线都列出，在线状态有区分）。点击在线设备后的「退出」可让该设备上的 WArmy 直接退出登录，之后需要用助记词才能重新登录。'))}">${escapeHtml(tOr('settings.securityDevices', '安全'))}</h2>
           <div id="secSheBeiLieBiao"></div>
           <div class="jingYin" id="secSheBeiXiaoXi"></div>
         </div>
         <!-- 第 36 轮【项 2】：社交接入**整体搬到「牛马管理局 → 每只牛马的设置」**里（在「社交信息」上面）。
              设置→功能 这里不再重复一份 —— 两处入口会让用户以为有"全局社交"和"牛马社交"两套。 -->
         <div class="sheZhiSection sheZhiKa" id="jiYiXiTongKa">
-          <h2>${escapeHtml(t('memory.statusTitle'))}</h2>
-          <p class="jingYin">${escapeHtml(t('memory.desc'))}</p>
+          <h2 title="${escapeHtml(t('memory.desc'))}&#10;${escapeHtml(t('memory.rebuildWhy'))}">${escapeHtml(t('memory.statusTitle'))}</h2>
           <div class="jingYin" id="aboutJiYi">—</div>
           <div style="margin-top:8px">
             <button class="anNiuXiao" id="anNiuJiYiChongJian">${escapeHtml(t('memory.rebuild'))}</button>
             <span class="jingYin" id="aboutJiYiXiaoXi"></span>
           </div>
-          <p class="jingYin" style="margin-top:6px">${escapeHtml(t('memory.rebuildWhy'))}</p>
         </div>
         <!-- R218：dsh 已随安装包内置（resources/warmy-dsh），设置页不再需要「DeepSeek Shell（dsh）运行时（必装）」卡；
              安装/升级入口在「关于」页（DeepSeek Shell 检查与升级按钮）。 -->
@@ -15721,7 +15722,6 @@ async function renderDashboard(host) {
             </select>
             <span class="secMiaoShu" id="secMiaoShu"></span>
           </div>
-          <p class="jingYin" style="margin:8px 0 0">${escapeHtml(t('settings.securityHint'))}</p>
         </div>
         <!-- ═══ ADR 004：功能 → 容器 ═══════════════════════════════════════
              ADR §3.2：主操作 =「查看本机已有容器」→ 列出本机**已有**的容器（含三态与不可用原因）；
@@ -15827,11 +15827,10 @@ async function renderDashboard(host) {
         </div>
         <div class="sheZhiSection" data-sec="plugin"><h2 style="color:var(--accent)">${escapeHtml(t('settings.tabPlugins'))}</h2></div>
         <div class="sheZhiSection sheZhiKa">
-          <h2 style="margin:0">${escapeHtml(t('settings.chaJianJi'))}</h2>
+          <h2 title="${escapeHtml(tOr('settings.cordisHint', '一切皆插件：pnpm 安装或目录扫描发现 → 加载 → Config 设置。插件工具经宿主授权网关执行。'))}" style="margin:0">${escapeHtml(t('settings.chaJianJi'))}</h2>
           <!-- R218：cordis 插件（运行时）移到插件列表上面（用户要求） -->
           <div class="jinengSaoMiaoKuai" style="margin-top:10px">
             <div class="jinengSaoMiaoBiaoTi">${escapeHtml(tOr('settings.cordisTitle', 'cordis 插件（运行时）'))}</div>
-            <div class="jingYin">${escapeHtml(tOr('settings.cordisHint', '一切皆插件：pnpm 安装或目录扫描发现 → 加载 → Config 设置。插件工具经宿主授权网关执行。'))}</div>
             <div class="shiLiHang" style="margin-top:6px;align-items:center">
               <input id="cordisPnpmShuRu" style="flex:1;min-width:120px" placeholder="${escapeHtml(tOr('settings.cordisPnpmPlaceholder', 'pnpm 包名，如 @scope/plugin'))}"/>
               <button class="anNiuXiao" id="anNiuCordisPnpm">${escapeHtml(tOr('settings.cordisInstallPnpm', 'pnpm 安装'))}</button>
@@ -15843,11 +15842,10 @@ async function renderDashboard(host) {
           </div>
           <div id="plugLieBiao" class="chaJianLieBiao"></div>
           <div class="shiLiHang" style="margin-top:6px;align-items:center">
-            <button class="anNiuXiao" id="anNiuPlugAnZhuangFolder">${escapeHtml(t('settings.pluginInstallBrowse'))}</button>
+            <button title="${escapeHtml(tOr('settings.pluginScanHint', '目录下含 plugin.json 的子目录（或目录本身）会被自动发现为插件；最多 10 个。无效路径会如实标注。'))}" class="anNiuXiao" id="anNiuPlugAnZhuangFolder">${escapeHtml(t('settings.pluginInstallBrowse'))}</button>
           </div>
           <div class="jinengSaoMiaoKuai" style="margin-top:10px">
             <div class="jinengSaoMiaoBiaoTi">${escapeHtml(t('settings.pluginScanTitle'))}</div>
-            <div class="jingYin">${escapeHtml(tOr('settings.pluginScanHint', '目录下含 plugin.json 的子目录（或目录本身）会被自动发现为插件；最多 10 个。无效路径会如实标注。'))}</div>
             <div id="plugSaoMiaoMuLuJi"></div>
             <div class="shiLiHang" style="margin-top:6px;align-items:center">
               <input id="plugSaoMiaoMuLuShuRu" style="flex:1;min-width:120px" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}"/>
@@ -15864,13 +15862,11 @@ async function renderDashboard(host) {
         <!-- 门禁：dao 合规检查等开发工具（心跳没有界面：引擎照跑，状态看审计与日志） -->
         <div class="sheZhiSection" data-sec="gate"><h2 style="color:var(--accent)">${escapeHtml(tOr('settings.tabGates', '门禁'))}</h2></div>
         <div class="sheZhiSection sheZhiKa" data-sec="gate">
-          <h2>${escapeHtml(tOr('gate.title', '合规门禁'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('gate.hint', '自动检查代码与文档是否符合 dao.md 的关键条款（硬编码密钥、静默吞异常、证据分级等）。在命令行运行，不显示在插件/工具列表中。'))}</p>
+          <h2 title="${escapeHtml(tOr('gate.hint', '自动检查代码与文档是否符合 dao.md 的关键条款（硬编码密钥、静默吞异常、证据分级等）。在命令行运行，不显示在插件/工具列表中。'))}&#10;${escapeHtml(tOr('gate.scanHint', '从这些目录自动发现门禁脚本。默认目录不可删，最多 10 个。'))}">${escapeHtml(tOr('gate.title', '合规门禁'))}</h2>
           <div id="gateLieBiao"></div>
           <!-- 门禁自动发现目录（产品要求：默认 1 个不可删，最多 10 个，加完自动扫描入库） -->
           <div class="jinengSaoMiaoKuai" style="margin-top:10px">
             <div class="jinengSaoMiaoBiaoTi">${escapeHtml(tOr('gate.scanTitle', '门禁自动发现目录'))}</div>
-            <div class="jingYin">${escapeHtml(tOr('gate.scanHint', '从这些目录自动发现门禁脚本。默认目录不可删，最多 10 个。'))}</div>
             <div id="gateSaoMiaoMuLuJi"></div>
             <div class="shiLiHang" style="margin-top:6px;align-items:center">
               <input id="gateSaoMiaoMuLuShuRu" style="flex:1;min-width:120px" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}"/>
@@ -15885,11 +15881,9 @@ async function renderDashboard(host) {
         <!-- R8：组网设置：混合公网地址列表（IP + 域名）+ 刷新本机/公网地址 + 逐条检测 + 开关（检测通过才能打开） -->
         <!-- R63：同一张卡承接「组网 / 联网 / 服务器」语义；「主机模式 = 别人连你时可用的地址」默认折叠。 -->
         <div class="sheZhiSection sheZhiKa" id="wangLuoKa" data-sec="func">
-          <h2>${escapeHtml(tOr('net.cardTitle', '网络与主机'))} <button type="button" class="anNiuXiao wangLuoHelpAnNiu" id="anNiuWangLuoHelp" aria-label="${escapeHtml(t('net.helpTitle'))}" title="${escapeHtml(t('net.helpTitle'))}">?</button></h2>
+          <h2>${escapeHtml(tOr('net.cardTitle', '网络与主机'))} <button type="button" class="anNiuXiao wangLuoHelpAnNiu" id="anNiuWangLuoHelp" aria-label="${escapeHtml(t('net.helpTitle'))}" title="${escapeHtml(t('net.helpTitle'))}&#10;${escapeHtml(tOr('net.cardHint', '组网、端口、地址与主机模式都在这里。主机模式列出的是「别人连你时」可用的地址；当前版本只保存配置与检测事实，尚未把主机模式接入协议层。'))}&#10;${escapeHtml(t('net.tiShi'))}">?</button></h2>
           <div id="wangLuoHelpHe" class="jingYin wangLuoHelpHe yinCang">${escapeHtml(t('net.helpBody'))}</div>
           <div hidden>
-          <p class="jingYin" style="margin:0 0 6px">${escapeHtml(tOr('net.cardHint', '组网、端口、地址与主机模式都在这里。主机模式列出的是「别人连你时」可用的地址；当前版本只保存配置与检测事实，尚未把主机模式接入协议层。'))}</p>
-          <p class="jingYin" style="margin:0 0 10px">${escapeHtml(t('net.tiShi'))}</p>
           <div class="shiLiHang">
             <div class="field" style="max-width:120px"><label>${escapeHtml(t('net.port'))}</label><input id="wangLuoDuanKou" value="${escapeHtml(String(netState.addr.port || ''))}"/></div>
           </div>
@@ -16000,12 +15994,11 @@ async function renderDashboard(host) {
           <!-- C 方案：发现开放 + 消息走自选服务器；公开可发现默认关。
                打开后只发布「地址/端口/指纹/在线时间」，聊天内容永不进入发现层。 -->
           <details class="wangLuoHostDetails" id="wangLuoDiscoveryMode">
-            <summary>
+            <summary title="${escapeHtml(tOr('net.discovery.hint', '公开可发现 = 把你的地址记录发布到发现网络，让别人能找到你。默认打开，每个设备都是发现网络的节点：公网可达即完整节点（存证/路由），入站进不来即弱节点（发布/查询），直连不可行时由中继站兜底。记录内容是地址、端口、身份指纹和在线时间；聊天内容永远不会进入发现层，消息仍走你自选的服务器。打开后任何人都能读到这些元数据。'))}">
               <span class="wangLuoFoldTitle">${escapeHtml(tOr('net.discovery.title', '公开可发现（默认开）'))}</span>
               <span class="jingYin wangLuoFoldSummary" id="wangLuoDiscoverySummary" aria-live="polite"></span>
             </summary>
             <div class="wangLuoHostBody">
-              <p class="jingYin">${escapeHtml(tOr('net.discovery.hint', '公开可发现 = 把你的地址记录发布到发现网络，让别人能找到你。默认打开，每个设备都是发现网络的节点：公网可达即完整节点（存证/路由），入站进不来即弱节点（发布/查询），直连不可行时由中继站兜底。记录内容是地址、端口、身份指纹和在线时间；聊天内容永远不会进入发现层，消息仍走你自选的服务器。打开后任何人都能读到这些元数据。'))}</p>
               <label class="wangLuoHostEnable">
                 <input type="checkbox" id="wangLuoDiscoveryEnabled"/>
                 <span>${escapeHtml(tOr('net.discovery.enable', '允许公开发现我的地址'))}</span>
@@ -16029,112 +16022,93 @@ async function renderDashboard(host) {
           </details>
         </div>
         <div class="sheZhiSection sheZhiKa" id="peiZhiDataKa" data-sec="func">
-          <h2>${escapeHtml(t('settings.dataTitle'))}</h2>
-          <p class="jingYin">${escapeHtml(t('settings.dataHint'))}</p>
+          <h2 title="${escapeHtml(t('settings.dataHint'))}">${escapeHtml(t('settings.dataTitle'))}</h2>
           <div id="peiZhiDataZhiBiaoJi" class="diagGrid"></div>
         </div>
 
         <!-- T20：统一链管理 —— 旧手动添加区已并入各链底部「加入链」行（不再保留独立手动区） -->
         <div class="sheZhiSection sheZhiKa" id="tongYiLianGuanLi" data-sec="model">
-          <h2>${escapeHtml(tOr('model.unifiedTitle', '统一链管理'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('model.unifiedHint', '每一条链管理一种能力的模型：链内第一个启用模型即默认，可上移 / 下移 / 置顶 / 删除；每链底部可从已拉取模型中「加入链」。'))}</p>
+          <h2 title="${escapeHtml(tOr('model.unifiedHint', '每一条链管理一种能力的模型：链内第一个启用模型即默认，可上移 / 下移 / 置顶 / 删除；每链底部可从已拉取模型中「加入链」。'))}">${escapeHtml(tOr('model.unifiedTitle', '统一链管理'))}</h2>
           <!-- 对话模型：全局对话模型白名单（**默认折叠**、**无默认模型**） -->
           <details class="moXianSuLian" data-lian="chat" id="smShouChat">
-            <summary>${escapeHtml(tOr('settings.chatModel', '对话模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="chat"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('settings.chatModelHint', '全局对话模型白名单：只有这里存在且「启用」的模型，才允许被任何地方用来对话。牛马各自有自己的模型调用链，实际用哪个由牛马决定。'))}</div>
+            <summary title="${escapeHtml(tOr('settings.chatModelHint', '全局对话模型白名单：只有这里存在且「启用」的模型，才允许被任何地方用来对话。牛马各自有自己的模型调用链，实际用哪个由牛马决定。'))}">${escapeHtml(tOr('settings.chatModel', '对话模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="chat"></span></summary>
             <div id="smChatLian"></div>
             <div class="lianBuChong" data-lian-jia="chat"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="chat"></select><button class="anNiuXiao" data-lian-jia-add="chat">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <!-- 特殊模型统一成**调用链**形式：第一个=默认，可上移/下移/禁用；默认折叠，点开查看 -->
           <details class="moXianSuLian" data-lian="asr" id="smShouAsr">
-            <summary>${escapeHtml(t('settings.asrModel'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="asr"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.asr', ''))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.asr', ''))}">${escapeHtml(t('settings.asrModel'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="asr"></span></summary>
             <div id="smAsrLian"></div>
             <div class="lianBuChong" data-lian-jia="asr"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="asr"></select><button class="anNiuXiao" data-lian-jia-add="asr">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="embed" id="smShouEmbed">
-            <summary>${escapeHtml(t('settings.embeddingModel'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="embed"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.embed', ''))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.embed', ''))}">${escapeHtml(t('settings.embeddingModel'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="embed"></span></summary>
             <div id="smEmbedLian"></div>
             <div class="lianBuChong" data-lian-jia="embed"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="embed"></select><button class="anNiuXiao" data-lian-jia-add="embed">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="organizer" id="smShouOrganizer">
-            <summary>${escapeHtml(t('settings.organizerModel'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="organizer"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.organizer', ''))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.organizer', ''))}">${escapeHtml(t('settings.organizerModel'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="organizer"></span></summary>
             <div id="smOrganizerLian"></div>
             <div class="lianBuChong" data-lian-jia="organizer"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="organizer"></select><button class="anNiuXiao" data-lian-jia-add="organizer">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="tts" id="smShouTts">
-            <summary>${escapeHtml(tOr('settings.ttsModel', '语音模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="tts"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.tts', ''))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.tts', ''))}">${escapeHtml(tOr('settings.ttsModel', '语音模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="tts"></span></summary>
             <div id="smTtsLian"></div>
             <div class="lianBuChong" data-lian-jia="tts"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="tts"></select><button class="anNiuXiao" data-lian-jia-add="tts">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="fenLei" id="smShouFenLei">
-            <summary>${escapeHtml(tOr('model.fenLei', '决策模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="fenLei"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.fenLei', ''))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.fenLei', ''))}">${escapeHtml(tOr('model.fenLei', '决策模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="fenLei"></span></summary>
             <div id="smFenLei"></div>
             <div class="lianBuChong" data-lian-jia="fenLei"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="fenLei"></select><button class="anNiuXiao" data-lian-jia-add="fenLei">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="imageUnd" id="smShouImageUnd">
-            <summary>${escapeHtml(tOr('settings.imageUndModel', '看图模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="imageUnd"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.imageUnd', ''))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.imageUnd', ''))}">${escapeHtml(tOr('settings.imageUndModel', '看图模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="imageUnd"></span></summary>
             <div id="smImageUndLian"></div>
             <div class="lianBuChong" data-lian-jia="imageUnd"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="imageUnd"></select><button class="anNiuXiao" data-lian-jia-add="imageUnd">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="image" id="smShouImage">
-            <summary>${escapeHtml(tOr('settings.imageModel', '画图模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="image"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.image', ''))}</div>
-            <div class="jingYin" style="margin:4px 0 6px; line-height:1.6">${escapeHtml(tOr('model.imageGenHint', '画图优先使用本链模型（在线图片 API 或本地 ComfyUI 的 OpenAI 兼容接口）；链没配或失败时自动回退本机 ComfyUI（原生，127.0.0.1:8188）。'))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.image', ''))}&#10;${escapeHtml(tOr('model.imageGenHint', '画图优先使用本链模型（在线图片 API 或本地 ComfyUI 的 OpenAI 兼容接口）；链没配或失败时自动回退本机 ComfyUI（原生，127.0.0.1:8188）。'))}">${escapeHtml(tOr('settings.imageModel', '画图模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="image"></span></summary>
             <div id="smImageLian"></div>
             <div class="lianBuChong" data-lian-jia="image"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="image"></select><button class="anNiuXiao" data-lian-jia-add="image">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="videoUnd" id="smShouVideoUnd">
-            <summary>${escapeHtml(tOr('settings.videoUndModel', '看视频模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="videoUnd"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.videoUnd', ''))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.videoUnd', ''))}">${escapeHtml(tOr('settings.videoUndModel', '看视频模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="videoUnd"></span></summary>
             <div id="smVideoUndLian"></div>
             <div class="lianBuChong" data-lian-jia="videoUnd"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="videoUnd"></select><button class="anNiuXiao" data-lian-jia-add="videoUnd">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="videoGen" id="smShouVideoGen">
-            <summary>${escapeHtml(tOr('settings.videoGenModel', '做视频模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="videoGen"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.videoGen', ''))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.videoGen', ''))}">${escapeHtml(tOr('settings.videoGenModel', '做视频模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="videoGen"></span></summary>
             <div id="smVideoGenLian"></div>
             <div class="lianBuChong" data-lian-jia="videoGen"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="videoGen"></select><button class="anNiuXiao" data-lian-jia-add="videoGen">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="rerank" id="smShouRerank">
-            <summary>${escapeHtml(tOr('settings.rerankModel', '嵌入重排'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="rerank"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.rerank', ''))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.rerank', ''))}">${escapeHtml(tOr('settings.rerankModel', '嵌入重排'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="rerank"></span></summary>
             <div id="smRerankLian"></div>
             <div class="lianBuChong" data-lian-jia="rerank"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="rerank"></select><button class="anNiuXiao" data-lian-jia-add="rerank">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="safety" id="smShouSafety">
-            <summary>${escapeHtml(tOr('settings.safetyModel', '安全审核'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="safety"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.safety', ''))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.safety', ''))}">${escapeHtml(tOr('settings.safetyModel', '安全审核'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="safety"></span></summary>
             <div id="smSafetyLian"></div>
             <div class="lianBuChong" data-lian-jia="safety"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="safety"></select><button class="anNiuXiao" data-lian-jia-add="safety">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="translate" id="smShouTranslate">
-            <summary>${escapeHtml(tOr('settings.translateModel', '翻译模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="translate"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('model.kindHint.translate', ''))}</div>
+            <summary title="${escapeHtml(tOr('model.kindHint.translate', ''))}">${escapeHtml(tOr('settings.translateModel', '翻译模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="translate"></span></summary>
             <div id="smTranslateLian"></div>
             <div class="lianBuChong" data-lian-jia="translate"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="translate"></select><button class="anNiuXiao" data-lian-jia-add="translate">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
 
           <details class="moXianSuLian" data-lian="ocr" id="smShouOcr">
-            <summary>${escapeHtml(tOr('settings.ocrModel', '文字识别'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="ocr"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('settings.ocrHint', '从图片/扫描件里提取文字与版面（DeepSeek-OCR、GLM-OCR、PaddleOCR-VL 等）。'))}</div>
+            <summary title="${escapeHtml(tOr('settings.ocrHint', '从图片/扫描件里提取文字与版面（DeepSeek-OCR、GLM-OCR、PaddleOCR-VL 等）。'))}">${escapeHtml(tOr('settings.ocrModel', '文字识别'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="ocr"></span></summary>
             <div id="smOcrLian"></div>
             <div class="lianBuChong" data-lian-jia="ocr"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="ocr"></select><button class="anNiuXiao" data-lian-jia-add="ocr">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="reasoning" id="smShouReasoning">
-            <summary>${escapeHtml(tOr('settings.reasoningModel', '推理模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="reasoning"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('settings.reasoningHint', '复杂多步推理与自我校验（LRM 类）。当前模型搞不定硬推理时可转交给它。'))}</div>
+            <summary title="${escapeHtml(tOr('settings.reasoningHint', '复杂多步推理与自我校验（LRM 类）。当前模型搞不定硬推理时可转交给它。'))}">${escapeHtml(tOr('settings.reasoningModel', '推理模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="reasoning"></span></summary>
             <div id="smReasoningLian"></div>
             <div class="lianBuChong" data-lian-jia="reasoning"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="reasoning"></select><button class="anNiuXiao" data-lian-jia-add="reasoning">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
           <details class="moXianSuLian" data-lian="code" id="smShouCode">
-            <summary>${escapeHtml(tOr('settings.codeModel', '代码模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="code"></span></summary>
-            <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('settings.codeHint', '写代码 / 改代码 / 代码审查的专项模型（Qwen-Coder、DeepSeek-Coder 等）。'))}</div>
+            <summary title="${escapeHtml(tOr('settings.codeHint', '写代码 / 改代码 / 代码审查的专项模型（Qwen-Coder、DeepSeek-Coder 等）。'))}">${escapeHtml(tOr('settings.codeModel', '代码模型'))}<span class="jingYin moXianSuZhaiYao" data-zhaiyao="code"></span></summary>
             <div id="smCodeLian"></div>
             <div class="lianBuChong" data-lian-jia="code"><span class="jingYin">${escapeHtml(tOr('model.joinChain', '加入链'))}</span><select class="moXingShu" data-lian-jia-sel="code"></select><button class="anNiuXiao" data-lian-jia-add="code">${escapeHtml(tOr('model.joinChainBtn', '加入'))}</button></div>
           </details>
@@ -16149,8 +16123,7 @@ async function renderDashboard(host) {
         </div>
           <!-- #109：提示词校对 + 备份 diff / 回滚（道/术/教条/束缚/印象） -->
           <div class="sheZhiSection sheZhiKa" id="tiShiJiaoDuiKa" data-sec="func">
-            <h2>${escapeHtml(tOr('prompt.tool.title', '提示词校对与回滚'))}</h2>
-            <p class="jingYin">${escapeHtml(tOr('prompt.tool.hint', '本地校对只查空值、超上限、重复行（不联网）；每次覆盖前自动留最近 5 份备份，可看差异并回滚。'))}</p>
+            <h2 title="${escapeHtml(tOr('prompt.tool.hint', '本地校对只查空值、超上限、重复行（不联网）；每次覆盖前自动留最近 5 份备份，可看差异并回滚。'))}">${escapeHtml(tOr('prompt.tool.title', '提示词校对与回滚'))}</h2>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0">
               <select id="tiShiJiaoDuiCeng"></select>
               <button class="anNiuXiao" id="anNiuTiShiJiaoDui">${escapeHtml(tOr('prompt.tool.check', '本地校对'))}</button>
@@ -16162,8 +16135,7 @@ async function renderDashboard(host) {
           <!-- 最近删除（默认折叠）：48 小时内可恢复；只有这里的「永久删除」才二次确认 -->
           <div class="sheZhiSection sheZhiKa" id="laJiKuai" data-sec="func">
             <details id="laJiQu">
-              <summary style="cursor:pointer;font-weight:600">${escapeHtml(tOr('trash.title', '最近删除'))}
-                <span class="jingYin">${escapeHtml(tOr('trash.hint', '（48 小时内可恢复，超时自动永久清理）'))}</span>
+              <summary title="${escapeHtml(tOr('trash.hint', '（48 小时内可恢复，超时自动永久清理）'))}" style="cursor:pointer;font-weight:600">${escapeHtml(tOr('trash.title', '最近删除'))}
               </summary>
               <div id="laJiLieBiao" style="margin-top:8px"></div>
             </details>
@@ -16171,13 +16143,10 @@ async function renderDashboard(host) {
 
         <div class="sheZhiSection" data-sec="skill"><h2 style="color:var(--accent)">${escapeHtml(t('settings.tabSkills'))}</h2></div>
         <div class="sheZhiSection sheZhiKa" id="jinengJiKa">
-          <h2>${escapeHtml(tOr('settings.skillsTitle', 'AI 技能'))}</h2>
-          <p class="jingYin" style="margin:0 0 8px">${escapeHtml(t('settings.skillsHint'))}</p>
-          <p class="jingYin" style="margin:0 0 8px">${escapeHtml(tOr('settings.skillsHotReload', '技能支持热拔插：导入或「扫描本机」后立即入库，下一轮对话即可被 find_skill / 按步骤调用，无需重启应用或会话。'))}</p>
+          <h2 title="${escapeHtml(t('settings.skillsHint'))}&#10;${escapeHtml(tOr('settings.skillsHotReload', '技能支持热拔插：导入或「扫描本机」后立即入库，下一轮对话即可被 find_skill / 按步骤调用，无需重启应用或会话。'))}&#10;${escapeHtml(t('settings.skillsScanHint'))}">${escapeHtml(tOr('settings.skillsTitle', 'AI 技能'))}</h2>
           <div id="jinengLieBiao" class="jingYin">${escapeHtml(t('settings.skillsEmpty'))}</div>
           <div class="jinengSaoMiaoKuai" style="margin-top:10px">
             <div class="jinengSaoMiaoBiaoTi">${escapeHtml(t('settings.skillsScanTitle'))}</div>
-            <div class="jingYin">${escapeHtml(t('settings.skillsScanHint'))}</div>
             <div id="jinengSaoMiaoMuLuJi"></div>
             <div class="shiLiHang" style="margin-top:6px;align-items:center">
               <input id="jinengSaoMiaoMuLuShuRu" class="skill-scan-input" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}" style="flex:1;min-width:120px"/>
@@ -16186,13 +16155,12 @@ async function renderDashboard(host) {
             </div>
             <div style="margin-top:6px">
               <button class="anNiuXiao" id="anNiuJinengSaoMiaoJianCha">${escapeHtml(t('settings.skillsScanCheck'))}</button>
-              <button class="anNiuXiao" id="anNiuJinengSaoMiaoJiQi">${escapeHtml(t('settings.scanMachine'))}</button>
+              <button title="${escapeHtml(tOr('settings.skillMarketHint', 'dsh-market 目录在应用内弹窗浏览（只读上游 JSON）。能解析出 SKILL.md 的条目才装成 WArmy 技能，装到上面第一个默认目录（不可删除）；不引入任何插件运行时。'))}" class="anNiuXiao" id="anNiuJinengSaoMiaoJiQi">${escapeHtml(t('settings.scanMachine'))}</button>
             </div>
             <div class="jingYin" id="jinengSaoMiaoXiaoXi"></div>
           <div class="jingYin jinengLuJingJi" id="jinengLuJingJi"></div>
           <div class="jinengSaoMiaoKuai" style="margin-top:10px">
             <div class="jinengSaoMiaoBiaoTi">${escapeHtml(tOr('settings.skillMarket', '技能市场'))}</div>
-            <div class="jingYin">${escapeHtml(tOr('settings.skillMarketHint', 'dsh-market 目录在应用内弹窗浏览（只读上游 JSON）。能解析出 SKILL.md 的条目才装成 WArmy 技能，装到上面第一个默认目录（不可删除）；不引入任何插件运行时。'))}</div>
             <div style="margin-top:6px">
               <button class="anNiuXiao" id="anNiuJinengShiChangShua">${escapeHtml(tOr('settings.openDshMarket', '打开 dsh-market'))}</button>
               <span class="jingYin" id="jinengShiChangXiaoXi"></span>
@@ -16204,12 +16172,11 @@ async function renderDashboard(host) {
         <div class="sheZhiSection sheZhiKa" id="webgpuKa" data-sec="func">
           <div style="display:flex;align-items:center;gap:12px">
             <h2 style="margin:0">${escapeHtml(tOr('webgpu.section', '图形加速（WebGPU）'))}</h2>
-            <label style="display:flex;align-items:center;gap:6px;margin:0">
+            <label title="${escapeHtml(tOr('webgpu.hint', '检测本机是否支持 WebGPU（与模型无关）。'))}" style="display:flex;align-items:center;gap:6px;margin:0">
               <input type="checkbox" id="webgpuKaiGuan"/>
               <span>${escapeHtml(tOr('webgpu.enable', '启用'))}</span>
             </label>
           </div>
-          <p class="jingYin">${escapeHtml(tOr('webgpu.hint', '检测本机是否支持 WebGPU（与模型无关）。'))}</p>
           <p class="jingYin" id="webgpuKaiGuanTiShi"></p>
           <div style="margin-top:8px"><button class="anNiuXiao" id="anNiuwebgpu">${escapeHtml(t('webgpu.test'))}</button> <span class="jingYin" id="webgpuXiaoXi"></span></div>
         </div>
@@ -16220,22 +16187,20 @@ async function renderDashboard(host) {
           <!-- 标题行右侧「启用」开关（产品要求） -->
           <div style="display:flex;align-items:center;gap:12px;margin:4px 0 6px">
             <h2 style="margin:0">${escapeHtml(tOr('archive.autoTitle', '自动总结'))}</h2>
-            <label style="display:flex;align-items:center;gap:6px;margin:0">
+            <label title="${escapeHtml(tOr('archive.autoHint', '把右键菜单里勾了「自动总结」的会话整理后放进知识库。每个会话都记得上次总结到哪，下次只总结新增内容，不从头重做。'))}" style="display:flex;align-items:center;gap:6px;margin:0">
               <input type="checkbox" id="guiDangZongKaiGuan" checked/>
               <span>${escapeHtml(tOr('archive.masterSwitchShort', '启用'))}</span>
             </label>
           </div>
           <div id="guiDangXiaTi">
-          <p class="jingYin">${escapeHtml(tOr('archive.autoHint', '把右键菜单里勾了「自动总结」的会话整理后放进知识库。每个会话都记得上次总结到哪，下次只总结新增内容，不从头重做。'))}</p>
           <!-- 待总结会话列表（产品要求）：名称 + 悬停最近消息 + 打开/暂停/删除 -->
           <div style="margin-top:10px">
             <div class="jingYin" style="font-weight:600">${escapeHtml(tOr('archive.pendingTitle', '待总结会话'))}</div>
             <div id="guiDangDaiGuiDang" class="jingYin" style="margin-top:6px"></div>
           </div>
           <div class="field" style="margin-top:8px">
-            <label>${escapeHtml(tOr('archive.model', '总结使用的模型'))}</label>
+            <label title="${escapeHtml(tOr('archive.modelHint', '用它把会话整理成可检索的知识条目。留空 = 不整理，直接按原文摘要总结。'))}">${escapeHtml(tOr('archive.model', '总结使用的模型'))}</label>
             <select id="guiDangMoXing"></select>
-            <div class="jingYin">${escapeHtml(tOr('archive.modelHint', '用它把会话整理成可检索的知识条目。留空 = 不整理，直接按原文摘要总结。'))}</div>
           </div>
           <div class="field" style="margin-top:8px">
             <label>${escapeHtml(tOr('archive.when', '什么时候总结'))}</label>
@@ -16261,12 +16226,10 @@ async function renderDashboard(host) {
         <!-- 「工具」：AI 要用的工具都在这里（与技能同款：可停用/启用、手动安装/导入、自动发现目录） -->
         <div class="sheZhiSection" data-sec="tool"><h2 style="color:var(--accent)">${escapeHtml(tOr('settings.tabTools', '工具'))}</h2></div>
         <div class="sheZhiSection sheZhiKa" id="gongJuKa">
-          <h2>${escapeHtml(tOr('gongJu.title', 'AI 工具'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('gongJu.hint', '模型能调用的工具都在这里。停用后模型就看不到它；已装的工具可手动安装/导入，也可添加自动发现的目录。'))}</p>
+          <h2 title="${escapeHtml(tOr('gongJu.hint', '模型能调用的工具都在这里。停用后模型就看不到它；已装的工具可手动安装/导入，也可添加自动发现的目录。'))}&#10;${escapeHtml(tOr('gongJu.scanHint', '目录下含 TOOL.json 的子目录（或目录本身）会被自动发现为工具包；最多 10 个。无效路径会如实标注。'))}">${escapeHtml(tOr('gongJu.title', 'AI 工具'))}</h2>
           <div id="gongJuLieBiao" class="jingYin">${escapeHtml(tOr('gongJu.empty', '暂无工具'))}</div>
           <div class="jinengSaoMiaoKuai" style="margin-top:10px">
             <div class="jinengSaoMiaoBiaoTi">${escapeHtml(tOr('gongJu.scanTitle', '自动发现目录'))}</div>
-            <div class="jingYin">${escapeHtml(tOr('gongJu.scanHint', '目录下含 TOOL.json 的子目录（或目录本身）会被自动发现为工具包；最多 10 个。无效路径会如实标注。'))}</div>
             <div id="gongJuSaoMiaoMuLuJi"></div>
             <div class="shiLiHang" style="margin-top:6px">
               <input id="gongJuSaoMiaoMuLuShuRu" class="skill-scan-input" placeholder="${escapeHtml(t('settings.skillsScanPlaceholder'))}" style="flex:1;min-width:120px"/>
@@ -16309,8 +16272,7 @@ async function renderDashboard(host) {
           <div class="hkapiShiJianJi" id="hkapiShiJianJi"></div>
         </div>
         <div class="sheZhiSection sheZhiKa" data-sec="mimic">
-          <h2>${escapeHtml(tOr('settings.mimic', '拟态'))}</h2>
-          <p class="jingYin">${escapeHtml(tOr('mimic.hint', '让桌面上出现一个拟态：可用语音或文字对话，由互动中理解意图来查看屏幕（截取的是整个屏幕）。拟态是单独的会话类型（不在「我的牛马」中）：名称、认知、模型链、社交都在下方配置。'))}</p>
+          <h2 title="${escapeHtml(tOr('mimic.hint', '让桌面上出现一个拟态：可用语音或文字对话，由互动中理解意图来查看屏幕（截取的是整个屏幕）。拟态是单独的会话类型（不在「我的牛马」中）：名称、认知、模型链、社交都在下方配置。') + '\n' + tOr('mimic.devicesMoved', '音视频设备（麦克风 / 播放器 / 音量）是全局设置，拟态、聊天麦克风与喇叭都用那一套。'))}">${escapeHtml(tOr('settings.mimic', '拟态'))}</h2>
           <!-- R219：化形/隐身（顶部单按钮切换：无拟态=化形，出现后=隐身） -->
           <div class="shiLiHang" style="margin:10px 0 4px;align-items:center">
             <button class="anNiuZhuYao" id="anNiuMimicHuaXing">${escapeHtml(tOr('mimic.huaXing', '化形'))}</button>
@@ -16322,23 +16284,19 @@ async function renderDashboard(host) {
             <summary>${escapeHtml(tOr('mimic.config', '拟态配置（与牛马设置同款）'))}</summary>
             <div>
               <div class="field">
-                <label>${escapeHtml(tOr('mimic.name', '名称'))}</label>
+                <label title="${escapeHtml(tOr('mimic.nameHint', '拟态的名字，双击它打开对话时显示。'))}">${escapeHtml(tOr('mimic.name', '名称'))}</label>
                 <input id="mimicMing" maxlength="40" spellcheck="false"/>
-                <div class="jingYin">${escapeHtml(tOr('mimic.nameHint', '拟态的名字，双击它打开对话时显示。'))}</div>
               </div>
               <div class="field" style="margin-top:8px">
-                <label>${escapeHtml(tOr('mimic.renZhi', '认知（性格与背景）'))}</label>
+                <label title="${escapeHtml(tOr('mimic.renZhiHint', '与牛马设置里的「写入认知」是同一份数据：拟态按它说话做事。'))}">${escapeHtml(tOr('mimic.renZhi', '认知（性格与背景）'))}</label>
                 <textarea id="mimicRenzhi" rows="4" style="width:100%;resize:vertical;box-sizing:border-box"></textarea>
-                <div class="jingYin">${escapeHtml(tOr('mimic.renZhiHint', '与牛马设置里的「写入认知」是同一份数据：拟态按它说话做事。'))}</div>
               </div>
               <div class="field" style="margin-top:8px">
-                <label>${escapeHtml(tOr('mimic.dangQian', '当前模型'))}</label>
-                <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.currentHint', '本轮中途换过模型，之后这段对话一直用它；点右侧 × 恢复按调用链选择'))}</div>
+                <label title="${escapeHtml(tOr('model.currentHint', '本轮中途换过模型，之后这段对话一直用它；点右侧 × 恢复按调用链选择'))}">${escapeHtml(tOr('mimic.dangQian', '当前模型'))}</label>
                 <div class="mgrMoXingJi" id="mimicDangQianJi"></div>
               </div>
               <div class="field" style="margin-top:8px">
-                <h4 style="margin:0 0 4px">${escapeHtml(tOr('model.available', '可用模型'))}</h4>
-                <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.availableHint', '只有这里选中的模型，才能被「默认模型」和「模型调用链」使用。'))}</div>
+                <h4 title="${escapeHtml(tOr('model.availableHint', '只有这里选中的模型，才能被「默认模型」和「模型调用链」使用。'))}" style="margin:0 0 4px">${escapeHtml(tOr('model.available', '可用模型'))}</h4>
                 <label style="display:block;margin-bottom:8px">
                   <input type="checkbox" id="mimicAllMoXing"/> ${escapeHtml(t('instances.allAvailable'))}
                 </label>
@@ -16355,18 +16313,15 @@ async function renderDashboard(host) {
                 </div>
               </div>
               <div class="field" style="margin-top:8px">
-                <h4 style="margin:0 0 4px">${escapeHtml(tOr('model.chain', '调用链'))}</h4>
-                <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('model.chainHint', '按顺序尝试；禁用的模型不会被调用。'))}</div>
-                <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+                <h4 title="${escapeHtml(tOr('model.chainHint', '按顺序尝试；禁用的模型不会被调用。'))}" style="margin:0 0 4px">${escapeHtml(tOr('model.chain', '调用链'))}</h4>
+                <label title="${escapeHtml(tOr('model.smartHint', '勾选后由系统自动安排调用链；取消勾选可手动排序/禁用。'))}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
                   <input type="checkbox" id="mimicSmartMoXing"/>
                   <span>${escapeHtml(tOr('model.smart', '智能模式'))}</span>
-                  <span class="jingYin">${escapeHtml(tOr('model.smartHint', '勾选后由系统自动安排调用链；取消勾选可手动排序/禁用。'))}</span>
                 </label>
                 <div id="mimicChain"></div>
               </div>
               <details style="margin-top:8px">
-                <summary>${escapeHtml(tOr('social.jieRuTi', '社交接入（外部 IM）'))}</summary>
-                <div class="jingYin" style="margin:6px 0">${escapeHtml(tOr('mimic.sheJiaoJieRuHint', '把拟态接到外部聊天工具：填好凭据 → 保存 → 连接。连上后那边收到的消息交给拟态处理。'))}</div>
+                <summary title="${escapeHtml(tOr('mimic.sheJiaoJieRuHint', '把拟态接到外部聊天工具：填好凭据 → 保存 → 连接。连上后那边收到的消息交给拟态处理。'))}">${escapeHtml(tOr('social.jieRuTi', '社交接入（外部 IM）'))}</summary>
                 <div id="mimicSheJiaoLieBiao"></div>
                 <div class="jingYin" id="mimicSheJiaoXiaoXi"></div>
               </details>
@@ -16380,74 +16335,70 @@ async function renderDashboard(host) {
           <div class="field" style="margin-top:10px">
             <label>${escapeHtml(tOr('mimic.voiceMode', '语音互动模式'))}</label>
             <div id="mimicMoShiJi" style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
-              <label><input type="radio" name="mimicMoShi" value="off"/> ${escapeHtml(tOr('mimic.mode.off', '关闭语音互动（不接受音频；只在拟态会话里打字才有反应）'))}</label>
-              <label><input type="radio" name="mimicMoShi" value="wake"/> ${escapeHtml(tOr('mimic.mode.wake', '仅关键词唤醒（听到唤醒词才响应；本地识别守门，省电且隐私最好）'))}</label>
-              <label><input type="radio" name="mimicMoShi" value="always"/> ${escapeHtml(tOr('mimic.mode.always', '持续语音对话（一直听得见、一直会回）'))}</label>
-              <label><input type="radio" name="mimicMoShi" value="smart"/> ${escapeHtml(tOr('mimic.mode.smart', '智能模式（持续接收音频，由判断模型决定要不要回应；没选判断模型时用拟态当前模型判断）'))}</label>
+              <label title="${escapeHtml(tOr('mimic.mode.off', '关闭语音互动（不接受音频；只在拟态会话里打字才有反应）'))}"><input type="radio" name="mimicMoShi" value="off"/> ${escapeHtml(tOr('mimic.mode.off', '关闭语音互动（不接受音频；只在拟态会话里打字才有反应）').split(/[（(]/)[0])}</label>
+              <label title="${escapeHtml(tOr('mimic.mode.wake', '仅关键词唤醒（听到唤醒词才响应；本地识别守门，省电且隐私最好）'))}"><input type="radio" name="mimicMoShi" value="wake"/> ${escapeHtml(tOr('mimic.mode.wake', '仅关键词唤醒（听到唤醒词才响应；本地识别守门，省电且隐私最好）').split(/[（(]/)[0])}</label>
+              <label title="${escapeHtml(tOr('mimic.mode.always', '持续语音对话（一直听得见、一直会回）'))}"><input type="radio" name="mimicMoShi" value="always"/> ${escapeHtml(tOr('mimic.mode.always', '持续语音对话（一直听得见、一直会回）').split(/[（(]/)[0])}</label>
+              <label title="${escapeHtml(tOr('mimic.mode.smart', '智能模式（持续接收音频，由判断模型决定要不要回应；没选判断模型时用拟态当前模型判断）'))}"><input type="radio" name="mimicMoShi" value="smart"/> ${escapeHtml(tOr('mimic.mode.smart', '智能模式（持续接收音频，由判断模型决定要不要回应；没选判断模型时用拟态当前模型判断）').split(/[（(]/)[0])}</label>
             </div>
           </div>
 
           <div class="field" style="margin-top:8px" id="mimicCiKuangJi">
-            <label>${escapeHtml(tOr('mimic.wakeWords', '唤醒关键词'))}</label>
+            <label title="${escapeHtml(tOr('mimic.wakeWordsHint', '识别到的语音包含任一关键词就会唤醒拟态；可添加多个。'))}">${escapeHtml(tOr('mimic.wakeWords', '唤醒关键词'))}</label>
             <div id="mimicCiJi" class="mgrMoXingJi" style="margin:4px 0"></div>
             <div class="shiLiHang" style="align-items:center">
               <input id="mimicCiShuRu" style="flex:1;min-width:100px" placeholder="${escapeHtml(tOr('mimic.wakeWordsAdd', '输入关键词，回车或点添加'))}" maxlength="20"/>
               <button class="anNiuXiao" id="anNiuMimicCiTianJia">${escapeHtml(tOr('common.add', '添加'))}</button>
             </div>
-            <div class="jingYin">${escapeHtml(tOr('mimic.wakeWordsHint', '识别到的语音包含任一关键词就会唤醒拟态；可添加多个。'))}</div>
           </div>
 
           <div class="field" style="margin-top:8px" id="mimicPanDuanMoXingKuai">
-            <label>${escapeHtml(tOr('mimic.judgeModel', '判断模型（仅智能模式使用）'))}</label>
+            <label title="${escapeHtml(tOr('mimic.judgeModelHint', '智能模式下由它判断"此刻该不该回应"。没有判断模型时自动用拟态当前模型判断。'))}">${escapeHtml(tOr('mimic.judgeModel', '判断模型（仅智能模式使用）'))}</label>
             <select id="mimicPanDuanMoXing"></select>
-            <div class="jingYin">${escapeHtml(tOr('mimic.judgeModelHint', '智能模式下由它判断"此刻该不该回应"。没有判断模型时自动用拟态当前模型判断。'))}</div>
           </div>
 
           <div class="field" style="margin-top:8px">
             <label style="display:flex;align-items:center;gap:6px">
-              <input type="checkbox" id="mimicZiMu"/> ${escapeHtml(tOr('mimic.subtitle', '显示字幕（回复时出现对话气泡）'))}
+              <input type="checkbox" id="mimicZiMu" title="${escapeHtml(tOr('mimic.subtitle', '显示字幕（回复时出现对话气泡）'))}"/> ${escapeHtml(tOr('mimic.subtitleShort', '显示字幕'))}
             </label>
           </div>
 
           <div class="field" style="margin-top:8px">
-            <label>${escapeHtml(tOr('mimic.character', '外观模型'))}</label>
+            <label title="${escapeHtml(tOr('mimic.characterTip', '点选预设或文件夹模型即用；下方「捏脸定制」可调参数捏出专属形象。'))}">${escapeHtml(tOr('mimic.character', '外观模型'))}</label>
             <!-- R218：2D/3D 形态 + 内置模型库 + 手捏 + 外部模型 + 格式提示 -->
             <div class="shiLiHang" style="gap:10px;margin:4px 0">
               <label style="display:flex;align-items:center;gap:4px"><input type="radio" name="mimicXingTai" value="2d" id="mimicXt2d"/> ${escapeHtml(tOr('mimic.xt2d', '2D 形态'))}</label>
               <label style="display:flex;align-items:center;gap:4px"><input type="radio" name="mimicXingTai" value="3d" id="mimicXt3d"/> ${escapeHtml(tOr('mimic.xt3d', '3D 形态'))}</label>
             </div>
             <div class="jingYin" style="margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span id="mimicMoXingTiShi">${escapeHtml(tOr('mimic.characterHint2d', '把模型放进 resources/mimic/characters/ 会被自动识别（静态图 / 精灵图 / Live2D）。'))}</span>
-              <button class="anNiuXiao" id="anNiuMimicMoXingMuLu" title="${escapeHtml(tOr('mimic.openModelDir', '打开模型文件夹'))}" style="width:24px;height:24px;padding:0;display:inline-flex;align-items:center;justify-content:center;flex:none">
+              <button class="anNiuXiao" id="anNiuMimicMoXingMuLu" title="${escapeHtml(tOr('mimic.openModelDir', '打开模型文件夹') + '\n' + tOr('mimic.characterHint2d', '把模型放进 resources/mimic/characters/ 会被自动识别（静态图 / 精灵图 / Live2D）。'))}" style="width:24px;height:24px;padding:0;display:inline-flex;align-items:center;justify-content:center;flex:none">
                 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>
               </button>
             </div>
             <!-- 形象网格：预设 + 模型文件夹（3 行滚动） -->
             <div id="mimicNeiZhiJi" class="mimicMoXingKu"></div>
-            <!-- 手捏参数 -->
-            <div id="mimicShouNie" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+            <!-- R223 项10：捏脸定制入口可见（有标题、可折叠、默认展开） -->
+            <div style="margin-top:10px">
+              <button type="button" id="anNiuMimicShouNie" class="anNiuXiao" aria-expanded="true" title="${escapeHtml(tOr('mimic.faceSculptTip', '调颜色/眼型/嘴型/耳朵/尾巴（2D）或头大小/胖瘦（3D），捏出专属形象；动任一参数即脱离预设成品。'))}" style="display:inline-flex;align-items:center;gap:6px">
+                <span aria-hidden="true">🎨</span><span>${escapeHtml(tOr('mimic.faceSculpt', '捏脸定制'))}</span><span class="jingYin" id="mimicShouNieZheDie" aria-hidden="true">▾</span>
+              </button>
+              <div id="mimicShouNie" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+            </div>
           </div>
 
           <div class="field" style="margin-top:8px">
-            <label>${escapeHtml(tOr('mimic.actions', '动作模型'))}</label>
+            <label title="${escapeHtml(tOr('mimic.actionsTip', '预设动作 2D/3D 通用；文件夹动作模型为 2D 精灵动画（3D 下映射到预设动作）。点击=启用/禁用，右键=触发词/删除。'))}">${escapeHtml(tOr('mimic.actions', '动作模型'))}</label>
             <!-- R222 项8：提示合并一行 + 文件夹图标；网格显示全部动作（3 行滚动）；点击=启用/禁用，右键=触发词/停用/删除；独立触发词区已删 -->
             <div class="jingYin" style="margin:4px 0 6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span>${escapeHtml(tOr('mimic.actionsHintLine', '把动作放进 resources/mimic/actions/ 后在此启用。'))}</span>
-              <button class="anNiuXiao" id="anNiuMimicDongZuoMuLu" title="${escapeHtml(tOr('mimic.openActionsDir', '打开动作文件夹'))}" style="width:24px;height:24px;padding:0;display:inline-flex;align-items:center;justify-content:center;flex:none">
+              <button class="anNiuXiao" id="anNiuMimicDongZuoMuLu" title="${escapeHtml(tOr('mimic.openActionsDir', '打开动作文件夹') + '\n' + tOr('mimic.actionsHintLine', '把动作放进 resources/mimic/actions/ 后在此启用。'))}" style="width:24px;height:24px;padding:0;display:inline-flex;align-items:center;justify-content:center;flex:none">
                 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>
               </button>
             </div>
             <div id="mimicDongZuoJi" class="mimicMoXingKu">${escapeHtml(tOr('mimic.actionsEmpty', '未发现动作。把动作放进模型文件夹的动作目录后会出现在这里。'))}</div>
           </div>
 
-          <!-- 音视频设备是**全局设置**（设置→功能→音视频）：拟态、聊天麦克风与喇叭都用那一套。 -->
-          <div class="field" style="margin-top:8px" id="mimicSheBeiKuai">
-            <div class="jingYin">${escapeHtml(tOr('mimic.devicesMoved', '音视频设备（麦克风 / 播放器 / 音量）是全局设置，拟态、聊天麦克风与喇叭都用那一套。'))}</div>
-          </div>
 
           <div class="field" style="margin-top:8px">
-            <label>${escapeHtml(tOr('mimic.tasks', '定时任务'))}</label>
-            <div class="jingYin">${escapeHtml(tOr('mimic.tasksHint', '可以对拟态说「每天早上八点提醒我喝水」这类话，它会建定时任务。每条任务可单独设置语音 / 字幕 / 音乐提醒。'))}</div>
+            <label title="${escapeHtml(tOr('mimic.tasksHint', '可以对拟态说「每天早上八点提醒我喝水」这类话，它会建定时任务。每条任务可单独设置语音 / 字幕 / 音乐提醒。'))}">${escapeHtml(tOr('mimic.tasks', '定时任务'))}</label>
             <div id="mimicDingShiJi" class="jingYin">—</div>
           </div>
         </div>
@@ -17609,38 +17560,30 @@ async function renderDashboard(host) {
 
         /* ══ R218：2D/3D 外观系统（内置模型库 + 手捏 + 动作触发词） ══ */
         (function mimicWaiGuanXiTong() {
-          /** 内置 2D 模型（10 个：SVG 参数组合） */
+          /* R223 项8：2D 预设缩减到 3 个 —— 牛马logo（品牌像素马）/ 大白 / 瓦特（灯泡精灵）。
+             成品 SVG 存 a.svg，hua2DSvg 直通；手捏参数仍在（改参数即脱离成品回到参数拼装）。 */
+          const LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" shape-rendering="crispEdges"><rect x="170" y="120" width="10" height="10" fill="#3E2723"/><rect x="180" y="130" width="10" height="20" fill="#3E2723"/><rect x="190" y="140" width="10" height="30" fill="#3E2723"/><rect x="180" y="170" width="10" height="10" fill="#3E2723"/><rect x="50" y="120" width="120" height="50" fill="#A0522D"/><rect x="80" y="140" width="60" height="30" fill="#C19A6B"/><rect x="50" y="170" width="20" height="30" fill="#A0522D"/><rect x="150" y="170" width="20" height="30" fill="#A0522D"/><rect x="50" y="200" width="20" height="10" fill="#1A1A1A"/><rect x="150" y="200" width="20" height="10" fill="#1A1A1A"/><rect x="40" y="20" width="140" height="100" fill="#A0522D"/><rect x="40" y="0" width="20" height="20" fill="#A0522D"/><rect x="160" y="0" width="20" height="20" fill="#A0522D"/><rect x="50" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="160" y="10" width="10" height="10" fill="#8B5A2B"/><rect x="70" y="10" width="80" height="20" fill="#3E2723"/><rect x="80" y="30" width="60" height="10" fill="#3E2723"/><rect x="90" y="40" width="40" height="10" fill="#3E2723"/><rect x="50" y="30" width="20" height="10" fill="#D2B48C" opacity=".55"/><rect x="50" y="40" width="10" height="10" fill="#D2B48C" opacity=".35"/><rect x="60" y="60" width="20" height="20" fill="#ffffff"/><rect x="140" y="60" width="20" height="20" fill="#ffffff"/><rect x="70" y="70" width="10" height="10" fill="#2b2b2b"/><rect x="140" y="70" width="10" height="10" fill="#2b2b2b"/><rect x="80" y="90" width="60" height="30" fill="#C19A6B"/><rect x="90" y="100" width="10" height="10" fill="#8B5A2B"/><rect x="120" y="100" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="110" width="20" height="10" fill="#8B5A2B"/></svg>';
+          const DABAI_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220"><ellipse cx="110" cy="208" rx="46" ry="8" fill="#000" opacity=".08"/><ellipse cx="86" cy="196" rx="16" ry="12" fill="#f4f4f0" stroke="#dcdcd6" stroke-width="2"/><ellipse cx="134" cy="196" rx="16" ry="12" fill="#f4f4f0" stroke="#dcdcd6" stroke-width="2"/><ellipse cx="52" cy="142" rx="15" ry="28" fill="#f7f7f3" stroke="#dcdcd6" stroke-width="2" transform="rotate(12 52 142)"/><ellipse cx="168" cy="142" rx="15" ry="28" fill="#f7f7f3" stroke="#dcdcd6" stroke-width="2" transform="rotate(-12 168 142)"/><ellipse cx="110" cy="148" rx="56" ry="50" fill="#fafaf7" stroke="#dcdcd6" stroke-width="2.5"/><ellipse cx="110" cy="162" rx="38" ry="30" fill="#f0f0ec" opacity=".7"/><circle cx="110" cy="142" r="7" fill="#ecece8" stroke="#d8d8d2" stroke-width="1.5"/><line x1="106" y1="142" x2="114" y2="142" stroke="#c8c8c2" stroke-width="2"/><circle cx="110" cy="78" r="42" fill="#fafaf7" stroke="#dcdcd6" stroke-width="2.5"/><ellipse cx="94" cy="60" rx="14" ry="8" fill="#fff" opacity=".7" transform="rotate(-18 94 60)"/><line x1="92" y1="78" x2="128" y2="78" stroke="#2b2b2b" stroke-width="2.5" stroke-linecap="round"/><circle cx="92" cy="78" r="5.5" fill="#2b2b2b"/><circle cx="128" cy="78" r="5.5" fill="#2b2b2b"/><circle cx="80" cy="90" r="5" fill="#f5c9c9" opacity=".5"/><circle cx="140" cy="90" r="5" fill="#f5c9c9" opacity=".5"/></svg>';
+          const WATE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220"><circle cx="110" cy="82" r="64" fill="#fff3c4" opacity=".45"/><circle cx="110" cy="82" r="56" fill="#fff8dc" opacity=".5"/><ellipse cx="96" cy="186" rx="11" ry="7" fill="#8a8a94"/><ellipse cx="124" cy="186" rx="11" ry="7" fill="#8a8a94"/><path d="M72 128 q-14 6 -12 20" stroke="#e8c86a" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="60" cy="150" r="8" fill="#ffdf8e" stroke="#e8c86a" stroke-width="2"/><path d="M148 128 q14 6 12 20" stroke="#e8c86a" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="160" cy="150" r="8" fill="#ffdf8e" stroke="#e8c86a" stroke-width="2"/><rect x="90" y="130" width="40" height="10" rx="3" fill="#c2c2cc"/><rect x="92" y="140" width="36" height="9" rx="3" fill="#a2a2ae"/><rect x="94" y="149" width="32" height="9" rx="3" fill="#c2c2cc"/><rect x="96" y="158" width="28" height="9" rx="3" fill="#a2a2ae"/><rect x="100" y="167" width="20" height="12" rx="5" fill="#7a7a86"/><circle cx="110" cy="82" r="50" fill="#ffe9a8" stroke="#e8c86a" stroke-width="3"/><circle cx="110" cy="88" r="36" fill="#fff3c4" opacity=".6"/><path d="M96 108 q6 -8 14 0 q6 -8 14 0" stroke="#d8a83a" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="94" cy="76" r="5" fill="#7a5a20"/><circle cx="126" cy="76" r="5" fill="#7a5a20"/><circle cx="92.5" cy="74" r="1.6" fill="#fff" opacity=".9"/><circle cx="124.5" cy="74" r="1.6" fill="#fff" opacity=".9"/><path d="M98 90 q12 11 24 0" stroke="#7a5a20" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="84" cy="88" r="5" fill="#f5b8a0" opacity=".55"/><circle cx="136" cy="88" r="5" fill="#f5b8a0" opacity=".55"/><ellipse cx="90" cy="56" rx="13" ry="8" fill="#fff" opacity=".65" transform="rotate(-20 90 56)"/><path d="M168 36 l0 14 M161 43 l14 0" stroke="#ffc93a" stroke-width="3" stroke-linecap="round"/><path d="M52 50 l0 10 M47 55 l10 0" stroke="#ffc93a" stroke-width="2.5" stroke-linecap="round"/></svg>';
           const NEI_ZHI_2D = [
-            { id: 'nz-01', ming: '橘猫', a: { zhuSe: '#f4a460', fuSe: '#efe3d2', yanXing: 'yuan', zuiXing: 'xiao', erDuo: true, weiBa: true, yanSe: '#2b2b2b', hongSe: '#e05a5a' } },
-            { id: 'nz-02', ming: '奶猫', a: { zhuSe: '#f5e6d3', fuSe: '#fdf6ee', yanXing: 'xiao', zuiXing: 'wei', erDuo: true, weiBa: true, yanSe: '#5b4636', hongSe: '#e8a0a0' } },
-            { id: 'nz-03', ming: '黑猫', a: { zhuSe: '#3a3a42', fuSe: '#4e4e58', yanXing: 'qiao', zuiXing: 'xiao', erDuo: true, weiBa: true, yanSe: '#ffe066', hongSe: '#ff7d7d' } },
-            { id: 'nz-04', ming: '白狐', a: { zhuSe: '#f9f4ea', fuSe: '#fdfaf3', yanXing: 'qiao', zuiXing: 'qiao', erDuo: true, weiBa: true, yanSe: '#c07a3a', hongSe: '#e07d7d' } },
-            { id: 'nz-05', ming: '柴犬', a: { zhuSe: '#e8b873', fuSe: '#f7e6c8', yanXing: 'hei', zuiXing: 'kai', erDuo: false, weiBa: true, yanSe: '#2b2b2b', hongSe: '#d97b6a' } },
-            { id: 'nz-06', ming: '浣熊', a: { zhuSe: '#8a8a92', fuSe: '#c8c8d0', yanXing: 'hei', zuiXing: 'xiao', erDuo: true, weiBa: true, yanSe: '#2b2b2b', hongSe: '#a05a5a' } },
-            { id: 'nz-07', ming: '奶龙', a: { zhuSe: '#a8d8a0', fuSe: '#e2f0da', yanXing: 'yuan', zuiXing: 'xiao', erDuo: true, weiBa: true, yanSe: '#2b5b2b', hongSe: '#e8a0a0' } },
-            { id: 'nz-08', ming: '小兔', a: { zhuSe: '#f7e0e8', fuSe: '#fdf2f6', yanXing: 'xing', zuiXing: 'wei', erDuo: true, weiBa: false, yanSe: '#7a4a6a', hongSe: '#f0a0b0' } },
-            { id: 'nz-09', ming: '企鹅', a: { zhuSe: '#3a4a6a', fuSe: '#f2f6fc', yanXing: 'yuan', zuiXing: 'ping', erDuo: false, weiBa: false, yanSe: '#1a2a4a', hongSe: '#e8a04a' } },
-            { id: 'nz-10', ming: '布偶', a: { zhuSe: '#d8b8a8', fuSe: '#faf2ec', yanXing: 'xiao', zuiXing: 'kai', erDuo: true, weiBa: true, yanSe: '#7a9ac8', hongSe: '#e8a0a0' } },
+            { id: 'nz-logo-2d', ming: '牛马logo', a: { svg: LOGO_SVG, zhuSe: '#A0522D', fuSe: '#C19A6B', yanSe: '#2b2b2b', hongSe: '#e05a5a', yanXing: 'yuan', zuiXing: 'xiao', erDuo: true, weiBa: true, teZheng: 'niuMa', zongSe: '#3E2723', wenSe: '#C19A6B', tiSe: '#1A1A1A' } },
+            { id: 'nz-daBai', ming: '大白', a: { svg: DABAI_SVG, zhuSe: '#fafaf7', fuSe: '#f0f0ec', yanSe: '#2b2b2b', hongSe: '#f5c9c9', yanXing: 'yuan', zuiXing: 'ping', erDuo: false, weiBa: false } },
+            { id: 'nz-waTe', ming: '瓦特', a: { svg: WATE_SVG, zhuSe: '#ffe9a8', fuSe: '#c2c2cc', yanSe: '#7a5a20', hongSe: '#f5b8a0', yanXing: 'yuan', zuiXing: 'xiao', erDuo: false, weiBa: false } },
           ];
-          /** 内置 3D 模型（10 个：程序化参数组合） */
+          /* R223 项8：3D 预设缩减到 2 个 —— logo牛马（鬃毛/吻部/蹄子）/ 牛马娘（拟人化：发盖刘海双马尾+连衣裙+马耳）。
+             teZheng 驱动 init3D 特征网格；yuLanSvg 给网格卡片真实预览。 */
+          const NIUMA_YULAN = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" shape-rendering="crispEdges"><rect x="40" y="30" width="140" height="110" fill="#A0522D"/><rect x="40" y="10" width="20" height="20" fill="#A0522D"/><rect x="160" y="10" width="20" height="20" fill="#A0522D"/><rect x="50" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="160" y="20" width="10" height="10" fill="#8B5A2B"/><rect x="70" y="20" width="80" height="20" fill="#3E2723"/><rect x="80" y="40" width="60" height="10" fill="#3E2723"/><rect x="60" y="70" width="20" height="20" fill="#ffffff"/><rect x="140" y="70" width="20" height="20" fill="#ffffff"/><rect x="70" y="80" width="10" height="10" fill="#2b2b2b"/><rect x="140" y="80" width="10" height="10" fill="#2b2b2b"/><rect x="80" y="100" width="60" height="40" fill="#C19A6B"/><rect x="90" y="110" width="10" height="10" fill="#8B5A2B"/><rect x="120" y="110" width="10" height="10" fill="#8B5A2B"/><rect x="100" y="125" width="20" height="10" fill="#8B5A2B"/><rect x="50" y="150" width="120" height="40" fill="#8B5A2B"/></svg>';
+          const NIANG_YULAN = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220"><ellipse cx="52" cy="140" rx="15" ry="36" fill="#5a3a22"/><ellipse cx="168" cy="140" rx="15" ry="36" fill="#5a3a22"/><circle cx="110" cy="100" r="62" fill="#5a3a22"/><path d="M62 48 L48 8 L88 34 Z" fill="#5a3a22"/><path d="M66 42 L58 20 L82 36 Z" fill="#f0b8a0"/><path d="M158 48 L172 8 L132 34 Z" fill="#5a3a22"/><path d="M154 42 L162 20 L138 36 Z" fill="#f0b8a0"/><circle cx="110" cy="110" r="46" fill="#f7d9b8"/><circle cx="80" cy="74" r="18" fill="#5a3a22"/><circle cx="110" cy="66" r="20" fill="#5a3a22"/><circle cx="140" cy="74" r="18" fill="#5a3a22"/><ellipse cx="92" cy="106" rx="7" ry="9" fill="#2b2b2b"/><ellipse cx="128" cy="106" rx="7" ry="9" fill="#2b2b2b"/><circle cx="90" cy="103" r="2.4" fill="#fff"/><circle cx="126" cy="103" r="2.4" fill="#fff"/><path d="M100 126 q10 8 20 0" stroke="#c07a6a" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="78" cy="120" r="6" fill="#f5b8a0" opacity=".6"/><circle cx="142" cy="120" r="6" fill="#f5b8a0" opacity=".6"/><path d="M70 170 q40 26 80 0 l-8 34 q-32 16 -64 0 Z" fill="#A0522D"/></svg>';
           const NEI_ZHI_3D = [
-            { id: 'nz-11', ming: '团子', a: { zhuSe: '#f4a460', fuSe: '#efe3d2', touDa: 1, zhuang: 1, erDuo: true, weiBa: true } },
-            { id: 'nz-12', ming: '云朵', a: { zhuSe: '#f5f6fa', fuSe: '#e8ecf6', touDa: 1.15, zhuang: 1.2, erDuo: false, weiBa: false } },
-            { id: 'nz-13', ming: '小黑', a: { zhuSe: '#3a3a42', fuSe: '#50505c', touDa: 1, zhuang: 1, erDuo: true, weiBa: true } },
-            { id: 'nz-14', ming: '奶龙3D', a: { zhuSe: '#a8d8a0', fuSe: '#e2f0da', touDa: 1.1, zhuang: 1.15, erDuo: true, weiBa: true } },
-            { id: 'nz-15', ming: '雪球', a: { zhuSe: '#fdfefe', fuSe: '#eef4f8', touDa: 1.25, zhuang: 1.35, erDuo: false, weiBa: false } },
-            { id: 'nz-16', ming: '小鹿', a: { zhuSe: '#e0b878', fuSe: '#f7ecd8', touDa: 1, zhuang: 0.9, erDuo: true, weiBa: true } },
-            { id: 'nz-17', ming: '蓝鲸', a: { zhuSe: '#5a8ac8', fuSe: '#c8dcf4', touDa: 1.2, zhuang: 1.3, erDuo: false, weiBa: false } },
-            { id: 'nz-18', ming: '桃子', a: { zhuSe: '#f2b8c8', fuSe: '#fdeef2', touDa: 1.1, zhuang: 1.1, erDuo: true, weiBa: false } },
-            { id: 'nz-19', ming: '闪电', a: { zhuSe: '#e8c040', fuSe: '#faf0c8', touDa: 1, zhuang: 0.85, erDuo: true, weiBa: true } },
-            { id: 'nz-20', ming: '小魔', a: { zhuSe: '#7a5ac8', fuSe: '#e0d4f4', touDa: 1, zhuang: 1, erDuo: true, weiBa: true } },
-            /* R220：开源现成模型（three.js 官方示例 RobotExpressive，MIT 许可）—— 动画剪辑驱动（Idle/Wave/Dance/Jump…） */
-            { id: 'nz-glb-robot', ming: '机器人（开源）', a: { glbSrc: './mimic/characters/RobotExpressive.glb' } },
+            { id: 'nz-logo-3d', ming: '牛马logo', yuLanSvg: NIUMA_YULAN, a: { zhuSe: '#A0522D', fuSe: '#8B5A2B', touDa: 1.05, zhuang: 1.05, erDuo: true, weiBa: true, teZheng: 'niuMa', zongSe: '#3E2723', wenSe: '#C19A6B', tiSe: '#1A1A1A' } },
+            { id: 'nz-niuMaNiang', ming: '牛马娘', yuLanSvg: NIANG_YULAN, a: { zhuSe: '#f7d9b8', fuSe: '#efe3d2', touDa: 1.1, zhuang: 0.95, erDuo: true, weiBa: true, teZheng: 'niuMaNiang', faSe: '#5a3a22', qunSe: '#A0522D' } },
           ];
           const DONG_ZUO_ID = { '呼吸': 'huXi', '眨眼': 'zhaYan', '摇尾': 'yaoWei', '嘟嘴': 'duZui', '开心': 'kaiXin', '招手': 'zhaoshou', '点头': 'dianTou', '摇头': 'yaoTou', '歪头': 'waiTou', '蹦跳': 'bengTiao', '打瞌睡': 'keShui', '害羞': 'haiXiu', '生气': 'shengQi', '委屈': 'weiQu', '惊讶': 'jingYa', '思考': 'siKao', '转圈': 'zhuanQuan', '跳舞': 'tiaoWu', '鼓掌': 'guZhang', '挥手': 'huiShou', '欢迎': 'huanYing', '趴下': 'paXia', '起立': 'qiLi', '伸懒腰': 'shenLan', '打哈欠': 'daHaQian', '疑惑': 'yiHuo', '打滚': 'daGun', '睡觉': 'shuiJiao', '伸爪': 'shenZhua' };
           /** 2D 预览 SVG（与 mimic-render.js 同款） */
           /* R222 项9：预览同步 mimic-render.js 新 Q 版造型（大头小身 + 高光眼睛 + 腮红 + w 嘴） */
           function hua2DSvg(a) {
+            /* R223 项8：预设角色（牛马logo/大白/瓦特）用定稿成品，不走参数拼装 */
+            if (a && a.svg) return a.svg;
             const zhu = a.zhuSe || '#f4a460', fu = a.fuSe || '#e8e0d0', yanSe = a.yanSe || '#2b2b2b', hong = a.hongSe || '#e05a5a';
             const er = a.erDuo !== false, wei = a.weiBa !== false;
             const yan = {
@@ -17676,11 +17619,12 @@ async function renderDashboard(host) {
           function cun() { try { window.warmy.mimicWaiGuanShe?.(wg); } catch { /* noop */ } }
           function hua() {
             const xt = String(wg.xingTai || '2d');
-            /* R222 项6：提示文案随 2D/3D 切换（文件夹按钮同一行，始终可用） */
-            const tiShi = $('mimicMoXingTiShi');
-            if (tiShi) tiShi.textContent = xt === '3d'
+            /* R223 项12：提示文案随 2D/3D 切换 —— 移入文件夹按钮悬停气泡（内联说明已删） */
+            const tiShiWen = xt === '3d'
               ? tOr('mimic.characterHint3d', '把模型放进 resources/mimic/characters/ 会被自动识别（.glb / .gltf）。')
               : tOr('mimic.characterHint2d', '把模型放进 resources/mimic/characters/ 会被自动识别（静态图 / 精灵图 / Live2D）。');
+            const muLuAn = $('anNiuMimicMoXingMuLu');
+            if (muLuAn) muLuAn.title = tOr('mimic.openModelDir', '打开模型文件夹') + '\n' + tiShiWen;
             const r2 = document.querySelector('input[name="mimicXingTai"][value="' + xt + '"]');
             if (r2) r2.checked = true;
             const ji = $('mimicNeiZhiJi');
@@ -17688,9 +17632,12 @@ async function renderDashboard(host) {
               const list = xt === '3d' ? NEI_ZHI_3D : NEI_ZHI_2D;
               ji.innerHTML = list.map((m) => {
                 const xuan = String(wg.modelId || '') === m.id;
-                const yuLan = (m.a && m.a.glbSrc) ? '<span style="font-size:22px;line-height:52px">🤖</span>' : (xt === '2d'
-                  ? '<img src="data:image/svg+xml;utf8,' + encodeURIComponent(hua2DSvg(m.a)) + '" style="width:52px;height:52px;object-fit:contain"/>'
-                  : '<span style="font-size:20px;line-height:52px">' + escapeHtml(m.ming[0]) + '</span>');
+                /* R223 项8：3D 预设也有真实预览（yuLanSvg）；2D 走 hua2DSvg（成品 svg 直通） */
+                const yuLan = (m.a && m.a.glbSrc) ? '<span style="font-size:22px;line-height:52px">🤖</span>'
+                  : (m.yuLanSvg ? '<img src="data:image/svg+xml;utf8,' + encodeURIComponent(m.yuLanSvg) + '" style="width:52px;height:52px;object-fit:contain"/>'
+                    : (xt === '2d'
+                      ? '<img src="data:image/svg+xml;utf8,' + encodeURIComponent(hua2DSvg(m.a)) + '" style="width:52px;height:52px;object-fit:contain"/>'
+                      : '<span style="font-size:20px;line-height:52px">' + escapeHtml(m.ming[0]) + '</span>'));
                 return '<span class="mimicMoXingKa' + (xuan ? ' xuan' : '') + '" data-mimic-mx="' + escapeHtml(m.id) + '" title="' + escapeHtml(m.ming) + '">' + yuLan + '<span class="jingYin" style="font-size:11px">' + escapeHtml(m.ming) + '</span></span>';
               }).join('');
               ji.querySelectorAll('[data-mimic-mx]').forEach((ka) => {
@@ -17698,6 +17645,8 @@ async function renderDashboard(host) {
                   const m = list.find((x) => x.id === ka.getAttribute('data-mimic-mx'));
                   if (!m) return;
                   wg.modelId = m.id;
+                  /* R223 项8：先清旧角色成品/特征再合并新预设（避免上一位的 svg 残留） */
+                  delete wg.svg; delete wg.teZheng;
                   wg = Object.assign({}, wg, m.a);
                   delete wg.imgSrc; delete wg.extId; delete wg.kind; delete wg.sheetJson;
                   cun(); hua();
@@ -17722,6 +17671,8 @@ async function renderDashboard(host) {
                   else if (inp.type === 'range') { wg[k] = Number(inp.value); if (inp.nextElementSibling) inp.nextElementSibling.textContent = inp.value; }
                   else wg[k] = inp.value;
                   delete wg.modelId;
+                  /* R223 项8：动手手捏即脱离预设成品（svg/特征），回到参数拼装 */
+                  delete wg.svg; delete wg.teZheng;
                   cun(); hua();
                 });
               });
@@ -17754,8 +17705,22 @@ async function renderDashboard(host) {
             } catch { /* noop */ }
           }
           document.querySelectorAll('input[name="mimicXingTai"]').forEach((r) => {
-            r.onchange = () => { wg.xingTai = r.value; delete wg.modelId; delete wg.imgSrc; delete wg.extId; delete wg.kind; delete wg.sheetJson; cun(); hua(); };
+            r.onchange = () => { wg.xingTai = r.value; delete wg.modelId; delete wg.imgSrc; delete wg.extId; delete wg.kind; delete wg.sheetJson; delete wg.svg; cun(); hua(); }; /* R223 项8：teZheng 保留 ⇒ logo牛马跨 2D/3D 连续 */
           });
+          /* R223 项10：捏脸面板折叠开关（默认展开；重画不重置折叠态） */
+          const snBtn = $('anNiuMimicShouNie');
+          if (snBtn && !snBtn.dataset.bound) {
+            snBtn.dataset.bound = '1';
+            snBtn.onclick = () => {
+              const mian = $('mimicShouNie');
+              if (!mian) return;
+              const kai = mian.style.display === 'none';
+              mian.style.display = kai ? 'flex' : 'none';
+              snBtn.setAttribute('aria-expanded', kai ? 'true' : 'false');
+              const jian = $('mimicShouNieZheDie');
+              if (jian) jian.textContent = kai ? '▾' : '▸';
+            };
+          }
           /* R222 项8：独立触发词区已删（触发词改由动作网格右键菜单设置）；旧渲染/添加绑定随之移除 */
           (async () => {
             try { const r = await window.warmy.settingsGet?.(); wg = (r && r.settings && r.settings.mimicAppearance) || {}; } catch { wg = {}; }
@@ -18069,8 +18034,11 @@ async function renderDashboard(host) {
                 ? items.map((x) => {
                     const pei = mimicDongZuoPeiZhi[x.id] || {};
                     const qiYong = pei.enabled !== false;
-                    return '<span class="mimicMoXingKa' + (qiYong ? ' xuan' : '') + '" data-mimic-act="' + escapeHtml(x.id) + '" title="' + escapeHtml(x.desc || x.name) + '">' +
-                      '<span style="font-size:22px;line-height:52px">🎬</span><span class="jingYin" style="font-size:11px">' + escapeHtml(x.name) + '</span></span>';
+                    /* R223 项7：预设动作与文件夹动作一起显示（内置 🐾 / 外部 🎬），3 行滚动同外观网格 */
+                    const tu = x.builtin ? '🐾' : '🎬';
+                    const tip = (x.builtin ? tOr('mimic.actBuiltinTip', '内置动作（随程序提供，不可删除）') : tOr('mimic.actExternalTip', '动作模型（来自文件夹，可删除）')) + '：' + (x.desc || x.name);
+                    return '<span class="mimicMoXingKa' + (qiYong ? ' xuan' : '') + '" data-mimic-act="' + escapeHtml(x.id) + '" title="' + escapeHtml(tip) + '">' +
+                      '<span style="font-size:22px;line-height:52px">' + tu + '</span><span class="jingYin" style="font-size:11px">' + escapeHtml(x.name) + '</span></span>';
                   }).join('')
                 : escapeHtml(tOr('mimic.actionsEmpty', '未发现动作。把动作放进模型文件夹的动作目录后会出现在这里。'));
               he.querySelectorAll('[data-mimic-act]').forEach((ka) => {
@@ -18116,16 +18084,26 @@ async function renderDashboard(host) {
                     try { await window.warmy.mimicDongZuoCiShe?.({ ci: biao }); } catch { /* noop */ }
                   });
                   xiangMu(qiYong ? tOr('mimic.actMenuDisable', '停用') : tOr('mimic.actMenuEnable', '启用'), false, async () => { sheQiYong(!qiYong); });
-                  xiangMu(tOr('mimic.actMenuDelete', '删除'), true, async () => {
-                    const mingCheng = String((xiang && xiang.name) || id);
-                    const que = await uiConfirm(tOr('mimic.actDeleteConfirm', '确定删除动作「{name}」？其模型文件将被移除。').replace('{name}', mingCheng));
-                    if (!que) return;
-                    try {
-                      const r = await window.warmy.mimicActionDelete?.({ id });
-                      if (r && r.ok) { void huaDongZuoWangGe(); }
-                      else { uiAlert(tOr('mimic.actDeleteBundled', '内置动作不可删除。')); }
-                    } catch { /* noop */ }
-                  });
+                  if (xiang && xiang.builtin) {
+                    /* R223 项7：内置动作删不到 ⇒ 删除项灰显（气泡说明原因） */
+                    const b = document.createElement('button');
+                    b.textContent = tOr('mimic.actMenuDelete', '删除');
+                    b.disabled = true;
+                    b.title = tOr('mimic.actDeleteBundled', '内置动作不可删除。');
+                    b.style.cssText = 'border:none;background:transparent;text-align:left;padding:7px 10px;border-radius:6px;font-size:12px;color:var(--muted,#888);opacity:.55;cursor:not-allowed';
+                    cai.appendChild(b);
+                  } else {
+                    xiangMu(tOr('mimic.actMenuDelete', '删除'), true, async () => {
+                      const mingCheng = String((xiang && xiang.name) || id);
+                      const que = await uiConfirm(tOr('mimic.actDeleteConfirm', '确定删除动作「{name}」？其模型文件将被移除。').replace('{name}', mingCheng));
+                      if (!que) return;
+                      try {
+                        const r = await window.warmy.mimicActionDelete?.({ id });
+                        if (r && r.ok) { void huaDongZuoWangGe(); }
+                        else { uiAlert(tOr('mimic.actDeleteBundled', '内置动作不可删除。')); }
+                      } catch { /* noop */ }
+                    });
+                  }
                   document.body.appendChild(cai);
                   const guan = (ev) => { if (!cai.contains(ev.target)) { cai.remove(); document.removeEventListener('pointerdown', guan, true); } };
                   setTimeout(() => document.addEventListener('pointerdown', guan, true), 0);
@@ -19283,9 +19261,24 @@ async function renderDashboard(host) {
               if (jiuZhi && zai.some((d) => d.id === jiuZhi)) xuan.value = jiuZhi;
             } catch { /* noop */ }
           }
+          /* R223 项11：免确定勾选 —— 持久化；默认不勾（连接前询问） */
+          const mianGou = $('rcMianQueRen');
+          if (mianGou) {
+            try {
+              const st0 = await window.warmy.settingsGet?.();
+              mianGou.checked = !!(st0 && st0.settings && st0.settings.rcMianQueRen === true);
+            } catch { /* 默认不勾 */ }
+            mianGou.onchange = () => { try { window.warmy.settingsSave?.({ rcMianQueRen: !!mianGou.checked }); } catch { /* noop */ } };
+          }
           $('rcMyLianJie')?.addEventListener('click', async () => {
             const id = xuan.value;
             if (!id) { if (xiao) xiao.textContent = tOr('rc.pickFirst', '先选择一台在线设备'); return; }
+            /* R223 项11：未勾「免确定」⇒ 连接前确认 */
+            if (!(mianGou && mianGou.checked)) {
+              const dMing = (xuan.selectedOptions && xuan.selectedOptions[0] && xuan.selectedOptions[0].textContent) || id;
+              const que = await uiConfirm(tOr('rc.connectConfirm', '连接并控制设备「{m}」？').replace('{m}', dMing));
+              if (!que) return;
+            }
             if (xiao) xiao.textContent = tOr('rc.connecting', '正在直连…');
             const r = await window.warmy.rcLianJieWoDe?.({ deviceId: id, command: 'echo warmy-remote-ok' }).catch(() => null);
             if (r && r.ok === true) {
@@ -25420,6 +25413,8 @@ async function renderDashboard(host) {
       try { if (clearUnreadNewest(String(sid))) biandong = true; } catch { /* noop */ }
       if (!biandong) return;
       try { renderList(); } catch { /* noop */ }
+      /* R223 项5：未读清掉 ⇒ 横幅立刻收（同步摘要 + 刷新浮层，不等下一次滚动） */
+      try { syncPendingNewest(String(sid)); updateScrollAffordances($('xiaoXiJi')); } catch { /* noop */ }
     };
     document.addEventListener('click', (e) => {
       // ⚠️ 不能叫 `t`：会遮蔽 i18n 的 `t()`（门禁会报「renderer: 有局部 t = ...」）
@@ -32047,14 +32042,13 @@ async function renderDashboard(host) {
       const gongYingShangJi = state.providers || [];
       const editProvLabel = t('model.editProvider') || t('settings.providers');
       duiHuaTi.innerHTML = `<div class="field">
-          <label>${escapeHtml(t('model.pickProvider'))}</label>
+          <label title="${escapeHtml(t('model.fetchHint'))}">${escapeHtml(t('model.pickProvider'))}</label>
           <div style="display:flex;gap:6px;align-items:center">
             <select id="mpProv" style="flex:1">${gongYingShangJi.map((p, i) => `<option value="${i}">${escapeHtml(p.biaoQian || p.id)}</option>`).join('')}</select>
             <button class="anNiuXiao" id="mpFetch">${escapeHtml(t('model.fetch'))}</button>
             <button class="anNiuXiao" id="mpEditProv" title="${escapeHtml(editProvLabel)}">${escapeHtml(editProvLabel)}</button>
           </div>
         </div>
-        <div class="jingYin" style="font-size:12px">${escapeHtml(t('model.fetchHint'))}</div>
         <div class="moXingXuanZeLieBiao" id="mpLieBiao"></div>`;
       const listBox = $('mpLieBiao');
       const renderList = () => {
@@ -36872,6 +36866,36 @@ try {
           if (!keys.length || keys.some((k) => String(k).startsWith('provider'))) {
             await loadProvidersFromSettings?.();
           }
+          /* R223 项6：实例定义（名称/认知/模型链…）跨窗口同步 ——
+             独立窗以前只在打开时读一次，主界面改名后它永远显示旧名。 */
+          if (!keys.length || keys.includes('instances')) {
+            const cun = Array.isArray(s.instances) ? s.instances : [];
+            if (cun.length && Array.isArray(state.instances) && state.instances.length) {
+              const byId = new Map(cun.map((x) => [String((x && x.id) || ''), x]));
+              state.instances = state.instances.map((it) => {
+                const xin = byId.get(String((it && it.id) || ''));
+                if (!xin) return it;
+                return { ...it, ...xin, status: it.status }; /* 定义跟盘上；运行态留本窗口 */
+              });
+              try { renderList(); } catch { /* noop */ }
+              if (state.selectedChat) { try { renderChat({ keepScroll: true }); } catch { /* noop */ } }
+              /* 独立窗标题/聊天头跟随改名（任务栏名 = document.title 自动同步） */
+              if (state.chatWindow && state.subWindowPinnedId) {
+                const inst = state.instances.find((x) => String((x && x.id) || '') === String(state.subWindowPinnedId));
+                const xinMing = inst ? mingOf(inst) : '';
+                if (xinMing) {
+                  try { document.title = xinMing; } catch { /* noop */ }
+                  const brand = document.getElementById('biaoTiLanPinPai');
+                  if (brand) brand.textContent = xinMing;
+                  if (state.selectedChat && String(state.selectedChat.id) === String(state.subWindowPinnedId)) {
+                    state.selectedChat.ming = xinMing;
+                    const bt = document.getElementById('liaoTianBiaoTi');
+                    if (bt) bt.textContent = xinMing;
+                  }
+                }
+              }
+            }
+          }
           try { renderPage(); } catch { /* 不在设置页时忽略 */ }
         } catch { /* noop */ }
       })();
@@ -37175,23 +37199,28 @@ try {
           instanceAvatars[i.id] = { avatarPreset: i.avatarPreset || 0, avatarDataUrl: i.avatarDataUrl || '' };
         }
       });
-      window.warmy.stateSave({
+      const taiPayload = {
         chaJianJi: state.chaJianJi,
         groups: state.groups,
         chats: state.chats,
         instanceAvatars,
-        /**
-         * 牛马定义一并落盘（主进程 `warmy:taiBaoCun` 本来就收这个字段，只是以前没人发）：
-         * 不落盘 ⇒ 重启后主进程内存表是空的、本地也没有 ⇒ 整列牛马消失。
-         * `__suoLueTried` 是"缩略图读过一次"的临时标记，跟实例定义无关，不落盘。
-         */
-        instances: (state.instances || []).map((i) => {
-          const { __suoLueTried: _tmp, ...dingYi } = i || {};
-          return dingYi;
-        }),
         listSort: state.listSort,
         pinned: state.pinned || {},
-      }).catch(() => {});
+      };
+      /**
+       * 牛马定义一并落盘（主进程 `warmy:taiBaoCun` 本来就收这个字段，只是以前没人发）：
+       * 不落盘 ⇒ 重启后主进程内存表是空的、本地也没有 ⇒ 整列牛马消失。
+       * `__suoLueTried` 是"缩略图读过一次"的临时标记，跟实例定义无关，不落盘。
+       * R223 项6：**只有主窗口写实例定义** —— 独立窗的副本是只读镜像，
+       * 它的周期保存若带上旧副本，会把主窗口刚改的名称/认知/模型链覆盖回去。
+       */
+      if (!state.chatWindow) {
+        taiPayload.instances = (state.instances || []).map((i) => {
+          const { __suoLueTried: _tmp, ...dingYi } = i || {};
+          return dingYi;
+        });
+      }
+      window.warmy.stateSave(taiPayload).catch(() => {});
     };
     window.__saveState = saveState;
     /**

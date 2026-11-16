@@ -3729,5 +3729,16 @@
   "mimic.actMenuDelete": "Löschen",
   "mimic.actDeleteConfirm": "Aktion „{name}“ löschen? Die Modelldateien werden entfernt.",
   "mimic.actDeleteBundled": "Eingebaute Aktionen können nicht gelöscht werden.",
-  "container.devEnv.noneReady": "Kein Container verfügbar: bitte unter Einstellungen → Funktionen → Container prüfen und starten."
+  "container.devEnv.noneReady": "Kein Container verfügbar: bitte unter Einstellungen → Funktionen → Container prüfen und starten.",
+  "mimic.actBuiltinTip": "Eingebaute Aktion (mit der App geliefert, nicht löschbar)",
+  "mimic.actExternalTip": "Aktionsmodell (aus Ihrem Ordner, löschbar)",
+  "mimic.faceSculpt": "Gesichts-Designer",
+  "mimic.faceSculptTip": "Farben / Augenform / Mundform / Ohren / Schweif (2D) oder Kopfgröße / Fülle (3D) anpassen, um eine eigene Figur zu formen; jede Parameteränderung löst vom Preset-Entwurf.",
+  "mimic.characterTip": "Preset oder Ordnermodell anklicken, um es zu nutzen; unten im „Gesichts-Designer“ Parameter anpassen.",
+  "mimic.actionsTip": "Preset-Aktionen gelten für 2D und 3D; Ordner-Aktionsmodelle sind 2D-Sprite-Animationen (in 3D auf Preset-Aktionen abgebildet). Klick = aktivieren/deaktivieren, Rechtsklick = Auslösewort/Löschen.",
+  "mimic.subtitleShort": "Untertitel anzeigen",
+  "rc.mianQueRen": "Ohne Bestätigung",
+  "rc.mianQueRenTip": "Wenn angehakt, wird beim Verbinden mit eigenen Geräten keine Bestätigung mehr angezeigt; sonst wird vor jeder Verbindung gefragt.",
+  "rc.connectConfirm": "Gerät „{m}“ verbinden und steuern?",
+  "rc.myDevicesNew": "Eigene Geräte"
 }
