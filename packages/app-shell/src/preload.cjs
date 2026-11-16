@@ -833,10 +833,7 @@ diagNmKai: () => ipcRenderer.invoke('warmy:zhenDuanNmDaKai'), // R223 项2
   daoShe: (p) => ipcRenderer.invoke('warmy:daoShe', p),
   /** 各层提示词的**硬上限表**（第 53 轮项 2）：渲染层拿它挡住输入，数字只有主进程那一份 */
   tiShiShangXian: () => ipcRenderer.invoke('warmy:tiShiShangXian'),
-  tiShiBeiFenLieBiao: () => ipcRenderer.invoke('warmy:tiShiBeiFenLieBiao'),
-  tiShiBeiFenDu: (p) => ipcRenderer.invoke('warmy:tiShiBeiFenDu', p),
-  tiShiBeiFenHuiFu: (p) => ipcRenderer.invoke('warmy:tiShiBeiFenHuiFu', p),
-  tiShiJiaoDui: () => ipcRenderer.invoke('warmy:tiShiJiaoDui'),
+  /* R227 项1：提示词校对与回滚通道已删除 */
   shuDu: () => ipcRenderer.invoke('warmy:shuDu'),
   shuShe: (p) => ipcRenderer.invoke('warmy:shuShe', p),
   shuFuDu: () => ipcRenderer.invoke('warmy:shuFuDu'),

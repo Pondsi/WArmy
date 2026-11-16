@@ -22702,74 +22702,8 @@ function beiFenTiShi(lu: string): void {
     for (const f of all.slice(0, Math.max(0, all.length - 5))) fs.rmSync(path.join(dir, f), { force: true });
   } catch { /* 备份失败不挡保存 */ }
 }
-function tiShiWenJianKu(): Array<{ id: string; ming: string; lu: string }> {
-  return [
-    { id: 'dao', ming: '道', lu: daoLu() },
-    { id: 'shu', ming: '术', lu: shuLu() },
-    { id: 'jiaotiao', ming: '教条', lu: zuiGaoXinNianLu() },
-    { id: 'shufu', ming: '束缚', lu: shuFuLu() },
-    { id: 'yinxiang', ming: '印象', lu: yinXiangLu() },
-  ];
-}
-chuliIpc('warmy:tiShiBeiFenLieBiao', () => {
-  try {
-    return {
-      ok: true,
-      ceng: tiShiWenJianKu().map((x) => {
-        let items: Array<{ file: string; at: number; bytes: number }> = [];
-        try {
-          const dir = path.dirname(x.lu); const base = path.basename(x.lu) + '.bak-';
-          items = fs.readdirSync(dir).filter((f) => f.startsWith(base)).map((f) => {
-            const p = path.join(dir, f); const st = fs.statSync(p);
-            return { file: f, at: Number(f.slice(base.length)) || st.mtimeMs, bytes: st.size };
-          }).sort((a, b) => b.at - a.at).slice(0, 5);
-        } catch { /* 无备份 */ }
-        return { id: x.id, ming: x.ming, currentBytes: (() => { try { return fs.statSync(x.lu).size; } catch { return 0; } })(), backups: items };
-      }),
-    };
-  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
-chuliIpc('warmy:tiShiBeiFenDu', (_e, p0?: { id?: string; file?: string }) => {
-  try {
-    const x = tiShiWenJianKu().find((v) => v.id === String(p0?.id || ''));
-    if (!x) return { ok: false, error: 'unknown-layer' };
-    const file = String(p0?.file || '');
-    if (!file || file.includes('/') || file.includes('\\') || !file.startsWith(path.basename(x.lu) + '.bak-')) return { ok: false, error: 'bad-file' };
-    const p = path.join(path.dirname(x.lu), file);
-    return { ok: true, current: (() => { try { return fs.readFileSync(x.lu, 'utf8'); } catch { return ''; } })(), backup: fs.readFileSync(p, 'utf8'), file };
-  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
-chuliIpc('warmy:tiShiBeiFenHuiFu', (_e, p0?: { id?: string; file?: string }) => {
-  try {
-    const x = tiShiWenJianKu().find((v) => v.id === String(p0?.id || ''));
-    if (!x) return { ok: false, error: 'unknown-layer' };
-    const file = String(p0?.file || '');
-    if (!file || file.includes('/') || file.includes('\\') || !file.startsWith(path.basename(x.lu) + '.bak-')) return { ok: false, error: 'bad-file' };
-    const p = path.join(path.dirname(x.lu), file);
-    const backup = fs.readFileSync(p, 'utf8');
-    beiFenTiShi(x.lu);
-    fs.mkdirSync(path.dirname(x.lu), { recursive: true });
-    fs.writeFileSync(x.lu, backup, 'utf8');
-    audit?.log('prompt.backup-restored', { layer: x.id, file });
-    return { ok: true, text: backup };
-  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
-chuliIpc('warmy:tiShiJiaoDui', () => {
-  try {
-    const lang = dangQianYuYan();
-    const ceng: Array<{ id: string; ming: string; ziShu: number; shangXian: number; chao: boolean; empty: boolean; dup: number }> = [];
-    for (const x of tiShiWenJianKu()) {
-      let t = '';
-      try { t = fs.readFileSync(x.lu, 'utf8'); } catch { /* 空 */ }
-      const cengMing = x.id === 'dao' ? '道' : x.id === 'shu' ? '术' : x.id === 'jiaotiao' ? '教条' : x.id === 'shufu' ? '束缚' : '印象';
-      const j = chaoShangXian(cengMing, t, lang);
-      const lines = t.split('\n').map((l) => l.trim()).filter(Boolean);
-      const dup = lines.length - new Set(lines).size;
-      ceng.push({ id: x.id, ming: x.ming, ziShu: j.ziShu, shangXian: j.shangXian, chao: j.chao, empty: !t.trim(), dup });
-    }
-    return { ok: true, ceng };
-  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
+/* R227 项1：「提示词校对与回滚」的 4 个专用 IPC 与 tiShiWenJianKu 已按主人要求删除。
+   beiFenTiShi（覆盖前自动留最近 5 份备份）保留 —— 道/术/教条/束缚/印象各保存路径仍在用。 */
 
 /**
  * **每会话印象**（第 51 轮用户口径）：印象卡属于「每个聊天界面」，总结时按会话分别更新。

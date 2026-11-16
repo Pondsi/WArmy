@@ -1,13 +1,13 @@
 {
-  "version": "0.4.21",
-  "notes": "WArmy 0.4.21 — acceptance-feedback round (10 items): first-run screens no longer allow background/text selection (inputs and mnemonic words stay copyable); the running-avatar effect is redesigned as a softer flowing-light sweep with diffusion ripple while staying clearly visible; the in-progress thinking/execution block now reliably stays expanded while running and collapses after the final reply; fixed chat viewport jumping to the top when sending a message / starting execution / final reply (top-pinning removed: follow-bottom or keep position, new user message always returns to bottom); the appearance-model list no longer mixes in bundled defaults (builtin-default / RobotExpressive) and filters by 2D/3D form; the model-folder hint sits on one line with a folder icon and switches text with the 2D/3D toggle; the redundant format list line is removed; the actions area is one hint line + folder icon + a 3-row scrolling grid (click toggles enable with selected state, right-click menu: trigger word / disable / delete), and the separate trigger-word section is removed; fixed 3D models being completely invisible (the GLB render branch never called renderer.render) and stale canvas stacking, and redrew the 2D character as a cuter chibi; the mimic sub-window settings button now uses the same icon as the main rail. 10 new UI strings in all 27 locales, 7 obsolete keys removed. Verified by the full suite: 78 gates + 6 real-machine feature probes x 3 consecutive clean rounds. The in-app updater downloads only changed blocks with unchanged SHA-256 verification.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.21/WArmy-Setup-0.4.21.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.21/WArmy-Setup-0.4.21.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.21/WArmy-Setup-0.4.21.exe.warmyblocks",
-  "sha256": "eec0b911c88af8376d1c5ca0fa811a927e458f75c08a2b6ec844e82075175367",
-  "size": 305312827,
+  "version": "0.4.22",
+  "notes": "WArmy 0.4.22 — settings cleanup & relay provider round (4 items): removed the \"Prompt proofread & rollback\" card from Settings > Features (card, bindings, its four dedicated IPC handlers and styles deleted; the automatic pre-overwrite backup mechanism beiFenTiShi is kept on every prompt save path); the host-provider form is back to THREE explicit fields — address + port (default 59599) + credential (scheme auto-stripped, bare IPv6 auto-bracketed, fwnexp_v2_ credentials can still auto-fill address/port when the address is left empty); the built-in preset provider now carries the real address www.numumu.com:59599 (older empty-address preset records are upgraded in place); a real-network probe (probe-r227-net.mjs) tested DHT join against the default anchors and the preset relay: from the build environment the relay port 59599 is firewalled (only 443 open, serving a website, /api/health 404) and DHT anchors returned no contacts — the app-side DHT stack starts/listens/publishes correctly, so the remaining step is server-side: open TCP 59599 (relay) and UDP 62666 (DHT) on the host and ensure the FWArmy relay + DHT node are running; re-run the probe to verify. 2 new + 4 updated UI strings across all 27 locales. Verified by the scoped suite: 14 gates/probes x 3 consecutive clean rounds covering exactly the changed surfaces plus R224/R225/R226 contract regressions.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.22/WArmy-Setup-0.4.22.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.22/WArmy-Setup-0.4.22.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.22/WArmy-Setup-0.4.22.exe.warmyblocks",
+  "sha256": "78d775571666a32e79c0b6256649b07410e3d8c3a57b67b55533dbd326de069f",
+  "size": 305311017,
   "mandatory": false,
-  "publishedAt": "2026-11-16T21:47:35.233Z",
+  "publishedAt": "2026-11-16T22:28:36.251Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.21"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.22"
 }

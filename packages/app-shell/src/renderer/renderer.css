@@ -3054,15 +3054,7 @@ html { font-weight: var(--fw-ui, 400); }
 .ssTongGuo { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
 .ssZanTing { background: color-mix(in srgb, #c96a2b 16%, transparent); color: #c96a2b; font-weight: 600; }
 
-/* #109 提示词备份 diff / 回滚 */
-.tiShiBakHang { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 2px 0; }
-.tiShiBakHang .anNiuXiao { padding: 2px 8px; }
-.tiShiDiff {
-  max-height: 320px; overflow: auto; margin: 6px 0 0; padding: 8px 10px;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--card);
-  color: var(--ink); font-family: var(--font-mono); font-size: 11px; line-height: 1.5;
-  white-space: pre-wrap; word-break: break-word;
-}
+/* R227 项1：提示词校对卡样式已随卡片删除 */
 
 /* #112 邀请二维码 / 待审批 */
 .jrgHe { margin: 10px 0 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }

@@ -16082,7 +16082,7 @@ async function renderDashboard(host) {
               <span class="jingYin wangLuoFoldSummary" id="wangLuoProviderSummary" aria-live="polite"></span>
             </summary>
             <div class="wangLuoProviderBody">
-              <p class="jingYin wangLuoProviderHint">${escapeHtml(tOr('net.provider.hint', '这里登记“提供主机接入的服务商”。只需名称 + 凭证（地址从凭证解析）；凭证只交给主进程的 SecureKeyStore，界面不回显明文。'))}</p>
+              <p class="jingYin wangLuoProviderHint">${escapeHtml(tOr('net.provider.hint', '这里登记“提供主机接入的服务商”。名称 + 地址 + 端口（默认 59599）+ 凭证；凭证只交给主进程的 SecureKeyStore，界面不回显明文。'))}</p>
               <div class="wangLuoProviderList" id="wangLuoProviderList" role="list"
                    aria-label="${escapeHtml(tOr('net.provider.listAria', '主机服务商列表'))}"
                    data-max="1000" data-visible-rows="7" data-row-height="46"></div>
@@ -16091,7 +16091,13 @@ async function renderDashboard(host) {
                 <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.provider.name', '名称'))}</span>
                   <input id="wangLuoProviderName" type="text" maxlength="80" autocomplete="off" spellcheck="false"
                          placeholder="${escapeHtml(tOr('net.provider.namePlaceholder', '例如：家里主机'))}"/></label>
-                <!-- R224 项1：地址栏已删 —— FWArmy 凭证自带地址端口（fwnexp_v2_ 自动解析） -->
+                <!-- R227 项2：地址 + 端口（默认 59599）+ 凭证 三字段（fwnexp_v2_ 凭证可自动填地址端口） -->
+                <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.provider.address', '地址'))}</span>
+                  <input id="wangLuoProviderAddress" type="text" autocomplete="off" spellcheck="false"
+                         placeholder="host / IP / 域名（IPv6 用 [::1]）"/></label>
+                <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.provider.port', '端口'))}</span>
+                  <input id="wangLuoProviderPort" type="number" min="1" max="65535" step="1"
+                         placeholder="59599"/></label>
                 <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.provider.credential', '凭证'))}</span>
                   <input id="wangLuoProviderCredential" type="password" autocomplete="new-password" spellcheck="false"/></label>
                 <div class="jingYin" id="wangLuoProviderCredentialHint"></div>
@@ -16105,7 +16111,7 @@ async function renderDashboard(host) {
                 <button type="button" class="anNiuXiao" id="anNiuProviderAdd">${escapeHtml(tOr('net.provider.add', '添加主机服务商'))}</button>
               </div>
               <div class="wangLuoHostMsg" id="wangLuoProviderMsg" role="status" aria-live="polite"></div>
-              <div class="jingYin wangLuoProviderAddressHint">${escapeHtml(tOr('net.provider.addressHint', '只需名称 + 凭证：fwnexp_v2_ 凭证自带地址端口，自动解析；其他格式凭证的地址在服务商侧，解析前显示「地址待解析」。'))}</div>
+              <div class="jingYin wangLuoProviderAddressHint">${escapeHtml(tOr('net.provider.addressHint', '地址 + 端口（默认 59599）+ 凭证。fwnexp_v2_ 凭证可自动填地址端口；地址不能重复。'))}</div>
             </div>
           </details>
 
@@ -16240,17 +16246,7 @@ async function renderDashboard(host) {
           <h2>${escapeHtml(t('join.blacklistTitle'))}</h2>
           <div id="heiMingDanHe" class="jingYin">${escapeHtml(t('join.blacklistEmpty'))}</div>
         </div>
-          <!-- #109：提示词校对 + 备份 diff / 回滚（道/术/教条/束缚/印象） -->
-          <div class="sheZhiSection sheZhiKa" id="tiShiJiaoDuiKa" data-sec="func">
-            <h2 title="${escapeHtml(tOr('prompt.tool.hint', '本地校对只查空值、超上限、重复行（不联网）；每次覆盖前自动留最近 5 份备份，可看差异并回滚。'))}">${escapeHtml(tOr('prompt.tool.title', '提示词校对与回滚'))}</h2>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0">
-              <select id="tiShiJiaoDuiCeng"></select>
-              <button class="anNiuXiao" id="anNiuTiShiJiaoDui">${escapeHtml(tOr('prompt.tool.check', '本地校对'))}</button>
-              <span class="jingYin" id="tiShiJiaoDuiJieGuo"></span>
-            </div>
-            <div id="tiShiBeiFenLieBiao" class="jingYin" style="font-size:11px"></div>
-            <pre id="tiShiDiff" class="tiShiDiff yinCang"></pre>
-          </div>
+          <!-- R227 项1：「提示词校对与回滚」卡已按主人要求删除（覆盖前自动备份机制保留在主进程） -->
           <!-- 最近删除（默认折叠）：48 小时内可恢复；只有这里的「永久删除」才二次确认 -->
           <div class="sheZhiSection sheZhiKa" id="laJiKuai" data-sec="func">
             <details id="laJiQu">
@@ -19600,79 +19596,7 @@ async function renderDashboard(host) {
           };
         }
       })();
-      // #109：提示词本地校对 + 备份 diff / 回滚
-      (function bindTiShiJiaoDui() {
-        const sel = $('tiShiJiaoDuiCeng');
-        const list = $('tiShiBeiFenLieBiao');
-        const out = $('tiShiJiaoDuiJieGuo');
-        const diff = $('tiShiDiff');
-        if (!sel || !list || !diff) return;
-        let data = null;
-        const diffHtml = (a, b) => {
-          const A = String(a || '').split('\n'), B = String(b || '').split('\n');
-          const n = Math.min(A.length, 300), m = Math.min(B.length, 300);
-          const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
-          for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
-            dp[i][j] = A[i] === B[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
-          }
-          const rows = [];
-          let i = 0, j = 0, plus = 0, minus = 0;
-          while (i < n || j < m) {
-            if (i < n && j < m && A[i] === B[j]) { rows.push('  ' + A[i]); i++; j++; }
-            else if (j < m && (i >= n || dp[i][j + 1] >= dp[i + 1][j])) { rows.push('+ ' + B[j]); j++; plus++; }
-            else { rows.push('- ' + A[i]); i++; minus++; }
-          }
-          return { text: rows.join('\n'), plus, minus };
-        };
-        const render = () => {
-          const c = (data && data.ceng || []).find((x) => x.id === sel.value);
-          if (!c) { list.textContent = ''; return; }
-          list.innerHTML = `<div style="margin:4px 0">${escapeHtml(c.ming)} · ${escapeHtml(tOr('prompt.tool.current', '当前'))} ${c.currentBytes || 0} B</div>`
-            + (c.backups.length
-              ? c.backups.map((b) => `<div class="tiShiBakHang"><span>${escapeHtml(TZ.loc(b.at))}</span><span class="jingYin">${b.bytes} B</span><button class="anNiuXiao" data-bak-view="${escapeHtml(b.file)}" data-bak-id="${escapeHtml(c.id)}">${escapeHtml(tOr('prompt.tool.viewDiff', '看差异'))}</button><button class="anNiuXiao" data-bak-restore="${escapeHtml(b.file)}" data-bak-id="${escapeHtml(c.id)}">${escapeHtml(tOr('prompt.tool.restore', '回滚'))}</button></div>`).join('')
-              : `<div>${escapeHtml(tOr('prompt.tool.noBackup', '还没有备份；下次保存/总结前会自动留一份。'))}</div>`);
-          diff.classList.add('yinCang');
-          diff.textContent = '';
-        };
-        const load = async () => {
-          data = await window.warmy.tiShiBeiFenLieBiao?.();
-          if (!data || !data.ok) { list.textContent = String((data && data.error) || 'ipc-unavailable'); return; }
-          const cur = sel.value;
-          const cengList = Array.isArray(data.ceng) ? data.ceng : [];
-          sel.innerHTML = cengList.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.ming)}</option>`).join('');
-          if (cur && cengList.some((c) => c.id === cur)) sel.value = cur;
-          render();
-        };
-        sel.onchange = render;
-        $('anNiuTiShiJiaoDui')?.addEventListener('click', async () => {
-          const r = await window.warmy.tiShiJiaoDui?.();
-          if (!r || !r.ok) { if (out) out.textContent = String((r && r.error) || 'ipc-unavailable'); return; }
-          if (out) {
-            const cengList = Array.isArray(r.ceng) ? r.ceng : [];
-            out.textContent = cengList.map((c) => `${c.ming}: ${c.chao ? '超上限' : '长度OK'}${c.empty ? ' · 空' : ''}${c.dup ? ' · 重复' + c.dup : ''}`).join(' | ');
-          }
-        });
-        list.addEventListener('click', async (e) => {
-          const b = e.target && e.target.closest && e.target.closest('[data-bak-view],[data-bak-restore]');
-          if (!b) return;
-          const id = b.getAttribute('data-bak-id') || '';
-          const file = b.getAttribute('data-bak-view') || b.getAttribute('data-bak-restore') || '';
-          if (b.hasAttribute('data-bak-view')) {
-            const r = await window.warmy.tiShiBeiFenDu?.({ id, file });
-            if (!r || !r.ok) { showToast(String((r && r.error) || t('common.error'))); return; }
-            const d = diffHtml(r.current, r.backup);
-            diff.textContent = d.text;
-            diff.classList.remove('yinCang');
-            showToast(tOr('prompt.tool.diffStat', '差异') + ` +${d.plus} / -${d.minus}`);
-            return;
-          }
-          if (!(await uiConfirm(tOr('prompt.tool.restoreConfirm', '用这份备份覆盖当前提示词？当前内容会先自动再备份一份。')))) return;
-          const r = await window.warmy.tiShiBeiFenHuiFu?.({ id, file });
-          showToast(r && r.ok ? tOr('prompt.tool.restored', '已回滚') : String((r && r.error) || t('common.error')));
-          void load();
-        });
-        void load();
-      })();
+      // R227 项1：bindTiShiJiaoDui 已随卡片删除（覆盖前自动备份 beiFenTiShi 仍在主进程各保存路径生效）
       // P0-6 白名单 D：列出自动加入的能力类别，可一键撤销
       (function bindNengLiWai() {
         const box = $('nengLiWaiLieBiao');
@@ -21784,13 +21708,15 @@ async function renderDashboard(host) {
     let rec = arr.find((p) => p && String(p.id) === YUSHE_PROVIDER_ID);
     if (!rec) {
       rec = {
-        id: YUSHE_PROVIDER_ID, name: tOr('net.provider.presetName', '预设服务商'), address: '',
-        hasCredential: true, credentialState: 'stored', invalidAddress: false, addressPending: true, builtin: true,
+        id: YUSHE_PROVIDER_ID, name: tOr('net.provider.presetName', '预设服务商'), address: 'www.numumu.com:59599',
+        hasCredential: true, credentialState: 'stored', invalidAddress: false, addressPending: false, builtin: true,
       };
       arr.unshift(rec);
     }
     rec.builtin = true;
     if (!rec.name) rec.name = tOr('net.provider.presetName', '预设服务商');
+    /* R227 项3：预设服务商地址 = www.numumu.com:59599（旧版空地址记录升级补齐） */
+    if (!rec.address) { rec.address = 'www.numumu.com:59599'; rec.addressPending = false; rec.invalidAddress = false; }
     /* 凭证进 SecureKeyStore（幂等覆盖；界面绝不读回明文） */
     try {
       const sv = window.warmy && window.warmy.secureKeySave;
@@ -22454,8 +22380,15 @@ async function renderDashboard(host) {
       ? t('net.provider.editTitle')
       : t('net.provider.addTitle');
     const name = $('wangLuoProviderName');
+    const addr = $('wangLuoProviderAddress');
+    const portEl = $('wangLuoProviderPort');
     const cred = $('wangLuoProviderCredential');
     if (name) name.value = rec ? rec.name : '';
+    /* R227 项2：地址/端口拆开回填（记录里是规范 host:port） */
+    const duo = rec ? String(rec.address || '') : '';
+    const m = duo.match(/^\[([^\]]+)\]:(\d+)$/) || duo.match(/^([^:]+):(\d+)$/);
+    if (addr) addr.value = rec ? (m ? (duo.startsWith('[') ? '[' + m[1] + ']' : m[1]) : duo) : '';
+    if (portEl) portEl.value = rec ? (m ? m[2] : '59599') : '59599';
     if (cred) cred.value = '';
     const hint = $('wangLuoProviderCredentialHint');
     if (hint) hint.textContent = rec && rec.hasCredential
@@ -22479,23 +22412,40 @@ async function renderDashboard(host) {
 
   async function netProviderSave() {
     const nameEl = $('wangLuoProviderName');
+    const addrEl = $('wangLuoProviderAddress');
+    const portEl = $('wangLuoProviderPort');
     const credEl = $('wangLuoProviderCredential');
     const cred = credEl ? String(credEl.value || '').trim() : '';
-    /* R224 项1：地址栏已删 —— 地址从凭证解析（fwnexp_v2_ 自带地址端口）；
-       不透明凭证：编辑保留原地址，新增标「地址待解析」。新增必填凭证。 */
+    /* R227 项2：地址 + 端口（默认 59599）+ 凭证。地址必填；fwnexp_v2_ 凭证在地址为空时自动填。 */
     const editId = netState.providerForm.mode === 'edit' ? netState.providerForm.id : '';
     const rec0 = editId ? netProviderFind(editId) : null;
+    let addrRaw = addrEl ? String(addrEl.value || '').trim().replace(/^https?:\/\//i, '') : '';
+    const portRaw = portEl ? String(portEl.value || '').trim() : '';
+    const portNum = /^\d+$/.test(portRaw) ? Number(portRaw) : 59599;
+    if (!addrRaw) {
+      const pure0 = netHostPure();
+      const pc = pure0 && typeof pure0.parseFwCredential === 'function' ? pure0.parseFwCredential(cred) : null;
+      if (pc && pc.ok) addrRaw = pc.address;
+      else if (rec0 && rec0.address) addrRaw = rec0.address;
+    }
+    if (!addrRaw) {
+      netSetProviderMsg(tOr('net.provider.addressRequired', '请填写地址（端口默认 59599）'), 'bad', true);
+      renderNetProviderForm();
+      return { ok: false, code: 'address-required' };
+    }
     if (!cred && !editId) {
-      netSetProviderMsg(tOr('net.provider.credRequired', '请填写凭证（地址从凭证解析，不再单独填写）'), 'bad', true);
+      netSetProviderMsg(tOr('net.provider.credRequired', '请填写凭证'), 'bad', true);
       renderNetProviderForm();
       return { ok: false, code: 'credential-required' };
     }
-    const input = { id: editId, name: nameEl ? nameEl.value : '', address: '', credential: cred };
-    const pure0 = netHostPure();
-    const pc = pure0 && typeof pure0.parseFwCredential === 'function' ? pure0.parseFwCredential(cred) : null;
-    if (pc && pc.ok) input.address = pc.address;
-    else if (rec0 && rec0.address) input.address = rec0.address;
-    if (!input.address && (cred || (rec0 && rec0.addressPending))) input.allowPendingAddress = true;
+    /* 端口拼接：地址已带端口则尊重原值；裸 IPv6 加方括号 */
+    let address = addrRaw;
+    const yiYouDuanKou = /^\[[^\]]+\]:\d+$/.test(addrRaw) || /^[^:]+:\d+$/.test(addrRaw);
+    if (!yiYouDuanKou) {
+      const luo = addrRaw.includes(':') && !addrRaw.startsWith('[') ? '[' + addrRaw + ']' : addrRaw;
+      address = luo + ':' + (portNum >= 1 && portNum <= 65535 ? portNum : 59599);
+    }
+    const input = { id: editId, name: nameEl ? nameEl.value : '', address, credential: cred };
     if (rec0 && rec0.builtin) input.builtin = true;
     const r = netProviderUpsert(input);
     if (!r.ok) {
