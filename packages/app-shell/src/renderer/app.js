@@ -17674,7 +17674,7 @@ async function renderDashboard(host) {
                   if (!m) return;
                   wg.modelId = m.id;
                   wg = Object.assign({}, wg, m.a);
-                  delete wg.imgSrc; delete wg.extId;
+                  delete wg.imgSrc; delete wg.extId; delete wg.kind; delete wg.sheetJson;
                   cun(); hua();
                 };
               });
@@ -17718,6 +17718,8 @@ async function renderDashboard(host) {
                   ka.onclick = () => {
                     wg.extId = String(x.id || ''); wg.imgSrc = String(x.file || '');
                     wg.xingTai = (x.kind === 'glb' || x.kind === 'vrm') ? '3d' : '2d';
+                    /* R221：精灵图/Live2D 识别传递（渲染层按 kind 走帧动画/诚实降级） */
+                    wg.kind = String(x.kind || 'image'); wg.sheetJson = String(x.json || '');
                     delete wg.modelId;
                     cun(); hua();
                   };
@@ -17728,7 +17730,7 @@ async function renderDashboard(host) {
             huaDongZuoCi();
           }
           document.querySelectorAll('input[name="mimicXingTai"]').forEach((r) => {
-            r.onchange = () => { wg.xingTai = r.value; delete wg.modelId; delete wg.imgSrc; delete wg.extId; cun(); hua(); };
+            r.onchange = () => { wg.xingTai = r.value; delete wg.modelId; delete wg.imgSrc; delete wg.extId; delete wg.kind; delete wg.sheetJson; cun(); hua(); };
           });
           async function huaDongZuoCi() {
             const ji = $('mimicDongZuoCiJi');

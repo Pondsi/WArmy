@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld('warmyMimic', {
   yuYinFenPian: (p) => ipcRenderer.invoke('warmy:mimicYuYinFenPian', p),
   yuYinMoShiQu: () => ipcRenderer.invoke('warmy:mimicYuYinMoShi'),
   onPlay: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicPlay', h); return () => ipcRenderer.removeListener('warmy:mimicPlay', h); },
+  /** R221：精灵图 JSON 读取（帧动画）/ 动作模型列表（外部动作注册） */
+  sheetJson: (p) => ipcRenderer.invoke('warmy:mimicSheetJson', p),
+  dongZuoLieBiao: () => ipcRenderer.invoke('warmy:mimicDongZuoLieBiao'),
   /** R218：动作触发与说话口型 */
   onDongZuo: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicDongZuo', h); return () => ipcRenderer.removeListener('warmy:mimicDongZuo', h); },
   onKouXing: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicKouXing', h); return () => ipcRenderer.removeListener('warmy:mimicKouXing', h); },

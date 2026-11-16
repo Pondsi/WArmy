@@ -1,13 +1,13 @@
 {
-  "version": "0.4.15",
-  "notes": "WArmy 0.4.15 — fixes custom-provider chat failing with \"object is not iterable\": the process-isolated chat engine no longer proxies its synchronous compression/budget callbacks across processes, and streamed responses are consumed as complete payloads, so chat and call-chain fallback work for every provider; fetching a provider model list now validates chat usability with a minimal probe (insufficient balance/quota is not a failure, while invalid keys/endpoints block adding the provider); abnormal-session badges show only the exclamation mark in the theme accent color (no overlapping unread count); in the model management card, enabling Smart Mode greys out and disables the call-chain section and the label drops its parenthetical; privacy gate hardening (no hardcoded workspace paths in scripts). Verified by the full gate suite: 78 gates x 3 consecutive clean rounds (234 checks, 0 failures, 0 flakes). The in-app updater downloads only changed blocks with unchanged SHA-256 verification.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.15/WArmy-Setup-0.4.15.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.15/WArmy-Setup-0.4.15.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.15/WArmy-Setup-0.4.15.exe.warmyblocks",
-  "sha256": "397084beaa51772cc9c8dbb225ac090a9cff477a9cacd5f1870614b87a7c0f97",
-  "size": 305213883,
+  "version": "0.4.16",
+  "notes": "WArmy 0.4.16 — mimic (desktop companion) completion round: sprite-sheet models now really animate (frame JSON wired to the renderer with fps-based time stepping, relative frame paths resolved, safe JSON read confined to the mimic model directories); external action packs are registered and playable (previously silently ignored), disabled actions are filtered on the AI action path just like the voice path, and enabled external actions plus user trigger words are injected into the mimic prompt so the model knows them; fixes a latent IPC sender-whitelist gap that silently rejected all mimic-window invoke channels (voice interaction chunks, mode query, action list, sheet JSON) — mimic voice interaction works again; 36 new mimic UI strings registered in all 27 locales and obsolete keys removed; Live2D models degrade honestly to a placeholder with a notice instead of showing a broken image (full Live2D rendering still pending the Cubism runtime). Test scaffolding stabilized (bounded polling instead of fixed sleeps; pixel-sampling retry without threshold changes). Verified by the full suite: 78 gates + 6 real-machine feature probes x 3 consecutive clean rounds. The in-app updater downloads only changed blocks with unchanged SHA-256 verification.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.16/WArmy-Setup-0.4.16.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.16/WArmy-Setup-0.4.16.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.16/WArmy-Setup-0.4.16.exe.warmyblocks",
+  "sha256": "d9805fca5f17155d475f4bb247a0ac52f4cfd12385e3fe06d91b683cf44198e5",
+  "size": 305235278,
   "mandatory": false,
-  "publishedAt": "2026-11-16T00:20:15.603Z",
+  "publishedAt": "2026-11-16T07:48:40.823Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.15"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.16"
 }

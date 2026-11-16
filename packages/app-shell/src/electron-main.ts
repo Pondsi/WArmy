@@ -12369,8 +12369,8 @@ function mimicGen(): { chars: string; actions: string; users: string } {
 }
 
 /** 扫描人物模型（静态图 / 精灵图 JSON / Live2D） */
-function mimicSaoRenWu(): Array<{ id: string; name: string; file: string; kind: string }> {
-  const out: Array<{ id: string; name: string; file: string; kind: string }> = [];
+function mimicSaoRenWu(): Array<{ id: string; name: string; file: string; kind: string; json?: string }> {
+  const out: Array<{ id: string; name: string; file: string; kind: string; json?: string }> = [];
   const roots: string[] = [];
   try { roots.push(path.join(app.getPath('userData'), 'mimic', 'characters')); } catch { /* noop */ }
   try { roots.push(path.join(__dirname, 'renderer', 'mimic', 'characters')); } catch { /* noop */ }
@@ -12392,7 +12392,7 @@ function mimicSaoRenWu(): Array<{ id: string; name: string; file: string; kind: 
           const d = JSON.parse(fs.readFileSync(fp, 'utf8'));
           const sheet = String(d.sheet || d.image || n.replace(/\.json$/i, '.png'));
           const sheetRef = isBundled ? './mimic/characters/' + sheet : 'file:///' + path.join(path.dirname(fp), sheet).replace(/\\/g, '/').replace(/^\/+/, '');
-          out.push({ id: n.replace(/\.json$/i, ''), name: String(d.name || n.replace(/\.json$/i, '')), file: sheetRef, kind: 'sheet' });
+          out.push({ id: n.replace(/\.json$/i, ''), name: String(d.name || n.replace(/\.json$/i, '')), file: sheetRef, kind: 'sheet', json: ref });
         } catch { /* 坏 json 跳过 */ }
       } else if (['.glb', '.gltf', '.vrm'].includes(ext)) {
         /* R218：3D 模型（glTF/GLB/VRM）识别登记；渲染器按形态选择 */
@@ -12441,7 +12441,23 @@ function mimicSaoDongZuo(): Array<{ id: string; name: string; desc: string; trig
 }
 
 chuliIpc('warmy:mimicRenWuLieBiao', () => ({ ok: true, items: mimicSaoRenWu() }));
-chuliIpc('warmy:mimicDongZuoLieBiao', () => ({ ok: true, items: mimicSaoDongZuo() }));
+chuliIpc('warmy:mimicDongZuoLieBiao', () => ({ ok: true, items: mimicSaoDongZuo() }), ['mimic.html']);
+/* R221：精灵图 JSON 读取 —— 渲染层帧动画用；只允许拟态模型目录内的文件（不开放任意路径） */
+chuliIpc('warmy:mimicSheetJson', (_e, p0?: { src?: string }) => {
+  try {
+    let src = String(p0?.src || '').trim();
+    if (!src) return { ok: false, error: 'empty-src' };
+    if (src.startsWith('file:///')) src = decodeURIComponent(src.slice('file:///'.length));
+    else if (src.startsWith('./mimic/')) src = path.join(__dirname, 'renderer', src.slice(2));
+    const resolved = path.resolve(src);
+    const roots = [path.resolve(path.join(app.getPath('userData'), 'mimic')), path.resolve(path.join(__dirname, 'renderer', 'mimic'))];
+    if (!roots.some((r) => resolved === r || resolved.startsWith(r + path.sep))) return { ok: false, error: 'outside-mimic-dir' };
+    if (!/\.json$/i.test(resolved)) return { ok: false, error: 'not-json' };
+    const text = fs.readFileSync(resolved, 'utf8');
+    if (text.length > 2_000_000) return { ok: false, error: 'too-large' };
+    return { ok: true, json: text };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+}, ['mimic.html']);
 /* R218：删除「看一眼（截本应用窗口）」功能 —— 拟态改由互动中理解意图来截**全屏**，
  * 见 mimicZhuoMianJieTu（本区块下方）。旧通道不再注册。 */
 
@@ -12486,7 +12502,7 @@ chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
     } else if (cap) {
       const list = mimicSaoRenWu();
       const hit = list.find((x) => x.id === cap) || list[0];
-      if (hit) { try { mimicWin.webContents.send('warmy:mimicSetTi', { src: hit.file }); } catch { /* noop */ } }
+      if (hit) { try { mimicWin.webContents.send('warmy:mimicSetTi', { src: hit.file, kind: hit.kind, sheetJson: (hit as { json?: string }).json || '' }); } catch { /* noop */ } }
       else { try { mimicWin.webContents.send('warmy:mimicSetTi', moRenWaiGuan); } catch { /* noop */ } }
     } else {
       try { mimicWin.webContents.send('warmy:mimicSetTi', moRenWaiGuan); } catch { /* noop */ }
@@ -12602,7 +12618,7 @@ function mimicYuYinPeiZhi(): { moShi: string; ci: string[]; panDuan: string } {
 chuliIpc('warmy:mimicYuYinMoShi', () => {
   const pz = mimicYuYinPeiZhi();
   return { ok: true, moShi: pz.moShi, ci: pz.ci };
-});
+}, ['mimic.html']);
 
 /** 拟态当前模型：设置页「当前模型」优先，否则调用链第一个未禁用，否则回退全局默认 */
 function mimicDangQianMoXing(): string {
@@ -12658,7 +12674,19 @@ async function mimicHuiHuaShuo(text: string): Promise<void> {
     /* R218：解析回复里的【动作:名字】→ 播放动作；【动作:名字】行本身不进字幕 */
     const dongZuoMing = /【动作[:：]\s*([^】]+)】/.exec(String(text || ''));
     if (dongZuoMing && mimicWin && !mimicWin.isDestroyed()) {
-      try { mimicWin.webContents.send('warmy:mimicDongZuo', { id: String(dongZuoMing[1] || '').trim() }); } catch { /* noop */ }
+      const dzMing = String(dongZuoMing[1] || '').trim();
+      /* R221：外部动作（动作模型）被禁用时不播放 —— 与语音触发词路径同口径；内置动作无启用概念不受影响 */
+      let beiJinYong = false;
+      try {
+        const wai = mimicSaoDongZuo().find((x) => x.name === dzMing || x.id === dzMing);
+        if (wai) {
+          const pei = ((settingsStore?.load() as { mimicActions?: Record<string, { enabled?: boolean }> } | undefined)?.mimicActions) || {};
+          const peiXiang = pei[wai.id];
+          if (peiXiang && peiXiang.enabled === false) beiJinYong = true;
+        }
+      } catch { /* 查不到配置按启用 */ }
+      if (beiJinYong) { try { audit?.log('mimic.action-disabled', { ming: dzMing.slice(0, 20) }); } catch { /* noop */ } }
+      else { try { mimicWin.webContents.send('warmy:mimicDongZuo', { id: dzMing }); } catch { /* noop */ } }
     }
     const wenBen = String(text || '').replace(/【动作[:：][^】]*】/g, '').trim();
     if (!wenBen) return;
@@ -12793,7 +12821,7 @@ chuliIpc('warmy:mimicYuYinFenPian', async (_e, p0?: { dataUrl?: string; ext?: st
       mimicYuYinZai = false;
     }
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
+}, ['mimic.html']);
 
 /** 智能模式：没有判断模型时，拟态当前模型也要能当判断模型用 —— 渲染层下拉缺省值从这里读 */
 chuliIpc('warmy:daKaiNiTaiSheZhi', () => {
@@ -15814,6 +15842,19 @@ async function zhenZhengFaSongBen(
               (sj && sj.niCheng) ? '【拟态 · 社交昵称】' + sj.niCheng : '',
               '【拟态 · 看屏幕】你可以**只在确实需要看屏幕时**在回复里单独写一行【看屏幕】：宿主会把当前屏幕截图放进你的下一轮输入，之后你能描述看到的内容。不需要看屏幕就别写。',
               '【拟态 · 动作】你可以在回复里单独写一行【动作:名字】来表达情绪/行为（如【动作:开心】【动作:摇尾】【动作:点头】【动作:疑惑】【动作:挥手】）。可用的动作名：呼吸、眨眼、摇尾、嘟嘴、开心、招手、点头、摇头、歪头、蹦跳、打瞌睡、害羞、生气、委屈、惊讶、思考、转圈、跳舞、鼓掌、挥手、欢迎、趴下、起立、伸懒腰、打哈欠、疑惑、打滚、睡觉、伸爪。不写就不动（宿主不会自己猜）。',
+              (() => {
+                /* R221：外部动作包（启用者）与用户触发词注入 —— 之前模型根本不知道有这些动作（R218 遗留） */
+                try {
+                  const pei = ((settingsStore?.load() as { mimicActions?: Record<string, { enabled?: boolean }> } | undefined)?.mimicActions) || {};
+                  const wai = mimicSaoDongZuo().filter((x) => { const p = pei[x.id]; return !(p && p.enabled === false); }).slice(0, 20);
+                  const ciBiao = (settingsStore?.load() as { mimicActionTriggers?: Record<string, string> } | undefined)?.mimicActionTriggers || {};
+                  const ciHang = Object.keys(ciBiao).slice(0, 20).map((c) => '「' + c + '」→' + String(ciBiao[c] || '')).join('、');
+                  const parts: string[] = [];
+                  if (wai.length) parts.push('【拟态 · 外部动作】用户安装了这些动作模型（已启用），也可用【动作:名字】播放：' + wai.map((x) => x.name + (x.trigger ? '（触发提示：' + x.trigger.slice(0, 60) + '）' : '')).join('、') + '。');
+                  if (ciHang) parts.push('【拟态 · 触发词】用户设置了这些触发词（语音/文字命中时宿主自动播放对应动作，你不需要重复播放）：' + ciHang + '。');
+                  return parts.join('\n\n');
+                } catch { return ''; }
+              })(),
               '（语音互动场景回复控制在 80 字以内。）',
             ].filter(Boolean).join('\n\n');
             shenFenTou.push({ role: 'system', content: zhuo } as LiaoTianXiaoXi);

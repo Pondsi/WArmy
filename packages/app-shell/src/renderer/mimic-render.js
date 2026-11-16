@@ -334,7 +334,22 @@
     yi._dzTimer = setTimeout(() => { try { yi.classList.remove('dz2d', 'dz-' + id); } catch { /* noop */ } }, 3200);
   }
 
-  /** 播放动作（3D 骨骼关键帧 / 2D 图层类） */
+  /* R221：外部动作包注册（动作模型目录扫描结果）—— 之前外部动作 id 进 boFang 恒 return false，AI/触发词都播不了 */
+  function zhuCeWaiBuDongZuo() {
+    try {
+      if (!window.warmyMimic || !window.warmyMimic.dongZuoLieBiao) return;
+      window.warmyMimic.dongZuoLieBiao().then((r) => {
+        try {
+          for (const x of ((r && r.items) || [])) {
+            const id = String(x.id || '');
+            if (!id || DONG_ZUO[id]) continue;
+            DONG_ZUO[id] = { ming: String(x.name || id), lei: 'ext', ms: Number(x.duration) || 1500, file: String(x.file || ''), zhiLing: 'trigger' };
+          }
+        } catch { /* noop */ }
+      }).catch(() => { /* noop */ });
+    } catch { /* noop */ }
+  }
+  /** 播放动作（3D 骨骼关键帧 / 2D 图层类 / R221 外部动作精灵图） */
   function boFang(id) {
     let k = String(id || '');
     if (!DONG_ZUO[k]) {
@@ -342,6 +357,17 @@
       const hit = Object.keys(DONG_ZUO).find((x) => DONG_ZUO[x] && DONG_ZUO[x].ming === k);
       if (!hit) return false;
       k = hit;
+    }
+    /* R221：外部动作 —— 2D 换动作图 + 通用摆动，播完还原；3D 无骨骼数据，映射到内置蹦跳（诚实可用） */
+    if (DONG_ZUO[k] && DONG_ZUO[k].lei === 'ext') {
+      if (xingTai !== '2d') return boFang('bengTiao');
+      const yi = document.getElementById('tupian');
+      if (!yi) return false;
+      const jiuSrc = yi.src;
+      if (DONG_ZUO[k].file) yi.src = DONG_ZUO[k].file;
+      dongZuo2D(k);
+      setTimeout(() => { try { if (jiuSrc) yi.src = jiuSrc; } catch { /* noop */ } }, DONG_ZUO[k].ms || 1500);
+      return true;
     }
     if (xingTai === '2d') { dongZuo2D(k); return true; }
     if (gltfMixer) return yingYongGltfDongZuo(k);
@@ -510,7 +536,27 @@
       if (san) san.style.display = 'none';
       if (renderer) { renderer.dispose(); renderer = null; scene = null; camera = null; sanD = null; boneRoot = null; }
       img.style.display = '';
+      /* R221：精灵图模型 → 读 JSON 走帧动画（__mimicSheet 此前有实现无调用方）；失败回退整图，不留空白 */
+      if (a && a.kind === 'sheet' && a.sheetJson && window.warmyMimic && window.warmyMimic.sheetJson) {
+        const src = String(a.sheetJson);
+        const base = src.slice(0, src.lastIndexOf('/') + 1);
+        if (a.imgSrc) img.src = a.imgSrc; /* 先显示整图兜底，JSON 到位后切帧动画 */
+        window.warmyMimic.sheetJson({ src }).then((r) => {
+          try {
+            if (r && r.ok && yingYongSheet(r.json, img, base)) return;
+          } catch { /* noop */ }
+          try { if (a.imgSrc) img.src = a.imgSrc; } catch { /* noop */ }
+        }).catch(() => { /* 读不到保持整图 */ });
+        return;
+      }
+      /* R221：Live2D 渲染未实现（需 Cubism Core）—— 诚实降级：程序化形象 + 字幕说明，绝不把 .model3.json 当图片显示 */
+      if (a && a.kind === 'live2d') {
+        img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(hua2DSvg(a || {}));
+        try { if (window.__shuo) window.__shuo('Live2D 渲染尚未实现，先用替身形象', 4200); } catch { /* noop */ }
+        return;
+      }
       /* 2D：优先用给定图片（内置/外部模型），否则程序化 SVG（手捏） */
+      tingZhiSheet();
       if (a && a.imgSrc) img.src = a.imgSrc;
       else img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(hua2DSvg(a || {}));
     }
@@ -553,29 +599,49 @@
   /* R220：GLB 状态暴露（探针/调试用） */
   window.__mimicGltfZhuangTai = () => ({ loaded: !!gltfRoot, mixer: !!gltfMixer, clips: Object.keys(gltfClips), dongZuo: dongZuoZhengZai ? String(dongZuoZhengZai.ming || '') : '' });
   jiChuDongZuo();
+  zhuCeWaiBuDongZuo();
 
-  /* 精灵图支持：sheet JSON（帧动画由 mimic 窗口按时间播放）—— 基础实现：帧索引切换 */
+  /* 精灵图支持：sheet JSON（帧动画）—— R221：fps 时基步进（原来每 RAF 换帧=60fps 闪瞎）+ 相对帧路径解析 + 可停止 */
   let sheetZt = null;
-  function yingYongSheet(srcJson, imgEl) {
+  function yingYongSheet(srcJson, imgEl, baseDir) {
     try {
       const d = typeof srcJson === 'string' ? JSON.parse(srcJson) : srcJson;
-      if (!d || !d.frames || !Array.isArray(d.frames)) return false;
-      sheetZt = { frames: d.frames.map((f) => (typeof f === 'string' ? f : (f && f.src) || '')), img: imgEl || document.getElementById('tupian'), i: 0 };
-      if (sheetZt.img) { sheetZt.img.src = sheetZt.frames[0] || ''; kaiShiSheet(); }
+      if (!d || !d.frames || !Array.isArray(d.frames) || !d.frames.length) return false;
+      const base = String(baseDir || '');
+      const jieXi = (f) => {
+        const s = String(typeof f === 'string' ? f : (f && f.src) || '');
+        if (!s) return '';
+        if (/^(data:|file:|https?:|\.\/mimic\/)/.test(s) || !base) return s;
+        return base + s; /* 相对帧路径 → 相对 JSON 所在目录 */
+      };
+      const frames = d.frames.map(jieXi).filter(Boolean);
+      if (!frames.length) return false;
+      tingZhiSheet();
+      sheetZt = { frames, img: imgEl || document.getElementById('tupian'), i: 0, fps: Math.max(1, Math.min(30, Number(d.fps) || 8)), last: 0 };
+      if (sheetZt.img) { sheetZt.img.src = frames[0]; kaiShiSheet(); }
       return true;
     } catch { return false; }
   }
   let sheetLoop = null;
   function kaiShiSheet() {
     if (sheetLoop) return;
-    const step = () => {
-      if (sheetZt && sheetZt.img && sheetZt.frames.length > 1) {
+    const step = (t) => {
+      if (!sheetZt || !sheetZt.img || sheetZt.frames.length < 2) { sheetLoop = null; return; }
+      if (!sheetZt.last || t - sheetZt.last >= 1000 / sheetZt.fps) {
+        sheetZt.last = t;
         sheetZt.i = (sheetZt.i + 1) % sheetZt.frames.length;
         sheetZt.img.src = sheetZt.frames[sheetZt.i];
-        sheetLoop = requestAnimationFrame(step);
-      } else sheetLoop = null;
+      }
+      sheetLoop = requestAnimationFrame(step);
     };
     sheetLoop = requestAnimationFrame(step);
   }
+  function tingZhiSheet() {
+    if (sheetLoop) { try { cancelAnimationFrame(sheetLoop); } catch { /* noop */ } sheetLoop = null; }
+    sheetZt = null;
+  }
   window.__mimicSheet = yingYongSheet;
+  window.__mimicSheetTing = tingZhiSheet;
+  /* R221：探针暴露点（帧数/fps/当前帧） */
+  window.__mimicSheetZt = () => (sheetZt ? { frames: sheetZt.frames.length, fps: sheetZt.fps, i: sheetZt.i } : null);
 })();
