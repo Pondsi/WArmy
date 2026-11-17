@@ -1,13 +1,13 @@
 {
-  "version": "0.4.23",
-  "notes": "WArmy 0.4.23 — mimic touch & right-click menu round (3 items): old WArmyData backups are deleted and the acceptance flow no longer keeps backups (owner decision); double-clicking the transformed mimic NO LONGER opens the chat window — a double click is simply two pats, and holding the mouse down (continuous petting, with duration) or holding and dragging from one spot to another (stroke with start/end coordinates) are all reported to the model via an interaction queue that survives the anti-spam throttle; right-clicking the mimic now does nothing on press, holding and dragging rotates the 3D form, and releasing WITHOUT having rotated opens a menu with exactly five entries — Dialog on/off (the subtitle bubble switch, now actually effective), Hide, Window (the mimic independent chat window), Voice-interaction mode (off/wake/always/smart radio submenu) and Settings (main UI Settings > Mimic); the menu is rendered inside the mimic window (native menus cannot take keyboard focus on a focusable:false transparent window) with a union body-rect so it stays clickable, ESC/outside-click/auto-close dismiss it, and every touch/menu action lands in the audit log. 5 new UI strings across all 27 locales. Verified by a 34-assertion real-machine probe (independent launch per case: tap/double-tap/hold/stroke semantics, menu open/ESC, all five menu actions with settings/window facts, 2D/3D rotation suppressing the menu) plus the scoped suite: 15 gates x 3 consecutive clean rounds covering exactly the changed surfaces plus R224-R227 contract regressions.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.23/WArmy-Setup-0.4.23.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.23/WArmy-Setup-0.4.23.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.23/WArmy-Setup-0.4.23.exe.warmyblocks",
-  "sha256": "e231468afd11f32d1f9b1e449a6467f2bbeb45b9de08707dc1cc39ba99ea4e5b",
-  "size": 305315348,
+  "version": "0.4.24",
+  "notes": "WArmy 0.4.24 — cross-view UI-state isolation round (R229): expanding or collapsing the \"Docked devices\" group (or the default group) in My Workhorses no longer syncs to Projects — the second-column group collapse memory was a single global object keyed only by group id, shared by all four list views (My Workhorses / Projects / Group chats / Contacts); it is now keyed per view with a one-time migration of the old flat format, so each view keeps its own expand/collapse choices. The same class of bleed was found and fixed in two more places: the temporary collapse-all snapshot taken while dragging a session between groups now records its owning view and only restores that view on drop, and the fourth-column card section collapse memory (file categories / knowledge categories etc.) was keyed by card+section only, so collapsing a section in a workhorse chat also collapsed the same-named card section in a project chat — it is now keyed by layout kind (single/internal) + card + section, also with a one-time migration. Verified by a 40-assertion real-machine probe (full first-run registration chain, seeded workhorse/project/group/contact records, real clicks across all four views, drag-start/drag-end restore, and per-layout section collapse memory) plus the scoped suite: 16 gates x 3 consecutive clean rounds covering exactly the changed surfaces plus R224-R228 contract regressions. No UI string changes this round.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.24/WArmy-Setup-0.4.24.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.24/WArmy-Setup-0.4.24.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.24/WArmy-Setup-0.4.24.exe.warmyblocks",
+  "sha256": "36c73ef79a46545f0e05172f96d6ff048284e9d907531a552e3e7401a483551a",
+  "size": 305315692,
   "mandatory": false,
-  "publishedAt": "2026-11-16T23:35:37.047Z",
+  "publishedAt": "2026-11-17T00:30:39.329Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.23"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.24"
 }

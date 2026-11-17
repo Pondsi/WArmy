@@ -3874,8 +3874,21 @@ async function langDuWenBen(text, btnEl) {
     try { window.__saveState?.(); } catch { /* noop */ }
   }
   function cunFenZu() { try { window.__saveState?.(); } catch { /* noop */ } }
-  /** 分组折叠状态（记住用户折叠了哪个；对接设备分组默认折叠） */
-  const fenZuZhe = window.__fenZuZhe || (window.__fenZuZhe = { duijie: true });
+  /** 分组折叠状态（记住用户折叠了哪个；对接设备分组默认折叠）
+   *  R229：按视图(nav)隔离 —— 原来全局单对象只按组 id 键，我的牛马/项目/群聊/联系人
+   *  的「对接设备」「默认分组」折叠态互相串（一边收起另一边跟着收）。旧扁平格式一次性迁移到各 nav。 */
+  const fenZuZhe = window.__fenZuZhe || (window.__fenZuZhe = {});
+  (function fenZuZheQianYi() {
+    const NAVS = ['singleAi', 'internalGroup', 'externalGroup', 'externalChat'];
+    const keys = Object.keys(fenZuZhe);
+    if (keys.length && keys.some((k) => typeof fenZuZhe[k] !== 'object' || fenZuZhe[k] === null)) {
+      const jiu = {};
+      for (const k of keys) { jiu[k] = fenZuZhe[k]; delete fenZuZhe[k]; }
+      for (const nav of NAVS) fenZuZhe[nav] = Object.assign({ duijie: true }, jiu);
+    }
+    for (const nav of NAVS) if (!fenZuZhe[nav] || typeof fenZuZhe[nav] !== 'object') fenZuZhe[nav] = { duijie: true };
+  })();
+  const fenZuZheOf = (nav) => fenZuZhe[nav] || (fenZuZhe[nav] = { duijie: true });
   /** 我的设备在线表（对接来源设备在线判断；定期刷新） */
   window.__syncSheBeiOnline = new Set();
   window.__syncSheBeiMing = {};
@@ -3915,7 +3928,8 @@ async function langDuWenBen(text, btnEl) {
     const benJiSheBeiId = window.__syncSelfId || '';
     const duijieKeys = Object.keys(duijie).filter((sid) => !shiNiTaiBenTi(sid))
       .filter((sid) => String(duijie[sid].from || '') !== '' && String(duijie[sid].from || '') !== benJiSheBeiId);
-    const zheKai = (zid) => fenZuZhe[zid] !== true;
+    const zheMap = fenZuZheOf(nav); /* R229：本视图自己的折叠表 */
+    const zheKai = (zid) => zheMap[zid] !== true;
     const zuoTuoZhongJi = { kai: false };
     zu.forEach((z, zi) => {
       if (!z) return;
@@ -3929,7 +3943,7 @@ async function langDuWenBen(text, btnEl) {
       tou.innerHTML = '<span class="lieBiaoFenZuTou">' + escapeHtml(z.ming || z.id) + '</span>';
       tou.addEventListener('click', () => {
         /* R218 修复：toggle 折叠/展开（原来展开后无法再次收起） */
-        fenZuZhe[z.id] = (fenZuZhe[z.id] === true) ? undefined : true;
+        zheMap[z.id] = (zheMap[z.id] === true) ? undefined : true;
         renderList();
       });
       /* 分组右键：重命名 / 建分组 / 删分组（对接设备分组不可改不可删） */
@@ -4050,8 +4064,9 @@ async function langDuWenBen(text, btnEl) {
               e.dataTransfer.setData('text/plain', 'hang:' + String(c.id));
               hangYuanSu.classList.add('dragging');
               document.querySelectorAll('.lieBiaoFenZuNei:not(.yinCang)').forEach((x) => { if (x !== nei) x.classList.add('zheLinShi'); });
-              fenZuZheLinShi = Object.assign({}, fenZuZhe);
-              document.querySelectorAll('.lieBiaoFenZu.zhe').forEach((x) => { x.classList.remove('zhe'); fenZuZhe[x.dataset.zu] = undefined; });
+              fenZuZheLinShi = Object.assign({}, zheMap);
+              fenZuZheLinShiNav = nav; /* R229：快照归属视图，恢复时校验 */
+              document.querySelectorAll('.lieBiaoFenZu.zhe').forEach((x) => { x.classList.remove('zhe'); zheMap[x.dataset.zu] = undefined; });
             });
             hangYuanSu.addEventListener('dragend', () => {
               hangYuanSu.classList.remove('dragging');
@@ -4060,7 +4075,7 @@ async function langDuWenBen(text, btnEl) {
               const he = $('lieBiaoTi');
               if (he) he.querySelectorAll('.lieBiaoFenZu').forEach((x) => {
                 const zid = x.dataset.zu;
-                const kai = fenZuZheLinShi && fenZuZheLinShi[zid] !== true;
+                const kai = fenZuZheLinShi && fenZuZheLinShiNav === nav && fenZuZheLinShi[zid] !== true;
                 x.classList.toggle('zhe', !kai);
                 const n = x.nextElementSibling;
                 if (n && n.classList.contains('lieBiaoFenZuNei')) n.classList.toggle('yinCang', !kai);
@@ -4075,6 +4090,7 @@ async function langDuWenBen(text, btnEl) {
     });
   }
   let fenZuZheLinShi = null;
+  let fenZuZheLinShiNav = ''; /* R229：临时折叠快照的归属视图 */
 
   function renderList() {
     renderListInner();
@@ -8370,16 +8386,32 @@ async function langDuWenBen(text, btnEl) {
          */
         try {
           window.__pfSectionShou = window.__pfSectionShou || {};
-          const key = String((h.closest('.mianBanKuai') || {}).id || 'pan') + '/' + String(h.dataset.pf || '');
+          pfShouQianYi();
+          const key = pfShouKey((h.closest('.mianBanKuai') || {}).id || 'pan', h.dataset.pf || '');
           if (kai) window.__pfSectionShou[key] = 1; else delete window.__pfSectionShou[key];
         } catch { /* noop */ }
       });
       /** 重画后把记住的收起状态贴回去 */
       try {
-        const key = String((h.closest('.mianBanKuai') || {}).id || 'pan') + '/' + String(h.dataset.pf || '');
+        pfShouQianYi();
+        const key = pfShouKey((h.closest('.mianBanKuai') || {}).id || 'pan', h.dataset.pf || '');
         if (window.__pfSectionShou && window.__pfSectionShou[key]) qie(true);
       } catch { /* noop */ }
     });
+  }
+  /** R229：第四列段落折叠记忆按布局类(single/internal)隔离 —— 原来只按 卡id/段 键，
+   *  牛马会话与项目会话共用同名卡（文件/知识库/摘要…）时收起状态互相串。旧两段键一次性迁移到两类。 */
+  function pfShouKey(kaId, pf) {
+    const k = state.selectedChat && state.selectedChat.kind === 'single' ? 'single' : 'internal';
+    return k + '/' + String(kaId) + '/' + String(pf);
+  }
+  function pfShouQianYi() {
+    const st = window.__pfSectionShou;
+    if (!st || window.__pfShouYiQian) return;
+    window.__pfShouYiQian = true;
+    for (const key of Object.keys(st)) {
+      if (key.split('/').length === 2) { st['single/' + key] = st[key]; st['internal/' + key] = st[key]; delete st[key]; }
+    }
   }
   window.__ensurePanCardCollapse = ensurePanCardCollapse;
   /** 给第四列每张卡片右上角补「×」：悬停才显示，点击从本类布局里移除 */
