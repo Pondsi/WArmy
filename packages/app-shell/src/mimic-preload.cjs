@@ -21,12 +21,16 @@ contextBridge.exposeInMainWorld('warmyMimic', {
   yuYinFenPian: (p) => ipcRenderer.invoke('warmy:mimicYuYinFenPian', p),
   yuYinMoShiQu: () => ipcRenderer.invoke('warmy:mimicYuYinMoShi'),
   onPlay: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicPlay', h); return () => ipcRenderer.removeListener('warmy:mimicPlay', h); },
+  onKaPian: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicKaPian', h); return () => ipcRenderer.removeListener('warmy:mimicKaPian', h); },
+  zhuoMianTuBiao: () => ipcRenderer.invoke('warmy:zhuoMianTuBiao'),
+  onZhuoMianDongHua: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:zhuoMianDongHua', h); return () => ipcRenderer.removeListener('warmy:zhuoMianDongHua', h); },
   /** R221：精灵图 JSON 读取（帧动画）/ 动作模型列表（外部动作注册） */
   sheetJson: (p) => ipcRenderer.invoke('warmy:mimicSheetJson', p),
   dongZuoLieBiao: () => ipcRenderer.invoke('warmy:mimicDongZuoLieBiao'),
   /** R223 项9：3D 部位触摸上报（AI 决定是否/如何回应）；R228 扩展 kind=tap/hold/stroke */
   moPart: (p) => ipcRenderer.invoke('warmy:mimicMoPart', p),
   /** R228 项3：右键松手且未旋转 → HTML 菜单（开菜单拿状态+文案 / 五项动作分发） */
+  caiDanXian: () => ipcRenderer.invoke('warmy:mimicCaiDanXian'),
   caiDanKai: () => ipcRenderer.invoke('warmy:mimicCaiDanKai'),
   caiDanDong: (p) => ipcRenderer.invoke('warmy:mimicCaiDanDong', p),
   /** R218：动作触发与说话口型 */

@@ -171,10 +171,7 @@
       chuanTou = !shang;
       pet.classList.toggle('xuanTing', !!shang);
       /* R228：菜单展开且光标真到过并集矩形后，离开 1.2s 自动收（穿透态收不到外部点击） */
-      if (caiDanKaiZhe) {
-        if (shang) { caiDanNeiGuo = true; clearTimeout(caiDanWaiTimer); }
-        else if (caiDanNeiGuo) { clearTimeout(caiDanWaiTimer); caiDanWaiTimer = setTimeout(guanCaiDan, 1200); }
-      }
+      /* R232：独立菜单用失焦即时关闭，本体命中不再负责菜单寿命。 */
     });
     function shangBaoBenTi() {
       try {
@@ -215,64 +212,32 @@
     });
 
     // ── R228 项3：HTML 右键菜单 ──
-    const caiDan = document.getElementById('caiDan');
-    let caiDanKaiZhe = false, caiDanWaiTimer = 0, caiDanNeiGuo = false;
-    let caiDanZt = { zmKai: true, moShi: 'smart', wen: null };
-    function guanCaiDan() {
-      if (!caiDanKaiZhe) return;
-      caiDanKaiZhe = false; caiDan.hidden = true; caiDan.innerHTML = '';
-      clearTimeout(caiDanWaiTimer);
-      shangBaoBenTi();
+    async function openCaiDan() {
+      try { await window.warmyMimic?.caiDanXian?.(); } catch { /* 宿主拒绝时不打开残缺菜单 */ }
     }
-    function shangBaoLianHe() {
-      try {
-        const a = pet.getBoundingClientRect(), b = caiDan.getBoundingClientRect();
-        const x = Math.min(a.left, b.left), y = Math.min(a.top, b.top);
-        window.warmyMimic?.setBodyRect?.({ x, y, w: Math.max(a.right, b.right) - x, h: Math.max(a.bottom, b.bottom) - y });
-      } catch { /* noop */ }
-    }
-    function huaCaiDan() {
-      const w = caiDanZt.wen; caiDan.innerHTML = '';
-      const xiang = (wen, dong) => {
-        const d = document.createElement('div'); d.className = 'xiang'; d.textContent = wen;
-        d.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); dong(); });
-        caiDan.appendChild(d); return d;
+
+    /* R232：系统语音播报卡片；播报期间停录且丢弃跨界分片，防自身声音变成授权。 */
+    let kaYuYinToken = '', kaBoBaoZhong = false, kaBoBaoDai = 0;
+    window.warmyMimic?.onKaPian?.((d) => {
+      const dai = ++kaBoBaoDai;
+      kaYuYinToken = ''; kaBoBaoZhong = !!d?.text;
+      guanLuYin();
+      window.speechSynthesis?.cancel();
+      if (!d?.text) { kaBoBaoZhong = false; tongBuYuYinMoShi(); return; }
+      window.__shuo(d.text, 15000);
+      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { kaBoBaoZhong = false; return; }
+      const ju = new SpeechSynthesisUtterance(String(d.text));
+      ju.lang = d.locale || 'zh-CN';
+      const voices = speechSynthesis.getVoices();
+      const voice = voices.find((v) => v.lang === ju.lang) || voices.find((v) => v.lang.split('-')[0] === ju.lang.split('-')[0]);
+      if (voice) ju.voice = voice;
+      ju.onend = () => {
+        if (dai !== kaBoBaoDai) return;
+        kaYuYinToken = String(d.token || ''); kaBoBaoZhong = false; tongBuYuYinMoShi();
       };
-      xiang(w.duiHua + ': ' + (caiDanZt.zmKai ? w.kai : w.guan), async () => {
-        const r = await window.warmyMimic?.caiDanDong?.({ item: 'duiHua' });
-        if (r && r.ok) caiDanZt.zmKai = !!r.zmKai;
-        guanCaiDan();
-      });
-      xiang(w.yinShen, async () => { await window.warmyMimic?.caiDanDong?.({ item: 'yinShen' }); guanCaiDan(); });
-      xiang(w.chuangKou, async () => { await window.warmyMimic?.caiDanDong?.({ item: 'chuangKou' }); guanCaiDan(); });
-      xiang(w.yuYin + ' ▸', () => {
-        const jiu = caiDan.querySelector('.zi');
-        if (jiu) { jiu.remove(); shangBaoLianHe(); return; }
-        const z = document.createElement('div'); z.className = 'zi';
-        for (const m of ['off', 'wake', 'always', 'smart']) {
-          const dd = document.createElement('div'); dd.className = 'xiang' + (caiDanZt.moShi === m ? ' on' : '');
-          dd.textContent = (caiDanZt.moShi === m ? '✓ ' : '') + (w.modes[m] || m);
-          dd.addEventListener('mousedown', async (e) => { e.preventDefault(); e.stopPropagation(); await window.warmyMimic?.caiDanDong?.({ item: 'yuYin', value: m }); guanCaiDan(); });
-          z.appendChild(dd);
-        }
-        caiDan.appendChild(z); shangBaoLianHe();
-      });
-      xiang(w.sheZhi, async () => { await window.warmyMimic?.caiDanDong?.({ item: 'sheZhi' }); guanCaiDan(); });
-    }
-    async function openCaiDan(x, y) {
-      const r = await window.warmyMimic?.caiDanKai?.();
-      if (!r || !r.ok || !r.wen) return;
-      caiDanZt = { zmKai: !!r.zmKai, moShi: String(r.moShi || 'smart'), wen: r.wen };
-      huaCaiDan();
-      caiDan.hidden = false; caiDanKaiZhe = true; caiDanNeiGuo = false;
-      const w = caiDan.offsetWidth, h = caiDan.offsetHeight;
-      const left = Math.max(4, Math.min(x - 24, window.innerWidth - w - 4));
-      let top = y - h - 6; if (top < 4) top = Math.min(y + 6, window.innerHeight - h - 4);
-      caiDan.style.left = left + 'px'; caiDan.style.top = Math.max(4, top) + 'px';
-      shangBaoLianHe();
-    }
-    window.addEventListener('mousedown', (e) => { if (caiDanKaiZhe && !caiDan.contains(e.target)) guanCaiDan(); }, true);
-    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') guanCaiDan(); });
+      ju.onerror = () => { if (dai === kaBoBaoDai) { kaBoBaoZhong = false; kaYuYinToken = ''; } };
+      speechSynthesis.speak(ju);
+    });
 
     // 主进程推来的说话/状态
     window.warmyMimic?.onSay?.((d) => window.__shuo(d && d.text, d && d.ms));
@@ -302,25 +267,29 @@
     // ── R218 语音互动：非 off 模式持续录音，每 2.5s 分片交给主进程 ASR/判断 ──
     let luYin = null;
     function kaiShiLuYin() {
-      if (luYin) return;
+      if (luYin || kaBoBaoZhong || !document.getElementById('yinPin').paused) return;
+      const luYinDai = kaBoBaoDai;
       navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
         .then((stream) => {
+          if (kaBoBaoZhong || luYinDai !== kaBoBaoDai || luYin) { stream.getTracks().forEach((track) => track.stop()); return; }
           let mime = 'audio/webm';
           try { mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'; } catch { /* noop */ }
           const rec = new MediaRecorder(stream, { mimeType: mime });
-          let kuai = [];
+          let kuai = [], luZhiKaToken = kaYuYinToken;
           rec.ondataavailable = (e) => { if (e.data && e.data.size) kuai.push(e.data); };
           rec.onstop = () => {
+            if (!luYin || luYin.rec !== rec || kaBoBaoZhong || luYinDai !== kaBoBaoDai) { kuai = []; return; }
+            const cardToken = luZhiKaToken;
             if (kuai.length) {
               const blob = new Blob(kuai, { type: rec.mimeType || 'audio/webm' });
               kuai = [];
               try {
                 const fr = new FileReader();
-                fr.onload = () => { try { window.warmyMimic?.yuYinFenPian?.({ dataUrl: String(fr.result), ext: 'webm' }); } catch { /* noop */ } };
+                fr.onload = () => { try { window.warmyMimic?.yuYinFenPian?.({ dataUrl: String(fr.result), ext: 'webm', cardToken }); } catch { /* noop */ } };
                 fr.readAsDataURL(blob);
               } catch { /* noop */ }
             }
-            if (luYin && luYin.rec === rec && rec.state !== 'recording') { try { rec.start(); } catch { /* noop */ } }
+            if (luYin && luYin.rec === rec && rec.state !== 'recording') { try { luZhiKaToken = kaYuYinToken; rec.start(); } catch { /* noop */ } }
           };
           rec.start();
           luYin = { stream, rec, timer: setInterval(() => { try { if (rec.state === 'recording') rec.stop(); } catch { /* noop */ } }, 2500) };
@@ -343,6 +312,9 @@
         }).catch(() => { /* 查不到按 off */ });
       } catch { /* noop */ }
     }
+    document.getElementById('yinPin').addEventListener('play', guanLuYin);
+    document.getElementById('yinPin').addEventListener('ended', tongBuYuYinMoShi);
+    document.getElementById('yinPin').addEventListener('error', tongBuYuYinMoShi);
     tongBuYuYinMoShi();
     setInterval(tongBuYuYinMoShi, 10000); // 设置页改模式后 10s 内生效
   </script>

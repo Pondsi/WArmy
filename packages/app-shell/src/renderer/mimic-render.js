@@ -484,7 +484,16 @@
   /** 每帧更新：idle 自动 + 当前动作 + 口型 */
   function gengXin(t) {
     if (gltfMixer) {
-      try { gltfMixer.update(1 / 60); } catch { /* noop */ }
+      const dt = gltfFrameAt ? Math.min(0.1, Math.max(0, (t - gltfFrameAt) / 1000)) : 0;
+      gltfFrameAt = t;
+      try {
+        gltfMixer.update(dt);
+        if (vrmModel) {
+          vrmModel.expressionManager?.setValue('aa', kouXingOn ? Math.abs(Math.sin(t / 110)) * 0.65 : 0);
+          vrmModel.expressionManager?.setValue('blink', Math.sin(t / 950) > 0.995 ? 1 : 0);
+          vrmModel.update(dt);
+        }
+      } catch { /* 保持当前可渲染帧 */ }
       /* R222 项9 真缺陷：原来更新完 mixer 直接 return，从不 renderer.render ⇒ GLB 3D 模型完全看不到 */
       if (renderer && scene && camera) { try { renderer.render(scene, camera); } catch { /* noop */ } }
       return;
@@ -531,6 +540,16 @@
   /** 外观渲染入口：a = { xingTai:'2d'|'3d', zhuSe, fuSe, yanXing, zuiXing, erDuo, weiBa, yanSe, hongSe, touDa, zhuang, modelId? } */
   /* ══ R220：GLB（glTF 2.0）现成模型 —— RobotExpressive 等开源模型直接用，动画剪辑驱动 ══ */
   let gltfRoot = null, gltfMixer = null, gltfClips = {};
+  let vrmModel = null, gltfLoadDai = 0, gltfFrameAt = 0, gltfError = '';
+  function qingLiGltf() {
+    gltfMixer?.stopAllAction();
+    if (gltfRoot) {
+      gltfMixer?.uncacheRoot(gltfRoot);
+      scene?.remove(gltfRoot);
+      window.VRMUtils?.deepDispose(gltfRoot);
+    }
+    gltfRoot = null; gltfMixer = null; gltfClips = {}; vrmModel = null; gltfFrameAt = 0;
+  }
   const GLTF_DONG_ZUO = {
     huXi: 'Idle', zhaYan: 'Idle', siKao: 'Idle', shuiJiao: 'Sitting', keShui: 'Sitting', paXia: 'Sitting',
     zhaoShou: 'Wave', huiShou: 'Wave', huanYing: 'Wave', kaiXin: 'ThumbsUp', guZhang: 'ThumbsUp',
@@ -543,7 +562,12 @@
     if (!gltfMixer || !gltfRoot) return false;
     const ming = GLTF_DONG_ZUO[id] || 'Idle';
     const clip = gltfClips[ming] || gltfClips.Idle;
-    if (!clip) return false;
+    if (!clip) {
+      const expression = { kaiXin: 'happy', shengQi: 'angry', weiQu: 'sad', jingYa: 'surprised', zhaYan: 'blink' }[id];
+      if (!vrmModel?.expressionManager || !expression || !vrmModel.expressionManager.getExpression(expression)) return false;
+      vrmModel.expressionManager.resetValues(); vrmModel.expressionManager.setValue(expression, 1);
+      return true;
+    }
     try {
       gltfMixer.stopAllAction();
       const act = gltfMixer.clipAction(clip);
@@ -558,13 +582,25 @@
       if (!THREE || !window.GLTFLoader) return false;
       if (!sanD) init3D({});
       if (!scene) return false;
-      if (gltfRoot) { try { scene.remove(gltfRoot); } catch { /* noop */ } gltfRoot = null; gltfMixer = null; gltfClips = {}; }
+      qingLiGltf(); gltfError = '';
+      const dai = ++gltfLoadDai;
       if (BONE && BONE.root) BONE.root.visible = false;
       const loader = new window.GLTFLoader();
+      if (window.VRMLoaderPlugin) loader.register((parser) => new window.VRMLoaderPlugin(parser));
+      const cuo = (e) => {
+        if (dai !== gltfLoadDai) return;
+        gltfError = String(e?.message || e || 'model-load-failed');
+        if (BONE && BONE.root) BONE.root.visible = true;
+        window.__shuo?.('VRM / glTF: ' + gltfError.slice(0, 120), 5000);
+      };
       loader.load(src, (gltf) => {
         try {
-          gltfRoot = gltf.scene || gltf.scenes[0];
-          if (!gltfRoot) return;
+          if (dai !== gltfLoadDai || !scene || xingTai !== '3d') { window.VRMUtils?.deepDispose(gltf.scene); return; }
+          vrmModel = gltf.userData?.vrm || null;
+          if (/\.vrm(?:[?#]|$)/i.test(src) && !vrmModel) { window.VRMUtils?.deepDispose(gltf.scene); cuo(new Error('invalid-vrm')); return; }
+          if (vrmModel) window.VRMUtils?.rotateVRM0(vrmModel);
+          gltfRoot = vrmModel?.scene || gltf.scene || gltf.scenes[0];
+          if (!gltfRoot) { cuo(new Error('empty-model')); return; }
           /* 自适应尺寸：缩放到约 2.2 单位高、落在脚下 */
           const box = new THREE.Box3().setFromObject(gltfRoot);
           const size = new THREE.Vector3(); box.getSize(size);
@@ -578,18 +614,20 @@
           for (const c of (gltf.animations || [])) gltfClips[c.name] = c;
           yingYongGltfDongZuo('huXi');
           if (window.__shangBaoBenTi) { try { window.__shangBaoBenTi(); } catch { /* noop */ } }
-        } catch { /* noop */ }
-      }, undefined, () => { /* 加载失败保持程序化骨骼可见 */ if (BONE && BONE.root) BONE.root.visible = true; });
+        } catch (e) { cuo(e); }
+      }, undefined, cuo);
       return true;
     } catch { return false; }
   }
 
   function yingYongWaiGuan(a, tupianEl) {
+    ++gltfLoadDai;
+    qingLiGltf();
     xingTai = String((a && a.xingTai) || '2d');
     const pet = document.getElementById('pet');
     const img = tupianEl || document.getElementById('tupian');
     const san = document.getElementById('tiSanD');
-    const glbSrc = String((a && (a.glbSrc || (String(a.imgSrc || '').toLowerCase().endsWith('.glb') ? a.imgSrc : ''))) || '');
+    const glbSrc = String((a && (a.glbSrc || (/\.(glb|gltf|vrm)(?:[?#]|$)/i.test(String(a.imgSrc || '')) ? a.imgSrc : ''))) || '');
     if (xingTai === '3d') {
       /* R220：.glb 现成模型走 GLTFLoader（动画剪辑）；否则程序化骨骼 */
       if (glbSrc && init3DGlTF(glbSrc)) {
@@ -730,7 +768,7 @@
     } catch { return ''; }
   };
   /* R220：GLB 状态暴露（探针/调试用） */
-  window.__mimicGltfZhuangTai = () => ({ loaded: !!gltfRoot, mixer: !!gltfMixer, clips: Object.keys(gltfClips), dongZuo: dongZuoZhengZai ? String(dongZuoZhengZai.ming || '') : '' });
+  window.__mimicGltfZhuangTai = () => ({ loaded: !!gltfRoot, vrm: !!vrmModel, error: gltfError, mixer: !!gltfMixer, clips: Object.keys(gltfClips), dongZuo: dongZuoZhengZai ? String(dongZuoZhengZai.ming || '') : '' });
   jiChuDongZuo();
   zhuCeWaiBuDongZuo();
   /* R223 项7：禁用表起手拉一次 + 10s 轮询（主窗口切换启用/禁用后及时生效） */

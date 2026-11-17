@@ -5,6 +5,17 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('warmy', {
   hardware: () => ipcRenderer.invoke('warmy:yingJian'),
+  mimicHuiTu: (p) => ipcRenderer.invoke('warmy:mimicHuiTu', p),
+  ziJinHuaZhuangTai: (sid) => ipcRenderer.invoke('warmy:ziJinHuaZhuangTai', sid),
+  ziJinHuaFaSong: (p) => ipcRenderer.invoke('warmy:ziJinHuaFaSong', p),
+  ziJinHuaXuanZe: (p) => ipcRenderer.invoke('warmy:ziJinHuaXuanZe', p),
+  ziJinHuaQuXiao: (sid) => ipcRenderer.invoke('warmy:ziJinHuaQuXiao', sid),
+  ziJinHuaHuiTui: (p) => ipcRenderer.invoke('warmy:ziJinHuaHuiTui', p),
+  zhuoMianCaoZuo: (p) => ipcRenderer.invoke('warmy:zhuoMianCaoZuo', p),
+  benDiShengChengChaXun: () => ipcRenderer.invoke('warmy:benDiShengChengChaXun'),
+  benDiShengChengAnZhuang: () => ipcRenderer.invoke('warmy:benDiShengChengAnZhuang'),
+  nengLiGeZhengCeShe: (p) => ipcRenderer.invoke('warmy:nengLiGeZhengCeShe', p),
+  onZiJinHua: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:ziJinHuaGengXin', h); return () => ipcRenderer.removeListener('warmy:ziJinHuaGengXin', h); },
   trustedFoldersList: () => ipcRenderer.invoke('warmy:shouXinMuLuLieBiao'),
   trustedFolderAdd: (p) => ipcRenderer.invoke('warmy:shouXinMuLuTianJia', p),
   trustedFolderRemove: (p) => ipcRenderer.invoke('warmy:shouXinMuLuShanChu', p),

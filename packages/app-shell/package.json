@@ -1,6 +1,6 @@
 {
   "name": "@warmy/app-shell",
-  "version": "0.4.26",
+  "version": "0.4.27",
   "private": true,
   "description": "Electron main/renderer shell (no native modules)",
   "main": "./dist/electron-main.js",
@@ -12,7 +12,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -b && node scripts/check-syntax.mjs && node scripts/copy-assets.mjs",
+    "build": "tsc -b && node scripts/build-mimic-three.mjs && node scripts/check-syntax.mjs && node scripts/copy-assets.mjs",
     "typecheck": "tsc -b --pretty",
     "start": "electron dist/electron-main.js",
     "dist": "electron-builder --config electron-builder.yml",
@@ -20,6 +20,7 @@
     "dev": "node scripts/dev-restart.mjs"
   },
   "dependencies": {
+    "@pixiv/three-vrm": "3.5.5",
     "@warmy/asset-governance": "workspace:*",
     "@warmy/board": "workspace:*",
     "@warmy/ccr-compressor": "workspace:*",
@@ -39,7 +40,8 @@
   "devDependencies": {
     "@types/node": "24.9.0",
     "electron": "45.1.0",
-    "electron-builder": "25.1.8"
+    "electron-builder": "25.1.8",
+    "esbuild": "0.25.12"
   },
   "types": "./dist/index.d.ts",
   "author": "Pondsi",

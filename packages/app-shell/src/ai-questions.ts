@@ -24,6 +24,8 @@ export interface AiWenTiXuanXiang {
 
 export interface AiWenTi {
   id: string;
+  /** 由宿主创建入口指定，不能根据回复里的“允许”等字眼猜授权类型。 */
+  kind?: 'authorization' | 'choice';
   groupId: string;
   sessionId?: string;
   biaoTi: string;
@@ -38,8 +40,12 @@ export interface AiWenTi {
 
 export class AiWenTiZhongXin {
   private items = new Map<string, AiWenTi>();
+  /** 异步通知让同一调用栈的自动选择先结束，避免播报已自动回答的卡。 */
+  onChanged?: () => void;
+  private tongZhi(): void { queueMicrotask(() => this.onChanged?.()); }
 
   daKai(shuRu: {
+    kind?: 'authorization' | 'choice';
     groupId: string;
     sessionId?: string;
     biaoTi: string;
@@ -51,7 +57,10 @@ export class AiWenTiZhongXin {
     const biaoTi = String(shuRu.biaoTi || '').trim();
     if (shuRu.dedupe !== false) {
       for (const q of this.items.values()) {
-        if (q.groupId === groupId && q.status === 'pending' && q.biaoTi === biaoTi) return q;
+        if (q.groupId === groupId && q.status === 'pending' && q.biaoTi === biaoTi
+                  && q.kind === (shuRu.kind || 'choice') && q.ti === String(shuRu.ti || '')
+                  && JSON.stringify(q.options.map((o) => [o.biaoQian, o.description || '']))
+                    === JSON.stringify((shuRu.options || []).filter((o) => o && String(o.biaoQian || '').trim()).map((o) => [String(o.biaoQian).trim(), o.description || '']))) return q;
       }
     }
     const options = (shuRu.options || [])
@@ -67,6 +76,7 @@ export class AiWenTiZhongXin {
     const q: AiWenTi = {
       id: 'q' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'),
       groupId,
+      kind: shuRu.kind || 'choice',
       sessionId: shuRu.sessionId,
       biaoTi,
       ti: shuRu.ti ? String(shuRu.ti) : '',
@@ -76,6 +86,7 @@ export class AiWenTiZhongXin {
       status: 'pending',
     };
     this.items.set(q.id, q);
+    this.tongZhi();
     return q;
   }
 
@@ -85,6 +96,7 @@ export class AiWenTiZhongXin {
     if (q.status === 'answered') {
       return { ok: true, question: q, inject: this.injectLine(q) };
     }
+    if (q.status !== 'pending') return { ok: false, error: 'card-not-pending' };
     if (optionId === AI_QUESTION_CUSTOM || optionId === 'custom' || optionId === 'other') {
       const text = String(customText || '').trim();
       if (!text) return { ok: false, error: 'custom-text-required' };
@@ -96,6 +108,7 @@ export class AiWenTiZhongXin {
     }
     q.status = 'answered';
     this.items.set(q.id, q);
+    this.tongZhi();
     return { ok: true, question: q, inject: this.injectLine(q) };
   }
 
@@ -128,6 +141,7 @@ export class AiWenTiZhongXin {
     const q = this.items.get(String(id || ''));
     if (!q || q.status !== 'pending') return false;
     q.status = 'cancelled';
+    this.tongZhi();
     return true;
   }
 }

@@ -80,6 +80,8 @@
     sessionSecurity: {},
     /** 聊天框的思考级别覆盖：只对当前聊天对象一次性生效（换会话即失效） */
     thinkOverride: {},
+    /** R232 自进化开关：按会话；开启后发送的消息进入 A/B。默认关。 */
+    evolveOn: {},
     /** 超出权限是否询问（默认询问；完全授权时该开关灰掉） */
     askOnExceed: true,
     /** 自动选择：默认**不勾**。勾上后，选项卡里标了「推荐」的方案按推荐自动执行 */
@@ -11019,9 +11021,11 @@ window.__keYiLiaoTian = keYiLiaoTian;
         host.innerHTML = pending.map((q) => {
           const qi = items.findIndex((x) => String(x.id) === String(q.id));
           /* R149 项9：选项固定顺序 = 允许一次、允许(长期)、拒绝、其他 */
-          const rawOpts = (q.options || []).map((o) => {
+          const mimicVoiceCard = String(q.sessionId || q.groupId || '') === 'mimic-pet';
+          const rawOpts = (q.options || []).map((o, oi) => {
             let label = escapeHtml(o.biaoQian);
             if (label === '同意' || label === 'Allow') label = escapeHtml(tOr('aiq.allowOnce', '允许一次'));
+            if (mimicVoiceCard) label = (oi < 26 ? String.fromCharCode(65 + oi) + '/' : '') + (oi + 1) + ': ' + label;
             const tui = o.tuiJian
               ? '<span class="aiqTuiJian">' + escapeHtml(tOr('aiq.recommended', '推荐')) + '</span>'
               : '';
@@ -11031,19 +11035,19 @@ window.__keYiLiaoTian = keYiLiaoTian;
             /* 分类：允许一次/同意类=1, 拒绝类=3, 其他模型选项=1.5 */
             const isAllowOnce = /同意|允许一次|Allow|Approve|Yes/i.test(String(o.biaoQian || ''));
             const isReject = /拒绝|Reject|Deny|No/i.test(String(o.biaoQian || ''));
-            return { html, order: isAllowOnce ? 1 : isReject ? 3 : 1.5 };
+            return { html, order: mimicVoiceCard ? oi : isAllowOnce ? 1 : isReject ? 3 : 1.5 };
           });
           /* 允许（长期）只在授权卡上出现（有拒绝+同意/允许配对）；决策卡/选择卡不加 */
-          const shiShouQuanKa = rawOpts.some((x) => x.order === 3) && rawOpts.some((x) => x.order === 1);
+          const shiShouQuanKa = q.kind === 'authorization' || (!mimicVoiceCard && rawOpts.some((x) => x.order === 3) && rawOpts.some((x) => x.order === 1));
           if (shiShouQuanKa) {
             rawOpts.push({
               html: `<button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__allow__">${escapeHtml(tOr('aiq.allow', '允许'))}</button>`,
-              order: 2,
+              order: mimicVoiceCard ? (q.options || []).length + 1 : 2,
             });
           }
           rawOpts.push({
             html: `<button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__custom__">${escapeHtml(t('aiq.custom')||'Other')}</button>`,
-            order: 4,
+            order: mimicVoiceCard ? Number.MAX_SAFE_INTEGER : 4,
           });
           rawOpts.sort((a, b) => a.order - b.order);
           const opts = rawOpts.map((x) => x.html).join(' ');
@@ -12148,6 +12152,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
         const r = await window.warmy.chatSend({
           sessionId: chatId,
           content: text,
+          evolve: !!(state.evolveOn && state.evolveOn[chatId]),
           insertMode: u === 'P1' ? 'inner' : 'outer',
           urgency: u,
           // 附件一并交给主进程：图片走多模态（模型真的能看到），其它只带路径
@@ -13541,7 +13546,7 @@ async function renderDashboard(host) {
     dong.innerHTML = '';
     const close = document.createElement('button');
     close.className = 'anNiuZhuYao';
-    close.textContent = t('common.close') || '关闭';
+    close.textContent = t('common.ok') || '确定';
     close.onclick = closeNiuMaSettings;
     dong.appendChild(close);
     root.classList.remove('yinCang');
@@ -16529,6 +16534,9 @@ async function renderDashboard(host) {
               <button type="button" id="anNiuMimicShouNie" class="anNiuXiao" aria-expanded="true" title="${escapeHtml(tOr('mimic.faceSculptTip', '调颜色/眼型/嘴型/耳朵/尾巴（2D）或头大小/胖瘦（3D），捏出专属形象；动任一参数即脱离预设成品。'))}" style="display:inline-flex;align-items:center;gap:6px">
                 <span aria-hidden="true">🎨</span><span>${escapeHtml(tOr('mimic.faceSculpt', '捏脸定制'))}</span><span class="jingYin" id="mimicShouNieZheDie" aria-hidden="true">▾</span>
               </button>
+              <button type="button" id="anNiuMimicHuiTu" class="anNiuXiao">AI · ${escapeHtml(tOr('mimic.faceSculpt', '捏脸定制'))}</button>
+              <button type="button" id="anNiuMimicLocalGen" class="anNiuXiao">${escapeHtml(tOr('mimic.localGenInstall', '下载 3D 生成后端'))}</button>
+              <span class="jingYin" id="mimicLocalGenZt"></span>
               <div id="mimicShouNie" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
             </div>
           </div>
@@ -17811,6 +17819,11 @@ async function renderDashboard(host) {
           /* R222 项8：独立触发词区已删（触发词改由动作网格右键菜单设置）；旧渲染/添加绑定随之移除 */
           (async () => {
             try { const r = await window.warmy.settingsGet?.(); wg = (r && r.settings && r.settings.mimicAppearance) || {}; } catch { wg = {}; }
+            /* R232：未配置时与首次化形使用同一个预设，不能显示列表外的通用形象。 */
+            if (!Object.keys(wg).some((k) => k !== 'modelId' || wg[k])) {
+              const moRen = NEI_ZHI_2D[0];
+              wg = { xingTai: '2d', modelId: moRen.id, ...moRen.a };
+            }
             if (!wg.xingTai) wg.xingTai = '2d';
             hua();
           })();
@@ -18076,9 +18089,24 @@ async function renderDashboard(host) {
           } catch { /* noop */ }
         })();
         /* R219：「设置音视频设备」按钮已删（说明文字保留，音视频仍是全局设置） */
+        $('anNiuMimicHuiTu')?.addEventListener('click', () => {
+          void window.__kaiMimicHuiTu?.({
+            title: 'AI · ' + tOr('mimic.faceSculpt', '捏脸定制'), prompt: tOr('mimic.sculpt.prompt', '描述形象，或框选部位后描述修改。'),
+            generate: tOr('mimic.sculpt.generate', '生成 / 改进'), selection: tOr('mimic.sculpt.selection', '选中部位'),
+            clear: tOr('mimic.sculpt.clear', '清除选区'), undo: tOr('mimic.sculpt.undo', '撤销编辑'),
+            save: t('common.save'), saved: t('common.saved'), cancel: t('common.cancel'),
+          });
+        });
         $('anNiuMimicMoXingMuLu')?.addEventListener('click', () => {
           try { window.warmy.mimicModelDirOpen?.(); } catch { /* noop */ }
         });
+        /* R232 本地 3D 生成后端按需下载（不随安装包）；无已验证来源如实提示 */
+        (async () => {
+          const zt = $('mimicLocalGenZt'); const b = $('anNiuMimicLocalGen');
+          const draw = async () => { try { const r = await window.warmy.benDiShengChengChaXun(); if (zt) zt.textContent = r.installed ? (tOr('mimic.localGenReady', '已安装') + ' v' + (r.version || '')) : (r.reason === 'source-unverified' ? tOr('mimic.localGenUnverified', '暂无已验证的免费商用后端，来源核验后开放下载。') : tOr('mimic.localGenNotInstalled', '未安装')); if (b) b.disabled = !!r.installed; } catch { /* noop */ } };
+          await draw();
+          b?.addEventListener('click', async () => { b.disabled = true; if (zt) zt.textContent = '…'; const r = await window.warmy.benDiShengChengAnZhuang(); if (zt) zt.textContent = r.ok ? (tOr('mimic.localGenReady', '已安装') + ' v' + (r.version || '')) : (r.error === 'source-unverified' ? tOr('mimic.localGenUnverified', '暂无已验证的免费商用后端，来源核验后开放下载。') : String(r.error || '')); await draw(); });
+        })();
         /* 化形按钮初始状态：拟态已在运行 ⇒ 显示「隐身」 */
         (async () => {
           try {
@@ -37649,6 +37677,17 @@ try {
      * 只是内存镜像丢了）。这里按契约建一次，别名"有读就有写"。（`verify-renderer-scope` 硬门禁看这条）
      */
     window.__appState = window.__appState || {};
+    /** R232 自进化 UI 桥：供 self-evolve-ui.js 读写开关/当前会话/角色，不暴露整个 state。 */
+    window.__ziJinHuaQiao = {
+      sid: () => (state.selectedChat && state.selectedChat.id) || '',
+      nav: () => state.nav,
+      get: (sid) => !!(state.evolveOn && state.evolveOn[sid]),
+      set: (sid, v) => { state.evolveOn = state.evolveOn || {}; state.evolveOn[sid] = !!v; try { window.warmy.settingsSave({ selfEvolveSessions: state.evolveOn }); } catch { /* noop */ } },
+      load: (map) => { state.evolveOn = Object.assign({}, map || {}); },
+      isAdmin: async (gid) => { try { const r = await window.warmy.groupMembers(gid); return !!(r && r.localIsAdmin); } catch { return false; } },
+      refresh: () => { try { renderList(); } catch { /* noop */ } },
+      t: (k, fb) => { try { return tOr(k, fb); } catch { return fb; } },
+    };
     
     /**
      * 独立会话窗：导航已按 URL 的 chatKind 设好，**不能**再改回 singleAi，

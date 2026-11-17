@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"/>
+<title>WArmy-Mimic-Menu</title>
+<style>
+:root { color-scheme: dark; --accent: #7ec8ff; --ink: #e8ecf4; --card: #181c26; }
+html, body { margin: 0; height: 100%; overflow: hidden; font: 13px/1.5 'Segoe UI', sans-serif; background: transparent; color: var(--ink); }
+#caiDan { box-sizing: border-box; max-height: 100%; padding: 5px; border: 1px solid #647b96; border-radius: 10px; background: var(--card); overflow-y: auto; }
+.xiang { display: block; width: 100%; text-align: start; border: 0; border-radius: 6px; background: transparent; color: inherit; padding: 6px 10px; font: inherit; cursor: pointer; white-space: normal; overflow-wrap: anywhere; }
+.xiang:hover, .xiang:focus-visible { background: #304455; outline: none; }
+.xiang:disabled { opacity: .45; cursor: not-allowed; }
+.zi { border-inline-start: 2px solid var(--accent); margin-inline-start: 12px; }
+.zi[hidden] { display: none; }
+.zi .on { color: var(--accent); }
+#cuoWu { margin: 6px; }
+</style></head>
+<body><div id="caiDan" role="menu"></div><script src="./mimic-menu.js"></script></body></html>

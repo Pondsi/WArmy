@@ -1531,7 +1531,7 @@ export function workspaceDirOf(userDataDir: string, sessionId: string): string {
 export const HOST_TOOL_NAMES = [
   'open_path', 'open_file', 'open_url', 'schedule_task', 'monitor_process', 'lsp_diagnostics', 'ask_user', 'plan_update', 'plan_verify', 'write_skill',
   'run_shell', 'remote_ssh', 'supervise_worker', 'split_task', 'find_skill', 'read_skill', 'install_skill', 'check_safety', 'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'fetch_url', 'web_search', 'web_extract', 'local_search', 'download_file', 'nm_browser', 'screen_view',
-  'get_time', 'wait_seconds', 'read_profile', 'image_generate', 'video_generate',
+  'get_time', 'wait_seconds', 'read_profile', 'image_generate', 'video_generate', 'desktop_file_op',
 ] as const;
 export function isHostTool(name: unknown): boolean {
   return typeof name === 'string' && (HOST_TOOL_NAMES as readonly string[]).includes(name);
@@ -1560,6 +1560,14 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
         name: 'open_url',
         description: '用系统默认浏览器打开一个网页（只接受 http/https）。',
         parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'desktop_file_op',
+        description: '仅当用户明确要求拟态对桌面文件操作时使用：move/create/delete(回收站)/modify/open。需授权卡；成功才播动画。path 为绝对路径；move 需 dest。',
+        parameters: { type: 'object', properties: { op: { type: 'string', enum: ['move', 'create', 'delete', 'modify', 'open'] }, path: { type: 'string' }, dest: { type: 'string' }, content: { type: 'string' } }, required: ['op', 'path'] },
       },
     },
     {

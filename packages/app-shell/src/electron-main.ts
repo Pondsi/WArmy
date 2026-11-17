@@ -8,6 +8,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { execFile, spawn, fork } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { caiDanWeiZhi } from './mimic-menu-layout.js';
+import { kaPianYuYinZhiWen, jieXiKaPianYuYin, kaPianYuYinWen } from './mimic-card-voice.js';
+import { jiaoYanHuiTu, jieXiHuiTu, juBuHeBing, huiTuSvg, huiTuHash, HUI_TU_TI_SHI } from './mimic-sculpt.js';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chuangJianP1YunXingShi } from './runtime.js';
 import { shiTongYiNeiRong, shiZhanWeiChongFu, zhaoHuChiWeiZhi, shiHuChiTiShiCeng } from './prompt-placement.js';
@@ -654,6 +657,10 @@ function qianYiMingWenJiYiKu(): boolean {
   }
 }
 const aiQuestions = new AiWenTiZhongXin();
+aiQuestions.onChanged = () => {
+  try { tongBuMimicYuYinKa(); }
+  catch (e) { audit?.log('mimic.card-notify-failed', { error: xiJingCuoWu(e) }); }
+};
 
 /**
  * **任务栏 / 系统托盘专用图标**：白底版。
@@ -2793,6 +2800,8 @@ async function dengDaiKaPian(id: string, timeoutMs: number, sessionId?: string):
   for (;;) {
     const q = aiQuestions.LieBiao().find((x) => x.id === id);
     if (q && q.status === 'answered' && q.answer) {
+      /* R232：自由回复只补充上下文，不因句中含“允许/同意”授予权限。 */
+      if (q.kind === 'authorization' && q.answer.optionId === AI_QUESTION_CUSTOM) return '拒绝（用户提供了补充说明但没有选择授权，详情保留在决策记录中）';
       const extra = q.answer.customText ? `（自定义）${q.answer.customText}` : '';
       return `${q.answer.biaoQian}${extra}`;
     }
@@ -3087,7 +3096,7 @@ async function qingQiuKaPian(
       return String(tongYi.biaoQian || '同意');
     }
   }
-  const q = aiQuestions.daKai({ groupId: sessionId, sessionId, biaoTi, ti, options });
+  const q = aiQuestions.daKai({ groupId: sessionId, sessionId, biaoTi, ti, options, kind: shiShouQuanKa ? 'authorization' : 'choice' });
   /**
    * **自动选择**（设置里勾了才生效）：卡里有模型自评的「推荐」方案 ⇒ 直接按它执行、不弹卡等人。
    * 没有标「推荐」的卡**一律不代选** —— 宁可停下来等人，也不替人拿主意。
@@ -5958,6 +5967,19 @@ async function yunXingLiaoTianXunHuan(
             if (!/^https?:\/\//i.test(url)) { okH = false; huiBaoH = '[open_url] 只接受 http/https 网址'; }
             else if (wlX === 'off' || (wlX === 'lan' && !shiJuYuWangZhuji(url))) { okH = false; huiBaoH = WANG_LUO_TI_SHI + (wlX === 'lan' ? '（当前：仅本地与局域网）' : '（当前：网络已断开）'); }
             else { await shell.openExternal(url); huiBaoH = `[open_url] 已用系统浏览器打开 ${url}`; }
+          } else if (gongJuMing === 'desktop_file_op') {
+            const op = String(argsH.op || ''); const abs = path.resolve(String(argsH.path || ''));
+            if (!['move', 'create', 'delete', 'modify', 'open'].includes(op) || !String(argsH.path || '')) { okH = false; huiBaoH = '[desktop_file_op] 参数不合法'; }
+            else {
+              const { full } = anQuanDangWei();
+              let yunXu = full;
+              if (!full) {
+                const da = await qingQiuKaPian(sessionId, '桌面操作授权', op + '：' + abs, [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+                yunXu = /^同意/.test(da);
+              }
+              if (!yunXu) { okH = false; huiBaoH = huiBaoJuJue(sessionId, gongJuMing, 'yongHu', op); broadcastToWindows('warmy:zhuoMianDongHua', { op, ok: false, path: abs }); }
+              else { const r = await zhiXingZhuoMianCaoZuo(op, abs, String(argsH.dest || ''), String(argsH.content ?? '')); okH = r.ok; huiBaoH = '[desktop_file_op] ' + (r.ok ? '已完成 ' + op : '失败：' + (r.error || '')); }
+            }
           } else if (gongJuMing === 'open_path' || gongJuMing === 'open_file') {
             const p0 = String(argsH.path || '').trim();
             const { full: quanQuan2, ask: yaoWen } = anQuanDangWei();
@@ -12310,6 +12332,26 @@ chuliIpc('warmy:tingZhiDuiHua', async (_e, payload?: string | { sessionId?: stri
  * ══════════════════════════════════════════════════════════════
  */
 let mimicWin: BrowserWindow | null = null;
+let mimicMenuWin: BrowserWindow | null = null;
+let desktopAnimWin: BrowserWindow | null = null;
+/** R232 全屏透明动画覆盖窗（不拦截鼠标），供桌面操作/空闲视觉互动。 */
+function ensureDesktopAnimWin(): void {
+  if (desktopAnimWin && !desktopAnimWin.isDestroyed()) return;
+  try {
+    const b = mimicWin && !mimicWin.isDestroyed() ? mimicWin.getBounds() : screen.getPrimaryDisplay().workArea;
+    const disp = screen.getDisplayMatching(b).workArea;
+    desktopAnimWin = new BrowserWindow({ x: disp.x, y: disp.y, width: disp.width, height: disp.height, frame: false, transparent: true, resizable: false, movable: false, alwaysOnTop: true, skipTaskbar: true, focusable: false, hasShadow: false, webPreferences: { preload: path.join(__dirname, 'mimic-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+    desktopAnimWin.setIgnoreMouseEvents(true);
+    desktopAnimWin.setAlwaysOnTop(true, 'screen-saver');
+    desktopAnimWin.loadFile(path.join(__dirname, 'renderer', 'desktop-anim.html'));
+    desktopAnimWin.on('closed', () => { desktopAnimWin = null; });
+  } catch { desktopAnimWin = null; }
+}
+function guanMimicCaiDan(): void {
+  const menu = mimicMenuWin;
+  mimicMenuWin = null;
+  if (menu && !menu.isDestroyed()) menu.close();
+}
 let mimicDragCun: { x: number; y: number; bx: number; by: number } | null = null;
 /** 拟态本体在窗口内的矩形（CSS 像素 ≈ DIP；渲染层上报） */
 let mimicBodyRect: { x: number; y: number; w: number; h: number } = { x: 0, y: 100, w: 160, h: 160 };
@@ -12524,19 +12566,17 @@ chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
       } catch { return { modelId: cap }; }
     })();
     /* R219：全新用户没配过外观也必须有形象 —— 合并默认 2D 参数下发（原来什么都不发 ⇒ 只有空白边框） */
-    const moRenWaiGuan = { xingTai: '2d', zhuSe: '#f4a460', fuSe: '#e8e0d0', yanSe: '#2b2b2b', hongSe: '#e05a5a', yanXing: 'yuan', zuiXing: 'xiao', erDuo: true, weiBa: true };
-    if (Object.keys(wg).length > 1 || wg.modelId) {
-      try { mimicWin.webContents.send('warmy:mimicSetTi', { ...moRenWaiGuan, ...wg }); } catch { /* noop */ }
-    } else if (cap) {
-      const list = mimicSaoRenWu();
-      const hit = list.find((x) => x.id === cap) || list[0];
-      if (hit) { try { mimicWin.webContents.send('warmy:mimicSetTi', { src: hit.file, kind: hit.kind, sheetJson: (hit as { json?: string }).json || '' }); } catch { /* noop */ } }
-      else { try { mimicWin.webContents.send('warmy:mimicSetTi', moRenWaiGuan); } catch { /* noop */ } }
-    } else {
-      try { mimicWin.webContents.send('warmy:mimicSetTi', moRenWaiGuan); } catch { /* noop */ }
-    }
-    mimicWin.on('closed', () => { mimicStopHoverPoll(); mimicWin = null; });
+    const moRenWaiGuan = JSON.parse(await fs.promises.readFile(path.join(__dirname, 'renderer', 'mimic', 'default-appearance.json'), 'utf8')) as Record<string, unknown>;
+    const hit = cap ? mimicSaoRenWu().find((x) => x.id === cap) : undefined;
+    const waiGuan = hit
+      ? { xingTai: ['glb', 'vrm'].includes(hit.kind) ? '3d' : '2d', modelId: hit.id, imgSrc: hit.file, kind: hit.kind, sheetJson: hit.json || '' }
+      : (Object.keys(wg).length > 1 || wg.modelId) ? { xingTai: '2d', ...wg } : moRenWaiGuan;
+    if (!mimicWin || mimicWin.isDestroyed()) return { ok: false, error: 'mimic-closed' };
+    mimicWin.webContents.send('warmy:mimicSetTi', waiGuan);
+    mimicWin.on('closed', () => { guanMimicCaiDan(); mimicStopHoverPoll(); mimicWin = null; });
     mimicStartHoverPoll();
+    ensureDesktopAnimWin();
+    tongBuMimicYuYinKa(true);
     try { broadcastToWindows('warmy:mimicState', { on: true }); } catch { /* noop */ }
     audit?.log('mimic.start', { character: cap });
     return { ok: true };
@@ -12546,6 +12586,7 @@ chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
 /** R228 项3：隐身动作提取成函数 —— 菜单「隐身」与 IPC 共用同一路径（含主界面按钮状态广播） */
 function mimicStopShiXian(): { ok: boolean; error?: string } {
   try {
+    guanMimicCaiDan();
     mimicStopHoverPoll();
     if (mimicWin && !mimicWin.isDestroyed()) mimicWin.close();
     mimicWin = null;
@@ -12714,6 +12755,24 @@ ipcMain.on('warmy:mimicOpenChat', () => {
  * 这里只有拟态专属的：语音互动引擎（wake / smart / always）、全屏「看屏幕」、字幕 / 语音回话。
  * ══════════════════════════════════════════════════════════════ */
 const MIMIC_SID = 'mimic-pet';
+let mimicYuYinKaToken = '';
+let mimicAsrMang = false;
+/** 按时间顺序播报一张卡；另一张必须等当前卡结束，避免 A/1 指向不明。 */
+function tongBuMimicYuYinKa(force = false): void {
+  if (!mimicWin || mimicWin.isDestroyed()) return;
+  const q = aiQuestions.pending(MIMIC_SID).sort((a, b) => a.createdAt - b.createdAt)[0];
+  const token = q ? kaPianYuYinZhiWen(q) : '';
+  if (!force && token === mimicYuYinKaToken) return;
+  mimicYuYinKaToken = token;
+  const s = settingsStore?.load();
+  const text = q ? kaPianYuYinWen(q, {
+    authorization: tMain('mimic.card.authorization', '授权卡'),
+    choice: tMain('mimic.card.choice', '选择卡'),
+    hint: tMain('mimic.card.voiceHint', '说字母或数字选择，也可以直接说出其他回复。'),
+  }) : '';
+  mimicWin.webContents.send('warmy:mimicKaPian', { token, id: q?.id || '', text, locale: s?.yuYan || 'zh-CN' });
+}
+
 
 /** 拟态语音互动配置（设置里录入） */
 function mimicYuYinPeiZhi(): { moShi: string; ci: string[]; panDuan: string } {
@@ -12867,13 +12926,14 @@ async function mimicHuiHuaShuo(text: string): Promise<void> {
  * wake：识别文本含任一唤醒词才触发；always：有语音就触发；
  * smart：判断模型（或拟态当前模型）决定该不该回应。
  */
-chuliIpc('warmy:mimicYuYinFenPian', async (_e, p0?: { dataUrl?: string; ext?: string }) => {
+chuliIpc('warmy:mimicYuYinFenPian', async (_e, p0?: { dataUrl?: string; ext?: string; cardToken?: string }) => {
   try {
     const now = Date.now();
-    if (now - mimicYuYinZuiHou < MIMIC_YUYIN_JIANGE_MS) return { ok: true, skipped: 'throttle' };
+    const cardToken = String(p0?.cardToken || '');
+    if (!cardToken && now - mimicYuYinZuiHou < MIMIC_YUYIN_JIANGE_MS) return { ok: true, skipped: 'throttle' };
     const pz = mimicYuYinPeiZhi();
     if (pz.moShi === 'off') return { ok: true, skipped: 'off' };
-    if (mimicYuYinZai) return { ok: true, skipped: 'busy' };
+    if (mimicAsrMang || (mimicYuYinZai && !cardToken)) return { ok: true, skipped: 'busy' };
     const b64 = String(p0?.dataUrl || '').replace(/^data:[^,]+,/, '');
     if (!b64) return { ok: false, error: 'empty-audio' };
     const buf = Buffer.from(b64, 'base64');
@@ -12885,9 +12945,23 @@ chuliIpc('warmy:mimicYuYinFenPian', async (_e, p0?: { dataUrl?: string; ext?: st
       const biao: Record<string, string> = { mpeg: 'mp3', 'x-wav': 'wav', wav: 'wav', webm: 'webm', ogg: 'ogg', opus: 'opus', mp4: 'm4a', 'x-m4a': 'm4a', flac: 'flac' };
       return biao[m.toLowerCase()] || 'webm';
     })();
-    const asr = await zhuanXieYinPinBuf(buf, geShi, 'microphone');
+    mimicAsrMang = true;
+    const asr = await zhuanXieYinPinBuf(buf, geShi, 'microphone').finally(() => { mimicAsrMang = false; });
     const text = String(asr.ok ? asr.text : '').trim();
     if (!text) return { ok: true, skipped: 'no-speech', error: asr.error };
+    /* 录音开始时的指纹须与识别结束时当前卡一致；等待任务的 busy 不阻止答卡。 */
+    const ka = aiQuestions.pending(MIMIC_SID).sort((a, b) => a.createdAt - b.createdAt)[0];
+    if (cardToken || ka) {
+      if (!ka || !cardToken || cardToken !== kaPianYuYinZhiWen(ka)) return { ok: false, error: 'stale-card-audio' };
+      const da = jieXiKaPianYuYin(text, ka);
+      if (da.kind === 'invalid') return { ok: false, error: 'ambiguous-card-choice' };
+      const r = aiQuestions.answer(ka.id, da.kind === 'option' ? da.optionId : AI_QUESTION_CUSTOM, da.kind === 'custom' ? da.text : undefined);
+      if (r.ok) {
+        broadcastToWindows('warmy:aiWenTi', { sessionId: MIMIC_SID, id: ka.id });
+        audit?.log('mimic.card-voice-answer', { id: ka.id, kind: da.kind });
+      }
+      return { ok: r.ok, cardId: ka.id, kind: da.kind, error: r.error };
+    }
     mimicYuYinZai = true;
     try {
       let ying: boolean;
@@ -12961,15 +13035,47 @@ chuliIpc('warmy:mimicPanDuanMoXingMoRen', () => ({ ok: true, model: mimicDangQia
 
 /** R228 项3：拟态右键菜单（HTML 版，拟态窗内渲染 —— 原生 Menu 在 focusable:false 透明窗上拿不到键盘焦点，真机探针实证后改）。
  *  caiDanKai = 开菜单：审计 + 返回当前状态与 27 语文案；caiDanDong = 五项动作分发（对话框开关/隐身/窗口/语音模式/设置）。 */
+/** R232：菜单独立成可聚焦小窗，点击桌面/其它窗口会失焦立即关闭；本体继续保持穿透。 */
+chuliIpc('warmy:mimicCaiDanXian', async (e) => {
+  if (!mimicWin || mimicWin.isDestroyed() || e.sender !== mimicWin.webContents) return { ok: false };
+  guanMimicCaiDan();
+  const b = mimicWin.getBounds();
+  const ti = { x: b.x + mimicBodyRect.x, y: b.y + mimicBodyRect.y, width: mimicBodyRect.w, height: mimicBodyRect.h };
+  const qu = screen.getDisplayMatching(b).workArea;
+  const menu = new BrowserWindow({
+    ...caiDanWeiZhi(ti, qu), parent: mimicWin, show: false,
+    frame: false, transparent: true, resizable: false, movable: false,
+    alwaysOnTop: true, skipTaskbar: true, focusable: true, hasShadow: false,
+    webPreferences: { preload: path.join(__dirname, 'mimic-menu-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  mimicMenuWin = menu;
+  menu.setAlwaysOnTop(true, 'screen-saver');
+  menu.on('closed', () => { if (mimicMenuWin === menu) mimicMenuWin = null; });
+  menu.on('blur', () => { if (mimicMenuWin === menu) guanMimicCaiDan(); });
+  try {
+    await menu.loadFile(path.join(__dirname, 'renderer', 'mimic-menu.html'));
+    if (menu.isDestroyed()) return { ok: false };
+    menu.show(); menu.focus();
+    return { ok: true };
+  } catch (err) {
+    if (mimicMenuWin === menu) guanMimicCaiDan();
+    return { ok: false, error: xiJingCuoWu(err) };
+  }
+}, ['mimic.html']);
+chuliIpc('warmy:mimicCaiDanGuan', (e) => {
+  if (mimicMenuWin && e.sender === mimicMenuWin.webContents) guanMimicCaiDan();
+  return { ok: true };
+}, ['mimic-menu.html']);
 chuliIpc('warmy:mimicCaiDanKai', () => {
   try {
     if (!mimicWin || mimicWin.isDestroyed()) return { ok: false };
-    const s = (settingsStore?.load() as { mimicSubtitle?: boolean; mimicVoiceMode?: string } | undefined) || {};
+    const s = (settingsStore?.load() as { mimicSubtitle?: boolean; mimicVoiceMode?: string; yuYan?: string } | undefined) || {};
     try { audit?.log('mimic.menu', {}); } catch { /* noop */ }
     const modes: Record<string, string> = {};
     for (const m of ['off', 'wake', 'always', 'smart']) modes[m] = tMain('mimic.mode.' + m, m).split(/[（(]/)[0] || m;
     return {
       ok: true,
+      locale: s.yuYan || 'en-US',
       zmKai: s.mimicSubtitle !== false,
       moShi: String(s.mimicVoiceMode || 'smart'),
       wen: {
@@ -12980,7 +13086,7 @@ chuliIpc('warmy:mimicCaiDanKai', () => {
       },
     };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-}, ['mimic.html']);
+}, ['mimic.html', 'mimic-menu.html']);
 chuliIpc('warmy:mimicCaiDanDong', (_e, p0?: { item?: string; value?: string }) => {
   try {
     const item = String(p0?.item || '');
@@ -13023,7 +13129,7 @@ chuliIpc('warmy:mimicCaiDanDong', (_e, p0?: { item?: string; value?: string }) =
     }
     return { ok: false, error: 'bad-item' };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-}, ['mimic.html']);
+}, ['mimic.html', 'mimic-menu.html']);
 
 /* R218：保存拟态外观（2D/3D 形态 + 手捏参数）并下发到拟态窗口 */
 chuliIpc('warmy:daKaiGongZuoMuLuKongZhiTai', async (_e, p0?: { sessionId?: string; dir?: string }) => {
@@ -13140,6 +13246,73 @@ chuliIpc('warmy:benJiKongZhiTai', async (_e, p0?: { action?: string; sessionId?:
     try { audit?.log('console.local-exec', { sid, ms: Date.now() - kaiShi, timedOut: jieGuo.timedOut }); } catch { /* noop */ }
     return { ok: true, executed: true, shuChu: jieGuo.shuChu, tuiMa: jieGuo.tuiMa, timedOut: jieGuo.timedOut, cwd };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R232：显式点击生成才调用已配置的拟态模型；仅生成场景数据，不给文件/网络/执行工具。 */
+const mimicHuiTuRenWu = new Map<number, AbortController>();
+let mimicHuiTuBaoCunZhong = false;
+chuliIpc('warmy:mimicHuiTu', async (e, p0?: { action?: string; prompt?: string; scene?: unknown; selection?: string[] }) => {
+  const id = e.sender.id;
+  try {
+    const action = String(p0?.action || 'preview');
+    if (action === 'cancel') { mimicHuiTuRenWu.get(id)?.abort(); return { ok: true }; }
+    if (action === 'read') {
+      const a = (settingsStore?.load() as { mimicAppearance?: { scene2d?: unknown } })?.mimicAppearance;
+      const scene = jiaoYanHuiTu(a?.scene2d || { version: 1, parts: [] });
+      return { ok: true, scene, svg: huiTuSvg(scene), hash: huiTuHash(scene) };
+    }
+    const base = jiaoYanHuiTu(p0?.scene);
+    if (JSON.stringify(base).length > 24000) return { ok: false, error: 'scene-context-too-large' };
+    if (action === 'preview') return { ok: true, scene: base, svg: huiTuSvg(base), hash: huiTuHash(base) };
+    if (action === 'save') {
+      if (!base.parts.length) return { ok: false, error: 'empty-scene' };
+      if (mimicHuiTuBaoCunZhong || mimicHuiTuRenWu.has(id)) return { ok: false, error: 'generation-busy' };
+      mimicHuiTuBaoCunZhong = true;
+      try {
+      const previous = JSON.stringify((settingsStore?.load() as { mimicAppearance?: unknown } | undefined)?.mimicAppearance);
+      const svg = huiTuSvg(base), hash = huiTuHash(base), modelId = 'generated-' + hash.slice(0, 16);
+      const dir = path.join(app.getPath('userData'), 'mimic', 'characters');
+      await fs.promises.mkdir(dir, { recursive: true });
+      const file = path.join(dir, modelId + '.svg');
+      await fs.promises.writeFile(file + '.tmp', svg, 'utf8');
+      await fs.promises.rename(file + '.tmp', file);
+      const appearance = { xingTai: '2d', modelId, svg, scene2d: base };
+      if (previous !== JSON.stringify((settingsStore?.load() as { mimicAppearance?: unknown } | undefined)?.mimicAppearance)) return { ok: false, error: 'appearance-conflict' };
+      settingsStore?.save({ mimicAppearance: appearance } as never);
+      if (mimicWin && !mimicWin.isDestroyed()) mimicWin.webContents.send('warmy:mimicSetTi', appearance);
+      audit?.log('mimic.sculpt-saved', { hash, parts: base.parts.length });
+      return { ok: true, modelId, scene: base, svg, hash };
+      } finally { mimicHuiTuBaoCunZhong = false; }
+    }
+    if (action !== 'generate') return { ok: false, error: 'bad-action' };
+    if (mimicHuiTuRenWu.has(id)) return { ok: false, error: 'generation-busy' };
+    const prompt = String(p0?.prompt || '').trim();
+    if (!prompt || prompt.length > 2000) return { ok: false, error: 'prompt-size' };
+    const selection = p0?.selection || [];
+    if (!Array.isArray(selection) || selection.some((s) => typeof s !== 'string' || !base.parts.some((p) => p.id === s))) return { ok: false, error: 'selection-missing' };
+    const modelName = mimicDangQianMoXing();
+    if (!modelName || !yunXuDuiHua(modelName)) return { ok: false, error: 'model-not-configured' };
+    const ctrl = new AbortController(); mimicHuiTuRenWu.set(id, ctrl);
+    const abort = () => ctrl.abort();
+    e.sender.once('destroyed', abort);
+    const timeout = setTimeout(abort, 120000);
+    let attempts = 0;
+    try {
+      const an = await jieMoXingGongYingShang(modelName);
+      if (!an || (an.protocol !== 'ollama' && !an.apiKey)) return { ok: false, error: 'provider-unavailable' };
+      if (ctrl.signal.aborted) return { ok: false, error: 'generation-cancelled' };
+      const provider = congYuSheChuangJian(an.presetId, { baseURL: an.baseURL, apiKey: an.apiKey }, an.protocol);
+      const res = await provider.chat({ model: jieMoXingMing(modelName), maxTokens: 8192,
+        xiaoXiJi: [{ role: 'system', content: HUI_TU_TI_SHI }, { role: 'user', content: JSON.stringify({ prompt, selection, scene: base }) }],
+        shiYanGuanCha: { yunXu: () => ++attempts <= 1 && !ctrl.signal.aborted },
+      }, ctrl.signal);
+      if (ctrl.signal.aborted) return { ok: false, error: 'generation-cancelled' };
+      const result = juBuHeBing(base, jieXiHuiTu(neiRongWenBen(res.choices[0]?.message?.content)), selection);
+      audit?.log('mimic.sculpt-generated', { parts: result.parts.length, attempts, usage: res.usage });
+      return { ok: true, scene: result, svg: huiTuSvg(result), hash: huiTuHash(result), baseHash: huiTuHash(base) };
+    } finally {
+      clearTimeout(timeout); e.sender.removeListener('destroyed', abort); mimicHuiTuRenWu.delete(id);
+    }
+  } catch (err) { return { ok: false, error: xiJingCuoWu(err) }; }
 });
 chuliIpc('warmy:mimicWaiGuanShe', (_e, p0?: Record<string, unknown>) => {
   try {
@@ -17989,7 +18162,7 @@ async function zhenZhengFaSongBen(
     biaoRenWuZhongDuan(sessionId, '模型调用失败（没有可用模型）', 'no-model-available', '模型调用');
     return { ok: false, reply: '', error: 'no-model-available', needsKey: false, retry: true };
 }
-chuliIpc('warmy:liaoTianFaSong', zhenZhengFaSong);
+chuliIpc('warmy:liaoTianFaSong', liaoTianFaSongLuYou as never);
 /** 第 81 轮：nm 查看器把选中的文字插入主窗口当前聊天输入框。 */
 chuliIpc('warmy:chaRuDuiHua', (_e, text: unknown) => {
   try {
@@ -22143,7 +22316,7 @@ function yaSuoDuanJiYi(sessionId: string): void {
       totalCount -= 1;
     }
     if (!removed.length) return;
-    fs.writeFileSync(p, quan.replace(/\n{3,}/g, '\n\n').trim() + (quan.trim() ? '\n' : ''), 'utf8');
+    fs.writeFileSync(p, quan.replace(/\x0a{3,}/g, String.fromCharCode(10, 10)).trim() + (quan.trim() ? String.fromCharCode(10) : ''), 'utf8');
     xieDuanJiYiPinLu(sid, pin);
     if (removed.length) {
       try {
@@ -31221,7 +31394,7 @@ async function guiDangYiGeHuiHua(
         if (!fs.existsSync(lu2)) {
           fs.writeFileSync(lu2, '# 话题判定反馈（总结/总结时更新；判定前对照，成功/失败都记录）\n\n> 补充词表（会被读回生效）：\n> +换题词: 示例\n> +回题词: 示例\n\n| 时间 | 判定 | 用户纠正/备注 |\n| --- | --- | --- |\n', 'utf8');
         }
-        fs.appendFileSync(lu2, tp.map((x) => '| ' + now + ' | ' + x.panDuan.replace(/[|\n]/g, ' ') + ' | ' + String(x.jiaoZheng || '（未见纠正，判为成功）').replace(/[|\n]/g, ' ') + ' |').join('\n') + '\n', 'utf8');
+        fs.appendFileSync(lu2, tp.map((x) => '| ' + now + ' | ' + x.panDuan.replace(/[|\x0a]/g, ' ') + ' | ' + String(x.jiaoZheng || '（未见纠正，判为成功）').replace(/[|\x0a]/g, ' ') + ' |').join(String.fromCharCode(10)) + String.fromCharCode(10), 'utf8');
         huaTiFanKuiJiLu.delete(sid);
         try { duHuaTiFanKuiCi(); } catch { /* noop */ }
       }
@@ -36964,3 +37137,272 @@ chuliIpc('warmy:jiaRuJiLuLieBiao', () => {
     return { ok: true, items: [...rcQ, ...jr] };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+
+/* ══════════════════════════════════════════════════════════════
+ * R232 自进化（运行期 A/B）宿主层。
+ * 纯判定在 self-evolution.ts；这里负责：实验存储/双臂执行/机械择优/人工选支/5s 暂存/快照回退。
+ * 支线文件隔离在各自 workspace；外部不可逆操作不在支线执行（延迟到合并后走正常授权）。
+ * ══════════════════════════════════════════════════════════════ */
+import { jieXiYanShou, paoGuiZe, panDingZhiXian, xuanOverlay, type ZiJinHuaShiYan, type ZhiXian, type XueXiOverlay } from './self-evolution.js';
+import { duZhuoMianTuBiao } from './desktop-icons.js';
+import { chaXunBenDiShengCheng, anZhuangBenDiShengCheng } from './local-gen-installer.js';
+const ziJinHuaLu = path.join(app.getPath('userData'), 'self-evolution.json');
+const ziJinHuaXueXiLu = path.join(app.getPath('userData'), 'self-evolution-overlays.json');
+const ziJinHuaBiao = new Map<string, ZiJinHuaShiYan>();
+const ziJinHuaDingShi = new Map<string, NodeJS.Timeout>();
+let ziJinHuaXueXi: XueXiOverlay[] = [];
+function duZiJinHua(): void {
+  try {
+    const j = JSON.parse(fs.readFileSync(ziJinHuaLu, 'utf8')) as { items?: ZiJinHuaShiYan[] };
+    for (const e of (j.items || [])) if (e && e.id && e.sessionId) ziJinHuaBiao.set(e.sessionId, e);
+  } catch { /* 首次无 */ }
+  try { ziJinHuaXueXi = JSON.parse(fs.readFileSync(ziJinHuaXueXiLu, 'utf8')) as XueXiOverlay[]; } catch { ziJinHuaXueXi = []; }
+}
+function cunZiJinHua(): void {
+  try {
+    const tmp = ziJinHuaLu + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ items: [...ziJinHuaBiao.values()].slice(-50) }, null, 2), 'utf8');
+    fs.renameSync(tmp, ziJinHuaLu);
+  } catch { /* 不阻断 */ }
+}
+function cunZiJinHuaXueXi(): void {
+  try { fs.writeFileSync(ziJinHuaXueXiLu, JSON.stringify(ziJinHuaXueXi.slice(-100), null, 2), 'utf8'); } catch { /* 不阻断 */ }
+}
+function ziJinHuaGuangBo(e: ZiJinHuaShiYan): void {
+  cunZiJinHua();
+  try { broadcastToWindows('warmy:ziJinHuaGengXin', { exp: e }); } catch { /* noop */ }
+}
+function ziJinHuaHuoQu(sid: string): ZiJinHuaShiYan | undefined {
+  const e = ziJinHuaBiao.get(sid);
+  return e && (e.status === 'running' || e.status === 'split' || e.status === 'staged') ? e : undefined;
+}
+function ziJinHuaGongZuoQu(sid: string, expId: string, arm: ZhiXian): string {
+  return path.join(workspaceDirOf(app.getPath('userData'), sid), 'evolve', expId, arm);
+}
+function wenJianHaXi(p: string): string {
+  try { return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'); } catch { return ''; }
+}
+/** 跑一条支线：复用 providers 工具循环 + work-tools（隔离工作区），收文件清单与回复，跑客观验收。 */
+async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: string): Promise<void> {
+  const base = ziJinHuaGongZuoQu(e.sessionId, e.id, arm);
+  try { fs.mkdirSync(base, { recursive: true }); } catch { /* noop */ }
+  const moXing = (await lieKeYongMoXing())[0] || '';
+  const an = moXing ? await jieMoXingGongYingShang(moXing) : null;
+  const zt = e.arms[arm];
+  if (!an || !moXing) { zt.reply = '[自进化] 无可用模型，支线未执行。'; zt.turns++; return; }
+  const provider = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL }, an.protocol);
+  const overlay = arm === 'B' ? (zt.overlay || xuanOverlay(ziJinHuaXueXi, e.sessionId) || '交付前自检：写文件后读回核对；金额用整数分；不得过滤负数行。') : '';
+  const xiTong = '你是自进化实验的支线 ' + arm + '。独立完成用户任务，需要写文件就写（工作区相对路径），最后给出可交付结论。' + (overlay ? '\n【改进要求】' + overlay : '');
+  const kong = new AbortController();
+  try {
+    const loop = await liaoTianDaiGongJu(provider, {
+      model: jieMoXingMing(moXing),
+      xiaoXiJi: [{ role: 'system', content: xiTong }, { role: 'user', content: String(content).slice(0, 4000) }],
+      maxTokens: 2048, tools: workToolSpecs() as never,
+    }, async (call) => {
+      const out = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } });
+      if (out.meta.ok && out.meta.abs) { const rel = path.relative(base, out.meta.abs); if (rel && !zt.files.includes(rel)) zt.files.push(rel); }
+      return String(out.content).slice(0, 2000);
+    }, { zuiDaLunShu: 4, zuiDaJieGuoZiShu: 4000, signal: kong.signal });
+    zt.reply = String(loop.xiangYingTi?.choices?.[0]?.message?.content || '').slice(0, 4000);
+  } catch (err) { zt.reply = '[自进化] 支线执行失败：' + xiJingCuoWu(err); }
+  zt.turns++;
+  // 客观验收：读支线工作区文件
+  for (const r of e.rules) {
+    const outcome = paoGuiZe(r, (p) => { try { return fs.readFileSync(path.join(base, p), 'utf8'); } catch { return null; } });
+    e.checks.push({ checkId: r.id, arm, outcome, ts: Date.now() });
+  }
+}
+/** 证据充足且无冲突⇒机械择优自动合并；否则保持分栏。次数不参与判定。 */
+function ziJinHuaChangShiZiDong(e: ZiJinHuaShiYan): void {
+  const pan = panDingZhiXian(e.rules, e.checks);
+  if (pan.sufficient && pan.winner) { void ziJinHuaHeBing(e, pan.winner, 'machine', true); }
+  else if (e.status === 'running') { e.status = 'split'; e.reason = pan.reason; ziJinHuaGuangBo(e); }
+}
+async function ziJinHuaHeBing(e: ZiJinHuaShiYan, winner: ZhiXian, by: string, auto: boolean): Promise<{ ok: boolean; conflicts?: string[] }> {
+  const mainBase = workspaceDirOf(app.getPath('userData'), e.sessionId);
+  const winBase = ziJinHuaGongZuoQu(e.sessionId, e.id, winner);
+  const conflicts: string[] = [];
+  for (const rel of e.arms[winner].files) {
+    const mainP = path.join(mainBase, rel);
+    const forkH = (e as unknown as { forkHashes?: Record<string, string> }).forkHashes?.[rel];
+    if (forkH && fs.existsSync(mainP) && wenJianHaXi(mainP) !== forkH) conflicts.push(rel);
+  }
+  if (conflicts.length) { e.status = 'split'; e.conflicts = conflicts; e.reason = 'conflict'; ziJinHuaGuangBo(e); return { ok: false, conflicts }; }
+  // pre-merge 快照（只覆盖胜出臂触及的主线文件），供历史显式回退
+  const snapId = 'zjh-' + e.id;
+  const snapDir = path.join(app.getPath('userData'), 'self-evolution-snapshots', snapId);
+  try {
+    fs.mkdirSync(snapDir, { recursive: true });
+    for (const rel of e.arms[winner].files) {
+      const mainP = path.join(mainBase, rel);
+      if (fs.existsSync(mainP)) { const d = path.join(snapDir, rel); fs.mkdirSync(path.dirname(d), { recursive: true }); fs.copyFileSync(mainP, d); }
+    }
+  } catch { /* 快照失败不阻断合并但记录 */ }
+  for (const rel of e.arms[winner].files) {
+    const src = path.join(winBase, rel); const d = path.join(mainBase, rel);
+    try { fs.mkdirSync(path.dirname(d), { recursive: true }); fs.copyFileSync(src, d); } catch { /* 单文件失败继续 */ }
+  }
+  e.status = 'merged'; e.winner = winner; e.auto = auto; e.mergedAt = Date.now(); e.snapshotId = snapId;
+  if (auto && winner === 'B' && e.arms.B.overlay) {
+    ziJinHuaXueXi.push({ family: e.sessionId, text: e.arms.B.overlay, basis: 'objective-win', expId: e.id, ts: Date.now() });
+    cunZiJinHuaXueXi();
+  }
+  try { zhuiJiaLiaoTianRiZhi(e.sessionId, { role: 'system', content: '[自进化] 已' + (auto ? '机械择优' : '人工') + '选择支线 ' + winner + ' 并合并到主线。' + (e.snapshotId ? '可在自进化历史回退到合并前。' : ''), ts: Date.now() } as never); } catch { /* noop */ }
+  jiXiTongXiaoXi('system', '自进化合并', '会话 ' + e.sessionId + ' 选择支线 ' + winner + (auto ? '（客观验收自动）' : '（人工）'));
+  ziJinHuaGuangBo(e);
+  return { ok: true };
+}
+duZiJinHua();
+chuliIpc('warmy:ziJinHuaZhuangTai', (_e, sid?: string) => ({ ok: true, exp: ziJinHuaHuoQu(String(sid || '')) || null, history: [...ziJinHuaBiao.values()].filter((x) => x.status === 'merged').slice(-20) }));
+/* R232 桌面图标只读快照（供拟态视觉互动定位）。 */
+chuliIpc('warmy:zhuoMianTuBiao', async () => { try { return await duZhuoMianTuBiao(); } catch (e) { return { ok: false, icons: [], error: xiJingCuoWu(e) }; } }, ['mimic.html', 'desktop-anim.html']);
+/** R232 桌面真实操作：仅用户要求（拟态工具）触发；需授权卡；成功才播成功动画，失败播失败。 */
+chuliIpc('warmy:zhuoMianCaoZuo', async (_e, p0?: { op?: string; path?: string; dest?: string; content?: string; sessionId?: string }) => {
+  const op = String(p0?.op || ''); const target = String(p0?.path || '');
+  if (!['move', 'create', 'delete', 'modify', 'open'].includes(op) || !target) return { ok: false, error: 'bad-op' };
+  const abs = path.resolve(target);
+  const dang = anQuanDangWei();
+  if (!dang.full) {
+    const da = await qingQiuKaPian(String(p0?.sessionId || 'mimic-pet'), '桌面操作授权', op + '：' + abs, [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+    if (!/^同意/.test(da)) { broadcastToWindows('warmy:zhuoMianDongHua', { op, ok: false, path: abs }); return { ok: false, error: 'denied' }; }
+  }
+  return zhiXingZhuoMianCaoZuo(op, abs, String(p0?.dest || ''), String(p0?.content ?? ''));
+});
+/** 桌面真实操作执行体（IPC 与宿主工具共用）；成功才播成功动画。 */
+async function zhiXingZhuoMianCaoZuo(op: string, abs: string, dest: string, content: string): Promise<{ ok: boolean; error?: string }> {
+  let ok = true; let err = '';
+  try {
+    if (op === 'create') { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, content, 'utf8'); }
+    else if (op === 'modify') { fs.appendFileSync(abs, content, 'utf8'); }
+    else if (op === 'move') { const d = path.resolve(dest); if (!d) throw new Error('bad-dest'); fs.mkdirSync(path.dirname(d), { recursive: true }); fs.renameSync(abs, d); }
+    else if (op === 'delete') { await shell.trashItem(abs); }
+    else if (op === 'open') { const r = await shell.openPath(abs); if (r) throw new Error(r); }
+  } catch (e) { ok = false; err = xiJingCuoWu(e); }
+  try { audit?.log('desktop.op', { op, ok, path: abs, error: err }); } catch { /* noop */ }
+  ensureDesktopAnimWin();
+  broadcastToWindows('warmy:zhuoMianDongHua', { op, ok, path: abs });
+  return { ok, error: err };
+}
+/* R232 本地生成后端按需安装：查询/下载按钮。无已验证来源如实提示。 */
+chuliIpc('warmy:benDiShengChengChaXun', () => chaXunBenDiShengCheng(app.getPath('userData')));
+chuliIpc('warmy:benDiShengChengAnZhuang', async () => {
+  const r = await anZhuangBenDiShengCheng(app.getPath('userData'));
+  if (r.ok) jiXiTongXiaoXi('system', '本地生成后端', '已安装 v' + (r.version || '') + '，可使用程序内 3D 生成。');
+  return r;
+});
+/* R232 能力格政策：人工选择进系统消息；默认拒绝超出上限。 */
+chuliIpc('warmy:nengLiGeZhengCeShe', (_e, p0?: { level?: string }) => {
+  const level = ['readonly', 'workspace-write'].includes(String(p0?.level || '')) ? String(p0?.level) : 'readonly';
+  settingsStore?.save({ capabilityLattice: level } as never);
+  jiXiTongXiaoXi('system', '能力格政策', '插件/工具能力上限设为 ' + (level === 'readonly' ? '只读沙箱' : '工作区写') + '。超出上限默认拒绝；试用次数不作为扩权依据。');
+  return { ok: true, level };
+});
+chuliIpc('warmy:ziJinHuaKaiShi', async (_e, p0?: { sessionId?: string; content?: string; projectId?: string }) => {
+  const sid = String(p0?.sessionId || '');
+  if (!sid || ziJinHuaHuoQu(sid)) return { ok: false, error: 'active-or-bad-session' };
+  const content = String(p0?.content || '');
+  const rules = jieXiYanShou([content]);
+  const mainBase = workspaceDirOf(app.getPath('userData'), sid);
+  const forkHashes: Record<string, string> = {};
+  try { for (const rel of fs.readdirSync(mainBase)) { const p = path.join(mainBase, rel); if (fs.statSync(p).isFile()) forkHashes[rel] = wenJianHaXi(p); } } catch { /* noop */ }
+  const e: ZiJinHuaShiYan = {
+    id: 'exp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    sessionId: sid, projectId: p0?.projectId, createdAt: Date.now(), forkSeq: Date.now(),
+    status: 'running', mode: rules.length ? 'objective' : 'subjective', rules,
+    arms: { A: { turns: 0, files: [], reply: '' }, B: { turns: 0, files: [], reply: '' } },
+    checks: [],
+  };
+  (e as unknown as { forkHashes?: Record<string, string> }).forkHashes = forkHashes;
+  ziJinHuaBiao.set(sid, e);
+  try { zhuiJiaLiaoTianRiZhi(sid, { role: 'system', content: '[自进化] 已开启：两条支线并行执行。' + (rules.length ? '检测到客观验收规则，证据充足将自动择优。' : '无客观规则，需人工选择支线。'), ts: Date.now() } as never); } catch { /* noop */ }
+  ziJinHuaGuangBo(e);
+  void (async () => {
+    await Promise.allSettled([paoZiJinHuaZhiXian(e, 'A', content), paoZiJinHuaZhiXian(e, 'B', content)]);
+    ziJinHuaChangShiZiDong(e);
+  })();
+  return { ok: true, exp: e };
+});
+/** 支线继续发消息（其他成员也可）；不创建新分支。 */
+chuliIpc('warmy:ziJinHuaFaSong', async (_e, p0?: { sessionId?: string; arm?: string; content?: string }) => {
+  const sid = String(p0?.sessionId || '');
+  const e = ziJinHuaHuoQu(sid);
+  const arm: ZhiXian = p0?.arm === 'B' ? 'B' : 'A';
+  if (!e || e.status === 'staged') return { ok: false, error: 'no-active-or-staged' };
+  const content = String(p0?.content || '');
+  // 支线里新出现的验收规则也并入（证据后来充足可自动择优）
+  const xin = jieXiYanShou([content]);
+  for (const r of xin) if (!e.rules.some((x) => x.id === r.id)) e.rules.push(r);
+  if (e.rules.length) e.mode = 'objective';
+  e.status = 'running';
+  ziJinHuaGuangBo(e);
+  await paoZiJinHuaZhiXian(e, arm, content);
+  ziJinHuaChangShiZiDong(e);
+  return { ok: true, exp: e };
+});
+/** 人工选支：仅创建者/管理者（项目）；本人单聊放行。5s 暂存可撤销。 */
+chuliIpc('warmy:ziJinHuaXuanZe', async (_e, p0?: { sessionId?: string; arm?: string }) => {
+  const sid = String(p0?.sessionId || '');
+  const e = ziJinHuaHuoQu(sid);
+  if (!e || e.status !== 'split') return { ok: false, error: 'not-split' };
+  if (e.projectId && !benJiShiGuanLiZhe(e.projectId)) return { ok: false, error: 'role-denied' };
+  const arm: ZhiXian = p0?.arm === 'B' ? 'B' : 'A';
+  e.status = 'staged'; e.stagedAt = Date.now(); e.winner = arm;
+  ziJinHuaGuangBo(e);
+  const t = setTimeout(() => { ziJinHuaDingShi.delete(sid); void ziJinHuaHeBing(e, arm, 'human', false); }, 5000);
+  ziJinHuaDingShi.set(sid, t);
+  return { ok: true, exp: e };
+});
+chuliIpc('warmy:ziJinHuaQuXiao', (_e, sid?: string) => {
+  const s = String(sid || '');
+  const t = ziJinHuaDingShi.get(s); if (t) { clearTimeout(t); ziJinHuaDingShi.delete(s); }
+  const e = ziJinHuaBiao.get(s);
+  if (e && e.status === 'staged') { e.status = 'split'; e.winner = undefined; e.stagedAt = undefined; ziJinHuaGuangBo(e); }
+  return { ok: true };
+});
+/** 历史显式回退到 pre-merge 快照（只恢复文件；聊天历史保留，追加回退说明）。 */
+chuliIpc('warmy:ziJinHuaHuiTui', (_e, p0?: { sessionId?: string; snapshotId?: string }) => {
+  const sid = String(p0?.sessionId || '');
+  const snapId = String(p0?.snapshotId || '');
+  const snapDir = path.join(app.getPath('userData'), 'self-evolution-snapshots', snapId);
+  if (!snapId || !fs.existsSync(snapDir)) return { ok: false, error: 'no-snapshot' };
+  const mainBase = workspaceDirOf(app.getPath('userData'), sid);
+  const huiTui = (dir: string, rel: string): void => {
+    for (const n of fs.readdirSync(dir)) {
+      const p = path.join(dir, n); const r = rel ? rel + '/' + n : n;
+      if (fs.statSync(p).isDirectory()) huiTui(p, r);
+      else { const d = path.join(mainBase, r); fs.mkdirSync(path.dirname(d), { recursive: true }); fs.copyFileSync(p, d); }
+    }
+  };
+  try { huiTui(snapDir, ''); } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+  try { zhuiJiaLiaoTianRiZhi(sid, { role: 'system', content: '[自进化] 已回退到合并前快照（仅文件；聊天历史保留）。', ts: Date.now() } as never); } catch { /* noop */ }
+  return { ok: true };
+});
+/** 主发送路由：开启自进化且无活跃实验⇒进入 A/B；否则走原引擎。 */
+async function liaoTianFaSongLuYou(e: unknown, xiaoXi: { sessionId?: string; content?: string; evolve?: boolean; [k: string]: unknown }): Promise<unknown> {
+  if (xiaoXi && xiaoXi.evolve && xiaoXi.sessionId && !ziJinHuaHuoQu(String(xiaoXi.sessionId))) {
+    const g = groupStore?.getGroup?.(String(xiaoXi.sessionId));
+    const projectId = g && (g as { type?: string }).type === 'internal' ? String(xiaoXi.sessionId) : undefined;
+    if (projectId && !benJiShiGuanLiZhe(projectId)) return { ok: false, error: 'role-denied' };
+    return ziJinHuaKaiShiNeiBu(String(xiaoXi.sessionId), String(xiaoXi.content || ''), projectId);
+  }
+  return zhenZhengFaSong(e, xiaoXi as never);
+}
+async function ziJinHuaKaiShiNeiBu(sid: string, content: string, projectId?: string): Promise<unknown> {
+  const rules = jieXiYanShou([content]);
+  const mainBase = workspaceDirOf(app.getPath('userData'), sid);
+  const forkHashes: Record<string, string> = {};
+  try { for (const rel of fs.readdirSync(mainBase)) { const p = path.join(mainBase, rel); if (fs.statSync(p).isFile()) forkHashes[rel] = wenJianHaXi(p); } } catch { /* noop */ }
+  const e: ZiJinHuaShiYan = {
+    id: 'exp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    sessionId: sid, projectId, createdAt: Date.now(), forkSeq: Date.now(),
+    status: 'running', mode: rules.length ? 'objective' : 'subjective', rules,
+    arms: { A: { turns: 0, files: [], reply: '' }, B: { turns: 0, files: [], reply: '' } }, checks: [],
+  };
+  (e as unknown as { forkHashes?: Record<string, string> }).forkHashes = forkHashes;
+  ziJinHuaBiao.set(sid, e);
+  try { zhuiJiaLiaoTianRiZhi(sid, { role: 'system', content: '[自进化] 已开启：两条支线并行执行。', ts: Date.now() } as never); } catch { /* noop */ }
+  ziJinHuaGuangBo(e);
+  void (async () => { await Promise.allSettled([paoZiJinHuaZhiXian(e, 'A', content), paoZiJinHuaZhiXian(e, 'B', content)]); ziJinHuaChangShiZiDong(e); })();
+  return { ok: true, reply: '', evolve: true, exp: e };
+}

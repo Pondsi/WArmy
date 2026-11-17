@@ -6,6 +6,8 @@
   <title>WArmy</title>
   <link rel="stylesheet" href="./app.css" />
   <link rel="stylesheet" href="./renderer.css" />
+  <link rel="stylesheet" href="./mimic-sculpt.css" />
+  <link rel="stylesheet" href="./self-evolve-ui.css" />
   <link rel="stylesheet" href="./auth-gate.css" />
 </head>
 <body>
@@ -38,7 +40,7 @@
       <div class="biaoTiLanDongZuoJi" id="biaoTiLanDongZuoJi">
         <button id="anNiuZhuXiFu" title="吸附（靠近屏幕边缘自动贴边）" aria-label="snap"><svg class="biaoTiLansvg" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M716.8 409.6v204.8a204.8 204.8 0 1 1-409.6 0V409.6H204.8v204.8a307.2 307.2 0 1 0 614.4 0V409.6H716.8z m0-51.2h102.4V256H716.8v102.4z m-409.6 0V256H204.8v102.4h102.4z m51.2-153.6v409.6a153.6 153.6 0 0 0 307.2 0V204.8h204.8v409.6a358.4 358.4 0 0 1-716.8 0V204.8h204.8z"/></svg></button>
         <!-- R225 项1：原手动同步图标改名「链接」—— 暂时无任何功能（空按钮）；位置不变：吸附右侧、置顶左侧 -->
-        <button id="anNiuTongBu" title="链接" aria-label="link" data-i18n-title="tip.linkBtn"><svg class="biaoTiLansvg" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
+        <button id="anNiuTongBu" title="链接" aria-label="link" data-i18n-title="tip.linkBtn"><svg class="biaoTiLansvg" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M352 960c-19.2 0-32-12.8-32-32V172.8l-201.6 201.6c-12.8 12.8-32 12.8-44.8 0s-12.8-32 0-44.8l256-256c9.6-9.6 22.4-12.8 35.2-6.4 12.8 3.2 19.2 16 19.2 28.8v832c0 16-12.8 32-32 32zM672 960c-3.2 0-9.6 0-12.8-3.2-12.8-3.2-19.2-16-19.2-28.8V96c0-19.2 12.8-32 32-32s32 12.8 32 32v755.2l201.6-201.6c12.8-12.8 32-12.8 44.8 0s12.8 32 0 44.8l-256 256c-6.4 6.4-12.8 9.6-22.4 9.6z" fill="currentColor"/></svg></button>
         <button id="anNiuZongShiDing" title="置顶窗口" aria-label="always on top" data-i18n-title="tip.pin">
           <svg class="biaoTiLansvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 6 4 3v2H6v-2l4-3-1-6Z"/><path d="M12 15v5"/></svg>
         </button>
@@ -366,6 +368,13 @@
                       </div>
                     </div>
                   </div>
+                  <!-- R232 自进化开关（思考级别右侧；默认关；项目仅创建者/管理者可见） -->
+                  <div class="jinJiDd" id="ziJinHuaDd">
+                    <button class="jinJiTrigger" id="anNiuZiJinHua" type="button" data-i18n-title="evolve.tip" aria-pressed="false">
+                      <svg class="ico ziJinHuaIco" viewBox="0 0 1024 1024" aria-hidden="true" fill="currentColor"><path d="M643.584 967.168c-35.84-14.336-74.24-23.552-111.616-35.84-8.704-3.072-19.456-7.68-24.064-14.848-15.872-24.064-31.744-48.64-43.008-74.752-54.784-123.904-37.376-245.248 19.968-363.008 33.28-68.608 70.144-135.68 85.504-210.432 12.288-57.856 14.336-115.712-10.24-171.52C540.672 52.224 507.392 20.48 462.336 0c0.512 2.56 2.048 4.096 4.096 5.632 54.784 40.448 79.872 94.208 79.872 159.232 0.512 70.656-25.6 134.656-58.88 196.096-8.192 15.872-17.408 30.72-26.624 46.08-3.072-4.096-3.584-6.656-3.072-9.216 11.776-66.048-3.584-125.44-45.568-178.688C368.64 164.864 310.272 128 245.76 100.864c-39.424-16.896-81.408-29.696-126.464-45.568 1.536 28.672 2.048 51.712 4.096 74.24 6.656 77.824 20.48 153.6 59.392 223.744 35.328 64 86.528 109.056 162.816 123.392 20.48 3.584 41.472 4.096 64 5.632-91.136 143.872-121.344 291.84-36.864 447.488-65.536 16.384-133.632 25.6-168.96 94.208h493.056c-7.68-29.184-28.16-47.104-53.248-56.832zM119.296 55.296z"/><path d="M938.496 420.864c-6.656-1.536-10.24-2.56-13.824-3.072-79.872-10.24-159.232-9.216-237.568 10.752-122.88 32.256-195.584 120.32-202.24 243.2-0.512 14.848 4.608 22.528 17.408 28.672 84.48 43.52 165.376 34.816 241.664-18.432 93.184-65.024 146.432-159.744 194.56-261.12z"/></svg>
+                      <span class="siKaoBiaoQian" data-i18n="evolve.name">自进化</span>
+                    </button>
+                  </div>
                 </div>
                 <div class="shuRuQuFaSongHang">
                   <button class="anNiuTuBiao" id="anNiuYuYin" data-i18n-title="chat.voiceTip">
@@ -659,6 +668,8 @@
   <script src="./auth-gate.js"></script>
   <!-- R207 x3：cordis 插件管理渲染层助手（设置→插件面板用 window.warmyPlugin） -->
   <script src="./plugin-manager.js"></script>
+  <script src="./mimic-sculpt.js"></script>
+  <script src="./self-evolve-ui.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
