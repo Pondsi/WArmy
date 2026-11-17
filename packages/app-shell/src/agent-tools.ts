@@ -493,7 +493,7 @@ function quBiaoQianWenBen(xml: string, biaoQian: string): string[] {
   const out: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(xml))) {
-    const inner = (m[1] || '').replace(/<[^>]*>?/g, '');
+    const inner = (m[1] || '').replace(/</g, '');
     if (inner.trim()) out.push(inner.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
   }
   return out;

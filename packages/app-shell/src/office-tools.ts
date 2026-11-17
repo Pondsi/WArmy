@@ -142,7 +142,7 @@ function quBiaoQianWenBen(xml: string, biaoQian: string): string[] {
   const re = new RegExp(`<${biaoQian}[^>]*>([\\s\\S]*?)</${biaoQian}>`, 'g');
   const out: string[] = [];
   let m: RegExpExecArray | null;
-  while ((m = re.exec(xml))) out.push(jieTao((m[1] || '').replace(/<[^>]*>?/g, '')));
+  while ((m = re.exec(xml))) out.push(jieTao((m[1] || '').replace(/</g, '')));
   return out;
 }
 

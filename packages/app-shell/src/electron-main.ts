@@ -37324,7 +37324,7 @@ chuliIpc('warmy:ziJinHuaKaiShi', async (_e, p0?: { sessionId?: string; content?:
   const forkHashes: Record<string, string> = {};
   try { for (const rel of fs.readdirSync(mainBase)) { const p = path.join(mainBase, rel); if (fs.statSync(p).isFile()) forkHashes[rel] = wenJianHaXi(p); } } catch { /* noop */ }
   const e: ZiJinHuaShiYan = {
-    id: 'exp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    id: 'exp-' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'), // R233：加密随机（code-scanning #147）
     sessionId: sid, projectId: p0?.projectId, createdAt: Date.now(), forkSeq: Date.now(),
     status: 'running', mode: rules.length ? 'objective' : 'subjective', rules,
     arms: { A: { turns: 0, files: [], reply: '' }, B: { turns: 0, files: [], reply: '' } },
@@ -37411,7 +37411,7 @@ async function ziJinHuaKaiShiNeiBu(sid: string, content: string, projectId?: str
   const forkHashes: Record<string, string> = {};
   try { for (const rel of fs.readdirSync(mainBase)) { const p = path.join(mainBase, rel); if (fs.statSync(p).isFile()) forkHashes[rel] = wenJianHaXi(p); } } catch { /* noop */ }
   const e: ZiJinHuaShiYan = {
-    id: 'exp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    id: 'exp-' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'), // R233：加密随机（code-scanning #147）
     sessionId: sid, projectId, createdAt: Date.now(), forkSeq: Date.now(),
     status: 'running', mode: rules.length ? 'objective' : 'subjective', rules,
     arms: { A: { turns: 0, files: [], reply: '' }, B: { turns: 0, files: [], reply: '' } }, checks: [],

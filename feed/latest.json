@@ -1,13 +1,13 @@
 {
-  "version": "0.4.31",
-  "notes": "WArmy 0.4.31 — security-hardening round driven by the GitHub code-scanning review. Real fixes: session/instance IDs and the social-bind nonce now use crypto.getRandomValues instead of Math.random; SMTP connection verification re-enables TLS certificate validation (rejectUnauthorized:true); session-keyed dictionaries (plan numbering / stream buffer / interim / unread) are prototype-free (Object.create(null)) so a crafted \"__proto__\" session id can no longer pollute Object.prototype; sculpt range values are HTML-escaped before innerHTML; timestamp attribute selectors use CSS.escape; SKILL.md YAML strings escape backslashes before quotes; XML entity decoding unescapes &amp; last (fixes double-unescape) and tag-stripping also removes unterminated tags; the PDF content-stream regex is disambiguated to remove exponential backtracking; knowledge event fingerprints upgraded sha1→sha256; model-name/URL/voice-list parsing inputs are length-capped to bound polynomial regex cost. CI root cause fixed: the VRM runtime bundler (build-mimic-three.mjs) and its entry were gitignored, so the public repo could not run pnpm build — both are now whitelisted as build-essential. Full-feature acceptance re-run with per-round varying test data passed three consecutive clean rounds (90 gates + unit invariants per round). One confirmed false positive (JSON.stringify code embedding) dismissed with rationale. Carries all R232/R233 features unchanged.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.31/WArmy-Setup-0.4.31.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.31/WArmy-Setup-0.4.31.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.31/WArmy-Setup-0.4.31.exe.warmyblocks",
-  "sha256": "400d5a32a43fcb940abaca5f7b03b88f5d52975305bbf004ab3e015ed5680a35",
-  "size": 305416179,
+  "version": "0.4.32",
+  "notes": "WArmy 0.4.32 — final security-convergence round: self-evolution experiment IDs now use crypto.randomBytes (they flow into branch workspace paths used by the work-tool security boundary); docx XML inner-text extraction removes every raw \"<\" (illegal in XML text content anyway), so no \"<script\" fragment can survive extraction. With these, all actionable GitHub code-scanning alerts are resolved (39 → 0 open actionable; one confirmed false positive dismissed with rationale). CI on main is green again: the VRM bundler and its entry, previously gitignored, are published as build-essential files so the public repo builds. Full-feature acceptance with per-round varying test data passed three consecutive clean rounds (90 gates + unit invariants per round). Carries all R232/R233 features unchanged.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.32/WArmy-Setup-0.4.32.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.32/WArmy-Setup-0.4.32.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.32/WArmy-Setup-0.4.32.exe.warmyblocks",
+  "sha256": "826325240a13e1f45eb91f112fdf703742044acb14056a98def8a9696305a288",
+  "size": 305416170,
   "mandatory": false,
-  "publishedAt": "2026-11-17T16:15:29.497Z",
+  "publishedAt": "2026-11-17T17:21:49.339Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.31"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.32"
 }
