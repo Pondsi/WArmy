@@ -1,13 +1,13 @@
 {
-  "version": "0.4.29",
-  "notes": "WArmy 0.4.29 — R232 completion: added an original zero-burden procedural 3D preset (蓝兽) bringing 3D presets to three and 2D to six (all first-run presets remain listed); card read-out now functionally verified end-to-end (real card open drives the mimic speech path with type + letter/number options, 2/2). Capability lattice truly enforced (readonly denies writes across work/group/self-evolution/desktop tools; open/read allowed; default workspace-write unchanged) 9/9. Carries all R232 features: self-evolve A/B toggle with split chat+input, role-gated confirm, 5s undo + pre-merge history rollback, count-independent objective auto-merge; authorized desktop real ops with result-driven animations + idle purely-visual nudges; VRM runtime; in-app prompt 2D sculpt with region box-select + SVG warp; voice card read-out + A/B/C/1/2/3/free-reply; on-demand TripoSR (MIT, verified sha256) download button. Scoped smoke 13 gates x3 consecutive clean.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.29/WArmy-Setup-0.4.29.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.29/WArmy-Setup-0.4.29.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.29/WArmy-Setup-0.4.29.exe.warmyblocks",
-  "sha256": "c3679e1f3f88a1a51b70d8ff3e9eac3463d786a9474f21df256777953fd84835",
-  "size": 305415790,
+  "version": "0.4.30",
+  "notes": "WArmy 0.4.30 — R233 acceptance round: decision-card dedupe contract restored and made safe by card kind (choice cards dedupe by title while pending, exactly the original anti-spam contract; authorization cards keep strict kind+body+options matching so a pending approval is never reused for a different target or option set). Full-feature acceptance now runs every gate with per-round varying test data (names/text/numbers change each round via a shared variant library, gate order deterministically shuffled, round 1 identical to the historical baseline) and passed three consecutive clean rounds: 90 gates + cross-file unit invariants per round, zero failures, zero flakes (FULL_VERIFY_3X_PASSED). Test-harness hardening behind that result: stray installed-app processes holding probe CDP ports are now cleaned (only debug-port instances, never the user app), 26 gates pre-create their temp profile so the main process truly isolates them, first-run target verification fails fast instead of silently attaching to a wrong app, and the desktop probe deletes before opening files (an open editor could lock the file against the recycle bin). Carries all R232 features unchanged: self-evolve A/B with objective auto-merge, authorized real desktop ops with result animations, VRM runtime, 2D sculpt, voice card read-out, capability lattice enforcement, on-demand TripoSR (MIT, verified sha256).",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.30/WArmy-Setup-0.4.30.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.30/WArmy-Setup-0.4.30.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.30/WArmy-Setup-0.4.30.exe.warmyblocks",
+  "sha256": "1c053633513be75a7ab6777462128866b247d0dd6eae13a33f8307150e72dd4e",
+  "size": 305415963,
   "mandatory": false,
-  "publishedAt": "2026-11-17T11:31:28.565Z",
+  "publishedAt": "2026-11-17T14:28:37.381Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.29"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.30"
 }

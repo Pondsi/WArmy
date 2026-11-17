@@ -56,9 +56,12 @@ export class AiWenTiZhongXin {
     const groupId = String(shuRu.groupId || '');
     const biaoTi = String(shuRu.biaoTi || '').trim();
     if (shuRu.dedupe !== false) {
+      const shiShouQuan = (shuRu.kind || 'choice') === 'authorization';
       for (const q of this.items.values()) {
-        if (q.groupId === groupId && q.status === 'pending' && q.biaoTi === biaoTi
-                  && q.kind === (shuRu.kind || 'choice') && q.ti === String(shuRu.ti || '')
+        if (q.groupId !== groupId || q.status !== 'pending' || q.biaoTi !== biaoTi) continue;
+        if (!shiShouQuan) return q; // 选择卡：同标题未答只留一张（避免刷屏，产品原契约）
+        /** 授权卡必须严格匹配：同标题不同操作对象/选项绝不能复用旧授权（R232 安全口径） */
+        if (q.kind === 'authorization' && q.ti === String(shuRu.ti || '')
                   && JSON.stringify(q.options.map((o) => [o.biaoQian, o.description || '']))
                     === JSON.stringify((shuRu.options || []).filter((o) => o && String(o.biaoQian || '').trim()).map((o) => [String(o.biaoQian).trim(), o.description || '']))) return q;
       }
