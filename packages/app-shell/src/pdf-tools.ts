@@ -346,7 +346,7 @@ function hexToStr(h: string): string {
 /** 从内容流里抽文本（Tj / TJ / ' / " 都认；按 TJ 的间隙补空格） */
 function chaiNeiRong(txt: string, tounicode: Map<number, string>): string {
   const out: string[] = [];
-  const re = /(\((?:\\.|[^\\()])*\)|<[0-9A-Fa-f\s]*>)\s*(Tj|TJ|'|")|(\[(?:[^\][]|\\.)*\])\s*TJ|(Td|TD|T\*|ET)/g;
+  const re = /(\((?:\\.|[^\\()])*\)|<[0-9A-Fa-f\s]*>)\s*(Tj|TJ|'|")|(\[(?:[^\\\][]|\\.)*\])\s*TJ|(Td|TD|T\*|ET)/g;
   let m: RegExpExecArray | null;
   const decode = (tok: string): string => {
     if (tok.startsWith('<')) {

@@ -95,7 +95,7 @@
      * 未读数（微信式角标）：**每次新回复 +1**，直到用户点了这个聊天界面里的任何元素才清零
      * （产品要求：即使当前正开着这个会话，角标也要显示）。
      */
-    unread: {},
+    unread: Object.create(null), // R233：sid 键字典 null 原型
     /** 被打断的任务（程序异常/退出/重启后恢复到的会话）：列表亮 !，会话里给「继续/重试」 */
     planInterrupted: new Set(),
     /** 中断通知先到、但这一轮还在出字 ⇒ 等真正收尾后再点亮按钮（不许半路弹） */
@@ -4855,7 +4855,7 @@ async function langDuWenBen(text, btnEl) {
     if (!heZi || !mao) return false;
     const top0 = heZi.getBoundingClientRect().top;
     let el = null;
-    if (mao.ts) el = heZi.querySelector('.xiaoXi[data-ts="' + String(mao.ts).replace(/"/g, '\\"') + '"]');
+    if (mao.ts) el = heZi.querySelector('.xiaoXi[data-ts="' + CSS.escape(String(mao.ts)) + '"]');
     if (!el) {
       const nodes = [...heZi.querySelectorAll('.xiaoXi')];
       el = nodes[Math.min(mao.index, nodes.length - 1)] || null;
@@ -7626,7 +7626,7 @@ async function langDuWenBen(text, btnEl) {
       if (prevScrollTop != null) sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
     } else if (youXinNeiRong) {
       const zuiEl = zuiTs
-        ? heZi.querySelector('.xiaoXi[data-ts="' + String(zuiTs).replace(/"/g, '\\"') + '"]')
+        ? heZi.querySelector('.xiaoXi[data-ts="' + CSS.escape(String(zuiTs)) + '"]')
         : null;
       if (zhuiDi || yongHuXinFa) {
         /** 勾选 / 用户刚发消息 ⇒ 滚到底（R222 防抖动保留：用户消息永远回底） */
@@ -8012,7 +8012,7 @@ async function langDuWenBen(text, btnEl) {
        * 用户主动停止留下的现场不算“新回复”，不加角标。
        */
       if (role === 'them' && !(opts && opts.system) && !(opts && opts.stopped)) {
-        state.unread = state.unread || {};
+        state.unread = state.unread || Object.create(null); // R233：同上
         // 单会话上限 999（防长跑把数字撑得没法看；到顶就停）
         const xianZai = Number(state.unread[chatId] || 0);
         state.unread[chatId] = Math.min(999, xianZai + 1);
@@ -8770,7 +8770,7 @@ async function langDuWenBen(text, btnEl) {
   }
   /** 会话级编号元数据 */
   function jiHuaBianHaoYuan() {
-    window.__jiHuaHao = window.__jiHuaHao || {};
+    window.__jiHuaHao = window.__jiHuaHao || Object.create(null); // R233：sid 键字典 null 原型，防 __proto__ 污染
     return window.__jiHuaHao;
   }
   function dangQianFengGe(sid) {
@@ -17761,7 +17761,7 @@ async function renderDashboard(host) {
                 : [['zhuSe', tOr('mimic.pzhuSe', '主色'), 'color'], ['fuSe', tOr('mimic.pfuSe', '副色'), 'color'], ['yanSe', tOr('mimic.pyanSe', '眼色'), 'color'], ['hongSe', tOr('mimic.phongSe', '腮红/嘴'), 'color'], ['yanXing', tOr('mimic.pyanXing', '眼型'), 'select', ['yuan', 'xiao', 'qiao', 'hei', 'xing']], ['zuiXing', tOr('mimic.pzuiXing', '嘴型'), 'select', ['xiao', 'wei', 'kai', 'qiao', 'ping']], ['erDuo', tOr('mimic.perDuo', '耳朵'), 'check'], ['weiBa', tOr('mimic.pweiBa', '尾巴'), 'check']];
               sn.innerHTML = can.map(([k, biao, lei, a1, a2, a3]) => {
                 if (lei === 'color') return '<label style="display:flex;align-items:center;gap:6px"><span class="jingYin" style="min-width:64px">' + escapeHtml(biao) + '</span><input type="color" data-mimic-p="' + k + '" value="' + escapeHtml(String(wg[k] || '#f4a460')) + '"/></label>';
-                if (lei === 'range') return '<label style="display:flex;align-items:center;gap:6px"><span class="jingYin" style="min-width:64px">' + escapeHtml(biao) + '</span><input type="range" data-mimic-p="' + k + '" min="' + a1 + '" max="' + a2 + '" step="' + a3 + '" value="' + (wg[k] != null ? wg[k] : 1) + '"/><span class="jingYin" style="min-width:34px">' + (wg[k] != null ? wg[k] : 1) + '</span></label>';
+                if (lei === 'range') return '<label style="display:flex;align-items:center;gap:6px"><span class="jingYin" style="min-width:64px">' + escapeHtml(biao) + '</span><input type="range" data-mimic-p="' + k + '" min="' + a1 + '" max="' + a2 + '" step="' + a3 + '" value="' + escapeHtml(String(wg[k] != null ? wg[k] : 1)) + '"/><span class="jingYin" style="min-width:34px">' + escapeHtml(String(wg[k] != null ? wg[k] : 1)) + '</span></label>';
                 if (lei === 'select') return '<label style="display:flex;align-items:center;gap:6px"><span class="jingYin" style="min-width:64px">' + escapeHtml(biao) + '</span><select data-mimic-p="' + k + '">' + a1.map((v) => '<option value="' + v + '"' + (String(wg[k] || '') === v ? ' selected' : '') + '>' + escapeHtml(v) + '</option>').join('') + '</select></label>';
                 return '<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" data-mimic-p="' + k + '"' + (wg[k] !== false ? ' checked' : '') + '/><span class="jingYin">' + escapeHtml(biao) + '</span></label>';
               }).join('');
@@ -25160,7 +25160,7 @@ async function renderDashboard(host) {
           zhengLiTeXiaoKai(yuan);
           zt.zhengLiTeXiaoStarted = true;
         }
-        const rid = 'zl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+        const rid = 'zl-' + Date.now().toString(36) + '-' + crypto.getRandomValues(new Uint32Array(2)).join('');
         yuYinZhengLiQingQiuId = rid;
         try {
           const ctx = (() => {
@@ -26281,7 +26281,7 @@ async function renderDashboard(host) {
               const sb = state.streamBuf && state.streamBuf[sid];
               const zj = String((sb && sb.content) || '').trim();
               if (zj) {
-                state.streamInterim = state.streamInterim || {};
+                state.streamInterim = state.streamInterim || Object.create(null); // R233：同上
                 const lie = state.streamInterim[sid] || (state.streamInterim[sid] = []);
                 lie.push({ ts: Number((sb && sb.contentAt) || Date.now()), text: zj });
                 if (lie.length > 80) lie.shift();
@@ -27731,9 +27731,9 @@ async function renderDashboard(host) {
       }
       const devEnv = pick.devEnv === 'container' ? 'container' : 'host';
       // id 绝不与既有实例冲突（避免顶替）
-      let id = 'inst-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+      let id = 'inst-' + Date.now() + '-' + crypto.getRandomValues(new Uint32Array(2)).join('');
       while ((state.instances || []).some((x) => x && x.id === id)) {
-        id = 'inst-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+        id = 'inst-' + Date.now() + '-' + crypto.getRandomValues(new Uint32Array(2)).join('');
       }
       // **随机使用专业模板**（产品要求：50 个模板随机分配）
       const moBanJi = (typeof window !== 'undefined' && Array.isArray(window.__NIU_MA_TEMPLATES)) ? window.__NIU_MA_TEMPLATES : [];
@@ -34343,7 +34343,7 @@ try {
       const zhe = document.createElement('div');
       zhe.className = 'saoMaZheZhao';
       zhe.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.45);display:grid;place-items:center';
-      const link = 'warmy://social/bind?platform=' + encodeURIComponent(pid) + '&nonce=' + Math.random().toString(36).slice(2);
+      const link = 'warmy://social/bind?platform=' + encodeURIComponent(pid) + '&nonce=' + crypto.getRandomValues(new Uint32Array(2)).join('');
       const svg = qrSvg(link, 200, 'M');
       zhe.innerHTML =
         '<div style="background:var(--card,#fff);border-radius:12px;padding:18px;max-width:420px;box-sizing:border-box;text-align:center">'
@@ -37136,7 +37136,7 @@ try {
         _liuShiZuiHou[sid] = Date.now();
         /** 本轮模型路由事实（悬停提示用）：主进程在选型那一刻登记，这里只存不猜 */
         if (d.luYou) { state.liuShiLuYou = state.liuShiLuYou || {}; state.liuShiLuYou[sid] = d.luYou; }
-        state.streamBuf = state.streamBuf || {};
+        state.streamBuf = state.streamBuf || Object.create(null); // R233：同上
         const b = state.streamBuf[sid] || (state.streamBuf[sid] = { reasoning: '', content: '', contentAt: 0 });
         // 单会话缓冲上限 200KB（防长文把内存撑大；到顶就不再追加）
         if (d.reasoning && b.reasoning.length < 200000) {

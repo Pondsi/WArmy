@@ -319,7 +319,7 @@ export function contentToText(result) {
 
 /** `mcp__<server>__<tool>` — safe for the OpenAI/Anthropic function-name charset. */
 export function qualifiedToolName(serverName, toolName) {
-  const clean = (s, max) => String(s || '')
+  const clean = (s, max) => String(s || '').slice(0, 256)
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '_')
     .replace(/^_+|_+$/g, '')

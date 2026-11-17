@@ -55,7 +55,7 @@ export class ComfyUiKeHu {
   private readonly fetchImpl: typeof fetch;
 
   constructor(opts: ComfyUiXuanXiang = {}) {
-    this.base = String(opts.baseUrl || MO_REN_BASE).replace(/\/+$/, '');
+    this.base = String(opts.baseUrl || MO_REN_BASE).slice(0, 2048).replace(/\/+$/, '');
     this.timeoutMs = opts.timeoutMs ?? 15_000;
     this.imageTimeoutMs = opts.imageTimeoutMs ?? 180_000;
     this.videoTimeoutMs = opts.videoTimeoutMs ?? 600_000;

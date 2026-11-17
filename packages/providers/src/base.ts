@@ -154,7 +154,9 @@ export async function qingQiuJson<T>(
 }
 
 export function pinJieUrl(base: string, path: string): string {
-  return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
+  const b = String(base || '').slice(0, 2048);
+  const p = String(path || '').slice(0, 2048);
+  return `${b.replace(/\/+$/, '')}/${p.replace(/^\/+/, '')}`;
 }
 
 /**
@@ -162,7 +164,7 @@ export function pinJieUrl(base: string, path: string): string {
  * 少了 `/v1` 就是 **HTTP 404**（真事故：DeepSeek 预设写成 `https://api.deepseek.com`）。
  */
 export function guiFanBaseURL(u: string): string {
-  const s0 = String(u || '').trim().replace(/\/+$/, '');
+  const s0 = String(u || '').trim().slice(0, 2048).replace(/\/+$/, '');
   if (!s0) return s0;
   if (/\/v\d+[a-z]*$/i.test(s0)) return s0;                       // 已带版本段：不动
   if (/api\.deepseek\.com$|api\.xiaomimimo\.com$|api\.openai\.com$|api\.moonshot\.cn$|api\.siliconflow\.cn$|open\.bigmodel\.cn\/api\/paas$/i.test(s0)) {
@@ -179,7 +181,7 @@ export abstract class JichuGongYing implements MoxingGongYing {
 
   constructor(auth: GongYingRenZheng, defaultBase: string) {
     this.auth = auth;
-    this.baseURL = guiFanBaseURL((auth.baseURL || defaultBase).replace(/\/+$/, ''));
+    this.baseURL = guiFanBaseURL(auth.baseURL || defaultBase);
   }
 
   abstract chat(Qiu: LiaoTianQingQiu, signal?: AbortSignal): Promise<LiaoTianXiangYing>;

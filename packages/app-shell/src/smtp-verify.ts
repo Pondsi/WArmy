@@ -65,7 +65,7 @@ export async function yanZhengSmtp(cfg: SmtpPeizhi): Promise<SmtpVerifyResult> {
     };
 
     const socket = cfg.secure
-      ? tls.connect({ host: cfg.host, port: cfg.port, servername: cfg.host, rejectUnauthorized: false })
+      ? tls.connect({ host: cfg.host, port: cfg.port, servername: cfg.host, rejectUnauthorized: true })
       : net.connect({ host: cfg.host, port: cfg.port });
 
     socket.setTimeout(12000, () => wanCheng({ ok: false, buZhou, message: 'timeout' }));

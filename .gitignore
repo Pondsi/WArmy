@@ -103,6 +103,9 @@ packages/app-shell/scripts/*
 # R162：增量更新的分块账生成器是**发布产物必需**（.warmyblocks 要随 Release 上传），
 # 与 check-syntax / copy-assets 同类：不入库就无法从公开仓库复现发布产物。
 !packages/app-shell/scripts/make-blocks.mjs
+# R233：VRM 运行时打包器与其入口同为构建必需（CI 的 pnpm build 依赖），不入库则公开仓库无法构建。
+!packages/app-shell/scripts/build-mimic-three.mjs
+!packages/app-shell/scripts/mimic-three-entry.mjs
 /_head-app.js
 packages/sync-protocol/scripts/
 

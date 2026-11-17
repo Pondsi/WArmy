@@ -60,7 +60,7 @@ export const WO_MEN_DANG_WEI = ['off', 'l1', 'l2', 'l3', 'l4', 'l5', 'l6', 'auto
 
 /** 档位名 → 强度 0..1（用于排序与映射；识别不出的按 0.5 中位） */
 export function dangWeiQiangDu(ming: string): number {
-  const s = String(ming || '').toLowerCase();
+  const s = String(ming || '').slice(0, 512).toLowerCase();
   if (/^(none|off|disable|minimal|min|tiny|brief|short|fast|quick|light|low|shallow|0)$/.test(s)) return 0;
   if (/xhigh|ultra|max|highest|deepest|extensive|heavy|thorough|long|thinking-max/.test(s)) return 1;
   if (/high|deep|strong|hard|serious/.test(s)) return 0.85;
@@ -203,7 +203,7 @@ const YI_ZHI_NENG_LI: Array<{ shi: RegExp; neng: Partial<MoXingNengLi> }> = [
 
 /** 从型号名猜种类（端点没给类别字段时用） */
 export function caiZhongLei(ming: string): MoXingNengLi['kind'] {
-  const s = String(ming || '').toLowerCase();
+  const s = String(ming || '').slice(0, 512).toLowerCase();
   if (/text-embedding|bge-(?!r?erank)|bge_|m3e|gte-|e5-|contriever|jina-embed|nomic-embed|\bembed\b/.test(s)) return 'embedding';
   if (/rerank|re-?rank|bge-?reranker/.test(s)) return 'rerank';
   if (/cosyvoice|melo-?tts|melo\b|vits|\bbark\b|kokoro|f5-?tts|xtts|edge-?tts|fish-?speech|voice-?clone|text-?to-?speech|\btts\b|piper|speecht5|valle|seed-?tts|(^|[-_/])tts([-_/]|$)/.test(s)) return 'tts';

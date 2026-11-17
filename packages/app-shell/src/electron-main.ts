@@ -21954,13 +21954,13 @@ function jiHuaIdZiRanXu(a: string, b: string): number {
 
 /** 组装一份合规的 SKILL.md（name 必须等于目录名；前置条件写 compatibility） */
 function xieJinengWen(ming: string, miaoShu: string, zhengWen: string, qianZhi?: unknown): string {
-  const miao = String(miaoShu || '').replace(/\r?\n/g, ' ').slice(0, 1024).replace(/"/g, '\\"');
+  const miao = String(miaoShu || '').replace(/\r?\n/g, ' ').slice(0, 1024).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const qian = String(qianZhi || '').replace(/\r?\n/g, ' ').slice(0, 500);
   return [
     '---',
     `name: ${ming}`,
     `description: "${miao}"`,
-    ...(qian ? [`compatibility: "${qian.replace(/"/g, '\\"')}"`] : []),
+    ...(qian ? [`compatibility: "${qian.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`] : []),
     '---',
     '',
     String(zhengWen || '').slice(0, 20000),
@@ -22361,7 +22361,7 @@ function jiShiXieRu(sessionId: string, kind: 'remember' | 'pitfall', biaoTi: str
       try { audit?.log('memory.instant-layer-denied', { sessionId: sid, kind, chars: String(wen).length, laiYuan }); } catch { /* noop */ }
       return false;
     }
-    const id = 'ev-' + (kind === 'remember' ? 'jz-' : 'keng-') + crypto.createHash('sha1')
+    const id = 'ev-' + (kind === 'remember' ? 'jz-' : 'keng-') + crypto.createHash('sha256')
       .update(duanJiYiNorm(biaoTi + '\n' + wen)).digest('hex').slice(0, 16);
     knowledge.allow(ceng).addEvent({
       id,

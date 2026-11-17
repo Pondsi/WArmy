@@ -142,7 +142,7 @@ export class KanbanCang {
 
 /** 值班者：自然语言 → BoardAction 简易解析（P6 雏形） */
 export function JieLing(text: string, groupId: string): Omit<KanbanShi, 'seq' | 'ts'> | null {
-  const s = text.trim();
+  const s = text.trim().slice(0, 4000); // R233：指令行长度封顶，正则多项式代价有界（code-scanning #1-#6）
   let m = s.match(/^(?:新建任务|创建任务|create task)[:：\s]+(.+)$/i);
   if (m) {
     const YuanWen = m[1]!.trim();

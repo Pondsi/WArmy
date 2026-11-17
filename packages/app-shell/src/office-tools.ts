@@ -142,7 +142,7 @@ function quBiaoQianWenBen(xml: string, biaoQian: string): string[] {
   const re = new RegExp(`<${biaoQian}[^>]*>([\\s\\S]*?)</${biaoQian}>`, 'g');
   const out: string[] = [];
   let m: RegExpExecArray | null;
-  while ((m = re.exec(xml))) out.push(jieTao((m[1] || '').replace(/<[^>]+>/g, '')));
+  while ((m = re.exec(xml))) out.push(jieTao((m[1] || '').replace(/<[^>]*>?/g, '')));
   return out;
 }
 
@@ -369,7 +369,7 @@ export function duXlsx(p: string): { ok: boolean; sheets: Array<{ name: string; 
     const names: string[] = [];
     for (const m of wbXml.matchAll(/<sheet\b[^>]*>/g)) {
       const nm = /\bname="([^"]*)"/.exec(m[0]);
-      names.push(nm ? nm[1]!.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"') : '');
+      names.push(nm ? nm[1]!.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&') : '');
     }
     // r:id → 目标路径
     const ridMap = new Map<string, string>();
@@ -429,7 +429,7 @@ export function duXlsx(p: string): { ok: boolean; sheets: Array<{ name: string; 
             val = idx >= 0 && idx < shared.length ? shared[idx]! : '';
           } else {
             const vm = /<v>([\s\S]*?)<\/v>/.exec(body);
-            val = vm ? vm[1]!.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"') : '';
+            val = vm ? vm[1]!.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&') : '';
           }
           if (ci >= 0) { while (hang.length < ci) hang.push(''); hang[ci] = val; }
           else hang.push(val);

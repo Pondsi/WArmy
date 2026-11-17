@@ -75,7 +75,7 @@ const GESHI_MIME: Record<string, string> = { wav: 'audio/wav', mp3: 'audio/mpeg'
 
 /** 从报错文本里解析 `Available voices: [a, b, c]`（**如实上报**，不硬编码会过期的表） */
 export function jieXiKeYongYinSe(text: string): string[] {
-  const m = /Available voices:\s*\[([^\]]*)\]/i.exec(String(text || ''));
+  const m = /Available voices:\s*\[([^\]]*)\]/i.exec(String(text || '').slice(0, 8192));
   if (!m) return [];
   return m[1]!.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
 }
