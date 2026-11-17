@@ -31,11 +31,11 @@
     "@warmy/memory-os": "workspace:*",
     "@warmy/providers": "workspace:*",
     "@warmy/sync-protocol": "workspace:*",
-    "hash-wasm": "4.12.0",
+    "hash-wasm": "4.13.0",
     "three": "0.187.0"
   },
   "optionalDependencies": {
-    "sherpa-onnx-node": "1.13.8"
+    "sherpa-onnx-node": "2.0.1"
   },
   "devDependencies": {
     "@types/node": "24.9.0",
