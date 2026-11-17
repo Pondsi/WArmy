@@ -48,6 +48,9 @@ contextBridge.exposeInMainWorld('warmy', {
   pickSound: () => ipcRenderer.invoke('warmy:xuanZeSound'),
   checkUpdate: () => ipcRenderer.invoke('warmy:jianChaGengXin'),
   pickFile: () => ipcRenderer.invoke('warmy:xuanZeWenJian'),
+  /** R230 项3：二维码双击复制图片 / 剪贴板有图诊断 */
+  fuZhiTuPian: (p) => ipcRenderer.invoke('warmy:fuZhiTuPian', p),
+  jianTieBanYouTu: () => ipcRenderer.invoke('warmy:jianTieBanYouTu'),
   /** 门禁：内置硬门禁清单 + 运行一个门禁（软门禁由设置里的 softGates 管理） */
   menJinYingJi: () => ipcRenderer.invoke('warmy:menJinYingJi'),
   menJinYunXing: (p) => ipcRenderer.invoke('warmy:menJinYunXing', p),

@@ -1420,15 +1420,15 @@
     if (!ctx || yinPinBaoHuo) return;
     try {
       /**
-       * 4 个采样的**极低电平噪声**（≈ -70dBFS，人耳听不到）循环。
-       * ⚠️ 不用纯数字静音：部分声卡/驱动会做"静音检测"，把流休眠掉，
-       * 于是第一声到来时又要冷启动 ⇒ 起音被吃掉（真机反馈："首次音效很小、像开头几帧被挡"）。
-       * 留一丝不可闻的电平，流就一直热着。
+       * 4 个采样的**极低电平噪声**循环保活（防声卡静音检测休眠）。
+       * R230 项6：原 0.0012 ≈ -58dBFS，真机反馈"开机后音响一直有极低滋滋声"——
+       * 4 采样循环在 48kHz 下是 12kHz 重复的周期 buzz，-58dBFS 在安静环境/好音箱上可闻。
+       * 现 0.00001 ≈ -100dBFS：低于绝大多数 DAC 的本底噪底，人耳不可闻，仍非纯零（保活有效）。
        */
       const n = 4;
       const buf = ctx.createBuffer(1, n, ctx.sampleRate || 48000);
       const d = buf.getChannelData(0);
-      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * 0.0012;
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * 0.00001;
       const yuan = ctx.createBufferSource();
       yuan.buffer = buf;
       yuan.loop = true;
@@ -15087,9 +15087,7 @@ async function renderDashboard(host) {
               <div class="woMingHang">
                 <span id="pMingDisplay" class="usernameDisplay" title="${escapeHtml(t('wo.username'))}">${escapeHtml(p.username || t('nav.touXiang'))}</span>
                 <input id="pMing" class="usernameShuRu yinCang" value="${escapeHtml(p.username)}"/>
-                <button type="button" class="anNiuXiao woMingPianBtn" id="pMingPianBtn" title="${escapeHtml(tOr('wo.card', '名片'))}" aria-label="${escapeHtml(tOr('wo.card', '名片'))}">
-                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><circle cx="8" cy="11" r="2.2"/><path d="M4.8 16c.7-1.7 1.8-2.5 3.2-2.5s2.5.8 3.2 2.5"/><path d="M14 10h4.5M14 13.5h4.5"/></svg>
-                </button>
+                <!-- R230 项2：名片按钮已删除 -->
               </div>
               <div class="woDataHang" role="group" aria-label="${escapeHtml(tOr('wo.dataActions', '数据'))}">
                 <button class="anNiuXiao woDataBtn" id="anNiuDaoRuWo" type="button">${escapeHtml(tOr('settings.importVault', '导入数据'))}</button>
@@ -15473,9 +15471,12 @@ async function renderDashboard(host) {
         input.addEventListener('input', tongBu);
         input.addEventListener('blur', tongBu);
       })();
-      // 第 67 轮 项 4：邮箱右侧的名片图标 → 网络服务商多选 + 二维码/链接。
-      const mingPianBtn = $('pMingPianBtn');
-      if (mingPianBtn) mingPianBtn.onclick = () => { void openMyCardDialog(); };
+      /* R230 项1：导入/导出/定时导出三按钮绑定回「我的」分支 —— 原来误放在设置分支，
+         我的页渲染时绑定代码不执行，三个按钮点了没反应（真机复现）。 */
+      $('anNiuDaoChuWo')?.addEventListener('click', () => { void daoChuPeiZhi(); });
+      $('anNiuDingShiDaoChuWo')?.addEventListener('click', () => { void showDingShiDaoChuDialog(); });
+      $('anNiuDaoRuWo')?.addEventListener('click', () => { void daoRuPeiZhi(); });
+      /* R230 项2：名字后的名片按钮已按主人要求删除（功能整体移除） */
       renderDashboard($('dashHost'));
       return;
     }
@@ -16723,68 +16724,7 @@ async function renderDashboard(host) {
         }
         await doCheckUpdate(false);
       };
-      // 导出/导入：**全量加密仓库**（.wvault，含数据库、聊天、联系人、项目、牛马、提示词等）
-      /**
-       * 两个动作抽成函数：**「设置 → 关于」和「我的」两处都要能用**（产品要求见 `peiZhiKaWo`）。
-       */
-      const daoChuPeiZhi = async () => {
-        try {
-          const cfg = await showDataExportDialog();
-          if (!cfg) return;
-          showToast(tOr('export.exporting', '正在打包…'));
-          const allCats = ['chat', 'knowledge', 'contacts', 'settings', 'account', 'logs'];
-          const include = cfg.include.length === allCats.length ? undefined : cfg.include;
-          const r = await window.warmy.peizhiDaoChu?.({ encrypt: cfg.encrypt, include });
-          if (r && r.ok) showToast(tOr('export.done', '已导出') + '：' + (r.path || ''));
-          else showToast(String((r && r.error) || t('common.error')));
-        } catch (e) { showToast(String(e && e.message || e)); }
-      };
-      const daoRuPeiZhi = async () => {
-        try {
-          const f = await window.warmy.pickFile?.({ filters: [{ name: 'WArmy 数据包（.nm；兼容旧 .wvault）', extensions: ['nm', 'wvault'] }] });
-          if (!f?.ok || !f.path) return;
-          const xin = await window.warmy.peizhiXinFeng?.({ path: f.path });
-          if (!xin || !xin.ok) {
-            uiAlert(String((xin && xin.error) || tOr('nm.badFormat', '不是 WArmy 的数据文件，或文件已损坏')));
-            return;
-          }
-          /** 加密包 + 不是当前账号 ⇒ 先输入源账号助记词（“提示词”）解锁 */
-          let mnemonic = '';
-          if (xin.needsMnemonic) {
-            const v = await uiPrompt(tOr('vault.sourceMnemonic', '这个数据包属于另一个账号。请输入源账号的助记词（24 个词，可用空格或中文词组）来解锁'), '');
-            if (v === null) return;
-            if (!String(v).trim()) { uiAlert(tOr('vault.sourceMnemonicRequired', '必须输入源账号助记词才能解锁这个数据包。')); return; }
-            mnemonic = String(v).trim();
-          }
-          /** 导入也不是“一股脑全灌”：先让用户选类别（与导出口径一致），再二次确认 */
-          const scope = await showVaultImportScopeDialog(xin.categories);
-          if (!scope) return;
-          const allCats = ['chat', 'knowledge', 'contacts', 'settings', 'account', 'logs'];
-          const include = scope.length === allCats.length ? undefined : scope;
-          // 仍会覆盖所选类别的当前数据；必须二次确认。
-          const yi = await uiConfirm(xin.mode === 'plain'
-            ? tOr('vault.importPlainConfirm', '这是一个未加密的明文数据包。导入会覆盖所选类别的当前数据，且不可撤销。是否继续？')
-            : tOr('vault.importConfirm', '导入数据会覆盖所选类别的当前数据（聊天、联系人、项目、牛马、提示词、账号与身份按勾选），且不可撤销。是否继续？'));
-          if (!yi) return;
-          const erCi = await uiConfirm(tOr('vault.importConfirm2', '再次确认：所选类别的数据将被导入包覆盖。确定继续？'));
-          if (!erCi) return;
-          let pw = '';
-          if (xin.kind === 'vault' && xin.mode !== 'plain') {
-            const v = await uiPrompt(tOr('nm.enterPassword', '请输入导出时设置的口令'), '');
-            if (v === null) return;
-            pw = v;
-          }
-          const r = await window.warmy.peizhiDaoRu?.({ path: f.path, password: pw, mnemonic, include, mode: 'fresh' });
-          if (r && r.ok) {
-            showToast(tOr('vault.importing', '导入完成，正在重启以载入数据…'));
-          } else {
-            uiAlert(String((r && r.error) || t('common.error')));
-          }
-        } catch (e) { uiAlert(String(e && e.message || e)); }
-      };
-      $('anNiuDaoChuWo')?.addEventListener('click', () => { void daoChuPeiZhi(); });
-      $('anNiuDingShiDaoChuWo')?.addEventListener('click', () => { void showDingShiDaoChuDialog(); });
-      $('anNiuDaoRuWo')?.addEventListener('click', () => { void daoRuPeiZhi(); });
+
       $('anNiuHuiFuMoRen')?.addEventListener('click', async () => {
         if (!(await uiConfirm(tOr('settings.restoreConfirm', '将清空所有设置并恢复出厂默认（含供应商/密钥引用/外观）。此操作不可撤销。是否继续？')))) return;
         try {
@@ -20174,7 +20114,7 @@ async function renderDashboard(host) {
         if (erWeiMa) {
           const svg = ziji.ok ? qrSvg(ziji.link, 168) : '';
           // 编码器没加载上就如实说明：不画占位矩阵、也不拿截断的链接冒充二维码
-          if (svg) erWeiMa.innerHTML = svg;
+          if (svg) { erWeiMa.innerHTML = svg; bindQrDblCopy(erWeiMa); } /* R230 项3 */
           else erWeiMa.textContent = t('join.qrUnavailable');
         }
       })();
@@ -27447,7 +27387,16 @@ async function renderDashboard(host) {
     const nd = TZ.parts(Date.now());
     const p2 = (n) => String(n).padStart(2, '0');
     const suffix = p2(nd.month) + '-' + p2(nd.day) + ' ' + p2(nd.hour) + ':' + p2(nd.minute);
-    const defaultName = (isProject ? t('list.createProject') : t('list.createGroupChat')) + ' ' + suffix;
+    /* R230 项5：项目=Overlord 哥布林兵团名池 / 群聊=著名动漫组织名池（当前语言本地译名），
+       与既有群/项目去重；创建时落盘字面串 ⇒ 换语言不变。池尽时随机名+时间后缀兜底。 */
+    const poolPre = isProject ? 'pool.pj.' : 'pool.qun.';
+    const poolLen = isProject ? 11 : 12;
+    const pool = Array.from({ length: poolLen }, (_, i) => tOr(poolPre + i, '')).filter(Boolean);
+    const usedNames = new Set((state.groups || []).map((x) => String(x.name || x.ming || '')));
+    const free = pool.filter((x) => !usedNames.has(x));
+    const defaultName = free.length
+      ? free[Math.floor(Math.random() * free.length)]
+      : (pool[Math.floor(Math.random() * pool.length)] || (isProject ? t('list.createProject') : t('list.createGroupChat'))) + '-' + suffix;
     const nameInput0 = $('erHeYiMing');
     if (nameInput0) nameInput0.value = defaultName;
     acts.innerHTML = '';
@@ -27724,11 +27673,18 @@ async function renderDashboard(host) {
   }
 
   function addInstanceFlow() {
+    /* R230 项5：默认名从 Overlord 哥布林军团名池随机（当前语言本地译名），与既有牛马去重；
+       名字创建时落盘为字面串 ⇒ 之后切换显示语言不再变化。池尽时随机名+序号兜底。 */
     const suanMing = () => {
-      let n = (state.instances || []).filter((i) => !shiNiTaiBenTi(i)).length + 1;
-      let houXuan = t('placeholder.agentName') + '-' + n;
-      while (mingYiZhanYong(houXuan)) { n += 1; houXuan = t('placeholder.agentName') + '-' + n; }
-      return houXuan;
+      const pool = Array.from({ length: 14 }, (_, i) => tOr('pool.nm.' + i, '')).filter(Boolean);
+      const used = new Set((state.instances || []).filter((i) => !shiNiTaiBenTi(i)).map((i) => mingOf(i)));
+      const free = pool.filter((x) => !used.has(x));
+      if (free.length) return free[Math.floor(Math.random() * free.length)];
+      const base = pool[Math.floor(Math.random() * pool.length)] || t('placeholder.agentName');
+      let n = 2;
+      let hou = base + '-' + n;
+      while (used.has(hou)) { n += 1; hou = base + '-' + n; }
+      return hou;
     };
     openCreateInstanceDialog(suanMing()).then(async (pick) => {
       if (!pick) return;
@@ -29253,6 +29209,8 @@ async function renderDashboard(host) {
       $('duiHuaKuangBiaoTi').textContent = biaoTi;
       const ti = $('duiHuaKuangTi');
       ti.innerHTML = neiRong;
+      /* R230 项3：信息窗/加入窗里生成的二维码统一挂双击复制图片 */
+      ti.querySelectorAll('.jrQr, #lianXiMyqr, #jiaRuqr').forEach((q) => bindQrDblCopy(q));
       const inline = (e) => {
         const b = e.target && e.target.closest && e.target.closest('[data-inline]');
         if (!b || !onInline) return;
@@ -32850,6 +32808,64 @@ async function renderDashboard(host) {
     return { include, chatIds, kbLayers, from: Number.isFinite(from) ? from : 0, to: Number.isFinite(to) ? to : 0, scope };
   }
 
+  /* R230 项1：导出/导入处理函数提升到模块作用域 —— 「我的」与「设置」两处都能绑 */
+  const daoChuPeiZhi = async () => {
+    try {
+      const cfg = await showDataExportDialog();
+      if (!cfg) return;
+      showToast(tOr('export.exporting', '正在打包…'));
+      const allCats = ['chat', 'knowledge', 'contacts', 'settings', 'account', 'logs'];
+      const include = cfg.include.length === allCats.length ? undefined : cfg.include;
+      const r = await window.warmy.peizhiDaoChu?.({ encrypt: cfg.encrypt, include });
+      if (r && r.ok) showToast(tOr('export.done', '已导出') + '：' + (r.path || ''));
+      else showToast(String((r && r.error) || t('common.error')));
+    } catch (e) { showToast(String(e && e.message || e)); }
+  };
+  
+  const daoRuPeiZhi = async () => {
+    try {
+      const f = await window.warmy.pickFile?.({ filters: [{ name: 'WArmy 数据包（.nm；兼容旧 .wvault）', extensions: ['nm', 'wvault'] }] });
+      if (!f?.ok || !f.path) return;
+      const xin = await window.warmy.peizhiXinFeng?.({ path: f.path });
+      if (!xin || !xin.ok) {
+        uiAlert(String((xin && xin.error) || tOr('nm.badFormat', '不是 WArmy 的数据文件，或文件已损坏')));
+        return;
+      }
+      /** 加密包 + 不是当前账号 ⇒ 先输入源账号助记词（“提示词”）解锁 */
+      let mnemonic = '';
+      if (xin.needsMnemonic) {
+        const v = await uiPrompt(tOr('vault.sourceMnemonic', '这个数据包属于另一个账号。请输入源账号的助记词（24 个词，可用空格或中文词组）来解锁'), '');
+        if (v === null) return;
+        if (!String(v).trim()) { uiAlert(tOr('vault.sourceMnemonicRequired', '必须输入源账号助记词才能解锁这个数据包。')); return; }
+        mnemonic = String(v).trim();
+      }
+      /** 导入也不是“一股脑全灌”：先让用户选类别（与导出口径一致），再二次确认 */
+      const scope = await showVaultImportScopeDialog(xin.categories);
+      if (!scope) return;
+      const allCats = ['chat', 'knowledge', 'contacts', 'settings', 'account', 'logs'];
+      const include = scope.length === allCats.length ? undefined : scope;
+      // 仍会覆盖所选类别的当前数据；必须二次确认。
+      const yi = await uiConfirm(xin.mode === 'plain'
+        ? tOr('vault.importPlainConfirm', '这是一个未加密的明文数据包。导入会覆盖所选类别的当前数据，且不可撤销。是否继续？')
+        : tOr('vault.importConfirm', '导入数据会覆盖所选类别的当前数据（聊天、联系人、项目、牛马、提示词、账号与身份按勾选），且不可撤销。是否继续？'));
+      if (!yi) return;
+      const erCi = await uiConfirm(tOr('vault.importConfirm2', '再次确认：所选类别的数据将被导入包覆盖。确定继续？'));
+      if (!erCi) return;
+      let pw = '';
+      if (xin.kind === 'vault' && xin.mode !== 'plain') {
+        const v = await uiPrompt(tOr('nm.enterPassword', '请输入导出时设置的口令'), '');
+        if (v === null) return;
+        pw = v;
+      }
+      const r = await window.warmy.peizhiDaoRu?.({ path: f.path, password: pw, mnemonic, include, mode: 'fresh' });
+      if (r && r.ok) {
+        showToast(tOr('vault.importing', '导入完成，正在重启以载入数据…'));
+      } else {
+        uiAlert(String((r && r.error) || t('common.error')));
+      }
+    } catch (e) { uiAlert(String(e && e.message || e)); }
+  };
+  
   /** 手动导出数据：先选范围，再决定是否加密（默认加密，用当前账号凭证） */
   function showDataExportDialog() {
     return new Promise((resolve) => {
@@ -36308,79 +36324,7 @@ try {
     return { ok: !!shui, link: shui ? 'warmy://join?' + Pian.join('&') : '', node, token, bieMing, zhiWen: fp };
   }
 
-  /**
-   * 第 67 轮 项 4：我的名片 —— 选择网络服务商（可多选）后生成二维码/链接。
-   * 只有选了服务商才生成；头像勾选项在服务商选项上方，勾选后头像嵌入二维码中心。
-   * 链接里带 prov/avatar 参数，接收方导入后按这些服务商路由（与网络服务商列表同一套 id）。
-   */
-  async function openMyCardDialog() {
-    // 网络服务商列表可能还没随设置页加载；打开名片时先读一次真实配置。
-    try { await netLoadConfig(); } catch { /* 读不到就按空列表如实提示 */ }
-    const root = $('duiHuaKuangGen');
-    if (!root) return;
-    const title = $('duiHuaKuangBiaoTi');
-    const body = $('duiHuaKuangTi');
-    const acts = $('duiHuaKuangDongZuoJi');
-    if (!title || !body || !acts) return;
-    title.textContent = tOr('wo.cardTitle', '我的名片');
-    const provs = (netState.providers || []).filter((p) => p && p.id);
-    const provHtml = provs.length
-      ? provs.map((p) => '<label class="woCardProv"><input type="checkbox" data-card-prov="' + escapeHtml(String(p.id)) + '"/> <span>' + escapeHtml(String(p.name || p.id)) + '</span><span class="jingYin">' + escapeHtml(String(p.address || '')) + '</span></label>').join('')
-      : '<div class="jingYin">' + escapeHtml(tOr('wo.cardNoProvider', '还没有网络服务商。请先在「设置 → 网络」里添加服务商。')) + '</div>';
-    body.innerHTML =
-      '<div class="woCardBody">' +
-      '<label class="warmyAuthCheck woCardAvatar"><input type="checkbox" id="woCardWithAvatar" checked/> <span>' + escapeHtml(tOr('wo.cardWithAvatar', '添加头像（放在二维码中心）')) + '</span></label>' +
-      '<div class="woCardProvTitle">' + escapeHtml(tOr('wo.cardProviders', '网络服务商（可多选）')) + '</div>' +
-      '<div class="woCardProvList">' + provHtml + '</div>' +
-      '<div class="shiLiHang" style="margin-top:12px;align-items:center">' +
-      '<button type="button" class="anNiuZhuYao" id="woCardGen">' + escapeHtml(tOr('wo.cardGenerate', '生成')) + '</button>' +
-      '<span class="jingYin" id="woCardMsg"></span></div>' +
-      '<div id="woCardOut" class="woCardOut"></div>' +
-      '</div>';
-    acts.innerHTML = '';
-    const close = document.createElement('button');
-    close.className = 'anNiuXiao';
-    close.textContent = t('common.close') || t('common.cancel') || '关闭';
-    close.onclick = () => root.classList.add('yinCang');
-    acts.appendChild(close);
-    const gen = $('woCardGen');
-    if (gen) gen.disabled = !provs.length;
-    if (gen) gen.onclick = async () => {
-      const checked = [...body.querySelectorAll('[data-card-prov]:checked')].map((x) => String(x.getAttribute('data-card-prov') || '')).filter(Boolean);
-      const msg = $('woCardMsg');
-      const out = $('woCardOut');
-      if (!checked.length) {
-        if (msg) msg.textContent = tOr('wo.cardNeedProvider', '请至少选择一个网络服务商');
-        if (out) out.innerHTML = '';
-        return;
-      }
-      if (msg) msg.textContent = tOr('wo.cardGenerating', '正在生成…');
-      const ziji = await ownInviteLink();
-      if (!ziji.ok) {
-        if (msg) msg.textContent = tOr('wo.cardNoLink', '拿不到本机组网节点/邀请令牌，无法生成名片。请先启用网络。');
-        return;
-      }
-      const sep = ziji.link.includes('?') ? '&' : '?';
-      const link = ziji.link + sep + 'prov=' + checked.map((x) => encodeURIComponent(x)).join(',') + (($('woCardWithAvatar') && $('woCardWithAvatar').checked) ? '&avatar=1' : '');
-      const withAvatar = !!($('woCardWithAvatar') && $('woCardWithAvatar').checked);
-      const logo = withAvatar ? personAvatarSrc(state.profile) : '';
-      const svg = qrSvg(link, 300, withAvatar ? 'H' : 'M', { logo });
-      if (out) {
-        out.innerHTML = '<div class="woCardQr" aria-label="' + escapeHtml(tOr('wo.cardQr', '名片二维码')) + '">' + (svg || '<div class="jingYin">' + escapeHtml(tOr('wo.cardQrFail', '二维码生成失败')) + '</div>') + '</div>' +
-          '<div class="woCardLinkHang"><input readonly id="woCardLink" value="' + escapeHtml(link) + '"/>' +
-          '<button type="button" class="anNiuXiao" id="woCardCopy">' + escapeHtml(tOr('wo.cardCopy', '复制链接')) + '</button></div>' +
-          '<div class="jingYin">' + escapeHtml(tOr('wo.cardHint', '对方导入后可添加你为联系人；头像只在勾选时嵌入二维码中心。')) + '</div>';
-        const copy = $('woCardCopy');
-        if (copy) copy.onclick = async () => {
-          try { await navigator.clipboard.writeText(link); if (msg) msg.textContent = tOr('wo.cardCopied', '链接已复制'); }
-          catch { if (msg) msg.textContent = tOr('wo.cardCopyFail', '复制失败，请手动选择链接'); }
-        };
-      }
-      if (msg) msg.textContent = tOr('wo.cardDone', '已生成');
-    };
-    root.classList.remove('yinCang');
-  }
-  window.__warmyOpenMyCard = openMyCardDialog;
+  /* R230 项2：我的名片功能已按主人要求整体删除（入口按钮 + 样式 + i18n 键同步移除） */
 
   /**
    * 左列：我的链接 + 我的二维码（真编码器：见 qrSvg 与 vendor/qrcode-generator-2.0.4.js）
@@ -36396,7 +36340,7 @@ try {
       '<button type="button" class="anNiuXiao" id="anNiuMyLinkCopy">' + escapeHtml(t('contact.mineCopy')) + '</button>' +
       '</div>' +
       (ziji.bieMing || ziji.zhiWen
-        ? '<div class="ownidXian">' + escapeHtml(t('contact.ownId')) + ': ' + escapeHtml(ziji.bieMing || ziji.zhiWen) + '</div>'
+        ? '<div class="ownidXian">' + escapeHtml(t('contact.ownId')) + ': ' + escapeHtml(state.profile.username || ziji.bieMing || ziji.zhiWen) + '</div>'
         : '') +
       '<div id="lianXiMyqr" data-link="' + escapeHtml(ziji.link) + '" aria-label="' + escapeHtml(t('contact.mineQr')) + '"></div>';
     return { ziji, html };
@@ -36406,6 +36350,43 @@ try {
    * 把左列的二维码画出来：**真** QR（版本自适应 + 纠错 M + 4 模块静区），屏幕宽度 168px。
    * 编码器不可用时返回 false 并置一句如实话术 —— 宁可没有码，也不给扫不出来的假码。
    */
+  /** R230 项3：二维码双击复制**图片**（PNG 进剪贴板，可直接粘贴给别人扫）。
+   *  链接文本的双击复制保留原路径；二维码元素 stopPropagation 避免两条路径打架。 */
+  function fuZhiErWeiMaTu(yuanSu) {
+    const svg = yuanSu && yuanSu.querySelector ? yuanSu.querySelector('svg') : null;
+    if (!svg) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      try {
+        const xml = new XMLSerializer().serializeToString(svg);
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const cv = document.createElement('canvas');
+            cv.width = 512; cv.height = 512;
+            const cx = cv.getContext('2d');
+            cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, 512, 512);
+            cx.drawImage(img, 0, 0, 512, 512);
+            const dataUrl = cv.toDataURL('image/png');
+            Promise.resolve(window.warmy.fuZhiTuPian?.({ dataUrl })).then((r) => resolve(!!(r && r.ok))).catch(() => resolve(false));
+          } catch { resolve(false); }
+        };
+        img.onerror = () => resolve(false);
+        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
+      } catch { resolve(false); }
+    });
+  }
+  function bindQrDblCopy(yuanSu) {
+    if (!yuanSu || yuanSu.__qrDblBound) return;
+    yuanSu.__qrDblBound = true;
+    yuanSu.style.cursor = 'copy';
+    yuanSu.title = tOr('qr.dblCopyImage', '双击复制二维码图片');
+    yuanSu.addEventListener('dblclick', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      void fuZhiErWeiMaTu(yuanSu).then((ok) => {
+        showToast(ok ? tOr('qr.copiedImage', '二维码图片已复制') : tOr('qr.copyFail', '复制失败'));
+      });
+    });
+  }
   function fillOwnQr(yuanSu, link, size = 168) {
     if (!yuanSu) return false;
     const svg = qrSvg(link, size);
@@ -36413,6 +36394,7 @@ try {
       yuanSu.innerHTML = svg;
       yuanSu.classList.remove('ownqrKong');
       yuanSu.setAttribute('data-qr-state', 'ok');
+      bindQrDblCopy(yuanSu); /* R230 项3 */
       return true;
     }
     yuanSu.innerHTML = '';

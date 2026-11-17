@@ -1579,8 +1579,6 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 }
 /* 数据范围/定时导出：内容多，卡片变宽；高度永远服从主界面，超出就在内容区滚动 */
 .duiHuaKuangKa:has(.daoChuShu) { width: min(780px, calc(100vw - 48px)); }
-/* 我的名片：卡片宽度跟随内容，但不超过主界面；内容超出高度时才由 .duiHuaKuangTi 滚动 */
-.duiHuaKuangKa:has(.woCardBody) { width: min(560px, calc(100vw - 48px)); }
 /* R183 项3/4：项目/群设置信息窗加大、内容自适应、仅一条滚动条 */
 .duiHuaKuangKa:has(.xinXiKuangNei) { width: min(720px, calc(100vw - 48px)); max-height: min(86vh, 860px); }
 .xinXiKuangNei { overflow: visible; }
@@ -1590,7 +1588,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 /* R163 #4：确认类弹窗（完全授权二次确认等）不该拉到接近满屏。
  * 旧口径 max-height: calc(100vh - 48px) ⇒ 文案稍长就变成一根很长的条。
  * 现在给确认框一个正常上限，超出由内容区滚动；数据范围/名片/头像这类内容型弹窗不受影响。 */
-.duiHuaKuangKa:has(.duiHuaKuangTi):not(:has(.daoChuShu)):not(:has(.woCardBody)):not(:has(.touXiangGrid)):not(:has(.tianJiaLianXiGrid)):not(:has(.erHeYiGrid)):not(.niuMaSheZhi *):not(:has(.shiLiHang)) { /* R176：排除设置窗/信息窗等多内容弹窗 */
+.duiHuaKuangKa:has(.duiHuaKuangTi):not(:has(.daoChuShu)):not(:has(.woCardBody)):not(:has(.touXiangGrid)):not(:has(.tianJiaLianXiGrid)):not(:has(.erHeYiGrid)):not(.niuMaSheZhi *):not(:has(.shiLiHang)):not(:has(.xinXiKuangNei)) { /* R176：排除设置窗/信息窗等多内容弹窗；R230 项4：信息窗(.xinXiKuangNei)不再被本条压回 360px */
   max-height: min(60vh, 460px);
   /* R170：确认加急这类确认窗左右收窄，不再 420 那么宽 */
   width: min(360px, calc(100vw - 48px));
@@ -2823,22 +2821,9 @@ body.liaoTianChuangKou #pageBuJu, body.liaoTianChuangKou #kongTai, body.liaoTian
 .woR67Right .woMingHang { margin-top: 8px; }
 .woYouJianHang { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .woYouJianHang #pYouJian { min-width: 220px; flex: 1; max-width: 420px; }
-.woMingPianBtn { display: inline-flex; align-items: center; justify-content: center; padding: 7px 9px; }
 #warmyAuthMyCard { margin-top: 2px; }
 #warmyAuthMyCard:empty { display: none; }
-/* 我的名片弹窗：服务商多选 + 生成二维码/链接（链接一律纯文本，不做可点样式） */
-.woCardBody { min-width: 0; }
-.woCardAvatar { margin-top: 0; }
-.woCardProvTitle { margin: 12px 0 6px; font-weight: 600; }
-.woCardProvList { display: flex; flex-direction: column; gap: 6px; padding: 2px; }
-.woCardProv { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
-.woCardProv .jingYin { font-size: 11px; }
-.woCardOut { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
-.woCardQr { width: 300px; height: 300px; max-width: 100%; }
-.woCardQr svg { width: 100%; height: 100%; display: block; }
-.woCardLinkHang { display: flex; gap: 8px; width: 100%; align-items: center; }
-.woCardLinkHang input { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
-.woCardLinkHang input, .woCardLinkHang input:focus { text-decoration: none; cursor: text; }
+/* R230 项2：我的名片弹窗样式已随功能删除 */
 .woYouJianInline { display: inline-flex; align-items: center; }
 .woYouJianInline input { min-width: 200px; }
 /* 小眼睛：低调的图标按钮，开启时高亮 */

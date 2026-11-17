@@ -2877,7 +2877,6 @@ html { font-weight: var(--fw-ui, 400); }
 .woR67Right .woMingHang { margin-top: 8px; }
 .woYouJianHang { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .woYouJianHang #pYouJian { min-width: 220px; flex: 1; max-width: 420px; }
-.woMingPianBtn { display: inline-flex; align-items: center; justify-content: center; padding: 7px 9px; }
 
 /* ══════════════════════════════════════════════════════════════════════
    宽屏适配（带鱼屏 / 超宽屏 / 全屏）

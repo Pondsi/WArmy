@@ -14347,6 +14347,9 @@ chuliIpc('warmy:jianChaGengXin', async () =>
 chuliIpc('warmy:xuanZeWenJian', async (_e, opts?: { filters?: string[] }) => {
   try {
     if (!win) return { ok: false };
+    /* R230 项1 探针钩子：自动化模式不弹原生选择框（返回探针预置样例文件），真人使用仍弹真框 */
+    try { audit?.log('ui.pickFile', { probe: process.env.WARMY_PROBE === '1' }); } catch { /* noop */ }
+    if (process.env.WARMY_PROBE === '1') return { ok: true, path: path.join(app.getPath('userData'), 'probe-import.nm') };
     const ext = opts?.filters?.length ? opts.filters : undefined;
     const r = await dialog.showOpenDialog(win, {
       properties: ['openFile'],
@@ -19942,11 +19945,14 @@ chuliIpc('warmy:peiZhiDaoChu', async (_e, p0?: { encrypt?: boolean; defaultName?
       const cur = dangQianKroot();
       if (cur) { try { owner = krootFingerprint(cur); } finally { cur.fill(0); } }
     }
-    const r = await dialog.showSaveDialog({
-      title: tMain('vault.exportTitle', '导出数据'),
-      defaultPath: String(p0?.defaultName || `WArmy-数据-${new Date().toISOString().slice(0, 10)}.nm`).replace(/[\\/:*?"<>|]/g, '_'),
-      filters: [{ name: 'WArmy 数据包', extensions: ['nm'] }],
-    });
+    /* R230 项1 探针钩子：自动化模式直接写探针路径，不弹原生保存框 */
+    const r = process.env.WARMY_PROBE === '1'
+      ? { canceled: false, filePath: path.join(app.getPath('userData'), 'probe-export.nm') }
+      : await dialog.showSaveDialog({
+        title: tMain('vault.exportTitle', '导出数据'),
+        defaultPath: String(p0?.defaultName || `WArmy-数据-${new Date().toISOString().slice(0, 10)}.nm`).replace(/[\\/:*?"<>|]/g, '_'),
+        filters: [{ name: 'WArmy 数据包', extensions: ['nm'] }],
+      });
     if (r.canceled || !r.filePath) return { ok: false, error: 'cancelled' };
     const out = await dv.exportNm(r.filePath, {
       plain: !encrypt,
@@ -26183,6 +26189,22 @@ chuliIpc('warmy:benDiYuYinZiJian', async () => {
 });
 chuliIpc('warmy:benDiYuYinQingDan', () => {
   try { return { ok: true, qingDan: BEN_DI_QING_DAN }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R230 项3：二维码双击复制**图片** —— 渲染层把 SVG 栅格成 PNG 交过来，主进程写剪贴板 */
+chuliIpc('warmy:fuZhiTuPian', async (_e, p0?: { dataUrl?: string }) => {
+  try {
+    const u = String(p0?.dataUrl || '');
+    if (!u.startsWith('data:image/png;base64,') || u.length > 8 * 1024 * 1024) return { ok: false, error: 'bad-image' };
+    const buf = Buffer.from(u.slice('data:image/png;base64,'.length), 'base64');
+    if (!buf.length) return { ok: false, error: 'empty-image' };
+    /* Electron 45 新剪贴板 API：write(ClipboardItem[])（与截图复制同一路径） */
+    await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(buf)], { type: 'image/png' }) })]);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R230 探针：剪贴板里是否有图（真机探针断言双击复制成功用） */
+chuliIpc('warmy:jianTieBanYouTu', async () => {
+  try { return { ok: true, hasImage: await clipboard.has('image/png') }; } catch { return { ok: false, hasImage: false }; }
 });
 chuliIpc('warmy:pickFileOrDir', async () => {
   try {
