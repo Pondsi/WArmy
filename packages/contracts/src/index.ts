@@ -478,3 +478,163 @@ export interface HeiBanTiao {
     /** 记忆库写成功才为 true（没落盘的条目不给 retrieve 指针，宁缺不假） */
     yiLuoPan: boolean;
 }
+
+/* ───────────────────────── R231 Harness² 借鉴：实验身份/收据/预算/证据/程序经验 ─────────────────────────
+ * 方案：docs/HANDOFF-HARNESS2-借鉴与实施方案.md §5/§6/§7/§9/§11/§18。
+ * 命名沿用拼音约定；类型只增不改既有契约。 */
+
+/** 实验臂：基线 / 候选（§11 固定 A/B） */
+export type ShiYanBi = 'baseline' | 'candidate';
+/** 执行终态（§5.3）；completed 只表示执行结束+清单完整，不等于验收 pass */
+export type YunXingZhuangTai = 'planned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'in_doubt';
+/** 验收结论（§12.1）；not_applicable 只用于事前声明不适用的检查 */
+export type YanShouJieLun = 'pass' | 'fail' | 'unknown' | 'not_applicable';
+/** 实验决策（§12.1）；keep_baseline 始终合法 */
+export type ShiYanJueCe = 'keep_baseline' | 'recommend_candidate' | 'inconclusive' | 'rejected' | 'aborted';
+
+export interface ShiYanShenFen {
+  campaignId: string;
+  experimentId: string;
+  taskId: string;
+  runId: string;
+  arm: ShiYanBi;
+  replicate: number;
+  harnessHash: string;
+  inputHash: string;
+  acceptanceHash: string;
+  environmentHash: string;
+  modelConfigHash: string;
+}
+export interface QingQiuShenFen {
+  requestId: string;
+  runId: string;
+  logicalCallId: string;
+  attempt: number;
+  parentRequestId?: string;
+  kind: 'model' | 'tool' | 'probe' | 'reflection';
+}
+/** 资源向量（§18.3）：token 三态 reported/bounded/unknown；金额用最小单位十进制字符串 */
+export interface ZiYuanZongLiang {
+  modelAttempts: number;
+  confirmedSent: number;
+  inDoubtPossibleSend: number;
+  conservativelyConsumedTickets: number;
+  toolCalls: number;
+  inputTokens: number | null;
+  generationTokens: number | null;
+  cachedInputTokens: number | null;
+  usageStatus: 'reported' | 'bounded' | 'unknown';
+  settledMoneyMinorUnits?: string;
+  unresolvedReservationMinorUnits?: string;
+  elapsedMs: number;
+}
+export interface YunXingShouJu {
+  runId: string;
+  state: Exclude<YunXingZhuangTai, 'planned' | 'running'>;
+  executionKey: string;
+  terminalEventId: string;
+  artifactManifestHash?: string;
+  resourceTotals: ZiYuanZongLiang;
+  reasonCode?: string;
+}
+export interface ShiYanYuSuan {
+  maxModelAttempts: number;
+  maxToolCalls: number;
+  maxInputTokensPerAttempt: number;
+  maxGenerationTokensPerAttempt: number;
+  maxWallMs: number;
+  maxEvidenceBytes: number;
+  money?: { currency: string; maxMinorUnits: string; pricingTableHash: string };
+}
+/** 冻结模型身份（§11.2）：同名模型不同供应商不等价 */
+export interface DongJieMoXingPeiZhi {
+  providerProfileId: string;
+  protocol: string;
+  endpointConfigHash: string;
+  modelId: string;
+  parameters: Record<string, string | number | boolean | null>;
+  seedSupported: boolean;
+  providerAdapterHash: string;
+  toolSchemaHash: string;
+}
+export type ShiYanJieDuan = 'development' | 'screen' | 'confirmation';
+export interface ShiYanManifestBase {
+  schemaVersion: 1;
+  campaignId: string;
+  experimentId: string;
+  protocolVersion: string;
+  stage: ShiYanJieDuan;
+  linkedBaselineExperimentId?: string;
+  taskFamily: string;
+  datasetHash: string;
+  taskIds: string[];
+  baselineHash: string;
+  acceptanceHash: string;
+  environmentHash: string;
+  model: DongJieMoXingPeiZhi;
+  randomizationSeed: string;
+  replicatesPerArm: number;
+  budget: ShiYanYuSuan;
+  missingPolicy: string;
+  stoppingRule: string;
+  /** 宿主可信批准事件 ID（§11.1）；approvedBy 展示字段不构成授权 */
+  approvalEventId: string;
+}
+/** E5 修正：candidate_evaluation 的 arms 必含 candidate、非空、去重（宿主校验） */
+export type ShiYanManifest = ShiYanManifestBase & (
+  | { mode: 'baseline_exploration'; arms: ['baseline'] }
+  | { mode: 'candidate_evaluation'; arms: ShiYanBi[]; candidateHash: string }
+);
+/** 证据引用（§7.3）：raw/模型可见/导出安全三视图分离 */
+export interface ZhengJuYinYong {
+  experimentId: string;
+  runId: string;
+  recordId: string;
+  contentHash: string;
+  byteRange?: { start: number; endExclusive: number };
+  origin: 'task_input' | 'executor' | 'tool' | 'verifier' | 'host';
+  view: 'raw_private' | 'model_visible' | 'export_safe';
+}
+export interface JieDuanXinXi {
+  truncated: boolean;
+  originalBytes: number;
+  shownBytes: number;
+  reason?: 'view_budget' | 'capture_limit' | 'render_limit' | 'unsupported_format';
+  rawRef?: ZhengJuYinYong;
+}
+/** 程序经验生命周期（§9）：validated 只能宿主经可信验证/用户批准设置 */
+export type ChengXuZhuangTai = 'observed' | 'provisional' | 'validated' | 'rejected' | 'deprecated';
+export interface ChengXuFanWei {
+  taskFamily: string;
+  contractVersion: string;
+  inputSchemaHash: string;
+  providerProfileId?: string;
+  modelConfigHash?: string;
+  requiredCapabilities: string[];
+}
+export interface ChengXuJingYan {
+  state: ChengXuZhuangTai;
+  cue: string;
+  lesson: string;
+  preconditions: string[];
+  stopConditions: string[];
+  scope: ChengXuFanWei;
+  supportRefs: ZhengJuYinYong[];
+  counterexampleRefs: ZhengJuYinYong[];
+  candidateHash: string;
+  validationReportRef?: ZhengJuYinYong;
+  validationBasis?: 'engineering_screen' | 'statistical_confirmation' | 'explicit_user_review';
+  reviewBy?: string;
+  expiresAt?: number;
+}
+/** 程序经验召回受权上下文（§9.4）：宿主认证，模型不可自填 */
+export interface ChengXuZhaoHuiShangXiaWen {
+  experimentId: string;
+  runId: string;
+  taskFamily: string;
+  contractVersion: string;
+  inputSchemaHash: string;
+  capabilities: string[];
+  /** 宿主授予的可见状态集；缺省仅 validated */
+  yunXuZhuangTai?: ChengXuZhuangTai[];
+}

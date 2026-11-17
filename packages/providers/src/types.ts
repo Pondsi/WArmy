@@ -96,6 +96,17 @@ export interface LiaoTianQingQiu {
   toolChoice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
   /** 透传给具体协议的扩展字段 */
   extra?: Record<string, unknown>;
+  /** R231 实验观测/许可（方案 §6.2）：宿主逐调用绑定；缺省普通调用零影响。
+   *  每次 qianChang 调用 = 一次真实 send 尝试（宿主据此耗票，与 attempt 编号无关）。 */
+  shiYanGuanCha?: ShiYanGuanCha;
+}
+
+/** R231 实验 send 许可/观测（不可伪造：由宿主绑定，模型填的 expId 拿不到权限） */
+export interface ShiYanGuanCha {
+  /** 每次实际 fetch 前调一次 */
+  qianChang?: (attempt: number) => void;
+  /** 返回 false 拒绝本次 send；预算错误抛 shiYanYuSuan: 前缀，不可被重试吞掉 */
+  yunXu?: (attempt: number) => boolean;
 }
 
 export interface LiaoTianXuanXiang {

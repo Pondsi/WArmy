@@ -1,4 +1,4 @@
-import { JichuGongYing, pinJieUrl, guiFanYongLiang, FEI_LIU_CHAT_MS } from './base.js';
+import { JichuGongYing, pinJieUrl, guiFanYongLiang, FEI_LIU_CHAT_MS, shiYanFaSongXuKe } from './base.js';
 import type { LiaoTianPian, LiaoTianQingQiu, LiaoTianXiangYing, GongYingRenZheng } from './types.js';
 
 /** 只放行 PNG / JPEG 的 base64：一张解不开的图会让 Ollama 整个请求 400/500，连同截图一起丢 */
@@ -258,6 +258,7 @@ export class OllamaGongYing extends JichuGongYing {
       };
       const yu2 = AbortSignal.timeout(this.auth.timeoutMs ?? FEI_LIU_CHAT_MS);
       const ben2 = signal ? AbortSignal.any([signal, yu2]) : yu2;
+      shiYanFaSongXuKe(Qiu.shiYanGuanCha, 1);
       const res = await fetch(pinJieUrl(this.baseURL, 'v1/chat/completions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...this.auth.headers },
@@ -304,7 +305,9 @@ export class OllamaGongYing extends JichuGongYing {
           source: 'none',
         },
       };
-    } catch {
+    } catch (e) {
+      /* R231：预算/许可错误不得被兼容路径吞掉降级（方案 §6.2） */
+      if (String((e as Error)?.message || e).startsWith('shiYanYuSuan:')) throw e;
       return null;
     }
   }
@@ -331,6 +334,7 @@ export class OllamaGongYing extends JichuGongYing {
     let cuoWu = '';
     let chong500 = false;
     for (let ci = 0; ci < jiShi.length; ci++) {
+      shiYanFaSongXuKe(Qiu.shiYanGuanCha, ci + 1);
       const res = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...this.auth.headers },
@@ -414,6 +418,7 @@ export class OllamaGongYing extends JichuGongYing {
     let cuoWu = '';
     let chong500 = false;
     for (let ci = 0; ci < caiDan.length; ci++) {
+      shiYanFaSongXuKe(Qiu.shiYanGuanCha, ci + 1);
       const r = await fetch(pinJieUrl(this.baseURL, 'api/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...this.auth.headers },

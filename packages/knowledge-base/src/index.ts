@@ -5,8 +5,40 @@
 import fs from 'node:fs';
 import path from 'node:path';
 /** 证据锚点只有一份定义（契约 v1.1）：以前这里自己写了一份、还少了 byteOffset */
-import type { ZhengjuMaodian } from '@warmy/contracts';
+import type { ZhengjuMaodian, ChengXuJingYan, ChengXuZhaoHuiShangXiaWen, ChengXuZhuangTai } from '@warmy/contracts';
 export type { ZhengjuMaodian };
+
+/** R231（方案 §9.4）：程序经验唯一准入谓词——所有模型可见出口共用这一份。
+ *  无受权上下文默认隔离；普通旧知识（无 procedure）不受影响。 */
+export function zhunRuChengXu(e: { procedure?: ChengXuJingYan }, ctx: ChengXuZhaoHuiShangXiaWen | null): boolean {
+  const p = e.procedure;
+  if (!p) return true;
+  if (!ctx) return false;
+  const yunXu = ctx.yunXuZhuangTai ?? ['validated'];
+  if (!yunXu.includes(p.state)) return false;
+  if (p.scope.taskFamily !== ctx.taskFamily) return false;
+  if (p.scope.contractVersion !== ctx.contractVersion) return false;
+  if (p.scope.inputSchemaHash !== ctx.inputSchemaHash) return false;
+  if (p.expiresAt !== undefined && p.expiresAt < Date.now()) return false;
+  return p.scope.requiredCapabilities.every((c) => ctx.capabilities.includes(c));
+}
+/** R231（方案 §9.2）：生命周期转移；validated 必须宿主可信验证/用户批准（basis 必填），模型不可自填 */
+export function zhuanYiChengXu(
+  p: ChengXuJingYan,
+  xin: ChengXuZhuangTai,
+  opts?: { basis?: 'engineering_screen' | 'statistical_confirmation' | 'explicit_user_review'; reviewBy?: string }
+): ChengXuJingYan | null {
+  const YUN_XU: Record<ChengXuZhuangTai, ChengXuZhuangTai[]> = {
+    observed: ['provisional', 'rejected'],
+    provisional: ['validated', 'rejected', 'deprecated'],
+    validated: ['deprecated', 'rejected'],
+    rejected: ['provisional'],
+    deprecated: [],
+  };
+  if (!(YUN_XU[p.state] || []).includes(xin)) return null;
+  if (xin === 'validated' && !opts?.basis) return null;
+  return { ...p, state: xin, validationBasis: xin === 'validated' ? opts?.basis : p.validationBasis, reviewBy: opts?.reviewBy ?? p.reviewBy };
+}
 
 /** 知识库三层（第 51 轮）：会话（全项目共用，可对外）/ 内部（业务与踩坑）/ 私密（仅用户本机） */
 export type ZhishiCeng = 'session' | 'internal' | 'private';
@@ -43,6 +75,8 @@ export interface ZhishiShijian {
   expected?: string;
   entityIds: string[];
   anchors: ZhengjuMaodian[];
+  /** R231（方案 §9）：可选程序经验元数据；旧记录缺省不受影响，不自动迁移/认证 */
+  procedure?: ChengXuJingYan;
   ts: number;
   /**
    * **记录时间**（第 53 轮项 5）：这条信息**什么时候被说出来/写下来** —— 取原文那条消息的时刻，
@@ -258,9 +292,13 @@ export class KnowledgeBase {
     return true;
   }
 
-  /** 只取仍在生效的事件（被取代的默认不进上下文） */
+  /** 只取仍在生效的事件（被取代的默认不进上下文）；R231：带 procedure 的事件默认隔离（§9.4） */
   activeEvents(): ZhishiShijian[] {
-    return [...this.events.values()].filter((e) => !e.shiXiaoTs);
+    return [...this.events.values()].filter((e) => !e.shiXiaoTs && !e.procedure);
+  }
+  /** R231（方案 §9.4）：程序经验唯一受权召回出口；宿主认证 ctx 才可见 */
+  procedureRecall(ctx: ChengXuZhaoHuiShangXiaWen): ZhishiShijian[] {
+    return [...this.events.values()].filter((e) => !e.shiXiaoTs && !!e.procedure && zhunRuChengXu(e, ctx));
   }
 
   /**
@@ -317,9 +355,10 @@ export class KnowledgeBase {
     );
     const events = [...this.events.values()].filter(
       (e) =>
-        fenMing(e.biaoTi) <= 3 ||
+        !e.procedure && /* R231：procedure 默认不进通用检索（§9.4） */
+        (fenMing(e.biaoTi) <= 3 ||
         (e.result || '').toLowerCase().includes(s) ||
-        (e.tool || '').toLowerCase().includes(s)
+        (e.tool || '').toLowerCase().includes(s))
     );
     if (s) {
       /** 命中方式越靠前（0→3）越排前；正文/属性包含命中排在名字命中之后 */

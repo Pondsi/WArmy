@@ -8,7 +8,15 @@ import type {
   MoxingGongYing,
   GongYingRenZheng,
   GongYingXieYi,
+  ShiYanGuanCha,
 } from './types.js';
+
+/** R231 实验 send 许可（方案 §6.2）：无 observer 零影响；预算错误抛 shiYanYuSuan: 前缀（调用方不得重试） */
+export function shiYanFaSongXuKe(guanCha: ShiYanGuanCha | undefined, attempt: number): void {
+  if (!guanCha) return;
+  guanCha.qianChang?.(attempt);
+  if (guanCha.yunXu && !guanCha.yunXu(attempt)) throw new Error('shiYanYuSuan: budget_exhausted');
+}
 
 /** 统一缓存用量归一化 */
 export function guiFanYongLiang(
@@ -90,7 +98,8 @@ export const FEI_LIU_CHAT_MS = 300_000;
 export async function qingQiuJson<T>(
   url: string,
   init: RequestInit & { timeoutMs?: number },
-  auth: GongYingRenZheng
+  auth: GongYingRenZheng,
+  guanCha?: ShiYanGuanCha
 ): Promise<T> {
   const timeoutMs = init.timeoutMs ?? auth.timeoutMs ?? 120_000;
   const jieZhi = Date.now() + timeoutMs;
@@ -106,6 +115,7 @@ export async function qingQiuJson<T>(
    */
   for (let ci = 1; ; ci++) {
     if (init.signal?.aborted) throw new Error('aborted');
+    shiYanFaSongXuKe(guanCha, ci);
     const shengYu = Math.max(1000, jieZhi - Date.now());
     const kongZhiQi = new AbortController();
     const jiShiQi = setTimeout(() => kongZhiQi.abort(new Error('timeout')), shengYu);
@@ -131,7 +141,7 @@ export async function qingQiuJson<T>(
     } catch (e) {
       const msg = String((e as Error)?.message || e);
       const shiHttp = /^HTTP \d{3}:/.test(msg);
-      const keChong = !shiHttp || /^HTTP (429|5\d\d):/.test(msg);
+      const keChong = (!shiHttp || /^HTTP (429|5\d\d):/.test(msg)) && !msg.startsWith('shiYanYuSuan:');
       if (keChong && ci < 6 && Date.now() < jieZhi && !init.signal?.aborted) {
         await new Promise((r) => setTimeout(r, Math.min(8000, ci * 1500)));
         continue;
