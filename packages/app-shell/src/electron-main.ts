@@ -7085,6 +7085,10 @@ async function yunXingLiaoTianXunHuan(
       if (isWorkTool(gongJuMing)) {
         const base = workspaceDirOf(app.getPath('userData'), sessionId);
         try { fs.mkdirSync(base, { recursive: true }); } catch { /* 建不出来下面会如实失败 */ }
+        if (!nengLiGeXieYunXu(gongJuMing)) {
+          try { audit?.log('lattice.denied', { sessionId, tool: gongJuMing }); } catch { /* noop */ }
+          return jieGuoShouWei('[能力格] 当前为只读沙箱，' + gongJuMing + ' 属写操作，默认拒绝。如需写入请在系统消息调整能力格。', ctx.zuiDaJieGuoZiShu, gongJuMing);
+        }
         /**
          * **交付物落点纠正**（见 `jiaoFuWuLuoDian`）：用户说了桌面、模型却发裸文件名时，
          * 在真正执行前把路径改成 `Desktop/<文件名>` ⇒ 桌面交付物只会出现一份，工作区里没有副本，
@@ -31721,6 +31725,10 @@ chuliIpc('warmy:qunXieTiao', async (_e, xiaoXi: { groupId: string; content: stri
         if (isWorkTool(toolName)) {
           const base = workspaceDirOf(app.getPath('userData'), xiaoXi.groupId);
           try { fs.mkdirSync(base, { recursive: true }); } catch { /* 建不出来 runWorkTool 会如实报错 */ }
+          if (!nengLiGeXieYunXu(toolName)) {
+            try { audit?.log('lattice.denied', { sessionId: xiaoXi.groupId, tool: toolName }); } catch { /* noop */ }
+            return '[能力格] 只读沙箱：' + toolName + ' 属写操作，默认拒绝。';
+          }
           const wr = daiHuiDang(String(xiaoXi.groupId || ''), () => runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, false, app.getAppPath()));
           try {
             audit?.log('group.work-tool', {
@@ -37200,6 +37208,8 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
       xiaoXiJi: [{ role: 'system', content: xiTong }, { role: 'user', content: String(content).slice(0, 4000) }],
       maxTokens: 2048, tools: workToolSpecs() as never,
     }, async (call) => {
+      const tn = String(call?.function?.name || '');
+      if (!nengLiGeXieYunXu(tn)) return '[能力格] 只读沙箱：' + tn + ' 属写操作，默认拒绝。';
       const out = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } });
       if (out.meta.ok && out.meta.abs) { const rel = path.relative(base, out.meta.abs); if (rel && !zt.files.includes(rel)) zt.files.push(rel); }
       return String(out.content).slice(0, 2000);
@@ -37261,6 +37271,7 @@ chuliIpc('warmy:zhuoMianTuBiao', async () => { try { return await duZhuoMianTuBi
 chuliIpc('warmy:zhuoMianCaoZuo', async (_e, p0?: { op?: string; path?: string; dest?: string; content?: string; sessionId?: string }) => {
   const op = String(p0?.op || ''); const target = String(p0?.path || '');
   if (!['move', 'create', 'delete', 'modify', 'open'].includes(op) || !target) return { ok: false, error: 'bad-op' };
+  if (op !== 'open' && !nengLiGeXieYunXu('desktop_file_op')) return { ok: false, error: 'lattice-readonly' };
   const abs = path.resolve(target);
   const dang = anQuanDangWei();
   if (!dang.full) {
@@ -37298,6 +37309,12 @@ chuliIpc('warmy:nengLiGeZhengCeShe', (_e, p0?: { level?: string }) => {
   jiXiTongXiaoXi('system', '能力格政策', '插件/工具能力上限设为 ' + (level === 'readonly' ? '只读沙箱' : '工作区写') + '。超出上限默认拒绝；试用次数不作为扩权依据。');
   return { ok: true, level };
 });
+/** R232 能力格强制闸：readonly 时写类工具默认拒绝（真实强制，非仅记录）。默认 workspace-write 不改变既有行为。 */
+const NENG_LI_GE_XIE = ['write_file', 'edit_file', 'copy_file', 'move_file', 'make_dir', 'make_docx', 'make_pptx', 'make_xlsx', 'make_pdf', 'extract_archive', 'desktop_file_op'];
+function nengLiGeXieYunXu(tool: string): boolean {
+  const level = String((settingsStore?.load() as { capabilityLattice?: string } | undefined)?.capabilityLattice || 'workspace-write');
+  return level !== 'readonly' || !NENG_LI_GE_XIE.includes(tool);
+}
 chuliIpc('warmy:ziJinHuaKaiShi', async (_e, p0?: { sessionId?: string; content?: string; projectId?: string }) => {
   const sid = String(p0?.sessionId || '');
   if (!sid || ziJinHuaHuoQu(sid)) return { ok: false, error: 'active-or-bad-session' };
