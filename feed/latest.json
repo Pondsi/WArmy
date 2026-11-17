@@ -1,13 +1,13 @@
 {
-  "version": "0.4.28",
-  "notes": "WArmy 0.4.28 — R232 follow-up: the capability lattice is now truly enforced, not just recorded: in readonly mode write/edit/move/create/delete are default-denied across work-tools, group tools, self-evolution branches and desktop operations (open/read still allowed); default workspace-write keeps existing behavior. Added three original zero-burden CC0 2D presets (青苗/火星/水珠), expanding the 2D list to six while first-run remains a listed preset. Lattice enforcement verified 9/9 on the real machine; scoped smoke 12 gates x3 consecutive clean. Carries all R232 features: self-evolve A/B toggle with split chat+input, role-gated branch confirm, 5s undo and pre-merge history rollback, count-independent objective auto-merge; authorized desktop real ops with result-driven animations and idle purely-visual nudges; VRM runtime; in-app prompt 2D sculpt with region box-select + SVG warp; voice card read-out and A/B/C/1/2/3/free-reply; on-demand TripoSR (MIT, verified sha256) download button.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.28/WArmy-Setup-0.4.28.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.28/WArmy-Setup-0.4.28.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.28/WArmy-Setup-0.4.28.exe.warmyblocks",
-  "sha256": "9ccfdc7aef0da762d9f424a40eb8b3e73299b8fc48a30c95a27a8a8f0214f47e",
-  "size": 305415631,
+  "version": "0.4.29",
+  "notes": "WArmy 0.4.29 — R232 completion: added an original zero-burden procedural 3D preset (蓝兽) bringing 3D presets to three and 2D to six (all first-run presets remain listed); card read-out now functionally verified end-to-end (real card open drives the mimic speech path with type + letter/number options, 2/2). Capability lattice truly enforced (readonly denies writes across work/group/self-evolution/desktop tools; open/read allowed; default workspace-write unchanged) 9/9. Carries all R232 features: self-evolve A/B toggle with split chat+input, role-gated confirm, 5s undo + pre-merge history rollback, count-independent objective auto-merge; authorized desktop real ops with result-driven animations + idle purely-visual nudges; VRM runtime; in-app prompt 2D sculpt with region box-select + SVG warp; voice card read-out + A/B/C/1/2/3/free-reply; on-demand TripoSR (MIT, verified sha256) download button. Scoped smoke 13 gates x3 consecutive clean.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.29/WArmy-Setup-0.4.29.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.29/WArmy-Setup-0.4.29.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.29/WArmy-Setup-0.4.29.exe.warmyblocks",
+  "sha256": "c3679e1f3f88a1a51b70d8ff3e9eac3463d786a9474f21df256777953fd84835",
+  "size": 305415790,
   "mandatory": false,
-  "publishedAt": "2026-11-17T11:10:30.153Z",
+  "publishedAt": "2026-11-17T11:31:28.565Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.28"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.29"
 }
