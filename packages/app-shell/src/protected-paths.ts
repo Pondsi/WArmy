@@ -21,11 +21,22 @@ export function getProgramDirs(): string[] {
   return programDirs.slice();
 }
 
-/** 用户数据里属于“其他会话 / 历史 / 记忆”的目录名（相对 userData） */
+/** 用户数据里属于“其他会话 / 历史 / 记忆”的目录名（相对 userData）
+ * R235 主人定稿：**提示词层不是受保护区域**——规范/短记忆（guifan）、印象/软门禁（impressions）、
+ * 要求（yaoqiu）都是模型可读可写的提示词（总结提炼也要改它们），故移出保护清单。
+ * 仍保护的只有：其他会话工作区（workspace）/ 长期记忆（memory）/ 检查点 / 归档 / 看板 / 总线 / 账号鉴权（auth）。 */
 const PROTECTED_DATA = [
-  'workspace', 'memory', 'checkpoints', 'archive', 'guifan', 'impressions', 'yaoqiu',
+  'workspace', 'memory', 'checkpoints', 'archive',
   'board', 'bus', 'auth',
 ];
+/** R235：插件 / skill / 运行时子树——即使住在程序安装目录里，也不算“程序本身”，
+ * 读/管理插件是正常干活，不是“查看其他会话”也不是“改程序本体”，不该弹受保护授权卡。
+ * 命中任一路径段即豁免（dsh* 运行时/插件、skills、plugins、扫描目录）。 */
+const CHA_JIAN_QU_MING = ['skills', 'plugins', 'scan-dirs', 'warmy-dsh'];
+function shiChaJianQu(p: string): boolean {
+  const segs = normCase(p).split(/[\\/]+/).filter(Boolean);
+  return segs.some((s) => CHA_JIAN_QU_MING.includes(s) || /^dsh/.test(s));
+}
 /** 用户数据根下的敏感文件（历史 / 账号 / 设置） */
 const PROTECTED_FILES = [
   'chat-logs.json', 'chat-meta.json', 'profile.json', 'settings.json', 'appearance.json',
@@ -33,6 +44,18 @@ const PROTECTED_FILES = [
 ];
 
 const yiCi = new Set<string>();
+/** R235 硬门禁：绝对不可由模型更改的提示词（道 dao.md 等，由主进程启动时登记绝对路径）。
+ * 与“受保护区域”（可经用户授权卡一次性放行）不同：硬门禁**即使同意也不放行**，
+ * 只能由用户本人在界面保存（warmy:daoShe）。grant/consume 都拒绝，保证任何工具路径都改不了。 */
+let yongBuKeGai = new Set<string>();
+export function setYongBuKeGai(paths: readonly string[]): void {
+  yongBuKeGai = new Set(paths.map((p) => normCase(path.resolve(String(p || '')))).filter(Boolean));
+}
+/** 硬门禁原因（null=非硬门禁）；供授权卡流程直接拒绝、不弹可放行的卡。 */
+export function hardProtectedReason(abs: string): string | null {
+  const k = normCase(path.resolve(String(abs || '')));
+  return yongBuKeGai.has(k) ? '硬门禁：道（dao.md）是用户最高准则，模型永不可更改，只能由用户在界面保存' : null;
+}
 const normCase = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p);
 const buZhouJian = (p: string): string => {
   const x = path.resolve(p);
@@ -47,10 +70,13 @@ function inside(child: string, parent: string): boolean {
 /** 一次性放行（用户在授权卡里明确同意后，主进程调用；下一次写/读消费掉） */
 export function grantProtectedOnce(abs: string): void {
   const p = path.resolve(String(abs || ''));
-  if (p) yiCi.add(normCase(p));
+  if (!p) return;
+  if (yongBuKeGai.has(normCase(p))) return; // R235 硬门禁：道等绝不可经授权放行
+  yiCi.add(normCase(p));
 }
 export function consumeProtectedOnce(abs: string): boolean {
   const k = normCase(path.resolve(String(abs || '')));
+  if (yongBuKeGai.has(k)) return false; // R235 硬门禁：即使被误登记也不消费
   if (!yiCi.has(k)) return false;
   yiCi.delete(k);
   return true;
@@ -68,6 +94,9 @@ export function protectedPathReason(abs: string, baseDir: string): string | null
     const base = path.resolve(String(baseDir || '.'));
     const wsRoot = path.dirname(base);              // userData/workspace
     const userData = path.dirname(wsRoot);          // userData
+    /** R235 硬门禁：道等绝对不可改的提示词优先判定，模型永不可写（授权卡也不放行）。 */
+    const ying = hardProtectedReason(p);
+    if (ying) return ying;
     /**
      * R163 #6 真机缺陷：**打包态 userData 就在安装目录下**（`<安装目录>/WArmyData`，R161 改的）。
      * 旧实现先无条件拿 `programDirs` 比，于是**应用自己的会话工作区**也被判成「程序安装目录」：
@@ -81,8 +110,8 @@ export function protectedPathReason(abs: string, baseDir: string): string | null
      * 其他会话工作区 / 历史记忆 / 账号文件 —— 那才是真正的禁止区。
      */
     const zaiUserData = inside(p, userData);
-    /** 程序安装目录：永远禁止（即使完全授权）—— 但 userData 子树除外 */
-    if (!zaiUserData) {
+    /** 程序安装目录：永远禁止（即使完全授权）—— 但 userData 子树与插件/skill/运行时子树除外 */
+    if (!zaiUserData && !shiChaJianQu(p)) {
       for (const d of programDirs) if (inside(p, d)) return '程序安装目录';
     }
     /** 其他会话工作区：workspace 根、以及不属于当前 base 的兄弟目录 */
@@ -175,9 +204,18 @@ export function protectedCommandReason(cmd: string, cwd: string, baseDir: string
       if (/^\/[A-Za-z][A-Za-z0-9_-]*$/.test(t) && process.platform === 'win32') continue;
       const looks = /^(?:[A-Za-z]:[\\/]|\\\\|\/|\.{1,2}[\\/]|~[\\/]?|%[^%]+%|\$env:|\$HOME)/.test(t)
         || /[\\/]/.test(t);
-      if (!looks) continue;
       /** 去掉命令行尾巴上的标点 */
       const clean = t.replace(/[),]+$/g, '');
+      if (!looks) {
+        /** R235：裸文件名（无分隔符，如 cd 到 userData 后的 `echo x > dao.md`）也要按 cwd 解析查保护，
+         *  否则硬门禁/敏感文件可被「cd + 裸名重定向」绕过。普通命令词解析到工作区内 ⇒ 放行，不误伤。 */
+        if (/^[^\s\\/]+$/.test(clean)) {
+          const absBare = path.resolve(now, env(clean));
+          const whyBare = protectedPathReason(absBare, baseDir);
+          if (whyBare) return whyBare;
+        }
+        continue;
+      }
       const e = env(clean);
       const abs = path.isAbsolute(e) ? path.resolve(e) : path.resolve(now, e);
       const why = protectedPathReason(abs, baseDir);

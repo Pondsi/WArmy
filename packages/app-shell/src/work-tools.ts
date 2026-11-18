@@ -236,7 +236,11 @@ export function resolveInside(baseDir: string, rel: unknown, kuaiQuan = false, z
   /** 第 93 轮：完全授权也不能碰其他会话工作区/历史与程序安装目录；用户单独授权的一次性放行除外 */
   const shenCha = (abs: string): string => {
     const why = protectedPathReason(abs, baseDir);
-    if (why && !consumeProtectedOnce(abs)) throw new Error('protected-path: ' + why);
+    if (why && !consumeProtectedOnce(abs)) {
+      /** R235 硬门禁（道等不可改提示词）用独立前缀：主进程各授权卡流程只认 /^protected-path/，
+       *  hard-protected 不匹配 ⇒ 自然落入“直接拒绝、不弹可放行的卡”，模型永不可改。 */
+      throw new Error((/^硬门禁/.test(why) ? 'hard-protected: ' : 'protected-path: ') + why);
+    }
     return abs;
   };
   /**

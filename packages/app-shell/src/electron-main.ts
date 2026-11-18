@@ -128,7 +128,7 @@ import { BenDiZhangHuCang, PeizhiCang, shengChengPingzheng, type YingYongPeizhi,
 /** 时间口径（第 91 轮）：记录存 epoch；界面按用户时区；模型/日志只给 epoch+ISO */
 import { geShiShiJian, guiYiShiQu, isoZaiShiQu, shiJianChuoWen, shiQuHeFa, xiTongShiQu } from './time-utils.js';
 /** 完全授权的禁止区（第 93 轮）：其他会话工作区/历史 + 程序安装目录 */
-import { setProgramDirs, protectedPathReason, protectedCommandReason, grantProtectedOnce } from './protected-paths.js';
+import { setProgramDirs, setYongBuKeGai, hardProtectedReason, protectedPathReason, protectedCommandReason, grantProtectedOnce } from './protected-paths.js';
 /** R163 #8：用户时限（「3 分钟内做不完就停下来总结」）—— 纯解析/纯计算在独立模块，便于跑真值表 */
 import { jieXiShiXian, shiXianDaoDian, jingGongShi, shiXianShengYu, miaoShu, jieXiKouJing, shiXianYouYiWen, type ShiXianZhuangTai } from './ren-wu-shi-xian.js';
 /** R167 项1：方案分歧硬门禁的纯判定（单一明显可用 / 推荐保底） */
@@ -490,6 +490,9 @@ function sheZhiChengXuMuLu(): void {
       dirs.add(root);
     }
     setProgramDirs([...dirs]);
+    /** R235 硬门禁：道（dao.md）等绝对不可由模型更改的提示词登记为硬保护——
+     *  即使完全授权/授权卡同意也不放行，只能用户本人经 warmy:daoShe 界面保存。 */
+    try { setYongBuKeGai([daoLu()]); } catch { /* 登记失败不挡启动 */ }
   } catch { /* 拿不到就只保护已有目录 */ }
 }
 
@@ -6064,7 +6067,14 @@ async function yunXingLiaoTianXunHuan(
                * 第 93 轮：其他会话工作区/历史、程序安装目录 = 禁止区；即使完全授权也要单独同意。
                */
               const baoHuWhy = protectedPathReason(abs, baseH);
-              if (baoHuWhy) {
+              /** R235 硬门禁：道等不可改提示词——直接拒绝，不弹可放行的授权卡。 */
+              const yingMenJinD = hardProtectedReason(abs);
+              if (yingMenJinD) {
+                okH = false;
+                huiBaoH = `[open_path] ${yingMenJinD}。不要换命令绕过；这是用户最高准则，只能由用户本人在界面修改。`;
+                try { audit?.log('chat.hard-protected-denied', { sessionId, tool: 'open_path', abs }); } catch { /* noop */ }
+                abs = '';
+              } else if (baoHuWhy) {
                 /* R154: 授权卡明确写清访问目标 */
                 let muBiao = '';
                 if (/程序安装目录/.test(baoHuWhy)) muBiao = '读取程序本身的代码（安装目录）';
@@ -6226,7 +6236,12 @@ async function yunXingLiaoTianXunHuan(
              * 禁止区本身已由 protectedCommandReason 内部的 protectedPathReason(cwd) 覆盖。 */
             /* R154 项2 修正: 完全授权下程序代码和其他会话数据仍需授权，但非保护区域（临时目录/用户项目）直接放行 */
             const cmdWhy = protectedCommandReason(cmd, cwdAbs, baseAbs) || (dang === 'full' ? '' : cwdWhy);
-            if (cmdWhy) {
+            /** R235 硬门禁：命令触及道等不可改提示词 ⇒ 直接拒绝，绝不弹卡、绝不同意后执行（命令流不走 work-tools 的 grant/consume）。 */
+            if (cmdWhy && /^硬门禁/.test(cmdWhy)) {
+              okH = false;
+              huiBaoH = `[run_shell] ${cmdWhy}。不要换命令绕过；这是用户最高准则，只能由用户本人在界面修改。`;
+              try { audit?.log('chat.hard-protected-denied', { sessionId, tool: 'run_shell', cmd: cmd.slice(0, 200) }); } catch { /* noop */ }
+            } else if (cmdWhy) {
               /**
                * 第 99 轮：完全授权不是“无边界”。命令涉及**项目程序目录 / 其他会话工作区或历史**
                * 时，先弹卡请求用户同意（同意 = 仅这一次）；常规/严格仍按越权询问设置。
@@ -6846,7 +6861,12 @@ async function yunXingLiaoTianXunHuan(
             } catch (eP) {
               const errP = String((eP as Error)?.message || eP);
               const baoHuP = /^protected-path/.test(errP);
-              if (yaoWen4 || baoHuP) {
+              /** R235 硬门禁：下载到道等不可改提示词 ⇒ 直接拒绝（不走下面 catch 兑底原始路径，防绕过）。 */
+              if (/^hard-protected/.test(errP)) {
+                okH = false;
+                huiBaoH = '[download_file] ' + errP.replace(/^hard-protected:\s*/, '') + '。不要换路径绕过；这是用户最高准则，只能由用户本人在界面修改。';
+                try { audit?.log('chat.hard-protected-denied', { sessionId, tool: 'download_file', path: String(argsH.path || '') }); } catch { /* noop */ }
+              } else if (yaoWen4 || baoHuP) {
                 const da = await qingQiuKaPian(sessionId, baoHuP ? 'AI 请求下载到受保护的目录' : 'AI 请求下载到工作区外',
                   `地址：${url}\n保存到：${String(argsH.path || '')}\n原因：${baoHuP ? errP.replace(/^protected-path:\s*/, '') : '工作区外'}\n（拒绝 = 不保存）`,
                   [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
@@ -37284,6 +37304,12 @@ chuliIpc('warmy:zhuoMianCaoZuo', async (_e, p0?: { op?: string; path?: string; d
 async function zhiXingZhuoMianCaoZuo(op: string, abs: string, dest: string, content: string): Promise<{ ok: boolean; error?: string }> {
   let ok = true; let err = '';
   try {
+    /** R235 硬门禁：道等不可改提示词，桌面操作也不许写（create/modify/move/delete）；open 只读放行。
+     *  中央拦截覆盖 desktop_file_op 工具与 warmy:zhuoMianCaoZuo IPC 两个调用方，防完全授权下绕过。 */
+    if (op !== 'open') {
+      const ying = hardProtectedReason(abs) || (op === 'move' && dest ? hardProtectedReason(dest) : null);
+      if (ying) { try { audit?.log('desktop.op.hard-denied', { op, path: abs }); } catch { /* noop */ } return { ok: false, error: ying }; }
+    }
     if (op === 'create') { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, content, 'utf8'); }
     else if (op === 'modify') { fs.appendFileSync(abs, content, 'utf8'); }
     else if (op === 'move') { const d = path.resolve(dest); if (!d) throw new Error('bad-dest'); fs.mkdirSync(path.dirname(d), { recursive: true }); fs.renameSync(abs, d); }

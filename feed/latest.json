@@ -1,13 +1,13 @@
 {
-  "version": "0.4.33",
-  "notes": "WArmy 0.4.33 — zero-burden preset expansion: four new original presets (all self-drawn/procedural, CC0-equivalent, no third-party licenses): 2D 雪团 (snowball) and 墨鲤 (ink koi) as finished SVG art, 3D 紫鸮 (purple owl) and 赤狐 (red fox) as procedural-skeleton color/proportion variants with real preview art. Built-in presets now 2D×8 / 3D×5; the first-run default stays the list-head logo (new presets appended after it). Verified on real Electron: each new 2D preset renders byte-identical to its art via the finished-SVG passthrough, each new 3D preset builds a live WebGL procedural skeleton (no GLTF), and switching back releases the 3D canvas (probe 8/8). The mimic interaction source-regression gate was aligned to the current R228 right-click/hold/stroke semantics and re-admitted to the full suite (38/0). Full-feature acceptance with per-round varying test data passed three consecutive clean rounds (92 gates + unit invariants per round). Carries all R232/R233 features and security hardening unchanged.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.33/WArmy-Setup-0.4.33.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.33/WArmy-Setup-0.4.33.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.33/WArmy-Setup-0.4.33.exe.warmyblocks",
-  "sha256": "d877bd819232292ffdf2a1fed029ba76e0536395aba4280cb9eb466d5a712c43",
-  "size": 305416910,
+  "version": "0.4.34",
+  "notes": "WArmy 0.4.34 — protected-area policy correction + Dao hard gate. (1) Prompt layers are no longer protected areas: session norms/short-memory (guifan), impressions/soft-gates (impressions) and requirements (yaoqiu) are readable/writable by the model, so the summary feature can refine prompts unblocked; skills and plugin directories are likewise open. (2) Plugin/skill/runtime subtrees (dsh*, warmy-dsh, skills, plugins, scan-dirs) are exempt from program-install-dir protection even when they live inside the install directory — reading/managing plugins is normal work, not \"viewing other sessions\" or \"modifying the program itself\". (3) The Dao (dao.md) and other absolutely-unchangeable prompts are now HARD-gated: registered at startup, blocked across every tool path (work-tools, run_shell, open_path, download_file, desktop_file_op) and never releasable even via a one-time authorization card — only the user can save them in the UI. Closed bypasses: bare-filename redirect after cd (echo x > dao.md), desktop ops in full-authorization mode, and download fallback to raw path. Still protected: other sessions workspaces, long-term memory, account/auth files, and the program binary itself. Changed-area verification passed three consecutive clean rounds (truth tables + real-device probes). Carries all prior features unchanged.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.34/WArmy-Setup-0.4.34.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.34/WArmy-Setup-0.4.34.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.34/WArmy-Setup-0.4.34.exe.warmyblocks",
+  "sha256": "383d2147a9e71cd21dbe4966e99c6b9aeeafcf92d3c98ae89a213d0277305013",
+  "size": 305418906,
   "mandatory": false,
-  "publishedAt": "2026-11-17T19:35:10.444Z",
+  "publishedAt": "2026-11-18T00:07:23.535Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.33"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.34"
 }
