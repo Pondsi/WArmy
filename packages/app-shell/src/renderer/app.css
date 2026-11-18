@@ -421,13 +421,13 @@ body.liaoTianChuangKou .liaoTianBuJu {
   position: relative;
 }
 .lieBiaoHead {
-  height: 56px; padding: 0 var(--sp-4);
-  display: flex; align-items: center; justify-content: space-between;
+  /* R249：去掉第二列标题文字（我的牛马/群聊/项目/联系人），图标移到搜索框右侧 */
+  display: none;
 }
 .lieBiaoHead h2 { font-size: var(--fs-lg); margin: 0; font-weight: 600; }
-.souSuoBaoGuo { padding: 0 var(--sp-3) 10px; }
+.souSuoBaoGuo { padding: 10px var(--sp-3) 10px; display: flex; align-items: center; gap: 6px; }
 .souSuoBaoGuo input {
-  width: 100%; border: none; border-radius: var(--radius-sm);
+  flex: 1; min-width: 0; width: auto; border: none; border-radius: var(--radius-sm);
   background: var(--hover); padding: 8px 10px; font-size: var(--fs-base);
   outline: none;
 }
@@ -689,7 +689,7 @@ body.liaoTianChuangKou .liaoTianBuJu {
 .xiaoXi.wo .bubble { text-align: start; }   /* 文字左对齐；气泡位置仍随头像（右侧） */
 /* R163 #5：.xiaoXi.wo .bubbleWrap 特异性(0,3,0) 高于 .xiaoXi .bubbleWrap(0,2,0)，
  * 这份不改的话「我方气泡」仍走旧值 —— 本轮真机 G7 就是这么抓出来的。 */
-.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: auto; max-width: min(70%, 680px); flex: 0 1 auto; }
+.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: auto; max-width: none; flex: 1 1 auto; }
 /* 时间分隔点（跨小时 / 跨日插入） */
 .shiJianFenGe {
   display: flex; align-items: center; justify-content: center;
@@ -700,8 +700,8 @@ body.liaoTianChuangKou .liaoTianBuJu {
 }
 /* 思考过程：可折叠，正文不抢气泡 */
 .siKaoKuai {
-  /* 与回复对话同宽（真机反馈：思考时内容太窄）—— 在 bubbleWrap 里就是与 .bubble 同宽 */
-  max-width: 100%; margin-bottom: 2px; font-size: var(--fs-xs);
+  /* R260：与回复对话同宽且固定（展开/折叠同宽）——width:100% 填满 bubbleWrap，不随内容伸缩 */
+  width: 100%; max-width: 100%; margin-bottom: 2px; font-size: var(--fs-xs);
   border: 1px dashed var(--line); border-radius: 8px; padding: 2px 8px;
   color: var(--muted); background: color-mix(in srgb, var(--card) 70%, transparent);
 }
@@ -1588,7 +1588,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 /* R163 #4：确认类弹窗（完全授权二次确认等）不该拉到接近满屏。
  * 旧口径 max-height: calc(100vh - 48px) ⇒ 文案稍长就变成一根很长的条。
  * 现在给确认框一个正常上限，超出由内容区滚动；数据范围/名片/头像这类内容型弹窗不受影响。 */
-.duiHuaKuangKa:has(.duiHuaKuangTi):not(:has(.daoChuShu)):not(:has(.woCardBody)):not(:has(.touXiangGrid)):not(:has(.tianJiaLianXiGrid)):not(:has(.erHeYiGrid)):not(.niuMaSheZhi *):not(:has(.shiLiHang)):not(:has(.xinXiKuangNei)) { /* R176：排除设置窗/信息窗等多内容弹窗；R230 项4：信息窗(.xinXiKuangNei)不再被本条压回 360px */
+.duiHuaKuangKa:has(.duiHuaKuangTi):not(:has(.daoChuShu)):not(:has(.woCardBody)):not(:has(.touXiangGrid)):not(:has(.tianJiaLianXiGrid)):not(:has(.erHeYiGrid)):not(.niuMaSheZhi *):not(:has(.shiLiHang)):not(:has(.xinXiKuangNei)):not(:has(.ssWrap)) { /* R176：排除设置窗/信息窗等多内容弹窗；R230 项4：信息窗(.xinXiKuangNei)不再被本条压回 360px */
   max-height: min(60vh, 460px);
   /* R170：确认加急这类确认窗左右收窄，不再 420 那么宽 */
   width: min(360px, calc(100vw - 48px));
@@ -3427,7 +3427,7 @@ body.liaoTianChuangKou #appTi {
  * R160 项9 只改了下面那份低特异性的 .bubbleWrap，这两份高特异性的没改
  * ⇒ 收窄从未生效（用户仍说「外框太长」）。三处现已同步，
  * 由 verify-css-consistency 的「两份 max-width 一致」硬门禁看住。 */
-.xiaoXi .bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: auto; max-width: min(70%, 680px); flex: 0 1 auto; }
+.xiaoXi .bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: auto; max-width: none; flex: 1 1 auto; }
 .xiaoXiMing { font-size: var(--fs-xs); opacity: .65; margin-bottom: 2px; padding-left: 2px; }
 .xiaoXi .touXiangTuPian { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
 /* ── 拉取模型：进行中的动画（至少 1.7s，直到完成/报错）── */
@@ -3722,14 +3722,12 @@ html { font-weight: var(--fw-ui, 400); }
  * 两边必须写同一个 max-width，否则这里改了不生效（真事故：连改三轮用户仍说"太窄"）。 */
 /* R160 项9：气泡整体收窄（用户左侧短一些、牛马右侧短一些），不再几乎撑满整行。
  * 旧值是 calc(100% - 84px) ≈ 占满，现改成上限 70% 且最大 680px。 */
-.bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: auto; max-width: min(70%, 680px); align-items: flex-start; flex: 0 1 auto; }
-.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: auto; max-width: min(70%, 680px); }
-/* R163 #5：气泡朝向**对方头像**的那一侧再让出 2 个头像宽（32×2 = 64px）。
- * 我的消息靠右 ⇒ 左侧留白；对方消息靠左 ⇒ 右侧留白。
- * ⚠️ renderer.css 的「.xiaoXi .bubbleWrap」特异性更高且后加载，那边必须同步改，
- *    否则这里改了不生效（R160 项9 就是这么失效的：只改了 app.css）。 */
-.xiaoXi.wo .bubbleWrap { margin-left: 32px; } /* R183 项8：1 头像 */
-.xiaoXi:not(.wo) .bubbleWrap { margin-right: 32px; } /* R183 项8 */
+.bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: auto; max-width: none; align-items: flex-start; flex: 1 1 auto; }
+.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: auto; max-width: none; }
+/* R260：朝向对方头像的一侧让出 2 个头像宽（聊天头像 32×2 = 64px）。
+ * 我的消息靠右 ⇒ 左侧留白；对方消息靠左 ⇒ 右侧留白。两份 CSS 同步（verify-css-consistency）。 */
+.xiaoXi.wo .bubbleWrap { margin-left: 64px; } /* R260：2 头像 */
+.xiaoXi:not(.wo) .bubbleWrap { margin-right: 64px; } /* R260：2 头像 */
 /* R129 铁律（内容位置不移动）：md 内联图固定 16:9 占位，加载前/后布局一致 */
 .md img { display: block; max-width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--hover, #ececec); border-radius: 6px; }
 /* 主动显示的时间（跨时/跨日）：浅分隔线 + 居中小字 */
@@ -4071,8 +4069,8 @@ html { font-weight: var(--fw-ui, 400); }
  * 于是模型名在 x=0、时间行在 x=12px，看着就是"缩进错位"。改为 0，对齐交给同一列。 */
 .xiaoXiJiaoHang { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--muted); margin-left: 0; }
 .xiaoXi.wo .xiaoXiJiaoHang { justify-content: flex-end; }
-/* 项 8：喇叭与它左边的（时间/词元）**再拉开一些**，不再挤成一坨 */
-.xiaoXiLangDu { margin-left: 12px; }
+/* R243：喇叭/引用/复制图标组靠右对齐（margin-left:auto 把图标推到行尾；时间/词元仍靠左） */
+.xiaoXiLangDu { margin-left: auto; }
 .xiaoXiCiYuan { font-size: var(--fs-xs); color: var(--muted); margin-left: 8px; font-variant-numeric: tabular-nums; }
 .xiaoXiShiJian { font-size: var(--fs-xs); color: var(--muted); }
 .xiaoXiFuZhi {
@@ -4807,6 +4805,10 @@ html { font-weight: var(--fw-ui, 400); }
 .guoChengLie { display: flex; flex-direction: column; margin-bottom: 2px; }
 .guoChengLie > :not(:first-child) { margin-top: 3px; }
 .guoChengLie > .guoChengCaoZuo { margin-top: 0; } /* R211 b11：去掉 1px 死区（鼠标下移时两者 hover 都失活→条消失） */
+/* R260 项31：内容块＋操作条包一层 hover 组——悬停组内任何位置（内容或条）都保持条可见，
+   鼠标从内容下移到条上不会因跨节点 hover 切换而闪烁/消失（条是内容的兄弟节点，旧 + 选择器有死区）。 */
+.guoChengDuanZu { display: flex; flex-direction: column; min-width: 0; position: relative; }
+.guoChengDuanZu > .guoChengCaoZuo { margin-top: 0; }
 .guoChengDuan { margin-bottom: 0; position: relative; }
 .zhongJianKa {
   position: relative;
@@ -4869,6 +4871,7 @@ html { font-weight: var(--fw-ui, 400); }
 }
 .siKaoKuai:hover + .guoChengCaoZuo,
 .zhongJianKa:hover + .guoChengCaoZuo,
+.guoChengDuanZu:hover .guoChengCaoZuo,
 .guoChengCaoZuo:hover { visibility: visible; }
 .guoChengCaoZuo .gcMoXing { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .guoChengCaoZuo .gcShiJian { flex: 0 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -4882,6 +4885,14 @@ html { font-weight: var(--fw-ui, 400); }
    R125 任务11：马图标绝对定位前移，正文左缘与中间回复框对齐（不再被图标挤偏 24px）。 */
 .zuiZhongHang { position: relative; display: flex; align-items: flex-start; min-width: 0; max-width: 100%; }
 .zuiZhongHang > .bubble { min-width: 0; }
+/* R259 报障26：进化图标左移（马头左侧）；马头恒显（无思考/执行时头像下方，绝对定位不占间距） */
+.banMaTouJing { position: static; flex: 0 0 18px; margin: 4px 6px 0 0; }
+.xiaoXiEvolveIcoZuo { display: inline-flex; align-items: center; color: var(--accent, #a87654); margin: 5px 4px 0 0; flex: 0 0 auto; }
+.xiaoXiZuoLan { position: relative; width: 32px; flex: 0 0 32px; }
+.zuoXiaRow { position: absolute; top: calc(100% + 1px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; height: 16px; pointer-events: none; }
+.zuoXiaRow .banMaTou { position: static; width: 16px; height: 16px; }
+.zuoXiaRow .xiaoXiEvolveIco { margin-left: 0; pointer-events: auto; }
+.zuoXiaRow .xiaoXiEvolveIco svg { width: 14px; height: 14px; }
 .banMaTou {
   position: absolute; left: -26px; top: 4px;
   width: 18px; height: 18px;
@@ -5199,18 +5210,32 @@ html { font-weight: var(--fw-ui, 400); }
   }
 }
 
-/* ── 第 123 轮：统一本地搜索浮窗（分区 + 敏感内容悬停解密） ───────── */
-.ssWrap { margin-top: 8px; max-height: 380px; overflow: auto; color: var(--ink, #222); }
+/* ── 第 123 轮：统一本地搜索浮窗（分区 + 敏感内容悬停解密）；R250 加宽+关键词高亮+点击跳转 ───────── */
+/* R250：搜索窗加宽（至少与聊天框同宽）+ 加高 */
+.duiHuaKuangKa:has(.ssWrap) { width: min(960px, calc(100vw - 48px)); max-height: min(86vh, 860px); }
+.ssShuRu { width: 100%; padding: 9px 12px; border: 1px solid var(--line, #ddd); border-radius: 8px; background: var(--hover, #f5f5f5); color: var(--ink, #222); font-size: var(--fs-base); outline: none; box-sizing: border-box; }
+.ssShuRu:focus { border-color: var(--accent, #A87654); }
+.ssWrap { margin-top: 10px; max-height: min(62vh, 620px); overflow: auto; color: var(--ink, #222); scrollbar-width: thin; scrollbar-color: var(--accent, #A87654) transparent; }
+.ssWrap::-webkit-scrollbar { width: 8px; }
+.ssWrap::-webkit-scrollbar-track { background: transparent; }
+.ssWrap::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent, #A87654) 55%, transparent); border-radius: 8px; }
+.ssWrap::-webkit-scrollbar-thumb:hover { background: var(--accent, #A87654); }
 .ssSec { margin-top: 10px; border-top: 1px solid var(--line, #ddd); padding-top: 6px; }
 .ssSec:first-child { border-top: none; margin-top: 0; }
 .ssSecHead { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--accent, #A87654); padding: 4px 6px; }
 .ssSecHead span { font-weight: 400; color: var(--muted, #888); }
-.ssHit { padding: 6px 8px; border-radius: 6px; cursor: default; }
+.ssHit { padding: 7px 9px; border-radius: 6px; cursor: default; }
+.ssHit.ssKeDian { cursor: pointer; }
 .ssHit:hover { background: color-mix(in srgb, var(--accent, #A87654) 9%, transparent); }
 .ssTitle { font-size: 13px; font-weight: 600; line-height: 1.45; word-break: break-all; }
 .ssSnippet { font-size: 12px; line-height: 1.55; opacity: .9; white-space: pre-wrap; word-break: break-all; }
 .ssHit[data-reveal]:not([data-reveal=""]) .ssSnippet { cursor: help; }
 .ssMeta { font-size: 11px; opacity: .55; margin-top: 2px; word-break: break-all; }
+/* R250：关键词主题色背景突出 */
+.ssKw { background: var(--accent, #A87654); color: #fff; font-weight: 600; padding: 0 2px; border-radius: 3px; }
+/* R250：跳转到记录时的闪烁提示 */
+.ssTiaoDaoShan { animation: ssTiaoDaoShan 1.6s ease-out; }
+@keyframes ssTiaoDaoShan { 0% { background: color-mix(in srgb, var(--accent, #A87654) 35%, transparent); } 100% { background: transparent; } }
 
 /* ── R127 T5：网络搜索供应商链管理（预设下拉 + 待测区/搜索调用链） ────── */
 .ssQuYu { border: 1px solid var(--line, #ddd); border-radius: 8px; margin-top: 10px; padding: 8px 10px; }

@@ -33,6 +33,12 @@ if (fsExists(path.join(src, 'mimic-preload.cjs'))) copyFileSync(path.join(src, '
 copyFileSync(path.join(src, 'mimic-menu-preload.cjs'), path.join(dist, 'mimic-menu-preload.cjs'));
 copyFileSync(path.join(src, 'desktop-icons.ps1'), path.join(dist, 'desktop-icons.ps1'));
 copyFileSync(path.join(src, 'ipc-aliases.json'), path.join(dist, 'ipc-aliases.json'));
+/** R257：迪文子进程 worker（纯 ESM；主进程 spawn 它，npm diwen 的 native 增强只活在子进程） */
+copyFileSync(path.join(src, 'diwen-worker.mjs'), path.join(dist, 'diwen-worker.mjs'));
+/** R258：dsh 侧 warmy-memory 接管插件（cordis 插件，profile patch 以绝对路径加载） */
+copyFileSync(path.join(src, 'dsh-warmy-memory.mjs'), path.join(dist, 'dsh-warmy-memory.mjs'));
+/** R259：DuckDB 子进程 worker（native 只在子进程） */
+copyFileSync(path.join(src, 'duckdb-worker.mjs'), path.join(dist, 'duckdb-worker.mjs'));
 copyDir(path.join(src, 'renderer'), path.join(dist, 'renderer'));
 copyDir(path.join(src, 'i18n'), path.join(dist, 'i18n'));
 // pptx 模板（make_pptx 用；打包后也要在，否则只能如实报 template-missing）

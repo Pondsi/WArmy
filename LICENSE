@@ -12,14 +12,19 @@ furnished to do so, subject to the following conditions:
 1. The above copyright notice and this permission notice shall be included in
    all copies or substantial portions of the Software.
 
-2. ATTRIBUTION TO PONDSI IS MANDATORY. Using all or part of this source code,
-   including modified variants and derivative works, is permitted. Within the
-   limits allowed by applicable law, any use of this source code is permitted,
-   but Pondsi must always be credited as the original author. The credit must be
-   reasonably visible to the recipients of the work — for example in the README,
-   the documentation, the about screen, the package metadata, or the source file
-   headers — and must not be removed or obscured by modification, renaming, or
-   redistribution.
+2. ATTRIBUTION TO PONDSI AND A LINK TO THE ORIGINAL REPOSITORY ARE MANDATORY.
+   This requirement applies to every use of this source code, in whole or in
+   part: the original version, any modified version (modified code), derivative
+   works, and even individual code snippets — and whether the use is private
+   (for yourself) or public (distributed to others). Within the limits allowed
+   by applicable law, any such use is permitted, but you must always:
+     (a) credit Pondsi as the original author; and
+     (b) include a link to the original repository:
+         https://github.com/Pondsi/WArmy
+   The credit and the repository link must be reasonably visible to the
+   recipients of the work — for example in the README, the documentation, the
+   about screen, the package metadata, or the source file headers — and must not
+   be removed or obscured by modification, renaming, or redistribution.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -34,8 +39,8 @@ SOFTWARE.
 ## Languages / 语言
 
 - English: see body above.
-- 简体中文：见上方英文正文；强制保留 Pondsi 署名，作者完全免责。
-- 繁體中文：見上方英文正文；強制保留 Pondsi 署名，作者完全免責。
+- 简体中文：见上方英文正文；无论原版、改版（修改后的代码）还是代码片段，无论自用还是分发，均须署名 Pondsi 并附仓库链接 https://github.com/Pondsi/WArmy；作者完全免责。
+- 繁體中文：見上方英文正文；無論原版、改版（修改後的代碼）還是代碼片段，無論自用還是分發，均須署名 Pondsi 並附倉庫連結 https://github.com/Pondsi/WArmy；作者完全免責。
 - 한국어: 위 영문 본문 참조. Pondsi 저작자 표시 필수, 작성자 무보증.
 - Русский: см. текст выше. Обязательно сохранять указание Pondsi; автор без гарантий.
 - 日本語: 上記英文本文を参照。Pondsi 署名の保持は必須、無保証。

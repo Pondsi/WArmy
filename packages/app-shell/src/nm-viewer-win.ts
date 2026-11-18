@@ -1221,6 +1221,10 @@ interface NmZhuangTai {
   devToolsKuang?: NmWangYeKuang;
   /** move/resize 贴靠监听已挂过（避免重复挂） */
   devToolsBound?: boolean;
+  /** R244 报障11c/11d：面板模态子窗（启动页设置/账号密码/清理数据/收藏夹）——原生模态窗盖在网页视图之上，网页不再被隐藏变空白 */
+  moTaiWin?: BrowserWindow;
+  /** R244 报障11c：收藏夹悬停面板的原生弹出窗（非模态，定位在按钮下方）——网页保持可见不再空白 */
+  tanChuangWin?: BrowserWindow;
 }
 
 /** 主窗口在窗口池里的固定 id（nm 窗口 id 都是正数，不会撞） */
@@ -1974,6 +1978,83 @@ export function nmWangYeKuang(id: number, kuang: NmWangYeKuang, tabKey?: string)
   try { v.setBounds(anQuanWangYeKuang(kuang)); return { ok: true }; } catch { return { ok: false }; }
 }
 
+/** R244 报障11b：浏览器模式网页缩放（webContents.setZoomFactor）——恢复放大缩小可用，能改页面大小 */
+export function nmWangYeSuoFang(id: number, tabKey: string | undefined, factor: number): { ok: boolean; factor?: number } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  const v = Z && nmWangYeViewOf(Z, nmWangYeTabKey(tabKey));
+  if (!Z || !v || v.webContents.isDestroyed()) return { ok: false };
+  const n = Math.min(5, Math.max(0.25, Number(factor) || 1));
+  try { v.webContents.setZoomFactor(n); return { ok: true, factor: n }; } catch { return { ok: false }; }
+}
+
+/** R244 报障11c/11d：面板模态子窗——原生模态窗盖在网页视图之上，网页保持可见不再被隐藏变空白 */
+/** R244 报障11c：按 id 查 nm 窗口状态（供主进程转发事件回 nm 窗） */
+export function nmChuangKouCha(id: number): NmZhuangTai | undefined {
+  return CHUANG_KOU.get(Number(id) || 0);
+}
+
+export function nmMoTaiKai(id: number, html: string, opts?: { width?: number; height?: number }): { ok: boolean; cuo?: string } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '窗口不存在' };
+  try { if (Z.moTaiWin && !Z.moTaiWin.isDestroyed()) Z.moTaiWin.destroy(); } catch { /* noop */ }
+  try {
+    const w = new BrowserWindow({
+      parent: Z.win, modal: true, show: false,
+      width: Math.max(360, Number(opts?.width) || 480), height: Math.max(240, Number(opts?.height) || 460),
+      frame: false, resizable: false, minimizable: false, maximizable: false, skipTaskbar: true,
+      backgroundColor: '#20232b',
+      webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+    });
+    Z.moTaiWin = w;
+    w.on('closed', () => { Z.moTaiWin = undefined; });
+    w.once('ready-to-show', () => { try { w.show(); } catch { /* noop */ } });
+    void w.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(String(html || '')));
+    return { ok: true };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 160) }; }
+}
+export function nmMoTaiGuan(id: number): { ok: boolean } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  try { if (Z?.moTaiWin && !Z.moTaiWin.isDestroyed()) Z.moTaiWin.destroy(); } catch { /* noop */ }
+  if (Z) Z.moTaiWin = undefined;
+  return { ok: true };
+}
+
+/** R244 报障11c：收藏夹悬停面板改原生弹出窗——非模态、定位在按钮下方，网页视图保持可见不再被隐藏变空白 */
+export function nmTanChuangKai(id: number, html: string, opts?: { rectLeft?: number; rectBottom?: number; width?: number; height?: number }): { ok: boolean; cuo?: string } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '窗口不存在' };
+  try { if (Z.tanChuangWin && !Z.tanChuangWin.isDestroyed()) Z.tanChuangWin.destroy(); } catch { /* noop */ }
+  try {
+    const cb = Z.win.getContentBounds();
+    const w = Math.max(200, Number(opts?.width) || 260);
+    const h = Math.max(120, Number(opts?.height) || 360);
+    let x = Math.round(cb.x + (Number(opts?.rectLeft) || 0));
+    let y = Math.round(cb.y + (Number(opts?.rectBottom) || 0) + 6);
+    try {
+      const wa = screen.getDisplayMatching(cb).workArea;
+      x = Math.min(Math.max(wa.x, x), wa.x + wa.width - w);
+      y = Math.min(Math.max(wa.y, y), wa.y + wa.height - h);
+    } catch { /* noop */ }
+    const win = new BrowserWindow({
+      parent: Z.win, modal: false, show: false, x, y, width: w, height: h,
+      frame: false, resizable: false, minimizable: false, maximizable: false, skipTaskbar: true,
+      backgroundColor: '#20232b',
+      webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+    });
+    Z.tanChuangWin = win;
+    win.on('closed', () => { Z.tanChuangWin = undefined; });
+    win.once('ready-to-show', () => { try { win.showInactive(); } catch { /* noop */ } });
+    void win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(String(html || '')));
+    return { ok: true };
+  } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 160) }; }
+}
+export function nmTanChuangGuan(id: number): { ok: boolean } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  try { if (Z?.tanChuangWin && !Z.tanChuangWin.isDestroyed()) Z.tanChuangWin.destroy(); } catch { /* noop */ }
+  if (Z) Z.tanChuangWin = undefined;
+  return { ok: true };
+}
+
 export function nmWangYeGuan(id: number, tabKey?: string): { ok: boolean } {
   const Z = CHUANG_KOU.get(Number(id) || 0);
   if (!Z) return { ok: true };
@@ -2526,6 +2607,17 @@ export async function nmBrowserTool(act: string, args: Record<string, unknown> =
         if (!text.trim()) return { ok: false, cuo: 'find 需要 text 参数' };
         const r = await nmWangYeXuanZhongGaoLiang(Z.id, tabKey, text);
         return { ok: !!r.ok, action: 'find', found: !!r.found, text: text.slice(0, 100) };
+      }
+      case 'elements': {
+        /** R259 报障26：browser-use 式自主浏览——提取可交互元素清单（坐标+文本+href），供智能体规划 click/type/nav 循环。 */
+        const v = nmBrowserView(Z, tabKey);
+        if (!v) return { ok: false, cuo: '网页视图不存在' };
+        const js = '(function(){var out=[];var ns=document.querySelectorAll("a,button,input,select,textarea,[role=button],[onclick]");for(var i=0;i<ns.length&&out.length<80;i++){var el=ns[i];var r=el.getBoundingClientRect();if(r.width<2||r.height<2)continue;var t=(el.innerText||el.value||el.getAttribute("aria-label")||el.placeholder||"").trim().slice(0,60);out.push({i:i,tag:el.tagName.toLowerCase(),type:el.type||"",text:t,href:(el.href||"").slice(0,120),x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)});}return JSON.stringify({url:location.href,title:document.title,elements:out});})()';
+        try {
+          const str = await v.webContents.executeJavaScript(js, true);
+          const d = JSON.parse(String(str));
+          return { ok: true, action: 'elements', url: d.url, title: d.title, elements: d.elements };
+        } catch (e) { return { ok: false, cuo: '提取元素失败：' + String((e as Error)?.message || e) }; }
       }
       case 'shot': {
         const v = nmBrowserView(Z, tabKey);

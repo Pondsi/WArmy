@@ -24,6 +24,8 @@ export interface VmAdapter {
   push(sandbox: string, local: string, remote: string): Promise<VmExecResult>;
   pull(sandbox: string, remote: string, local: string): Promise<VmExecResult>;
   snapshot(sandbox: string, name: string): Promise<VmExecResult>;
+  /** R260 快照克隆：从现有沙箱克隆出一个新沙箱（分身环境/快速回滚）。 */
+  clone(sandbox: string, newName: string): Promise<VmExecResult>;
   dispose(sandbox: string): Promise<VmExecResult>;
   /** R209 z1：持久 bidirectional stdio 隧道（VM-backed IPC）；没装返回 null。 */
   spawnTunnel?(sandbox: string, cmd: string): Promise<ChildProcess | null>;
@@ -84,6 +86,7 @@ export class MicrosandboxAdapter implements VmAdapter {
   pushArgs(sandbox: string, local: string, remote: string): string[] { return ['cp', local, `${sandbox}:${remote}`]; }
   pullArgs(sandbox: string, remote: string, local: string): string[] { return ['cp', `${sandbox}:${remote}`, local]; }
   snapshotArgs(sandbox: string, name: string): string[] { return ['snap', sandbox, name]; }
+  cloneArgs(sandbox: string, newName: string): string[] { return ['clone', sandbox, newName]; }
   disposeArgs(sandbox: string): string[] { return ['rm', sandbox]; }
   async exec(sandbox: string, cmd: string, opts?: VmExecOpts): Promise<VmExecResult> {
     const lu = await this.checker(this.bin); if (!lu) return { ok: false, code: null, stdout: '', stderr: '', error: 'msb-not-installed' };
@@ -93,6 +96,7 @@ export class MicrosandboxAdapter implements VmAdapter {
   async push(sandbox: string, local: string, remote: string): Promise<VmExecResult> { const lu = await this.checker(this.bin); if (!lu) return weiAnZhuang(this.engine); return paoMingLing(lu, this.pushArgs(sandbox, local, remote)); }
   async pull(sandbox: string, remote: string, local: string): Promise<VmExecResult> { const lu = await this.checker(this.bin); if (!lu) return weiAnZhuang(this.engine); return paoMingLing(lu, this.pullArgs(sandbox, remote, local)); }
   async snapshot(sandbox: string, name: string): Promise<VmExecResult> { const lu = await this.checker(this.bin); if (!lu) return weiAnZhuang(this.engine); return paoMingLing(lu, this.snapshotArgs(sandbox, name)); }
+  async clone(sandbox: string, newName: string): Promise<VmExecResult> { const lu = await this.checker(this.bin); if (!lu) return weiAnZhuang(this.engine); return paoMingLing(lu, this.cloneArgs(sandbox, newName)); }
   async dispose(sandbox: string): Promise<VmExecResult> { const lu = await this.checker(this.bin); if (!lu) return weiAnZhuang(this.engine); return paoMingLing(lu, this.disposeArgs(sandbox)); }
   /** R209 z1：隧道命令构造（msb exec … -- sh -c cmd，stdio 留给 JSON-line IPC）。 */
   tunnelArgs(sandbox: string, cmd: string): string[] { return ['exec', sandbox, '--', 'sh', '-c', cmd]; }
@@ -139,6 +143,15 @@ export class QemuAdapter implements VmAdapter {
     const bin = await this.checker('qemu-img'); if (!bin) return weiAnZhuang(this.engine);
     return paoMingLing(bin, this.snapshotDiskArgs(diskPath, name));
   }
+  /** R260 克隆：qemu-img 基于 backing 盘建增量盘（纯函数可测）；未配磁盘路径如实标记。 */
+  cloneDiskArgs(diskPath: string, newPath: string): string[] { return ['create', '-f', 'qcow2', '-b', diskPath, '-F', 'qcow2', newPath]; }
+  async cloneDisk(diskPath: string, newPath: string): Promise<VmExecResult> {
+    const bin = await this.checker('qemu-img'); if (!bin) return weiAnZhuang(this.engine);
+    return paoMingLing(bin, this.cloneDiskArgs(diskPath, newPath));
+  }
+  async clone(sandbox: string, newName: string): Promise<VmExecResult> {
+    return { ok: false, code: null, stdout: '', stderr: '', error: `qemu-clone-needs-disk-config（${sandbox}/${newName}）` };
+  }
   async dispose(sandbox: string): Promise<VmExecResult> {
     const ssh = await this.checker(this.sshBin); if (!ssh) return weiAnZhuang(this.engine);
     return paoMingLing(ssh, this.execArgs(sandbox, 'sudo shutdown -h now'));
@@ -175,5 +188,17 @@ export class VmAdapterManager {
   async xuanKeYong(): Promise<VmAdapter | null> {
     for (const a of this.adapters) { const r = await a.probe(); if (r.available) return a; }
     return null; // 都没装 ⇒ 降级 L1 进程级
+  }
+  /** R260 快照：选可用引擎建快照；没装任何引擎如实降级提示（不假装成功）。 */
+  async snapshot(sandbox: string, name: string): Promise<VmExecResult> {
+    const a = await this.xuanKeYong();
+    if (!a) return { ok: false, code: null, stdout: '', stderr: '', error: 'no-vm-engine（未装 VM 引擎，降级 L1 进程级，无快照）' };
+    return a.snapshot(sandbox, name);
+  }
+  /** R260 克隆：选可用引擎克隆沙箱（分身环境/快速回滚）；没装如实降级提示。 */
+  async clone(sandbox: string, newName: string): Promise<VmExecResult> {
+    const a = await this.xuanKeYong();
+    if (!a) return { ok: false, code: null, stdout: '', stderr: '', error: 'no-vm-engine（未装 VM 引擎，降级 L1 进程级，无克隆）' };
+    return a.clone(sandbox, newName);
   }
 }

@@ -201,7 +201,12 @@ export class KnowledgeBase {
     }
   }
 
-  /** 使用计数合并落盘：只在空闲窗口写一次，避免每次召回都整层 JSON 序列化 */
+  /**
+   * 合并落盘（R241 卡顿修复）：**所有变更**（实体/事件增改取代 + 使用计数）都走这条防抖写盘。
+   * 旧实现里 upsertEntity/addEvent/supersedeEvent 每次都 `save()` 同步重写**整层** JSON，
+   * 而后台总结一轮会连续改几十上百条 ⇒ O(N×M) 次整库序列化+同步写盘卡死主进程（间歇性“未响应”）。
+   * 现在一个同步变更 bursts 只在 800ms 空闲窗口写一次；退出/总结收尾/删除用 flush() 立即落。
+   */
   private scheduleUseSave(): void {
     if (this.useSaveTimer) return;
     this.useSaveTimer = setTimeout(() => {
@@ -232,7 +237,7 @@ export class KnowledgeBase {
       chuangJianTs: prev?.chuangJianTs ?? partial.chuangJianTs ?? Date.now(),
     };
     this.entities.set(e.id, e);
-    this.save();
+    this.dirty = true; this.scheduleUseSave();
     return e;
   }
 
@@ -244,7 +249,7 @@ export class KnowledgeBase {
       const i = Shi.entityIds.indexOf(id);
       if (i >= 0) Shi.entityIds.splice(i, 1);
     }
-    this.save();
+    this.dirty = true; this.scheduleUseSave();
     return true;
   }
 
@@ -256,7 +261,7 @@ export class KnowledgeBase {
       const i = tiaoMu.eventIds.indexOf(id);
       if (i >= 0) tiaoMu.eventIds.splice(i, 1);
     }
-    this.save();
+    this.dirty = true; this.scheduleUseSave();
     return true;
   }
 
@@ -276,7 +281,7 @@ export class KnowledgeBase {
         tiaoMu.updatedAt = Date.now();
       }
     }
-    this.save();
+    this.dirty = true; this.scheduleUseSave();
     return this.events.get(Shi.id)!;
   }
 
@@ -288,7 +293,7 @@ export class KnowledgeBase {
     const Shi = this.events.get(id);
     if (!Shi || Shi.shiXiaoTs) return false;
     this.events.set(id, { ...Shi, shiXiaoTs });
-    this.save();
+    this.dirty = true; this.scheduleUseSave();
     return true;
   }
 
@@ -400,6 +405,15 @@ export class ZhishiCang {
   }
   allow(ceng: ZhishiCeng) {
     return ceng === 'session' ? this.session : ceng === 'internal' ? this.internal : this.private;
+  }
+  /**
+   * R241：立即落盘所有层（退出 / 总结收尾 / 会话删除用）。防抖写盘把一轮变更合并成一次，
+   * 这里保证收尾时真的落下去；返回成功落盘的层数（失败保留 dirty 供诊断）。
+   */
+  flushAll(): number {
+    let n = 0;
+    for (const kb of [this.session, this.internal, this.private]) { try { if (kb.flush()) n++; } catch { /* 落盘失败保留 dirty */ } }
+    return n;
   }
   queryLayers(layers: readonly ZhishiCeng[], q: string) {
     const out = { entities: [] as Array<Shiti & { _ceng?: ZhishiCeng }>, events: [] as Array<ZhishiShijian & { _ceng?: ZhishiCeng }> };

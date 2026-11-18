@@ -27,7 +27,7 @@
     b.disabled = !!active;
     b.classList.toggle('qiYong', !!Q().get(sid) && !active);
     b.setAttribute('aria-pressed', String(!!Q().get(sid)));
-    b.title = active ? t('evolve.lockedTip', '已有分支进行中：请先选择一条支线合并，才能再开自进化。') : t('evolve.tip', '自进化：开启后这条消息会同时跑两条改进支线，自动或人工选出更好的一条合并，让牛马越用越顺手。注意：token 消耗可能变为 2 倍甚至更多。');
+    b.title = active ? t('evolve.lockedTip', '已有分支进行中：请先选择一条支线合并，才能再开进化。') : t('evolve.tip', '进化：开启后这条消息会同时跑两条改进支线，自动或人工选出更好的一条合并，让牛马越用越顺手。注意：token 消耗可能变为 2 倍甚至更多。');
   }
 
   function ensurePanel() {
@@ -44,7 +44,7 @@
     const zt = exp.arms[arm];
     const col = document.createElement('div'); col.className = 'zjhCol';
     col.innerHTML = '<div class="zjhColHead"><b>' + t('evolve.arm', '支线') + ' ' + arm + '</b><span class="jingYin">' + t('evolve.turns', '轮数') + ' ' + (zt.turns || 0) + '</span></div>'
-      + '<div class="zjhMsgs">' + (zt.reply ? '<div class="zjhMsg">' + esc(zt.reply) + '</div>' : '<div class="jingYin">…</div>') + '</div>'
+      + '<div class="zjhMsgs">' + ((zt.history && zt.history.length) ? zt.history.map((h) => '<div class="zjhMsg ' + (h.role === 'user' ? 'zjhUser' : 'zjhThem') + '">' + esc(h.content) + '</div>').join('') : (zt.reply ? '<div class="zjhMsg">' + esc(zt.reply) + '</div>' : '<div class="jingYin">…</div>')) + '</div>'
       + '<div class="zjhInput"><textarea rows="2" placeholder="' + esc(t('evolve.armInput', '发送到支线 ' + arm)) + '"></textarea><button class="anNiuXiao zjhSend">' + esc(t('chat.faSong', '发送')) + '</button></div>'
       + '<button class="anNiuZhuYao zjhChoose"' + (canChoose ? '' : ' disabled title="' + esc(t('evolve.confirmTip', '只有项目创建者和管理员可以选择合并支线。')) + '"') + '>' + esc(t('evolve.choose', '选此支线')) + '</button>';
     col.querySelector('.zjhSend').onclick = async () => {
@@ -61,13 +61,14 @@
 
   async function renderPanel() {
     const p = ensurePanel(); const sid = Q() ? Q().sid() : '';
-    const active = cur && cur.sessionId === sid && (cur.status === 'split' || cur.status === 'staged' || cur.status === 'running');
+    const active = cur && cur.sessionId === sid && (cur.status === 'split' || cur.status === 'running');
+    /* R246：staged（已选支线待合并）⇒ 立即恢复一栏（面板隐藏+普通输入恢复）；5s 内撤销回 split ⇒ 马上恢复两栏。 */
     document.body.classList.toggle('zjh-split', !!active);
     p.classList.toggle('yinCang', !active);
     if (!active) { p.innerHTML = ''; return; }
     const isProject = Q().nav() === 'internalGroup';
     const canChoose = !isProject || await isAdmin(sid);
-    p.innerHTML = '<div class="zjhHead"><b>' + esc(t('evolve.title', '自进化 · 双支线')) + '</b><span class="jingYin">' + (cur.mode === 'objective' ? esc(t('evolve.objective', '客观验收：证据充足自动择优')) : esc(t('evolve.subjective', '主观：请人工选择'))) + '</span><button class="anNiuXiao zjhHistory">' + esc(t('evolve.history', '历史回退')) + '</button></div>';
+    p.innerHTML = '<div class="zjhHead"><b>' + esc(t('evolve.title', '进化 · 双支线')) + '</b><span class="jingYin">' + (cur.mode === 'objective' ? esc(t('evolve.objective', '客观验收：证据充足自动择优')) : esc(t('evolve.subjective', '主观：请人工选择'))) + '</span><button class="anNiuXiao zjhHistory">' + esc(t('evolve.history', '历史回退')) + '</button></div>';
     const row = document.createElement('div'); row.className = 'zjhRow';
     row.appendChild(armCol(cur, 'A', canChoose)); row.appendChild(armCol(cur, 'B', canChoose));
     p.appendChild(row);

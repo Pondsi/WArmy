@@ -513,10 +513,21 @@ export class ShiliGuanliqi extends EventEmitter {
     Zhi.stderr?.on('data', (d: Buffer) => {
       this.emit('stderr', { id: config.id, text: d.toString() });
     });
+    /** R258：实例 IPC 消息上抛（warmy-memory 插件 RPC 等），宿主经 send() 回包。 */
+    Zhi.on('message', (m: unknown) => {
+      this.emit('message', { id: config.id, msg: m });
+    });
 
     this.emit('spawned', { id: config.id, pid: Zhi.pid });
     const { Zhi: _drop, ...publicHandle } = handle;
     return publicHandle;
+  }
+
+  /** R258：向实例子进程发 IPC 消息（warmy-memory-reply 等）；实例不在/已退 → false。 */
+  send(id: string, msg: unknown): boolean {
+    const h = this.instances.get(id);
+    if (!h || !h.Zhi || h.Zhi.exitCode !== null) return false;
+    try { h.Zhi.send(msg as Parameters<ChildProcess['send']>[0]); return true; } catch { return false; }
   }
 
   async stop(id: string, timeoutMs = 5000): Promise<void> {

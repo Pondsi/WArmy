@@ -16,7 +16,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-export type SousuoFenQu = 'session' | 'ui' | 'otherSessions' | 'knowledge' | 'workspace' | 'disk';
+export type SousuoFenQu = 'session' | 'ui' | 'otherSessions' | 'knowledge' | 'workspace' | 'disk' | 'otherWorkspace' | 'contacts' | 'sessionNames' | 'prompts' | 'schedules';
 
 export interface SousuoMingzhong {
   section: SousuoFenQu;
@@ -31,6 +31,12 @@ export interface SousuoMingzhong {
   sensitive?: boolean;
   ts?: number;
   score?: number;
+  /** R250：点击跳转用——kind=chat/file/contact/session/prompt/knowledge/ui/schedule */
+  kind?: string;
+  sessionId?: string;
+  seq?: number;
+  navKind?: string;
+  navTarget?: string;
   /** 仅主进程内部用于建立悬停解密映射；**不得**直接回给渲染层 */
   full?: string;
 }
@@ -82,11 +88,16 @@ export function daMa(text: string): { text: string; sensitive: boolean } {
 
 function fenQuMing(id: SousuoFenQu): string {
   return ({
-    session: '当前会话',
-    ui: '程序界面',
-    otherSessions: '其他会话',
+    session: '本会话聊天记录',
+    ui: '界面文案',
+    otherSessions: '其他会话聊天记录',
     knowledge: '知识库',
-    workspace: '本会话工作区',
+    workspace: '本会话工作区文件',
+    otherWorkspace: '其他会话工作区文件',
+    contacts: '联系人名称',
+    sessionNames: '会话名称',
+    prompts: '提示词',
+    schedules: '定时任务',
     disk: '本机磁盘',
   } as Record<SousuoFenQu, string>)[id] || id;
 }
@@ -344,7 +355,7 @@ export async function saoMiaoQuanPan(query: string, opts: QuanPanXuanXiang = {})
 /** 会话/知识库/工作区等结构化结果统一成同一种命中项 */
 export function zhengLiMingzhong(
   section: SousuoFenQu,
-  rows: Array<{ title?: string; snippet?: string; meta?: string; path?: string; key?: string; ts?: number }>,
+  rows: Array<{ title?: string; snippet?: string; meta?: string; path?: string; key?: string; ts?: number; kind?: string; sessionId?: string; seq?: number; navKind?: string; navTarget?: string }>,
   limit = 20,
 ): SousuoMingzhong[] {
   return rows.slice(0, Math.max(1, limit)).map((r) => {
@@ -358,10 +369,82 @@ export function zhengLiMingzhong(
       path: r.path,
       key: r.key,
       ts: r.ts,
+      kind: r.kind,
+      sessionId: r.sessionId,
+      seq: r.seq,
+      navKind: r.navKind,
+      navTarget: r.navTarget,
       sensitive: dm.sensitive,
       full: dm.sensitive ? raw : undefined,
     };
   });
+}
+
+/** R250：会话工作区文件搜索（只读，按文件名/内容命中；跳过临时/缓存目录）。 */
+export async function saoMiaoGongZuoQuWenJian(query: string, roots: Array<{ dir: string; sessionId?: string }>, opts: { limit?: number; maxFiles?: number; maxMs?: number } = {}): Promise<SousuoMingzhong[]> {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return [];
+  const limit = Math.max(1, Math.min(40, Number(opts.limit) || 20));
+  const maxFiles = Math.max(1, Math.min(20000, Number(opts.maxFiles) || 4000));
+  const maxMs = Math.max(300, Math.min(15000, Number(opts.maxMs) || 4000));
+  const qi = Date.now();
+  const out: SousuoMingzhong[] = [];
+  const seen = new Set<string>();
+  let files = 0;
+  const chao = () => Date.now() - qi > maxMs || out.length >= limit || files >= maxFiles;
+  async function wenJian(p: string, sessionId?: string): Promise<void> {
+    if (seen.has(p.toLowerCase())) return;
+    seen.add(p.toLowerCase());
+    let st: fs.Stats; try { st = await fsp.stat(p); } catch { return; }
+    if (!st.isFile() || st.size > 2 * 1024 * 1024) return;
+    const base = path.basename(p);
+    const mingZhong = base.toLowerCase().includes(q);
+    let snippet = '';
+    let sensitive = false;
+    let full: string | undefined;
+    if (!mingZhong) {
+      const ext = path.extname(base).toLowerCase();
+      if (ext && !WEN_BEN_KUO.has(ext)) return;
+      let buf: Buffer; try { buf = await fsp.readFile(p); } catch { return; }
+      const text = buf.toString('utf8');
+      if (!text || text.includes('\u0000')) return;
+      const at = text.toLowerCase().indexOf(q);
+      if (at < 0) return;
+      const ls = text.lastIndexOf('\n', at) + 1; const le = text.indexOf('\n', at);
+      const line = text.slice(ls, le < 0 ? text.length : le).trim().slice(0, 320);
+      const dm = daMa(line); snippet = dm.text; sensitive = dm.sensitive; full = dm.sensitive ? line : undefined;
+    }
+    const dmTitle = daMa(base);
+    out.push({
+      section: sessionId ? 'otherWorkspace' : 'workspace',
+      title: base,
+      snippet: snippet || dmTitle.text,
+      meta: p,
+      path: p,
+      kind: 'file',
+      sessionId,
+      sensitive: sensitive || dmTitle.sensitive,
+      full,
+    });
+  }
+  async function muLu(dir: string, sessionId: string | undefined, depth: number): Promise<void> {
+    if (chao() || depth > 8) return;
+    let ents: fs.Dirent[]; try { ents = await fsp.readdir(dir, { withFileTypes: true }); } catch { return; }
+    const zi: string[] = [];
+    for (const e of ents) {
+      if (chao()) return;
+      if (e.isSymbolicLink()) continue;
+      const p = path.join(dir, e.name);
+      if (e.isFile()) { files++; await wenJian(p, sessionId); }
+      else if (e.isDirectory()) { if (TIAO_GUO_MU.has(e.name) || e.name.startsWith('.')) continue; zi.push(p); }
+    }
+    for (const p of zi) { if (chao()) return; await muLu(p, sessionId, depth + 1); }
+  }
+  for (const r of roots) {
+    if (chao()) break;
+    if (r.dir && fs.existsSync(r.dir)) await muLu(r.dir, r.sessionId, 0);
+  }
+  return out;
 }
 
 /** 给模型看的只读文本（敏感项只给打码文本；绝不给 full） */

@@ -614,20 +614,46 @@ export async function liaoTianDaiGongJu(
       // 思考也要原样带回（MiMo/DeepSeek/Kimi 交错思考的硬要求）：丢了它，模型下一轮看不到自己为什么调了这个工具，会去"核实"或重做。
       const siKaoBenLun = String((xiaoXi as { reasoning?: unknown } | undefined)?.reasoning || '');
       xiaoXiJi.push({ role: 'assistant', content: xiaoXi?.content || '', gongJuDiaoYongJi: diaoYongJi, ...(siKaoBenLun ? { reasoning: siKaoBenLun } : {}) });
-      for (const call of diaoYongJi) {
+      /* R260 并行工具调用：整批都是只读工具⇒并发执行（仍逐个经宿主授权网关/停止世代/重复守卫），
+       * 结果按原序入账；只要含写/跑命令等有副作用工具⇒保持顺序（防文件冲突）。 */
+      const ZHI_DU_BING_XING = new Set(['read_file', 'list_dir', 'search_files', 'find_files', 'knowledge_query', 'recall', 'retrieve', 'get_time', 'web_search', 'web_extract', 'read_document', 'read_docx', 'read_pdf', 'read_pptx', 'read_xlsx', 'screen_view', 'local_search', 'list_archive', 'read_archive_entry', 'read_profile', 'read_skill', 'find_skill', 'list_subagents', 'monitor_process', 'lsp_diagnostics', 'duckdb_query']);
+      const yuSuanWanWen = (ming: string): string => `（宿主给这一轮的**结果额度已用完**，${ming} 这次没有执行。`
+        + '**这不是权限被拒，也不是执行失败** —— 只是宿主的用量闸到点了。'
+        + '请基于已经拿到的信息如实汇报：已经做完了什么、还差哪几步、卡在哪一步。'
+        + '只要还有用户明确要的东西没交付、而且刚才那一步有真实进展，宿主会再给额度，所以不要把没做完的说成做完了。）';
+      const keBingXing = diaoYongJi.length > 1 && diaoYongJi.every((c) => ZHI_DU_BING_XING.has(String(c.function?.name || '')));
+      const bingXingJieGuo = keBingXing ? await Promise.all(diaoYongJi.map(async (call) => {
+        const ming0 = String(call.function?.name || 'unknown');
+        const shengYu0 = zongYuSuan - jieGuoZiShu;
+        if (shengYu0 <= 0) return { budget: true, ok: false, text: yuSuanWanWen(ming0), detail: 'budget' };
+        const shangXian0 = Math.min(zuiDaJieGuoZiShu, shengYu0);
+        try {
+          const out = await execute(call, { round: lunShu, zuiDaJieGuoZiShu: shangXian0 });
+          let t = out === undefined || out === null ? '' : String(out);
+          if (t.length > shangXian0) t = jieWeiAnQuan(t, shangXian0) + `\n…[结果被截断：原 ${t.length} 字符，本次上限 ${shangXian0}]`;
+          return { budget: false, ok: true, text: t, detail: '' };
+        } catch (e) {
+          const yy = String((e as Error)?.message || e).slice(0, 200);
+          return { budget: false, ok: false, text: `工具 ${ming0} 执行失败：${yy}`, detail: yy };
+        }
+      })) : null;
+      for (let idx = 0; idx < diaoYongJi.length; idx += 1) {
+        const call = diaoYongJi[idx]!;
         const ming = call.function?.name || 'unknown';
         const shengYu = zongYuSuan - jieGuoZiShu;
         let text = '';
-        if (shengYu <= 0) {
-          /**
-           * 额度用完的**话术必须不像拒绝**（第 35/39 轮的同一课）：写成"未执行/权限"，
-           * 模型就当成被拒，换一个工具再试一次、再被拒、再换 —— 真机 145 秒里跑了十几轮。
-           * 所以直说：这是宿主的用量闸、不是权限、也不是出错；并告诉它该怎么收口。
-           */
-          text = `（宿主给这一轮的**结果额度已用完**，${ming} 这次没有执行。`
-            + '**这不是权限被拒，也不是执行失败** —— 只是宿主的用量闸到点了。'
-            + '请基于已经拿到的信息如实汇报：已经做完了什么、还差哪几步、卡在哪一步。'
-            + '只要还有用户明确要的东西没交付、而且刚才那一步有真实进展，宿主会再给额度，所以不要把没做完的说成做完了。）';
+        const yu = bingXingJieGuo ? bingXingJieGuo[idx] : null;
+        if (yu) {
+          text = yu.text;
+          if (yu.budget) {
+            emit({ kind: 'tool', round: lunShu, tool: ming, ok: false, chars: text.length, detail: 'budget' });
+          } else {
+            if (!yu.ok) emit({ kind: 'tool', round: lunShu, tool: ming, ok: false, chars: text.length, detail: yu.detail });
+            gongJuDiaoYongJi += 1;
+            emit({ kind: 'tool', round: lunShu, tool: ming, ok: true, chars: text.length });
+          }
+        } else if (shengYu <= 0) {
+          text = yuSuanWanWen(ming);
           emit({ kind: 'tool', round: lunShu, tool: ming, ok: false, chars: text.length, detail: 'budget' });
         } else {
           const shangXian = Math.min(zuiDaJieGuoZiShu, shengYu);

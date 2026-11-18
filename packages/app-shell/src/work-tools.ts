@@ -2013,7 +2013,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'local_search',
-        description: '**只读本地搜索**：按当前会话已授权的范围搜索——当前会话记录、程序界面文案、本会话知识库层、本会话工作区文件。不会修改/删除任何内容。`include_other_sessions:true` 用于用户明确要求查看其他会话时：我的牛马会弹授权（完全授权直接放行）；项目只能看项目和群聊且需授权；群聊/联系人直接拒绝且无授权途径。`include_disk:true` 仅「我的牛马」会话可用，且每次会弹用户授权。敏感内容会以 ***** 返回，不要尝试还原。',
+        description: '**只读本地搜索**：按当前会话已授权的范围搜索——当前会话记录、程序界面文案、本会话知识库层、本会话工作区文件。不会修改/删除任何内容。`include_other_sessions:true` 仅「我的牛马」可用（常规授权弹授权卡、完全授权直接放行）；项目/群聊/联系人一律拒绝且无授权途径。`include_disk:true` 仅「我的牛马」会话可用，且每次会弹用户授权。敏感内容会以 ***** 返回，不要尝试还原。',
         parameters: {
           type: 'object',
           properties: {
@@ -2023,6 +2023,126 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
             limit: { type: 'number', description: '每个分区最多返回多少条（默认 10，最多 30）' },
           },
           required: ['query'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'session_intervene',
+        description: '**跨会话查看/介入**（仅「我的牛马」会话可用；项目/群聊/联系人一律拒绝）：查看其他会话的聊天记录与当前状态，或介入操作（停止该会话本轮、向该会话发送一条用户消息）。常规授权下每次弹授权卡，完全授权下直接执行。用户明确要求管理其他会话时才用。',
+        parameters: {
+          type: 'object',
+          properties: {
+            session_id: { type: 'string', description: '目标会话 id（不能是当前会话）' },
+            action: { type: 'string', enum: ['status', 'read', 'stop', 'send'], description: 'status=当前状态+最近消息；read=最近聊天记录；stop=停止该会话本轮；send=发送一条用户消息' },
+            text: { type: 'string', description: 'action=send 时要发送的内容' },
+            limit: { type: 'number', description: 'read 返回条数（默认 10，最多 30）' },
+          },
+          required: ['session_id', 'action'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'git',
+        description: '**Git 只读/提交**（R259）：在本会话工作区跑 git。action=status/diff/log/add/commit。只读类不需授权；add/commit 属写操作受能力格/授权约束。用于版本管理与变更核对。',
+        parameters: {
+          type: 'object',
+          properties: {
+            action: { type: 'string', enum: ['status', 'diff', 'log', 'add', 'commit'], description: 'git 子命令' },
+            args: { type: 'string', description: '附加参数（如 diff 的路径、commit 的 -m 消息；add 默认 .）' },
+          },
+          required: ['action'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'run_tests',
+        description: '**测试+反馈环**（R259）：自动识别本会话工作区的测试命令（package.json scripts.test / pytest / cargo test）并运行，返回退出码+输出尾部。失败后据此修复再跑，形成反馈环。',
+        parameters: { type: 'object', properties: { timeoutSec: { type: 'number', description: '超时秒（默认 120，最大 600）' } } },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'office_convert',
+        description: '**LibreOffice 转换**（R259，MPL）：用本机 LibreOffice headless 把 docx/xlsx/pptx/odt 转成 pdf 或 txt（只读转换，不改原件）。未安装时如实返回 not-installed 与安装提示。',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: '要转换的办公文档绝对路径' },
+            to: { type: 'string', enum: ['pdf', 'txt'], description: '目标格式（默认 pdf）' },
+          },
+          required: ['path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'duckdb_query',
+        description: '**DuckDB 分析**（R259）：在独立子进程跑 DuckDB SQL（native 只活在子进程），可直接 SELECT 本地 csv/parquet/json 文件（read_csv_auto/read_parquet）做聚合分析。只读查询；返回前 200 行。',
+        parameters: {
+          type: 'object',
+          properties: { sql: { type: 'string', description: 'DuckDB SQL（只读 SELECT）' } },
+          required: ['sql'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'calendar_read',
+        description: '**日历读取**（R260）：读本地 .ics 日历事件（标题/起止时间/地点/描述）。只读。例：查看明天有什么会。',
+        parameters: { type: 'object', properties: {} },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'calendar_add',
+        description: '**日历添加**（R260）：往本地 .ics 日历加一个事件。联系人/群聊会话不可写。例：把明天 10 点的评审会加进日历。',
+        parameters: {
+          type: 'object',
+          properties: {
+            summary: { type: 'string', description: '事件标题' },
+            dtstart: { type: 'string', description: '开始时间（ICS 格式，如 20261120T100000）' },
+            dtend: { type: 'string', description: '结束时间（可选）' },
+            location: { type: 'string', description: '地点（可选）' },
+            description: { type: 'string', description: '描述（可选）' },
+          },
+          required: ['summary', 'dtstart'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'docling_parse',
+        description: '**Docling 文档解析**（R260，MIT）：用 Docling 子进程把 PDF/DOCX/PPTX 转成保真 Markdown（含表格/版面）。需本机装 docling（pip install docling）；未装如实报 not-installed。例：把扫描合同 PDF 转成带表格的 Markdown 供知识库入库。',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string', description: '要解析的文档绝对路径' } },
+          required: ['path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'code_ast',
+        description: '**Tree-sitter 代码结构**（R260）：用 Tree-sitter WASM 子进程按 AST 精确提取函数/类/方法 outline（而非正则）。需 web-tree-sitter + 对应语言 grammar.wasm；未装/缺语法如实报。例：提取某源码文件的函数/类清单做结构化理解。',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: '源码文件绝对路径' },
+            grammar: { type: 'string', description: '对应语言的 grammar.wasm 路径' },
+          },
+          required: ['path'],
         },
       },
     },
@@ -2046,7 +2166,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       function: {
         name: 'nm_browser',
         description: '**内置浏览器操控**：在 nm 浏览器窗口里像真人一样浏览网页——打开/导航、读页面文本、点坐标、打字、页面内查找高亮、截图、多标签。适合**需要交互**的网页任务（登录后的页面、点按钮、填表单、看动态渲染结果）；纯查资料优先 web_search / web_extract / fetch_url。坐标 (x,y) 以**网页可视区左上角**为原点（CSS 像素，可先 find/read 定位元素再点）。'
-          + 'action 取值：open=打开网址（没有窗口就新建）；nav=导航到新网址（需已 open）；new-tab=在新标签页打开；back/forward/reload/stop=浏览控制；read=读当前页文本（返回 text/url/title）；click=点击（x,y,button=left|right|middle,count=1|2|3）；type=在当前焦点输入文本（\\n=回车，先 click 输入框再 type）；find=页面内查找并滚动高亮（text）；shot=截图返回图片绝对路径；status=当前页状态（url/title/loading/可前进后退）。',
+          + 'action 取值：open=打开网址（没有窗口就新建）；nav=导航到新网址（需已 open）；new-tab=在新标签页打开；back/forward/reload/stop=浏览控制；read=读当前页文本（返回 text/url/title）；elements=提取可交互元素清单（a/button/input/select 的文本/href/中心坐标，R259 browser-use 式自主浏览：open→elements→规划 click/type/nav 循环）；click=点击（x,y,button=left|right|middle,count=1|2|3）；type=在当前焦点输入文本（\\n=回车，先 click 输入框再 type）；find=页面内查找并滚动高亮（text）；shot=截图返回图片绝对路径；status=当前页状态（url/title/loading/可前进后退）。',
         parameters: {
           type: 'object',
           properties: {

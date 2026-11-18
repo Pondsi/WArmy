@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld('warmy', {
   stopInstance: (id) => ipcRenderer.invoke('warmy:tingZhiShiLi', id),
   stopChat: (sessionId, opts) => ipcRenderer.invoke('warmy:tingZhiDuiHua', { sessionId, ...(opts && typeof opts === 'object' ? opts : {}) }),
   securityMode: () => ipcRenderer.invoke('warmy:anQuanMoShi'),
-  setSecurityMode: (mode) => ipcRenderer.invoke('warmy:sheZhiAnQuanMoShi', mode),
+  setSecurityMode: (mode, sessionId) => ipcRenderer.invoke('warmy:sheZhiAnQuanMoShi', mode, sessionId),
   memoryRecall: (q) => ipcRenderer.invoke('warmy:jiYiHuiSuo', q),
   memoryAppend: (ti) => ipcRenderer.invoke('warmy:jiYiZhuiJia', ti),
   memoryRetrieve: (payload) => ipcRenderer.invoke('warmy:jiYiJianSuo', payload),
@@ -185,6 +185,30 @@ contextBridge.exposeInMainWorld('warmy', {
   huiFuJinXing: (payload) => ipcRenderer.invoke('warmy:huiFuJinXing', payload),
   settingsGet: () => ipcRenderer.invoke('warmy:peiZhiQu'),
   settingsSave: (partial) => ipcRenderer.invoke('warmy:peiZhiBaoCun', partial),
+  /** R260 项28：设备权限（摄像头/麦克风/扬声器/网络）读写＋全窗变更监听 */
+  quanXianDu: () => ipcRenderer.invoke('warmy:quanXianDu'),
+  quanXianShe: (p) => ipcRenderer.invoke('warmy:quanXianShe', p),
+  /** R260 神经符号预测约束闸（ETA/难度/分身/迪文词根） */
+  yuCeYueShuJiaoYan: (p) => ipcRenderer.invoke('warmy:yuCeYueShuJiaoYan', p),
+  /** R260 硬门禁申诉复核 */
+  menJinShenSu: (p) => ipcRenderer.invoke('warmy:menJinShenSu', p),
+  /** R260 技能版本更新检测 */
+  jinengBanBenJianCe: (p) => ipcRenderer.invoke('warmy:jinengBanBenJianCe', p),
+  /** R260 进化实验分析 */
+  jinHuaFenXi: (p) => ipcRenderer.invoke('warmy:jinHuaFenXi', p),
+  /** R260 拟态情绪反馈 */
+  niTaiQingXu: (p) => ipcRenderer.invoke('warmy:niTaiQingXu', p),
+  /** R260 日历（本地 .ics）读/增 */
+  riLiDu: () => ipcRenderer.invoke('warmy:riLiDu'),
+  riLiTian: (p) => ipcRenderer.invoke('warmy:riLiTian', p),
+  /** R260 项30 反谄媚裁决 + 系统消息3选一 */
+  fanChanMeiPanJue: (p) => ipcRenderer.invoke('warmy:fanChanMeiPanJue', p),
+  fanChanMeiXiTongXiaoXi: (p) => ipcRenderer.invoke('warmy:fanChanMeiXiTongXiaoXi', p),
+  /** R260 项29 智能语音预测文件/感知决策 */
+  zhiNengYuYinYuCeDu: () => ipcRenderer.invoke('warmy:zhiNengYuYinYuCeDu'),
+  zhiNengYuYinGaiJin: (p) => ipcRenderer.invoke('warmy:zhiNengYuYinGaiJin', p),
+  zhiNengYuYinGanZhiJueCe: (p) => ipcRenderer.invoke('warmy:zhiNengYuYinGanZhiJueCe', p),
+  onQuanXianBianGeng: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:quanXianBianGeng', h); return () => ipcRenderer.removeListener('warmy:quanXianBianGeng', h); },
   // ADR 004：执行环境探测（只探测，不安装不下载不提权）与启停（只接受预定义 id + 'start'|'stop'）
   containerProbe: (opts) => ipcRenderer.invoke('warmy:rongQiTanCe', opts),
   containerAction: (payload) => ipcRenderer.invoke('warmy:rongQiDongZuo', payload),
@@ -285,7 +309,7 @@ contextBridge.exposeInMainWorld('warmy', {
   mimicYuYinFenPian: (p) => ipcRenderer.invoke('warmy:mimicYuYinFenPian', p),
   mimicPanDuanMoXingMoRen: () => ipcRenderer.invoke('warmy:mimicPanDuanMoXingMoRen'),
   mimicWaiGuanShe: (p) => ipcRenderer.invoke('warmy:mimicWaiGuanShe', p),
-  mimicModelDirOpen: () => ipcRenderer.invoke('warmy:mimicMoXingMuLuKai'),
+  mimicModelDirOpen: (p) => ipcRenderer.invoke('warmy:mimicMoXingMuLuKai', p),
   /* R222 项8：打开动作文件夹 / 删除动作包（仅用户目录） */
   mimicActionsDirOpen: () => ipcRenderer.invoke('warmy:mimicDongZuoMuLuKai'),
   mimicActionDelete: (p) => ipcRenderer.invoke('warmy:mimicDongZuoShanChu', p),
@@ -338,6 +362,11 @@ contextBridge.exposeInMainWorld('warmy', {
   benDiYuYinZiJian: () => ipcRenderer.invoke('warmy:benDiYuYinZiJian'),
   benDiYuYinQingDan: () => ipcRenderer.invoke('warmy:benDiYuYinQingDan'),
   onBenDiYuYinJinDu: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:benDiYuYinJinDu', h); return () => ipcRenderer.removeListener('warmy:benDiYuYinJinDu', h); },
+  // R260：Whisper ASR 引擎（只语音转文字；TTS 仍 sherpa-onnx）
+  whisperZhuangTai: () => ipcRenderer.invoke('warmy:whisperZhuangTai'),
+  whisperAnZhuang: () => ipcRenderer.invoke('warmy:whisperAnZhuang'),
+  whisperShanChu: (p) => ipcRenderer.invoke('warmy:whisperShanChu', p),
+  whisperShiBie: (p) => ipcRenderer.invoke('warmy:whisperShiBie', p),
   uiPromptMulti: (p) => ipcRenderer.invoke('warmy:uiPromptMulti', p),
   pickFileOrDir: () => ipcRenderer.invoke('warmy:pickFileOrDir'),
   pickDirectory: () => ipcRenderer.invoke('warmy:xuanZeMuLu'),
@@ -409,6 +438,15 @@ contextBridge.exposeInMainWorld('warmy', {
   syncPublish: (env) => ipcRenderer.invoke('warmy:tongBuFaBu', env),
   syncPull: (nodeId) => ipcRenderer.invoke('warmy:tongBuLaQu', nodeId),
   dshAvailable: () => ipcRenderer.invoke('warmy:dshKeYong'),
+  /** R258：上下文预算百分比（相对当前模型上下文大小）设置/读取 */
+  dshContextPercent: (p) => ipcRenderer.invoke('warmy:dshNeiCunYuSuan', p),
+  dshContextPercentGet: () => ipcRenderer.invoke('warmy:dshNeiCunYuSuanDu'),
+  /** R259：nm 查看器用 WPS/Office 编辑 */
+  nmOfficeBianJi: (p) => ipcRenderer.invoke('warmy:nmOfficeBianJi', p),
+  /** R259：3D 捏脸环境复检 */
+  sanDHuiTuHuanJing: () => ipcRenderer.invoke('warmy:sanDHuiTuHuanJing'),
+  /** R260 项10：3D AI 捏脸推理（单图→TripoSR→glb） */
+  sanDShengCheng: (p) => ipcRenderer.invoke('warmy:sanDShengCheng', p),
   dshStatus: () => ipcRenderer.invoke('warmy:dshZhuangTai'),
   dshInstall: (opts) => ipcRenderer.invoke('warmy:dshAnZhuang', opts),
   dshGengXinJianCha: () => ipcRenderer.invoke('warmy:dshGengXinJianCha'),
@@ -530,6 +568,17 @@ contextBridge.exposeInMainWorld('warmy', {
   /** 第 122 轮：链接在新标签页打开的开关（第 98 轮修正通道名，避免与上面的撞车） */
   nmWangYeXinBiaoQian: (p) => ipcRenderer.invoke('warmy:nmWangYeXinBiaoQian', p),
   nmWangYeKuang: (p) => ipcRenderer.invoke('warmy:nmWangYeKuang', p),
+  nmWangYeSuoFang: (p) => ipcRenderer.invoke('warmy:nmWangYeSuoFang', p),
+  nmMoTaiKai: (p) => ipcRenderer.invoke('warmy:nmMoTaiKai', p),
+  nmMoTaiGuan: (p) => ipcRenderer.invoke('warmy:nmMoTaiGuan', p),
+  nmShouCangTianJia: (p) => ipcRenderer.invoke('warmy:nmShouCangTianJia', p),
+  onNmShouCangTianJiaHui: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:nmShouCangTianJiaHui', h); return () => ipcRenderer.removeListener('warmy:nmShouCangTianJiaHui', h); },
+  nmTanChuangKai: (p) => ipcRenderer.invoke('warmy:nmTanChuangKai', p),
+  nmTanChuangGuan: (p) => ipcRenderer.invoke('warmy:nmTanChuangGuan', p),
+  nmShouCangDaKai: (p) => ipcRenderer.invoke('warmy:nmShouCangDaKai', p),
+  nmShouCangXinJian: (p) => ipcRenderer.invoke('warmy:nmShouCangXinJian', p),
+  onNmShouCangDaKaiHui: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:nmShouCangDaKaiHui', h); return () => ipcRenderer.removeListener('warmy:nmShouCangDaKaiHui', h); },
+  onNmShouCangXinJianHui: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:nmShouCangXinJianHui', h); return () => ipcRenderer.removeListener('warmy:nmShouCangXinJianHui', h); },
   nmWangYeGuan: (p) => ipcRenderer.invoke('warmy:nmWangYeGuan', p),
   nmWangYeGuanTing: (p) => ipcRenderer.invoke('warmy:nmWangYeGuanTing', p),
   nmWangYeDaoHang: (p) => ipcRenderer.invoke('warmy:nmWangYeDaoHang', p),
@@ -574,9 +623,19 @@ contextBridge.exposeInMainWorld('warmy', {
   diwenLuoDianHua: (p) => ipcRenderer.invoke('warmy:diwenLuoDianHua', p),
   diwenYongHuSouSuo: (p) => ipcRenderer.invoke('warmy:diwenYongHuSouSuo', p),
   diwenLuoDianQingDan: () => ipcRenderer.invoke('warmy:diwenLuoDianQingDan'),
+  /** R257：迪文 npm 集成——启用开关/状态/私有迪文 CRUD/试探映射 */
+  diwenSheZhi: (p) => ipcRenderer.invoke('warmy:diwenSheZhi', p),
+  diwenZhuangTai: () => ipcRenderer.invoke('warmy:diwenZhuangTai'),
+  diwenSiYouList: () => ipcRenderer.invoke('warmy:diwenSiYouList'),
+  diwenSiYouTian: (p) => ipcRenderer.invoke('warmy:diwenSiYouTian', p),
+  diwenSiYouShan: (p) => ipcRenderer.invoke('warmy:diwenSiYouShan', p),
+  diwenShiTan: (p) => ipcRenderer.invoke('warmy:diwenShiTan', p),
   /** R199：VM 适配器（探测/执行）+ 进程级隔离执行（默认开不可关） */
   vmTanCe: () => ipcRenderer.invoke('warmy:vmTanCe'),
   vmZhiXing: (p) => ipcRenderer.invoke('warmy:vmZhiXing', p),
+  /** R260 容器快照/克隆 */
+  vmKuaiZhao: (p) => ipcRenderer.invoke('warmy:vmKuaiZhao', p),
+  vmKeLong: (p) => ipcRenderer.invoke('warmy:vmKeLong', p),
   geLiZhiXing: (p) => ipcRenderer.invoke('warmy:geLiZhiXing', p),
   nmWangYePeiZhiDu: () => ipcRenderer.invoke('warmy:nmWangYePeiZhiDu'),
   nmWangYePeiZhiShe: (p) => ipcRenderer.invoke('warmy:nmWangYePeiZhiShe', p),
@@ -752,6 +811,8 @@ diagNmKai: () => ipcRenderer.invoke('warmy:zhenDuanNmDaKai'), // R223 项2
   xiaoDiChongShi: (payload) => ipcRenderer.invoke('warmy:xiaoDiChongShi', payload),
   /** 删除会话：连带本会话知识库 + 工作区；牛马在群聊/项目里会被拒绝 */
   sessionDelete: (payload) => ipcRenderer.invoke('warmy:huiHuaShanChu', payload),
+  /** R260 项8：主进程广播「会话已删」（解散/删除/延迟真删完成）⇒ 渲染层统一移出列表 */
+  onHuiHuaYiShanChu: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:huiHuaYiShanChu', h); return () => ipcRenderer.removeListener('warmy:huiHuaYiShanChu', h); },
   // 最近删除（48h 可恢复）：设置页底部「最近删除」区用
   laJiJiLu: (payload) => ipcRenderer.invoke('warmy:laJiJiLu', payload),
   // 门禁（第 41 轮）：硬门禁清单/最坏情况、软门禁冲突检查与改动裁决

@@ -14,6 +14,9 @@ importers:
 
   packages/app-shell:
     dependencies:
+      '@duckdb/node-api':
+        specifier: 2.0.0-r.1
+        version: 2.0.0-r.1
       '@pixiv/three-vrm':
         specifier: 3.5.5
         version: 3.5.5(three@0.187.0)
@@ -47,6 +50,9 @@ importers:
       '@warmy/sync-protocol':
         specifier: workspace:*
         version: link:../sync-protocol
+      diwen:
+        specifier: 6.6.1
+        version: 6.6.1
       hash-wasm:
         specifier: 4.12.0
         version: 4.12.0
@@ -175,6 +181,52 @@ packages:
   '@develar/schema-utils@2.6.5':
     resolution: {integrity: sha512-0cp4PsWQ/9avqTVMCtZ+GirikIA36ikvjtHweU4/j8yLtgObI0+JUPhYFScgwlteveGB1rt3Cm8UhN04XayDig==}
     engines: {node: '>= 8.9.0'}
+
+  '@duckdb/node-api@2.0.0-r.1':
+    resolution: {integrity: sha512-SA4oG7X9UNpSJsr99b7rbJxSs7n5KqMEGV1kC04TxdsYHjGH6w4kGEOiC/yXzvgWr6Jd1WRQD9RUPTX6qGdEwg==}
+
+  '@duckdb/node-bindings-darwin-arm64@2.0.0-r.1':
+    resolution: {integrity: sha512-vay0TmtEaUM7Dm7z1nXlxy2KOcwlY3Xq+wAHRbkuOYmJu//qjcZBT7ijT4qE6m5qGyuLSOiq3w36ShCYApL4yg==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@duckdb/node-bindings-darwin-x64@2.0.0-r.1':
+    resolution: {integrity: sha512-mkPKjf7YR6xk8r5nVyHYjbybrQxMW+mfXJwl2otSKi8bireJV+xaOodyxqzP2cqPB95rpIg1owfYjFfUyLi7NQ==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@duckdb/node-bindings-linux-arm64-musl@2.0.0-r.1':
+    resolution: {integrity: sha512-AAmQa/uI4LDfyY7zldUwU0Qnpv+yjQPxr0k2uJQylo0tyXWzQ1O0bBWfnDmN0ulym124gFRwr+fzlHyvxCt1FA==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@duckdb/node-bindings-linux-arm64@2.0.0-r.1':
+    resolution: {integrity: sha512-V+oOWVY8qq7t5Uh+j8Hf+iwb4pLx2GsxAso1oGBP7ubf38QN1FGoPclJ8ByZob+ZcLdSDgwlS7QUbMB9pnCi2A==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@duckdb/node-bindings-linux-x64-musl@2.0.0-r.1':
+    resolution: {integrity: sha512-8GCE/ye+w5GJsCgAk2owUyQA55rtoiBRe2T8A42CaqGbNNZm9hOj3C96d6flT82p7YhQVA8AzA40k9Pn30kJDg==}
+    cpu: [x64]
+    os: [linux]
+
+  '@duckdb/node-bindings-linux-x64@2.0.0-r.1':
+    resolution: {integrity: sha512-0VdXZQlCnD6oWwJABkp3ihZGBic/6Ora4PQekHv9jwa4Fe2OVcgm0hGtn6yyNGhURVDzZllMITEF98zdo6ussQ==}
+    cpu: [x64]
+    os: [linux]
+
+  '@duckdb/node-bindings-win32-arm64@2.0.0-r.1':
+    resolution: {integrity: sha512-k47ASHylCPfUe7H+MvaNqsSwXGv8fjxixMF0vqJghp/wUUdAERMi1WNkPIjOj31cJ+O0x+Srdlfe4N0Diofm7Q==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@duckdb/node-bindings-win32-x64@2.0.0-r.1':
+    resolution: {integrity: sha512-8moS6xWPmM4UahiUhkfNSPFQG+7kpN2zu8w39C+K9Xgn8Z4Ctu5jOSTdXlybYrLofLH8jwgoNFiUOLMXLD4giw==}
+    cpu: [x64]
+    os: [win32]
+
+  '@duckdb/node-bindings@2.0.0-r.1':
+    resolution: {integrity: sha512-R8mrpS9FFUNUL5Xi4NgirZWuP9/1KVEqy6b91a7s7TptIKnu4ZZLch3yBrN+GeWz3hoo5RUctfbaORLRFgqgwQ==}
 
   '@electron-internal/extract-zip@1.0.5':
     resolution: {integrity: sha512-+bqFCP98pLI0Tt0XQo1TmlXtwjWchISndDOxCkEcIuUgXWpBnLyRI+2DU+mesvnMMX6L1XDqYNA0lXNDHd/yiA==}
@@ -377,6 +429,88 @@ packages:
   '@malept/flatpak-bundler@0.4.0':
     resolution: {integrity: sha512-9QOtNffcOF/c1seMCDnjckb3R9WHcG34tky+FHpNKKCW0wc/scYLwMtO+ptyGUfMW0/b/n4qRiALlaFHc9Oj7Q==}
     engines: {node: '>= 10.0.0'}
+
+  '@node-rs/jieba-android-arm-eabi@2.0.4':
+    resolution: {integrity: sha512-cQkLpMGJQ3utAfmdUSHgto+zErR10qQglCd08zF1ZGBQfAcOP3lK+L53vpozxWpGngA2MsgMfb3uaXfBUrjLYw==}
+    engines: {node: '>= 10'}
+    cpu: [arm]
+    os: [android]
+
+  '@node-rs/jieba-android-arm64@2.0.4':
+    resolution: {integrity: sha512-qC1flCXhOuFMWKaiyyaLBI7FsGDCk8Gix85nG2RkEqj22jiQWSxvzIOJNIK/4FH0HSd7yrMgaw4nOyYNKGs55A==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [android]
+
+  '@node-rs/jieba-darwin-arm64@2.0.4':
+    resolution: {integrity: sha512-/cGLKHB8dhcgTR7FRMvisXgPtt4Yiq9ygAQjHqskKKEOxrek60dJJzpgFPo5MY8EJyNInqxlRdN8H2a/vIFG7A==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@node-rs/jieba-darwin-x64@2.0.4':
+    resolution: {integrity: sha512-+sAHLzJF4XNrZUIwZBi1bBiwZDDSUVldW17cA94GBUb6F5UPB0OLq0ldOw8XtdA0MaotNnLlJQkm5ARuI1xheQ==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@node-rs/jieba-freebsd-x64@2.0.4':
+    resolution: {integrity: sha512-v6MTAPnVhq2HnKH4ASWGfaFv7FEQZUEWve0/UtJx3ViiwYbG2pgZ3XZPRumXRIst0xdFfIoukrYqnMjj89HTVA==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@node-rs/jieba-linux-arm-gnueabihf@2.0.4':
+    resolution: {integrity: sha512-Y7Wm7nhV9UNfq4ojCN6HSbjO1p1pyqDZyGlwAT1NsruGRvowC0luhXEFTo6VSDMIQ7PTP+IQXZfuc5d7fgTDFA==}
+    engines: {node: '>= 10'}
+    cpu: [arm]
+    os: [linux]
+
+  '@node-rs/jieba-linux-arm64-gnu@2.0.4':
+    resolution: {integrity: sha512-+x5FP4PDoRAagSvxyXeK3GdWjzZwigTD9GGyTWEKGViGcSUrY3/IsuPmVmOax3jHeQZkcX8aazybRiEwy2vIbQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@node-rs/jieba-linux-arm64-musl@2.0.4':
+    resolution: {integrity: sha512-PyIXG7eyScZ1jN7ZqMS7XE2qei1PVQd3AnvdYwgTaUawkQxNQGeCOGARuzXYxqpYV+ipg5zju+VJ23j3ucE0RQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@node-rs/jieba-linux-x64-gnu@2.0.4':
+    resolution: {integrity: sha512-VjetEm7IoerpyhIaASJg2HcADFZ+mTEBc18ciKqCt15Wdu1Tmv44vF0XUHKYBH0Q7U3LhoXXswTgjb/pcH3K+Q==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+
+  '@node-rs/jieba-linux-x64-musl@2.0.4':
+    resolution: {integrity: sha512-WK9gU+lMq0wAuaDcFaqbr03Rv4/tNb9hFwfG3mYI96uG5TdVK2DBuRKzoPHP7XVz6iEmOu98lfhmL2/1Y0/DAw==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+
+  '@node-rs/jieba-win32-arm64-msvc@2.0.4':
+    resolution: {integrity: sha512-tcRW2cMHjYFfDPqG/St59ZoaR34CyLQJ5I4NGhZIfVhbYftJWnjvGPZBFdbudjgRCJ1in6rOZalDNGDex9+DHA==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@node-rs/jieba-win32-ia32-msvc@2.0.4':
+    resolution: {integrity: sha512-I8+WnUD1FKIIC2NdunUE9EpoQRUM0iAeKvAxpOzpO1xDhw1D2Ya/9qY1K/xibnh8jGEGZnE4Bsc27zt9M/ZQow==}
+    engines: {node: '>= 10'}
+    cpu: [ia32]
+    os: [win32]
+
+  '@node-rs/jieba-win32-x64-msvc@2.0.4':
+    resolution: {integrity: sha512-aR6tFs1Lk7lZW/gy1q+F1GFdMqJVpLvAT5zpRCE+QbZSj9KRfKNooa5Y7c9v5yrxx4EH3vB31J3SWRR+OmVpog==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [win32]
+
+  '@node-rs/jieba@2.0.4':
+    resolution: {integrity: sha512-/dTk3vV/v8+RIEUP7XOCkqRCVU0tqL3Ia9VTzHt38IDysGQmX7T56tM2IpwCLAWXubH7TyrcY54Stjsvcrbjqw==}
+    engines: {node: '>= 10'}
 
   '@npmcli/fs@2.1.2':
     resolution: {integrity: sha512-yOJKRvohFOaLqipNtwYB9WugyZKhC/DZC4VYPmpaCzDBrA8YpK3qHZ8/HGscMnE4GqbkLNuVcCnxkeQEdGt6LQ==}
@@ -793,6 +927,9 @@ packages:
   dir-compare@4.2.0:
     resolution: {integrity: sha512-2xMCmOoMrdQIPHdsTawECdNPwlVFB9zGcz3kuhmBO6U3oU+UQjsue0i8ayLKpgBcm+hcXPMVSGUN9d+pvJ6+VQ==}
 
+  diwen@6.6.1:
+    resolution: {integrity: sha512-XvNn31e4ZVxFOZlML7BBUhrx/EPh+v/50EBq/1vw89ah6JGb9O+bPd1pwAE5nyKHglcMTrzkaZ9pRY4enPe/Mw==}
+
   dmg-builder@25.1.8:
     resolution: {integrity: sha512-NoXo6Liy2heSklTI5OIZbCgXC1RzrDQsZkeEwXhdOro3FT1VBOvbubvscdPnjVuQ4AMwwv61oaH96AbiYg9EnQ==}
 
@@ -955,16 +1092,17 @@ packages:
 
   glob@10.4.5:
     resolution: {integrity: sha512-7Bv8RF0k6xjo7d4A/PxYLbUCfb6c+Vpd2/mB2yRDlew7Jb5hEXiCD9ibfO7wpk8i4sevK6DFny9h7EYbM3/sHg==}
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
     hasBin: true
 
   glob@7.2.3:
     resolution: {integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   glob@8.1.0:
     resolution: {integrity: sha512-r8hpEjiQEYlF2QU0df3dS+nxxSIreXQS1qRhMJM0Q5NDdR386C7jb7Hwwod8Fgiuex+k0GFjgft18yvxm5XoCQ==}
     engines: {node: '>=12'}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   gopd@1.2.0:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
@@ -1543,6 +1681,7 @@ packages:
   tar@6.2.1:
     resolution: {integrity: sha512-DZ4yORTwrbTj/7MZYq2w+/ZFdI6OZ/f9SFHR+71gIVUZhOQPHzVCLpvRnPgyaMpfWxxk/4ONva3GQSyNIKRv6A==}
     engines: {node: '>=10'}
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   temp-file@3.4.0:
     resolution: {integrity: sha512-C5tjlC/HCtVUOi3KWVokd4vHVViOmGjtLwIh4MuzPo/nMYTV/p1urt3RnMz2IWXDdKEGJH3k5+KPxtqRsUYGtg==}
@@ -1650,6 +1789,47 @@ snapshots:
     dependencies:
       ajv: 6.15.0
       ajv-keywords: 3.5.2(ajv@6.15.0)
+
+  '@duckdb/node-api@2.0.0-r.1':
+    dependencies:
+      '@duckdb/node-bindings': 2.0.0-r.1
+
+  '@duckdb/node-bindings-darwin-arm64@2.0.0-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-darwin-x64@2.0.0-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-linux-arm64-musl@2.0.0-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-linux-arm64@2.0.0-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-linux-x64-musl@2.0.0-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-linux-x64@2.0.0-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-win32-arm64@2.0.0-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-win32-x64@2.0.0-r.1':
+    optional: true
+
+  '@duckdb/node-bindings@2.0.0-r.1':
+    dependencies:
+      detect-libc: 2.1.2
+    optionalDependencies:
+      '@duckdb/node-bindings-darwin-arm64': 2.0.0-r.1
+      '@duckdb/node-bindings-darwin-x64': 2.0.0-r.1
+      '@duckdb/node-bindings-linux-arm64': 2.0.0-r.1
+      '@duckdb/node-bindings-linux-arm64-musl': 2.0.0-r.1
+      '@duckdb/node-bindings-linux-x64': 2.0.0-r.1
+      '@duckdb/node-bindings-linux-x64-musl': 2.0.0-r.1
+      '@duckdb/node-bindings-win32-arm64': 2.0.0-r.1
+      '@duckdb/node-bindings-win32-x64': 2.0.0-r.1
 
   '@electron-internal/extract-zip@1.0.5': {}
 
@@ -1824,6 +2004,61 @@ snapshots:
       tmp-promise: 3.0.3
     transitivePeerDependencies:
       - supports-color
+
+  '@node-rs/jieba-android-arm-eabi@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-android-arm64@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-darwin-arm64@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-darwin-x64@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-freebsd-x64@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-linux-arm-gnueabihf@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-linux-arm64-gnu@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-linux-arm64-musl@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-linux-x64-gnu@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-linux-x64-musl@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-win32-arm64-msvc@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-win32-ia32-msvc@2.0.4':
+    optional: true
+
+  '@node-rs/jieba-win32-x64-msvc@2.0.4':
+    optional: true
+
+  '@node-rs/jieba@2.0.4':
+    optionalDependencies:
+      '@node-rs/jieba-android-arm-eabi': 2.0.4
+      '@node-rs/jieba-android-arm64': 2.0.4
+      '@node-rs/jieba-darwin-arm64': 2.0.4
+      '@node-rs/jieba-darwin-x64': 2.0.4
+      '@node-rs/jieba-freebsd-x64': 2.0.4
+      '@node-rs/jieba-linux-arm-gnueabihf': 2.0.4
+      '@node-rs/jieba-linux-arm64-gnu': 2.0.4
+      '@node-rs/jieba-linux-arm64-musl': 2.0.4
+      '@node-rs/jieba-linux-x64-gnu': 2.0.4
+      '@node-rs/jieba-linux-x64-musl': 2.0.4
+      '@node-rs/jieba-win32-arm64-msvc': 2.0.4
+      '@node-rs/jieba-win32-ia32-msvc': 2.0.4
+      '@node-rs/jieba-win32-x64-msvc': 2.0.4
 
   '@npmcli/fs@2.1.2':
     dependencies:
@@ -2289,6 +2524,10 @@ snapshots:
     dependencies:
       minimatch: 3.1.5
       p-limit: 3.1.0
+
+  diwen@6.6.1:
+    dependencies:
+      '@node-rs/jieba': 2.0.4
 
   dmg-builder@25.1.8:
     dependencies:

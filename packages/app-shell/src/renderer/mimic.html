@@ -88,6 +88,11 @@
   @keyframes dzQiLi     { 0%{ transform: scaleY(.8) translateY(6px) } 100%{ transform: scaleY(1) translateY(0) } }
   #pet img.dz2d.dz-shuiJiao, #pet img.dz2d.dz-keShui { animation: dzShuiJiao 3s ease-in-out infinite; }
   @keyframes dzShuiJiao { 0%,100%{ transform: scaleY(1) rotate(0) } 50%{ transform: scaleY(.96) rotate(-3deg) } }
+  /* R259 报障26：本体走到图标旁互动——走路步态 + 到达互动 */
+  #pet img.dz-zouLu { animation: dzZouLu .5s ease-in-out infinite; }
+  @keyframes dzZouLu { 0%,100%{ transform: translateY(0) rotate(-3deg) } 25%{ transform: translateY(-5px) rotate(0) } 50%{ transform: translateY(0) rotate(3deg) } 75%{ transform: translateY(-5px) rotate(0) } }
+  #pet img.dz-huDong { animation: dzHuDong .65s ease-in-out 2; }
+  @keyframes dzHuDong { 0%,100%{ transform: translateY(0) scale(1) } 35%{ transform: translateY(-12px) scale(1.06) rotate(-4deg) } 70%{ transform: translateY(0) scale(.96,.98) } }
 
 </style>
 </head>
@@ -252,6 +257,16 @@
     });
     /* R218：动作触发（触发词 / AI 判断 / 事件） */
     window.warmyMimic?.onDongZuo?.((d) => { if (d && d.id) window.__mimicDongZuo(String(d.id)); });
+    /* R260 拟态情绪反馈：情绪映射出的预设动作→播放（只映射已有动作，不臆造） */
+    window.warmyMimic?.onQingXu?.((d) => { if (d && d.dongZuo) window.__mimicDongZuo(String(d.dongZuo)); });
+    /* R259 报障26：本体走路/互动阶段（主进程驱动窗口移动，渲染层只负责步态/互动动画） */
+    window.warmyMimic?.onZouLu?.((d) => {
+      const ph = String((d && d.phase) || '');
+      tupian.classList.remove('dz-zouLu', 'dz-huDong');
+      if (ph === 'walk' || ph === 'back') tupian.classList.add('dz-zouLu');
+      else if (ph === 'arrive') tupian.classList.add('dz-huDong');
+      if (ph === 'arrive') window.__shuo({ open: '打开看看～', create: '放好啦～', delete: '收走啦～', modify: '改好～', move: '搬好～' }[String((d && d.op) || '')] || '到啦～', 1400);
+    });
     /* R218：说话口型（语音合成/ASR 期间） */
     window.warmyMimic?.onKouXing?.((d) => window.__mimicKouXing(!!(d && d.on)));
     // 语音回复播放（主进程合成好的音频）

@@ -39,6 +39,8 @@
       b.dataset.mode = mode; b.classList.toggle('on', r.moShi === mode);
     }
     gen.appendChild(zi);
+    /* R260 项28：静音（切换扬声器权限，与设置→拟态扬声器勾选联动）；已静音时显示“取消静音” */
+    xiang(r.speakerOn === false ? (w.quXiaoJingYin || '取消静音') : (w.jingYin || '静音'), () => dong('jingYin'));
     xiang(w.sheZhi, () => dong('sheZhi'));
     gen.querySelector('button')?.focus();
   } catch { await guan(); }

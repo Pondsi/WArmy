@@ -305,12 +305,13 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 }
 .lieBiaoHead {
   height: 56px; padding: 0 var(--sp-4);
-  display: flex; align-items: center; justify-content: space-between;
+  /* R260：与 app.css 同步——R249 隐藏第二列标题（图标已移搜索框右），renderer.css 旧 flex 会盖掉 app.css 的 none。 */
+  display: none; align-items: center; justify-content: space-between;
 }
 .lieBiaoHead h2 { font-size: var(--fs-lg); margin: 0; font-weight: 600; }
-.souSuoBaoGuo { padding: 0 var(--sp-3) 10px; }
+.souSuoBaoGuo { padding: 0 var(--sp-3) 10px; display: flex; align-items: center; gap: 6px; }
 .souSuoBaoGuo input {
-  width: 100%; border: none; border-radius: var(--radius-sm);
+  flex: 1; min-width: 0; width: auto; border: none; border-radius: var(--radius-sm);
   background: var(--hover); padding: 8px 10px; font-size: var(--fs-base);
   outline: none;
 }
@@ -423,7 +424,7 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
 .xiaoXi.wo .bubble { text-align: start; }   /* 文字左对齐；气泡位置仍随头像（右侧） */
 /* R163 #5：.xiaoXi.wo .bubbleWrap 特异性(0,3,0) 高于 .xiaoXi .bubbleWrap(0,2,0)，
  * 这份不改的话「我方气泡」仍走旧值 —— 本轮真机 G7 就是这么抓出来的。 */
-.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: auto; max-width: min(70%, 680px); flex: 0 1 auto; }
+.xiaoXi.wo .bubbleWrap { align-items: flex-end; width: auto; max-width: none; flex: 1 1 auto; }
 /**
  * 深色下我方气泡的文字色。
  *
@@ -1464,6 +1465,47 @@ body.liaoTianChuangKou #appTi:not(.yinCangLieBiao) {
   max-width: 70%;
   z-index: 30; /* 低于决策卡（.aiqKa z-index:50），避免挡住选项 */
 }
+/* ── R256 报障23：聊天框右缘用户对话时间轴（短横列）──
+   平时隐藏，鼠标靠近右缘/悬停/聚焦才显示；位置/高度由 JS 随 #xiaoXiJi 同步 */
+#yongHuShiJianZhou {
+  position: absolute; width: 16px; z-index: 6;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .18s ease, visibility .18s;
+}
+#yongHuShiJianZhou.xianShi { opacity: 1; visibility: visible; pointer-events: auto; }
+#yongHuShiJianZhou .sjzSlot {
+  width: 16px; flex: 0 0 auto; margin: 0; padding: 0; border: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; cursor: pointer; border-radius: 4px;
+}
+#yongHuShiJianZhou .sjzSlot.kong { cursor: default; }
+#yongHuShiJianZhou .sjzHeng {
+  display: block; width: 10px; height: 3px; border-radius: 2px;
+  transition: width .12s ease, height .12s ease, box-shadow .12s ease;
+}
+#yongHuShiJianZhou .sjzSlot:hover .sjzHeng,
+#yongHuShiJianZhou .sjzSlot:focus-visible .sjzHeng { width: 14px; height: 4px; box-shadow: 0 0 8px var(--accent); }
+#yongHuShiJianZhou .sjzSlot:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+#shiJianZhouPao {
+  position: absolute; z-index: 7; max-width: 320px; padding: 8px 10px;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25); pointer-events: none;
+}
+#shiJianZhouPao .sjzPaoTou { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+#shiJianZhouPao .sjzPaoWen {
+  font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+  max-height: 160px; overflow: hidden;
+}
+/* ── R257 报障24：迪文卡（启用章/私有列表/未覆盖片段）── */
+.diwenChip { font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); background: var(--card); }
+.diwenChip.kai { color: var(--accent-ink, #fff); background: var(--accent); border-color: var(--accent); }
+.diwenLieHang { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.diwenLieCi { font-weight: 600; }
+.diwenLieHang .jingYin { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diwenPian { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--hover); color: var(--ink); border: 1px dashed var(--line); cursor: pointer; }
+.diwenPian:hover { border-color: var(--accent); color: var(--accent); }
 /* 决策卡必须在上层（产品：不要被新消息提示气泡挡住） */
 .aiqKa, .aiqWrap, #aiqQuYu, .shouQuanKa {
   position: relative;
@@ -2195,16 +2237,14 @@ body.liaoTianChuangKou #appTi {
  * 宽度上限在这条**高特异性**规则上给（它会盖掉 app.css 的 .bubbleWrap） */
 .xiaoXi .bubbleWrap {
   display: flex; flex-direction: column; min-width: 0;
-  /* R163 #5：R160 项9 把 app.css 改成 min(70%,680px) 却**没改这里**，
-   * 而本规则特异性更高且后加载 ⇒ 那次收窄从未生效（用户仍说"外框太长"）。
-   * 现在两边同步：宽度自适应内容、上限 70% 且不超过 680px。 */
+  /* R260：气泡填充行宽（更宽且所有气泡一致），上限交给行宽；与 app.css 同步（verify-css-consistency）。 */
   width: auto;
-  max-width: min(70%, 680px);
-  flex: 0 1 auto;
+  max-width: none;
+  flex: 1 1 auto;
 }
-/* R163 #5：朝向对方头像的一侧再让出 2 个头像宽（32×2 = 64px） */
-.xiaoXi.wo .bubbleWrap { margin-left: 32px; align-items: flex-end; } /* R183 项8 */
-.xiaoXi:not(.wo) .bubbleWrap { margin-right: 32px; align-items: flex-start; } /* R183 项8 */
+/* R260：朝向对方头像的一侧让出 2 个头像宽（聊天头像 32×2 = 64px） */
+.xiaoXi.wo .bubbleWrap { margin-left: 64px; align-items: flex-end; } /* R260：2 头像 */
+.xiaoXi:not(.wo) .bubbleWrap { margin-right: 64px; align-items: flex-start; } /* R260：2 头像 */
 /* T150：气泡随行宽拉满（思考/执行块天然是块级，等宽后与气泡一致） */
 .xiaoXi .bubble { width: 100%; max-width: 100%; }
 /* 任务标题行不参与等宽（强制整行居中） */

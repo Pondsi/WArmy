@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('warmyMimic', {
   onKaPian: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicKaPian', h); return () => ipcRenderer.removeListener('warmy:mimicKaPian', h); },
   zhuoMianTuBiao: () => ipcRenderer.invoke('warmy:zhuoMianTuBiao'),
   onZhuoMianDongHua: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:zhuoMianDongHua', h); return () => ipcRenderer.removeListener('warmy:zhuoMianDongHua', h); },
+  /** R259：本体走路/互动阶段（walk/arrive/back/idle） */
+  onZouLu: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicZouLu', h); return () => ipcRenderer.removeListener('warmy:mimicZouLu', h); },
   /** R221：精灵图 JSON 读取（帧动画）/ 动作模型列表（外部动作注册） */
   sheetJson: (p) => ipcRenderer.invoke('warmy:mimicSheetJson', p),
   dongZuoLieBiao: () => ipcRenderer.invoke('warmy:mimicDongZuoLieBiao'),
@@ -35,5 +37,7 @@ contextBridge.exposeInMainWorld('warmyMimic', {
   caiDanDong: (p) => ipcRenderer.invoke('warmy:mimicCaiDanDong', p),
   /** R218：动作触发与说话口型 */
   onDongZuo: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicDongZuo', h); return () => ipcRenderer.removeListener('warmy:mimicDongZuo', h); },
+  /** R260 拟态情绪反馈（valence/arousal 映射出的动作/语气） */
+  onQingXu: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicQingXu', h); return () => ipcRenderer.removeListener('warmy:mimicQingXu', h); },
   onKouXing: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicKouXing', h); return () => ipcRenderer.removeListener('warmy:mimicKouXing', h); },
 });

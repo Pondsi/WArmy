@@ -34,6 +34,22 @@ extraResources:
       - "!**/rollup.config.*"
       - "!**/biome.json"
       - "!src/**"
+  # R257：diwen（迪文 npm 包，纯 ESM 零依赖，运行期入口即 src/）——同 hash-wasm 口径
+  # 拎进 resources/app/node_modules/，打包态 import('diwen') 才有解析目标；不可排除 src。
+  - from: node_modules/diwen
+    to: node_modules/diwen
+    filter:
+      - "**/*"
+      - "!**/*.map"
+      - "!**/tests/**"
+      - "!**/test/**"
+  # R259：DuckDB（native 只活在 duckdb-worker 子进程）——平铺三个包保证解析链。
+  - from: ../../node_modules/.pnpm/@duckdb+node-api@2.0.0-r.1/node_modules/@duckdb/node-api
+    to: node_modules/@duckdb/node-api
+  - from: ../../node_modules/.pnpm/@duckdb+node-bindings@2.0.0-r.1/node_modules/@duckdb/node-bindings
+    to: node_modules/@duckdb/node-bindings
+  - from: ../../node_modules/.pnpm/@duckdb+node-bindings-win32-x64@2.0.0-r.1/node_modules/@duckdb/node-bindings-win32-x64
+    to: node_modules/@duckdb/node-bindings-win32-x64
   - from: ../memory-os/dist
     to: memory-os/dist
   - from: ../memory-os/package.json
@@ -84,6 +100,18 @@ extraResources:
   # 第 122 轮：dsh 运行时随项目携带（必装；设置页检测优先看 resources/warmy-dsh）
   - from: ../../spikes/spike-05-plugins/node_modules
     to: warmy-dsh/node_modules
+  # R260 项10：TripoSR 推理脚本（单图→mesh，独立 Python 子进程跑；模型按需下载不随包）
+  - from: resources/triposr-run.py
+    to: warmy/triposr-run.py
+  # R260 Docling 文档解析脚本（版面/表格保真；独立 Python 子进程，docling 按需安装）
+  - from: resources/docling-run.py
+    to: warmy/docling-run.py
+  # R260 Tree-sitter AST 解析脚本（WASM 子进程，零原生；web-tree-sitter+grammar 按需安装）
+  - from: resources/tree-sitter-run.mjs
+    to: warmy/tree-sitter-run.mjs
+  # R260 项27：MCP 桥接插件随包（打包态播种需 bridge.mjs；默认不启动，用户勾选才启用）
+  - from: plugins/mcp-bridge
+    to: plugins/mcp-bridge
 
 # ── 应用图标（打包进 exe，任务栏/资源管理器都读它）──
 win:

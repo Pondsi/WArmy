@@ -281,6 +281,7 @@
               <button id="anNiuWangYeDaYin" class="tb2" title="打印网页（Ctrl+P）" aria-label="打印网页">
                 <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.6 5.2V2.8h6.8v2.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><rect x="2.6" y="5.2" width="10.8" height="5.4" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4.6 10.6h6.8v2.8H4.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
               </button>
+              <button id="anNiuOfficeBianJi" class="tb2" title="用本机 WPS/Office 打开编辑（未安装则系统默认应用）">WPS/Office 编辑</button>
               <span id="yuanLeiXing" class="jingYin"></span>
             </div>
             <div id="wangYeYuanHang2" class="gongJuHang yuanHang">
@@ -296,12 +297,14 @@
               <span id="yuanSouJi" class="souJiAnNiu">0/0</span>
               <button id="anNiuWangYeYouHao" class="tb2" title="友好视图：把网页源码按阅读友好的排版显示（只读）" aria-label="友好视图" aria-pressed="false">友好视图</button>
             </div>
-            <div id="yuanDevFenGe" title="拖动调整源码/开发者工具宽度（双击复位）"></div>
-      <div id="yuanDevLan">
-        <div id="yuanDevTou"><span>开发者工具</span><button id="anNiuDevDaKai" class="tb2" title="打开完整开发者工具（独立窗口）">打开 DevTools</button><button id="anNiuDevGuan" class="tb2" title="收起开发者工具栏">×</button></div>
-        <div id="yuanDevRiZhi" class="jingYin">页面 console 输出会显示在这里；点「打开 DevTools」可调出完整开发者工具（元素/网络/控制台）。</div>
-      </div>
-      <textarea id="wangYeYuanWen" spellcheck="false" wrap="soft" aria-label="网页源码"></textarea>
+            <div id="yuanDevRongQi">
+              <textarea id="wangYeYuanWen" spellcheck="false" wrap="soft" aria-label="网页源码"></textarea>
+              <div id="yuanDevFenGe" title="拖动调整源码/开发者工具宽度（双击复位）" role="separator" aria-orientation="vertical" tabindex="0"></div>
+              <div id="yuanDevLan">
+                <div id="yuanDevTou"><span>开发者工具</span><button id="anNiuDevDaKai" class="tb2" title="打开完整开发者工具（独立窗口）">打开 DevTools</button><button id="anNiuDevGuan" class="tb2" title="收起开发者工具栏">×</button></div>
+                <div id="yuanDevRiZhi" class="jingYin">页面 console 输出会显示在这里；点「打开 DevTools」可调出完整开发者工具（元素/网络/控制台）。</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

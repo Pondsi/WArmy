@@ -17,6 +17,25 @@
     let scene = { version: 1, parts: [] }, hash = '', selected = [], busy = false, seq = 0;
     const history = [];
     const invoke = (p) => window.warmy.mimicHuiTu(p);
+    /** R260 项10：3D 形态判定（读设置里的形态单选）；3D 走 LLM→SVG→栅格化→TripoSR→glb。 */
+    const shi3D = () => { try { return String(document.querySelector('input[name="mimicXingTai"]:checked')?.value || '2d') === '3d'; } catch { return false; } };
+    const svgToPng = (svgEl) => new Promise((resolve, reject) => {
+      try {
+        const xml = new XMLSerializer().serializeToString(svgEl);
+        const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml' }));
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const c = document.createElement('canvas'); c.width = 512; c.height = 512;
+            const g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, 512, 512);
+            g.drawImage(img, 0, 0, 512, 512); URL.revokeObjectURL(url);
+            resolve(c.toDataURL('image/png'));
+          } catch (e) { URL.revokeObjectURL(url); reject(e); }
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('svg-raster-failed')); };
+        img.src = url;
+      } catch (e) { reject(e); }
+    });
     const update = (r) => {
       if (!r?.ok) throw new Error(r?.error || 'generation-failed');
       scene = r.scene; hash = r.hash; picture.innerHTML = r.svg; selected = []; selectionText.textContent = '';
@@ -39,6 +58,17 @@
         if (!r?.ok) throw new Error(r?.error || 'generation-failed');
         history.push(before); if (history.length > 16) history.shift();
         update(r); status.textContent = '';
+        /** R260 项10：3D 形态——把刚生成的 SVG 栅格化送 TripoSR 子进程出 glb（环境未就绪如实报错）。 */
+        if (shi3D()) {
+          status.textContent = '3D …';
+          const svgEl = picture.querySelector('svg');
+          if (!svgEl) throw new Error('no-svg');
+          const png = await svgToPng(svgEl);
+          const g = await window.warmy.sanDShengCheng?.({ png, name: 'sculpt-' + String(hash || '').slice(0, 12) });
+          if (!dlg.open || ticket !== seq) return;
+          if (!g?.ok) throw new Error(g?.hint || g?.error || '3d-generation-failed');
+          status.textContent = labels.saved + ' (3D)';
+        }
       } catch (e) { if (ticket === seq) status.textContent = e.message; }
       finally { if (ticket === seq) { busy = false; generate.disabled = false; save.disabled = !scene.parts.length; } }
     });

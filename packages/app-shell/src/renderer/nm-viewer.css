@@ -1608,17 +1608,22 @@ body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
 #anNiuWangYeXinKai.kai { color: var(--accent); }
 #anNiuWangYeXinKai.kai svg path { stroke: var(--accent); }
 
-/* 第 123 轮：源码/开发者工具双栏（中间可拖） */
-#yuanDevFenGe { width: 7px; cursor: col-resize; background: var(--line, #ddd); flex: 0 0 auto; user-select: none; }
-#yuanDevLan { width: 32%; min-width: 140px; display: flex; flex-direction: column; border-left: 1px solid var(--line, #ddd); }
+/* 第 123 轮：源码/开发者工具双栏（中间可拖）；R255 整洁布局：工具栏整行降高 + 源码|分割|DevTools 横向 */
+#wangYeYuan { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+#wangYeYuan > .yuanHang { width: 100%; flex: 0 0 auto; }
+#yuanDevRongQi { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: row; align-items: stretch; }
+#wangYeYuanWen { order: 1; flex: 1 1 auto; min-width: 120px; width: auto; }
+#yuanDevFenGe { order: 2; width: 7px; cursor: col-resize; background: var(--line, #ddd); flex: 0 0 auto; user-select: none; transition: background .12s; }
+#yuanDevFenGe:hover, #yuanDevFenGe:active { background: var(--accent, #a87654); }
+#yuanDevLan { order: 3; width: 32%; min-width: 140px; flex: 0 0 auto; display: flex; flex-direction: column; border-left: 1px solid var(--line, #ddd); }
 #yuanDevTou { display: flex; align-items: center; gap: 6px; padding: 2px 6px; font-size: 11px; font-weight: 600; border-bottom: 1px solid var(--line, #ddd); }
 #yuanDevRiZhi { flex: 1; overflow: auto; padding: 6px; font-size: 11px; line-height: 1.5; font-family: var(--font-mono, monospace); white-space: pre-wrap; }
-
-#wangYeYuan { display: flex; flex-direction: row; flex-wrap: wrap; align-items: stretch; }
-#wangYeYuan > .yuanGongJuHang, #wangYeYuan > div:first-child { width: 100%; }
-#wangYeYuanWen { order: 1; flex: 1 1 300px; min-width: 180px; }
-#yuanDevFenGe { order: 2; }
-#yuanDevLan { order: 3; flex: 0 0 32%; }
+/* R255：源码工具栏降高（两行都紧凑） */
+#wangYeYuan .yuanHang { padding: 1px 4px; }
+#wangYeYuan button { height: 20px; min-width: 22px; padding: 0 4px; }
+#wangYeYuan button svg { width: 12px; height: 12px; }
+#wangYeYuan #yuanSouRu, #wangYeYuan #yuanTiHuanRu { height: 20px; }
+#wangYeYuan #anNiuYuanShang, #wangYeYuan #anNiuYuanXia { height: 18px; width: 18px; min-width: 18px; }
 
 /* R183 项11：菜单内图标统一尺寸（搜索图标不再偏小）；浮层用主题卡色不露白 */
 .gongJuCaiDan button svg, .gongJuCaiDan label svg { width:14px !important; height:14px !important; }

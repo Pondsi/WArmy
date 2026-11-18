@@ -14,6 +14,7 @@
  *
  * 纯函数、无模型调用；模型分类器可用时以模型 JSON 为准（见 electron-main）。
  */
+import { nanYiDuYueShu } from './yu-ce-yue-shu.js';
 
 export type NanDang = 1 | 2 | 3 | 4 | 5;
 export type ZaDang = 1 | 2 | 3 | 4 | 5;
@@ -135,11 +136,15 @@ export function panDuanNanZa(
   reason = '',
   jiOverride?: number,
 ): NanYiDuJieGuo {
-  const n = qie(nan);
-  const z = qie(za);
-  const imp = qie(importance);
+  let n = qie(nan);
+  let z = qie(za);
+  let imp = qie(importance);
   const conf = Math.max(0, Math.min(1, Number(confidence) || 0));
-  const ji = qie(jiOverride == null ? jinJiCongP(urgency) : Number(jiOverride));
+  let ji = qie(jiOverride == null ? jinJiCongP(urgency) : Number(jiOverride));
+  /* R260 神经符号预测约束闸：难度/复杂度/急缓/重要度经符号验证器裁决（1–5 整数，越界保守修正），
+   * 不靠裸夹取——可审计、可回归。整数输入与 qie 同值；非整数回退中值 3（保守）。 */
+  const gated = nanYiDuYueShu({ nan: n, za: z, ji, importance: imp });
+  n = gated.value.nan; z = gated.value.za; imp = gated.value.importance; ji = gated.value.ji;
 
   const modelTier: NanYiDuJieGuo['modelTier'] = n >= 4 ? 'high' : n === 3 ? 'mid' : 'low';
   const liYou: string[] = [];

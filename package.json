@@ -1,10 +1,15 @@
 {
   "name": "warmy",
-  "version": "0.4.39",
+  "version": "0.4.40",
   "private": true,
   "description": "Workhorse Army (WArmy) — local-first multi-agent group-chat desktop app",
   "author": "Pondsi",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Pondsi/WArmy.git"
+  },
+  "homepage": "https://github.com/Pondsi/WArmy",
   "engines": {
     "node": ">=24.0.0"
   },

@@ -25,6 +25,8 @@ export interface Jianchadian extends JianchadianZengliang {
   createdAt: number;
   /** 人读摘要：几点几分、大致进行到哪一步 */
   summary: string;
+  /** R246：自进化合并前的回退点标记（渲染右侧自进化图标） */
+  evolve?: boolean;
   detail: JianChaDianXiangQing;
   bytes: number;
 }
@@ -97,6 +99,8 @@ export class JianChaDianCang {
     limit?: number;
     maxBytes?: number;
     summary?: string;
+    /** R246：标记为自进化合并前回退点 */
+    evolve?: boolean;
     detail?: Partial<JianChaDianXiangQing>;
     /** 会话级回滚标记（见 Jianchadian.sessionId） */
     sessionId?: string;
@@ -164,6 +168,7 @@ export class JianChaDianCang {
       bytes,
     };
     if (opts.sessionId) cp.sessionId = String(opts.sessionId);
+    if (opts.evolve) cp.evolve = true;
     this.items.push(cp);
     const limit = opts.limit ?? 50;
     while (this.items.length > limit) {

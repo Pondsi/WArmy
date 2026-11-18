@@ -1,13 +1,13 @@
 {
-  "version": "0.4.39",
-  "notes": "WArmy 0.4.39 — fix: tool operation records in the \"Thinking & Execution\" log are now fully localized to the UI language; English tool names no longer leak. Previously caoMingLocal fell back to de-underscoring the raw tool name (run_shell -> \"run shell\", plan_update -> \"plan update\") whenever an op.* i18n key was missing, which happened on the interrupt/restore ledger paths (op stored the raw tool name) and for any tool without a registered key. Now: (1) a new gongJuGuiFanKey normalizes every tool name and legacy alias to a canonical op key (synonyms grouped, e.g. read_docx/read_pdf -> read_document, open_file -> open_path, exec/run_command -> run_shell); (2) caoMingLocal resolves op.<key> -> normalized canonical key -> passes through already-localized legacy text (non-ASCII) -> and otherwise falls back to a localized op.generic, NEVER returning a raw English identifier; (3) the realtime ledger (gongJuMingZhongWen) now returns the canonical i18n key instead of hardcoded Chinese, so it localizes per language like the interrupt/restore paths; (4) the segment copy-summary (segText) and the stop-summary \"recent: {op}\" line also route through caoMingLocal. Added 46 new op.* keys covering all 54 tools + generic across all 27 locales (key sets equal, no CJK in non-CJK packs, no empty values, existing 11 keys unchanged). A new real-device probe probe-r240-op-local injects all tools + aliases + an unknown tool + legacy Chinese and asserts every operation row renders the correct local label with zero English/underscore leaks (run_shell -> 运行命令, plan_update -> 更新计划), plus static en-US key verification proving true i18n. Changed-area gates (syntax, naming, i18n-locales 448/0, locale-parity 151/0, broad suites, op-local probe, R239 scroll regression) passed three consecutive clean rounds. Carries all prior features unchanged.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.39/WArmy-Setup-0.4.39.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.39/WArmy-Setup-0.4.39.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.39/WArmy-Setup-0.4.39.exe.warmyblocks",
-  "sha256": "d82d65107ac107cba500f2d502087e006ca05a338c16645ce334a41ec5c52f6f",
-  "size": 305454931,
+  "version": "0.4.40",
+  "notes": "WArmy 0.4.40 — feat: speech engine selection + UI fixes + agent tooling. Speech & text conversion card renamed and reworked: the enable checkbox is replaced by two dropdowns — speech-to-text (Whisper / sherpa-onnx / follow listening model) and text-to-speech (sherpa-onnx / follow speaking model). Whisper and sherpa-onnx show install-first when not installed; defaults follow the listening/speaking models since local engines are not installed by default. Whisper (MIT, whisper.cpp subprocess) does speech-to-text only; text-to-speech stays sherpa-onnx (Apache-2.0) or the speaking model. Backend ASR/TTS routing honors the selection and falls back to cloud when a local engine is absent. Fixed the Thinking & Execution box width: constant whether expanded or collapsed, equal to the reply bubble; all bubbles (user/workhorse/other) share one width; the side facing the other avatar leaves two avatar widths. New agent tooling: neuro-symbolic prediction constraint gate (ETA/difficulty/subagent/Diwen), hard-gate appeal review, memory-graph enhanced recall, skill semver update detection, evolution A/B experiment analysis, VM snapshot/clone, mimic emotion feedback, local .ics calendar tools, parallel read-only tool calls, Docling/Tree-sitter subprocess parsers (honest gating), smart-voice perception self-improvement + prediction file, anti-sycophancy self-modification gate. MCP bridge plugin restored and bundled. Tool operation records fully localized. Carries all prior features unchanged.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.40/WArmy-Setup-0.4.40.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.40/WArmy-Setup-0.4.40.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.40/WArmy-Setup-0.4.40.exe.warmyblocks",
+  "sha256": "42d88e17dfec22545df6a1668c1ec11acff3b93228dd983f7e676fc6781a2c0d",
+  "size": 322978583,
   "mandatory": false,
-  "publishedAt": "2026-11-18T06:40:16.665Z",
+  "publishedAt": "2026-11-18T19:25:34.779Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.39"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.40"
 }

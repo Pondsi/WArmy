@@ -123,6 +123,26 @@ export async function ensureDshProfile(opts: {
   return { created: true, profileDir };
 }
 
+/** R258：写 warmy-memory 接管 patch 进 profile cordis.patch.yml。
+ *  禁用默认 compaction-basic + 把 WArmy 记忆插件插进 compaction 隔离组（command-compact 自动跟随新服务）。
+ *  contextPercent = 上下文预算百分比（相对当前模型 contextWindow）→ thresholdRatio。 */
+export function writeWarmyMemoryPatch(profileDir: string, pluginPath: string, contextPercent: number): void {
+  const percent = Math.min(100, Math.max(10, Math.round(Number(contextPercent) || 80)));
+  const yml = [
+    '# R258 WArmy 记忆系统接管：禁默认 compaction，挂 warmy-memory（上下文预算 ' + percent + '%）',
+    '- id: compaction-basic',
+    '  disabled: true',
+    '- id: compaction',
+    '  insert:',
+    '    - id: warmy-memory',
+    '      name: ' + JSON.stringify(pluginPath),
+    '      config:',
+    '        contextPercent: ' + percent,
+    '',
+  ].join('\n');
+  fs.writeFileSync(path.join(profileDir, 'cordis.patch.yml'), yml, 'utf8');
+}
+
 /** 向 InstanceManager 暴露的入口脚本路径 */
 export function writeDshInstanceEntry(outFile: string, opts: {
   dshPackageDir: string;
@@ -140,7 +160,7 @@ const dshHome = ${JSON.stringify(opts.dshJiaMuLu)};
 const profile = ${JSON.stringify(opts.profile)};
 const child = spawn(process.execPath, [entry, '--profile', profile], {
   cwd: process.cwd(),
-  env: { ...process.env, DSH_HOME: dshHome },
+  env: { ...process.env, DSH_HOME: dshHome, WARMY_DSH_DIR: ${JSON.stringify(opts.dshPackageDir)} },
   stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
 });
 
@@ -151,12 +171,18 @@ child.on('exit', (code) => {
   process.exit(code ?? 0);
 });
 
+/** R258：warmy-memory 插件 ↔ 宿主 RPC 转发（dsh 子进程 → 宿主；宿主回包 → dsh 子进程）。 */
+child.on('message', (m) => {
+  if (m && m.type === 'warmy-memory') process.send?.(m);
+});
+
 process.on('message', (m) => {
   if (m === 'ping') process.send({ type: 'pong' });
   if (m === 'shutdown') {
     child.kill();
     setTimeout(() => process.exit(0), 100);
   }
+  if (m && m.type === 'warmy-memory-reply') child.send(m);
 });
 
 setInterval(() => {}, 1 << 30);
