@@ -4988,8 +4988,10 @@ async function yunXingLiaoTianXunHuan(
           const sxT = renWuShiXian.get(String(sessionId || ''));
           if (shiXianDaoDian(sxT, Date.now())) {
             const mingSx = String((call && call.function && call.function.name) || '');
-            /** 收尾要用的：只读、计划销账、问用户、写交接文档（write_file 单独放行一次给交接文档） */
-            const shouWeiKeYong = /^(read_|list_|find_|search_|get_time|recall|retrieve|plan_verify|plan_update|ask_user|knowledge_query|local_search)/.test(mingSx);
+            /** 收尾要用的：只读、计划销账、问用户、写交接文档（write_file 单独放行一次给交接文档）
+             * R236 安全加固：白名单正则加边界锚点（$）——read_/list_/find_/search_ 族须为完整工具名标识符，
+             * 收尾类精确名也须整名匹配，防前缀误匹配较长名造成越权放行（code-scanning CWE-284）。 */
+            const shouWeiKeYong = /^(?:read_[a-z0-9_]+|list_[a-z0-9_]+|find_[a-z0-9_]+|search_[a-z0-9_]+|get_time|recall|retrieve|plan_verify|plan_update|ask_user|knowledge_query|local_search)$/.test(mingSx);
             const jiaoJie = mingSx === 'write_file' && /交接|handoff|HANDOFF|README/i.test(JSON.stringify((call && call.function && call.function.arguments) || ''));
             if (!shouWeiKeYong && !jiaoJie) {
               try { audit?.log('task.deadline-tool-blocked', { sessionId, tool: mingSx, jingGongShi: jingGongShi(sxT!, Date.now()) }); } catch { /* noop */ }

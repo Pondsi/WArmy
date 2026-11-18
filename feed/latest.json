@@ -1,13 +1,13 @@
 {
-  "version": "0.4.34",
-  "notes": "WArmy 0.4.34 — protected-area policy correction + Dao hard gate. (1) Prompt layers are no longer protected areas: session norms/short-memory (guifan), impressions/soft-gates (impressions) and requirements (yaoqiu) are readable/writable by the model, so the summary feature can refine prompts unblocked; skills and plugin directories are likewise open. (2) Plugin/skill/runtime subtrees (dsh*, warmy-dsh, skills, plugins, scan-dirs) are exempt from program-install-dir protection even when they live inside the install directory — reading/managing plugins is normal work, not \"viewing other sessions\" or \"modifying the program itself\". (3) The Dao (dao.md) and other absolutely-unchangeable prompts are now HARD-gated: registered at startup, blocked across every tool path (work-tools, run_shell, open_path, download_file, desktop_file_op) and never releasable even via a one-time authorization card — only the user can save them in the UI. Closed bypasses: bare-filename redirect after cd (echo x > dao.md), desktop ops in full-authorization mode, and download fallback to raw path. Still protected: other sessions workspaces, long-term memory, account/auth files, and the program binary itself. Changed-area verification passed three consecutive clean rounds (truth tables + real-device probes). Carries all prior features unchanged.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.34/WArmy-Setup-0.4.34.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.34/WArmy-Setup-0.4.34.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.34/WArmy-Setup-0.4.34.exe.warmyblocks",
-  "sha256": "383d2147a9e71cd21dbe4966e99c6b9aeeafcf92d3c98ae89a213d0277305013",
-  "size": 305418906,
+  "version": "0.4.35",
+  "notes": "WArmy 0.4.35 — fix: right-clicking a second-column session icon could probabilistically show two overlapping context menus. Root cause: when text was selected anywhere (e.g. in the chat area), the document-level generic copy menu (#youJianCaiDan) also fired on the row right-click because session rows lacked the data-has-ctx yield marker and did not stop propagation, so it opened alongside the row menu. Fix: session rows now carry data-has-ctx and stop propagation; closeContextMenu removes ALL same-id menus (querySelectorAll, not just the first) and also hides the generic menu; the generic show() closes any row menu first (mutual exclusion). Verified with a real-device probe (positive: single menu across selected-text / rapid-right-click / no-selection / dismiss scenarios; negative control: reverting the fix reproduces the overlap). Changed-area gates passed three consecutive clean rounds. Carries all prior features unchanged.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.35/WArmy-Setup-0.4.35.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.35/WArmy-Setup-0.4.35.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.35/WArmy-Setup-0.4.35.exe.warmyblocks",
+  "sha256": "80d8aa59d944364045758abda811f72531a94b254b6625e3903be1a6c83f5dcd",
+  "size": 305419372,
   "mandatory": false,
-  "publishedAt": "2026-11-18T00:07:23.535Z",
+  "publishedAt": "2026-11-18T01:21:46.327Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.34"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.35"
 }

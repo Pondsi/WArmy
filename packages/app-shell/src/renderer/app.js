@@ -1989,6 +1989,8 @@
     };
     const hide = () => { if (cai) cai.classList.add('yinCang'); };
     const show = (x, y, items) => {
+      /** R236：两套菜单互斥——开通用菜单前先收掉行菜单（#shangXiaWenCaiDan），防重叠。 */
+      try { closeContextMenu(); } catch { /* noop */ }
       const el = ensure();
       el.innerHTML = items.map((it, idx) =>
         '<button type="button" data-ctx="' + idx + '" style="display:block;width:100%;text-align:left;border:0;background:transparent;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--ink)">' + escapeHtml(it.label) + '</button>'
@@ -28999,9 +29001,12 @@ async function renderDashboard(host) {
     if (e.key === 'Escape') closeContextMenu();
   }
   function closeContextMenu() {
-    document.getElementById('shangXiaWenCaiDan')?.remove();
+    /** R236：用 querySelectorAll 收掉**所有**同 id 菜单（getElementById 只删第一个，异步竞态下可能残留重叠个）。 */
+    document.querySelectorAll('#shangXiaWenCaiDan').forEach((n) => n.remove());
     /** 文件/超链接右键菜单是另一套 DOM，必须一起收，否则两套互相叠 */
     document.querySelectorAll('.wenJianYouJianCaiDan').forEach((n) => n.remove());
+    /** R236：通用复制菜单（#youJianCaiDan）是另一套持久 DOM，一并收，防与本菜单重叠。 */
+    document.getElementById('youJianCaiDan')?.classList.add('yinCang');
     // R173 项1：同步摘掉关闭监听，避免遗留监听误收下一个新菜单
     document.removeEventListener('click', closeContextMenu);
     document.removeEventListener('keydown', onCtxKey);
@@ -29891,8 +29896,13 @@ async function renderDashboard(host) {
   }
 
   function bindRowContext(hangYuanSu, getItems) {
+    /** R236：标 data-has-ctx ⇒ 文档级通用右键菜单（#youJianCaiDan）让位（见 bindYouJianCaiDan 的 closest('[data-has-ctx]') 判据）。 */
+    hangYuanSu.dataset.hasCtx = '1';
     hangYuanSu.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      /** R236 修复重叠菜单：阻止冒泡到文档级通用菜单处理器——否则有选中文字时它会另开一个
+       *  #youJianCaiDan（z-index 99999）与本行菜单叠加，概率出现两个重叠菜单。 */
+      e.stopPropagation();
       // 菜单构造可以是 async（例如"只有容器开发项目才有切换容器"要先读设置）：
       // 先把坐标固定下来，再等构造完成才弹菜单，避免异步期间鼠标已经移走。
       const x = e.clientX;
