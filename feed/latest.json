@@ -1,13 +1,13 @@
 {
-  "version": "0.4.37",
-  "notes": "WArmy 0.4.37 — feat: plugin system aligned with the official DeepSeek Harness (dsh/Cordis) plugin model. (1) Deterministic, non-model-discretion extension points: plugins register ctx.on(event) listeners fired by the host at fixed lifecycle points (before-tool veto via bail, after-tool, plugin-loaded), ctx.effect() with disposers run on unload (no resource leaks), ctx.provide()/inject services, and ctx.middleware() pipelines — alongside model-callable defineTool tools. (2) Plugins decide whether they have settings: a Schemastery-style Config schema (string/number/integer/boolean/select, defaults, required, min/max, title/description) drives an optional settings form; plugins without Config show no settings. Saving re-applies config live and persists it. (3) Update mechanism: SemVer range compatibility (engines), recommended-version selection (highest compatible non-prerelease, else prerelease), update detection and one-click update. (4) Plugin market/discovery per the dsh index spec: per-profile index sources (http/https, no userinfo/fragment), strict index validation with JSON-path errors, fuzzy multilingual search, category/label/sort-key ordering (missing values last), install confirmation showing the npm/git source, and version-detail install. A new plugin panel (installed cards with enable/disable, settings, update, uninstall and visible extension-point chips; discovery tab) is wired into Settings. Verified with offline gates (runtime 13, extension 24, market 54, installer 11, planA 10, host 33) and a real-device probe (17 assertions) over the actual load/settings/toggle/market/update flow; changed-area gates passed three consecutive clean rounds. Carries all prior features unchanged.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.37/WArmy-Setup-0.4.37.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.37/WArmy-Setup-0.4.37.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.37/WArmy-Setup-0.4.37.exe.warmyblocks",
-  "sha256": "2b805c9bdadaa3bfa5152809646c07ab852ef6d0532e309f0984a7ba3dceb2ec",
-  "size": 305441742,
+  "version": "0.4.38",
+  "notes": "WArmy 0.4.38 — fix: chat scrolling now follows the owner's authoritative spec. (1) With \"scroll records\" unchecked, a new unread reply auto-scrolls so its top aligns with the top of the chat box (read from the start). (2) With it checked, the view always scrolls to the very bottom. (3) Regardless of the checkbox, once the user scrolls OR clicks the chat log, ALL programmatic scrolling stops and the viewport is fully handed to the user (never blocked, never jumped) until the user sends a new message, which reclaims control and returns it to the checkbox logic. Implemented via a per-session userControl takeover flag (set on real wheel/touch/keyboard/scrollbar input and on chat clicks, cleared only by a new user message or the explicit back-to-bottom arrow/bubble); renderChat and the streaming renderer preserve the user position under takeover and never auto-scroll. Contradictory legacy assertions were removed (the orphaned R128 verify-scroll-ui gate deleted; verify-scroll-repro aligned to the new spec) and a new real-device probe probe-r239-scroll covers all 13 spec assertions. Also diagnosed reported test stutter: not the dsh-our-free-model plugin (it cannot load in WArmy — missing dsh llm service — and was not running) and not a WArmy idle bug; the load was the OpenClaw host gateway plus concurrent test-probe Electron instances; stray test residue cleaned. Changed-area gates passed three consecutive clean rounds. Carries all prior features unchanged.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.38/WArmy-Setup-0.4.38.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.38/WArmy-Setup-0.4.38.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.38/WArmy-Setup-0.4.38.exe.warmyblocks",
+  "sha256": "9bfeebd7cba02a57f08978dcb1f339414fc14237dade216d0e17134b56e14415",
+  "size": 305441875,
   "mandatory": false,
-  "publishedAt": "2026-11-18T04:41:05.564Z",
+  "publishedAt": "2026-11-18T05:29:47.477Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.37"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.38"
 }

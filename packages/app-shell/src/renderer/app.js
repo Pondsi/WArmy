@@ -4722,7 +4722,7 @@ async function langDuWenBen(text, btnEl) {
     let st = chatGun.get(sid);
     if (!st) {
       /** following=null 表示“还没量过”，首次打开按跟随底部处理；pause=R130 生成中手动滚动的暂停档 */
-      st = { following: null, anchorTurn: '', anchorTop: 0, anchorEl: null, followBottomTurn: '', forceBottom: false, pause: '' };
+      st = { following: null, anchorTurn: '', anchorTop: 0, anchorEl: null, followBottomTurn: '', forceBottom: false, pause: '', userControl: false };
       chatGun.set(sid, st);
     }
     return st;
@@ -4771,24 +4771,24 @@ async function langDuWenBen(text, btnEl) {
   }
   const markZiGun = () => { /* 兼容旧调用：新实现不再用时间窗判程序/用户 */ };
   /**
-   * 用户滚动后的唯一处理：**只根据当前位置是否在底部**决定 following。
-   * 不再因为 pointerdown/点击就判“接管”，也不再清锚点后让下一次重画把视口拉走。
+   * R239 权威规格：用户**滚动或点击**聊天记录 ⇒ 全面接管（userControl=true），
+   * 停止任何程序滚动，视口完全交给用户（不阻滚、不跳转），**直到用户发新消息**才收回。
+   * 不再「滚回底部即恢复跟随」（旧 R129 语义与权威规格矛盾，已废）。
    */
   function markUserScrolled() {
     const sid = String(state.selectedChat?.id || '');
     const heZi = $('xiaoXiJi');
     if (!sid || !heZi) { chatZiGunTop = null; return; }
-    /** R129：无论是否勾选「滚动记录」，用户滚离底部 = 停（直到新回复重新触发）；滚回底部 = 恢复跟随 */
-    const zaiDi = isAtBottom(heZi);
-    sheZhiGenDi(sid, zaiDi);
     const st = chatGunOf(sid);
+    st.userControl = true;
+    sheZhiGenDi(sid, false);
     st.anchorTurn = '';
     st.anchorTop = 0;
     st.anchorEl = null;
     st.followBottomTurn = '';
     st.forceBottom = false;
+    st.pause = '';
     chatZiGunTop = null;
-    /* R219：滚到底不再在此自动清 —— 用户滚动经 scroll→qing() 统一清（程序滚动不算） */
   }
   /** 程序滚动：同时记下目标位置，供 scroll 事件判断“这个 scrollTop 是不是我们设的” */
   function sheZhiChatGunDong(heZi, top, smooth) {
@@ -5176,6 +5176,8 @@ async function langDuWenBen(text, btnEl) {
         };
       } catch { return null; }
     },
+    /** R239 门禁用：模拟用户滚动/点击接管（与真实 wheel/click 同走 markUserScrolled）。 */
+    yongHuJieGuan: () => { try { markUserScrolled(); return chatGunOf(String((state.selectedChat && state.selectedChat.id) || '')).userControl === true; } catch { return false; } },
     /** 第 96 轮门禁用：直接跑一次流式块更新，验证用户滚动不被流式追加抢走 */
     liuShiKuai: (b) => { try { xuanRanLiuShiKuai(String((state.selectedChat && state.selectedChat.id) || ''), b || {}); return true; } catch { return false; } },
     /** 第 102 轮门禁用：走一遍真实的「收到一条牛马回复」路径（不写主进程日志） */
@@ -5294,7 +5296,8 @@ async function langDuWenBen(text, btnEl) {
     if (sid) {
       sheZhiGenDi(sid, true);
       const st = chatGunOf(sid);
-      /** R130：下箭头是用户明确的「恢复跟随」动作 ⇒ 同时解除生成中暂停 */
+      /** R239：下箭头/新回复气泡是用户明确「恢复跟随」动作 ⇒ 收回接管权，之后按勾选态滚动 */
+      st.userControl = false;
       st.pause = '';
       st.anchorTurn = '';
       st.anchorTop = 0;
@@ -5597,11 +5600,11 @@ async function langDuWenBen(text, btnEl) {
        */
       const stL = chatGunOf(sidLiu);
       /* R154 项13 修正: 暂停期不因新流式帧解除暂停/恢复跟随；只有用户滚回底部或点「回到底部」才恢复 */
-      if (!chatRebuilding && !stL.pause) {
-        if (autoScrollChat || isAtBottom(heZi)) {
+      if (!chatRebuilding && !stL.pause && !stL.userControl) {
+        if (autoScrollChat) {
           sheZhiGenDi(sidLiu, true);
         } else {
-          /* R224 项2：限制1 恢复 —— 未勾选且不在底部 ⇒ 钉本次回复首内容顶部（从头读），退出跟随 */
+          /* R239 权威规格：未勾选 ⇒ 钉本次回复首内容顶部（从头读），退出跟随（不再「在底部就贴底」） */
           stL.anchorEl = kuai.querySelector('.siKaoKuai, .zhongJianKa, .bubble') || kuai;
           sheZhiGenDi(sidLiu, false);
           sheZhiChatGunDong(heZi, chatAnchorTop(heZi, stL), false);
@@ -5694,6 +5697,8 @@ async function langDuWenBen(text, btnEl) {
     if (zh && b.content) zh.textContent = b.content;
     /** R129：本次回复锚点（不勾选时把「第一条内容」钉在聊天框顶部；首帧已设 anchorEl=流式块） */
     const stL2 = chatGunOf(sidLiu);
+    /** R239：用户接管中 ⇒ 流式也不抢视口，保持原位（直到发新消息） */
+    const jieGuanLiu = !!stL2.userControl;
     /**
      * **跟随底部 = 只由用户滚动决定**：
      *   · 跟随 ⇒ 每次流式更新后继续贴底；
@@ -5702,10 +5707,10 @@ async function langDuWenBen(text, btnEl) {
     try {
       /** R130：暂停中（生成中用户手动滚动）= 滚动完全交给用户，一个像素都不碰；
        *  未暂停：勾选贴底；未勾选把「本次回复第一条内容」顶部钉在聊天框顶部（限制1）。 */
-      if (stL2.pause) {
+      if (jieGuanLiu || stL2.pause) {
         if (baoHuTop != null) sheZhiChatGunDong(heZi, baoHuTop, false);
-      } else if (autoScrollChat || isAtBottom(heZi)) {
-        /* 勾选 ⇒ 贴底；未勾选但用户滚回底部 ⇒ 看尾 */
+      } else if (autoScrollChat) {
+        /* R239：勾选 ⇒ 始终贴底 */
         sheZhiChatGunDong(heZi, heZi.scrollHeight, false);
         baoHuTop = null;
       } else if (stL2.anchorEl && stL2.anchorEl.isConnected) {
@@ -5726,9 +5731,9 @@ async function langDuWenBen(text, btnEl) {
     } catch { /* noop */ }
     /** 第 66 轮 项 6：流式期间就按最终「执行过程」的规则归组，顺序与完成后一致 */
     try { guiNaXingDong(heZi, true); } catch { /* noop */ }
-    if (stL2.pause) {
+    if (jieGuanLiu || stL2.pause) {
       if (baoHuTop != null) sheZhiChatGunDong(heZi, Math.min(baoHuTop, Math.max(0, heZi.scrollHeight - heZi.clientHeight)), false);
-    } else if (autoScrollChat || isAtBottom(heZi)) {
+    } else if (autoScrollChat) {
       sheZhiChatGunDong(heZi, heZi.scrollHeight, false);
     } else if (stL2.anchorEl && stL2.anchorEl.isConnected) {
       sheZhiChatGunDong(heZi, chatAnchorTop(heZi, stL2), false);
@@ -7530,6 +7535,9 @@ async function langDuWenBen(text, btnEl) {
       });
       window.addEventListener('pointerup', () => { chatGunTuoZhong = false; });
       window.addEventListener('pointercancel', () => { chatGunTuoZhong = false; });
+      /** R239：点击聊天记录 = 用户接管（与滚动同权），停止程序滚动直到发新消息。
+       *  下箭头/新回复气泡浮层不在 heZi 内，不会误触；它们自己的处理器会收回接管权。 */
+      heZi.addEventListener('click', () => { if (!chatRebuilding) markUserScrolled(); });
       /**
        * 滚动处理**合并到每帧一次**（passive）。不再监听 pointerdown/mousedown/wheel：
        * 点击不等于滚动，过早置“不跟随”正是旧实现反复把视口拉走的根因之一。
@@ -7545,15 +7553,8 @@ async function langDuWenBen(text, btnEl) {
         /* R147 项6：非程序滚动 + 无用户输入意图 = 布局夹取（卡片答完变短、图片加载、窗口缩放），
          * 不改 following、不置 pause —— 自动滚动继续生效。 */
         if (!programmatic && chatShiYongHuGun()) {
-          /** 用户滚动：**只按当前位置**决定是否跟随底部；不点“接管”，不设时间窗 */
-          const zaiDi = isAtBottom(heZi);
-          sheZhiGenDi(String(state.selectedChat?.id || ''), zaiDi);
-          /** R130：生成中用户手动滚动 ⇒ 立即暂停自动滚动（勾选暂停到本次回复完成；未勾选到新回复） */
-          try {
-            const sidGun = String(state.selectedChat?.id || '');
-            if (sidGun && shiHuiFuZhong(sidGun)) chatGunOf(sidGun).pause = autoScrollChat ? 'complete' : 'newReply';
-          } catch { /* noop */ }
-          /** 用户往上翻**不产生**「新回复」摘要（第 102 轮）；摘要只由真正到来的回复写入 */
+          /** R239：用户滚动 ⇒ 全面接管（停止程序滚动直到发新消息），不再按位置恢复跟随 */
+          markUserScrolled();
         }
         if (scrollRaf) return;
         scrollRaf = requestAnimationFrame(() => {
@@ -7571,11 +7572,8 @@ async function langDuWenBen(text, btnEl) {
               }
             }
             if (isAtBottom(heZi) && id2) {
-              /* R219：程序滚到底不算「看过」，不自动清已读 */
-              /** 程序滚到底（首次打开/下箭头）也保持跟随；只有用户滚离底部才退出 */
-              if (programmatic) sheZhiGenDi(String(id2), true);
-              /* R154 项13: 用户滚回底部 → 解除暂停，恢复自动滚动（仅用户滚动，程序滚动不解除） */
-              if (!programmatic) { try { chatGunOf(String(id2)).pause = ''; } catch { /* noop */ } }
+              /* R239：程序滚到底（首次打开/下箭头）保持跟随；用户接管中不因滚到底恢复（直到发新消息） */
+              if (programmatic && !chatGunOf(String(id2)).userControl) sheZhiGenDi(String(id2), true);
             }
             if (id2) chatScrollPos.set(String(id2), heZi.scrollTop);
             updateScrollAffordances(heZi);
@@ -7601,6 +7599,7 @@ async function langDuWenBen(text, btnEl) {
       if (youXinNeiRong && !o.keepScroll && zuiYongTs > Number(st.lastUserTs || 0)) {
         st.lastUserTs = zuiYongTs;
         yongHuXinFa = true;
+        st.userControl = false;
         sheZhiGenDi(sid, true);
         st.pause = '';
         /* R222 项3：新一轮开始 ⇒ 清上一轮的手动展开/折叠记录（本轮进行中默认展开） */
@@ -7637,10 +7636,15 @@ async function langDuWenBen(text, btnEl) {
       if (xin && xin.isConnected) { gunMuBiao.el = xin; return xin; }
       return null;
     };
+    /** R239 权威规格：用户接管（滚动/点击）中 ⇒ 停止任何程序自动滚动，视口原样保持，直到发新消息收回。 */
+    const jieGuan = !!st.userControl;
     if (o.keepScroll) {
-      // 加载历史/夹具重画：跟随则到底；不跟随则原样保留位置
-      if (genDi) sheZhiChatGunDong(heZi, maxScrollNow(), false);
+      // 加载历史/夹具重画：跟随且未接管则到底；否则原样保留位置
+      if (genDi && !jieGuan) sheZhiChatGunDong(heZi, maxScrollNow(), false);
       else if (prevScrollTop != null) sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
+    } else if (jieGuan) {
+      /** 接管中：绝不自动滚底/钉顶/跳转，只保持用户当前视口（gunMuBiao=null 让补滚也保持原位） */
+      if (prevScrollTop != null) sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
     } else if (youXinNeiRong && zanTingZhong) {
       /** 生成中用户手动滚动 ⇒ 滚动完全交给用户（视口原样） */
       if (prevScrollTop != null) sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
