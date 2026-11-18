@@ -1,13 +1,13 @@
 {
-  "version": "0.4.35",
-  "notes": "WArmy 0.4.35 — fix: right-clicking a second-column session icon could probabilistically show two overlapping context menus. Root cause: when text was selected anywhere (e.g. in the chat area), the document-level generic copy menu (#youJianCaiDan) also fired on the row right-click because session rows lacked the data-has-ctx yield marker and did not stop propagation, so it opened alongside the row menu. Fix: session rows now carry data-has-ctx and stop propagation; closeContextMenu removes ALL same-id menus (querySelectorAll, not just the first) and also hides the generic menu; the generic show() closes any row menu first (mutual exclusion). Verified with a real-device probe (positive: single menu across selected-text / rapid-right-click / no-selection / dismiss scenarios; negative control: reverting the fix reproduces the overlap). Changed-area gates passed three consecutive clean rounds. Carries all prior features unchanged.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.35/WArmy-Setup-0.4.35.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.35/WArmy-Setup-0.4.35.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.35/WArmy-Setup-0.4.35.exe.warmyblocks",
-  "sha256": "80d8aa59d944364045758abda811f72531a94b254b6625e3903be1a6c83f5dcd",
-  "size": 305419372,
+  "version": "0.4.36",
+  "notes": "WArmy 0.4.36 — fix: with \"scroll records\" (auto-scroll) unchecked, the chat jumped to the very top after the workhorse finished its final reply. Root cause: final-reply delivery triggers several consecutive full chat re-renders (endOfRound -> drainQueue -> loadSessionMessages -> refreshEntityView); each renderChat rebuilds the DOM (innerHTML=\"\") and schedules its own deferred scroll-restore (requestAnimationFrame + setTimeout 140ms). Deferred callbacks from superseded renders held a now-disconnected anchor element, so chatAnchorTop fell back to Number(st.anchorTop)||0 — and anchorTop is always 0 — scrolling the whole chat to the absolute top, even though the synchronous renders had already correctly pinned the reply first content to the viewport top. Fix: chatAnchorTop now preserves the current viewport when the anchor element is lost (never falls back to 0); the scroll target records the reply timestamp, and both the post-grouping restore and the deferred restore re-resolve the reply first content block (.them only) in the current DOM before pinning. Verified with a real-device probe reproducing the actual delivery cascade over long history (before fix scrollTop=0/atTop=true; after fix pinned to reply top maoTop=0, stable across late re-renders; auto-scroll-checked contrast still follows bottom). Changed-area gates passed three consecutive clean rounds. Carries all prior features unchanged.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.36/WArmy-Setup-0.4.36.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.36/WArmy-Setup-0.4.36.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.36/WArmy-Setup-0.4.36.exe.warmyblocks",
+  "sha256": "6b2018f288112a5be7dd59e50ba9cfe0dd1caf36fbede2bb0f2236f5028ec276",
+  "size": 305419982,
   "mandatory": false,
-  "publishedAt": "2026-11-18T01:21:46.327Z",
+  "publishedAt": "2026-11-18T03:07:13.211Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.35"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.36"
 }

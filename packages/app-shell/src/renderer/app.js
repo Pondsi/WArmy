@@ -4747,6 +4747,10 @@ async function langDuWenBen(text, btnEl) {
     if (heZi && el && el.isConnected) {
       return el.getBoundingClientRect().top - heZi.getBoundingClientRect().top + heZi.scrollTop;
     }
+    /** R237：锚点元素已失效（被后续整块重画 innerHTML='' 销毁，或被 guiNaXingDong 归组重建替换）
+     *  ⇒ 保持当前视口位置，绝不回退到 0。旧实现回退 Number(st.anchorTop)||0，而 anchorTop 全程恒为 0，
+     *  于是「最终回复后多次重画的延迟补滚拿着已销毁的锚点」把整段聊天记录跳到最顶部（用户报障真因）。 */
+    if (heZi) return heZi.scrollTop;
     return Number(st && st.anchorTop) || 0;
   }
   /** 本会话“当前这一轮”的键：最后一条用户消息的时间戳；没有用户消息就用最后一条消息 */
@@ -7618,7 +7622,19 @@ async function langDuWenBen(text, btnEl) {
     /** 记录本次渲染采用的滚动目标，供「归组/布局稳定后」的补滚复用同一目标 */
     let gunMuBiao = null;
     const gunDaoZuiXin = () => { gunMuBiao = { type: 'bottom' }; sheZhiChatGunDong(heZi, maxScrollNow(), false); };
-    const gunDaoMaoDing = (el) => { if (!el) return; st.anchorEl = el; gunMuBiao = { type: 'anchor', el }; sheZhiChatGunDong(heZi, chatAnchorTop(heZi, st), false); };
+    const gunDaoMaoDing = (el) => { if (!el) return; st.anchorEl = el; gunMuBiao = { type: 'anchor', el, ts: zuiTs }; sheZhiChatGunDong(heZi, chatAnchorTop(heZi, st), false); };
+    /** R237：补滚（同步归组后 / 延迟 rAF+140ms）时，锚点元素可能已被 guiNaXingDong 归组重建或后续整块重画销毁。
+     *  按「本次回复 ts」在当前 DOM 里重新解析首内容块，拿新鲜元素再钉顶；解析不到则返回 null（保持原位，绝不跳顶）。
+     *  真因：endOfRound→drainQueue→loadSessionMessages→refreshEntityView 连续整块重画，旧回调闭包里的 gunMuBiao.el
+     *  早被 innerHTML='' 销毁，chatAnchorTop 回退 0 ⇒ 最终回复后聊天跳到最顶。重解析让延迟补滚始终钉当前 DOM 的回复首块。 */
+    const chongXinMaoDian = () => {
+      if (!gunMuBiao || gunMuBiao.type !== 'anchor') return null;
+      if (gunMuBiao.el && gunMuBiao.el.isConnected) return gunMuBiao.el;
+      const zuiEl = gunMuBiao.ts ? heZi.querySelector('.xiaoXi.them[data-ts="' + CSS.escape(String(gunMuBiao.ts)) + '"]') : null;
+      const xin = huiFuShouGeEl(heZi, zuiEl) || zuiEl;
+      if (xin && xin.isConnected) { gunMuBiao.el = xin; return xin; }
+      return null;
+    };
     if (o.keepScroll) {
       // 加载历史/夹具重画：跟随则到底；不跟随则原样保留位置
       if (genDi) sheZhiChatGunDong(heZi, maxScrollNow(), false);
@@ -7835,9 +7851,9 @@ async function langDuWenBen(text, btnEl) {
       /** R130：归组/布局改完高度后，按**本次渲染同一目标**补滚（勾选=最新；未勾选=限制1/2 锚点）；暂停中不动 */
       if (gunMuBiao && !st.pause && gunMuBiao.type === 'bottom' && autoScrollChat) {
         sheZhiChatGunDong(heZi, maxScrollNow(), false);
-      } else if (gunMuBiao && !st.pause && gunMuBiao.type === 'anchor' && gunMuBiao.el && !autoScrollChat) {
-        st.anchorEl = gunMuBiao.el;
-        sheZhiChatGunDong(heZi, chatAnchorTop(heZi, st), false);
+      } else if (gunMuBiao && !st.pause && gunMuBiao.type === 'anchor' && !autoScrollChat) {
+        const mao = chongXinMaoDian();
+        if (mao) { st.anchorEl = mao; sheZhiChatGunDong(heZi, chatAnchorTop(heZi, st), false); }
       } else if (!gunMuBiao && prevScrollTop != null) {
         sheZhiChatGunDong(heZi, Math.min(prevScrollTop, maxScrollNow()), false);
       }
@@ -7847,9 +7863,9 @@ async function langDuWenBen(text, btnEl) {
       try {
         if (String(state.selectedChat?.id || '') !== sid) return;
         if (gunMuBiao && !st.pause && gunMuBiao.type === 'bottom' && autoScrollChat) sheZhiChatGunDong(heZi, maxScrollNow(), false);
-        else if (gunMuBiao && !st.pause && gunMuBiao.type === 'anchor' && gunMuBiao.el && !autoScrollChat) {
-          st.anchorEl = gunMuBiao.el;
-          sheZhiChatGunDong(heZi, chatAnchorTop(heZi, st), false);
+        else if (gunMuBiao && !st.pause && gunMuBiao.type === 'anchor' && !autoScrollChat) {
+          const mao = chongXinMaoDian();
+          if (mao) { st.anchorEl = mao; sheZhiChatGunDong(heZi, chatAnchorTop(heZi, st), false); }
         }
       } catch { /* noop */ }
     };
