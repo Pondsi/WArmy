@@ -559,6 +559,17 @@ contextBridge.exposeInMainWorld('warmy', {
   chaJianSheZhiSchema: () => ipcRenderer.invoke('warmy:chaJianSheZhiSchema'),
   chaJianJiaZaiYiZhuang: (p) => ipcRenderer.invoke('warmy:chaJianJiaZaiYiZhuang', p),
   chaJianJiaZai: (p) => ipcRenderer.invoke('warmy:chaJianJiaZai', p),
+  /** R238：插件系统对齐 dsh——已装元信息/确定性扩展点/设置保存/启用/索引源/市场浏览/安装/更新 */
+  chaJianXinXi: () => ipcRenderer.invoke('warmy:chaJianXinXi'),
+  chaJianKuoZhanDian: () => ipcRenderer.invoke('warmy:chaJianKuoZhanDian'),
+  chaJianSheZhiBaoCun: (p) => ipcRenderer.invoke('warmy:chaJianSheZhiBaoCun', p),
+  chaJianQiYong: (p) => ipcRenderer.invoke('warmy:chaJianQiYong', p),
+  chaJianSuoYinYuan: (p) => ipcRenderer.invoke('warmy:chaJianSuoYinYuan', p),
+  chaJianSuoYinQu: (p) => ipcRenderer.invoke('warmy:chaJianSuoYinQu', p),
+  chaJianShiChang: (p) => ipcRenderer.invoke('warmy:chaJianShiChang', p),
+  chaJianShiChangAnZhuang: (p) => ipcRenderer.invoke('warmy:chaJianShiChangAnZhuang', p),
+  chaJianGengXinJianCe: (p) => ipcRenderer.invoke('warmy:chaJianGengXinJianCe', p),
+  chaJianGengXin: (p) => ipcRenderer.invoke('warmy:chaJianGengXin', p),
   /** R199：迪文融合（落点迪文化/用户搜索恒原文/落点清单） */
   diwenLuoDianHua: (p) => ipcRenderer.invoke('warmy:diwenLuoDianHua', p),
   diwenYongHuSouSuo: (p) => ipcRenderer.invoke('warmy:diwenYongHuSouSuo', p),

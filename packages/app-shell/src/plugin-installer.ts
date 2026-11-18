@@ -11,6 +11,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { installSpec, versionCompatible, type SuoYinBanBen } from './plugin-market.js';
 
 export interface ChaJianHouXuan { id: string; ming: string; path: string; hasCordis: boolean; version?: string; }
 
@@ -44,19 +45,21 @@ export function scanChaJianMuLu(dirs: string[], max = 100): ChaJianHouXuan[] {
   return out;
 }
 
-/** pnpm 安装命令构造（纯函数，可测）。装进 profile 目录。 */
-export function pnpmInstallArgs(pkg: string, profileDir: string): string[] {
-  return ['add', pkg, '--dir', profileDir];
+/** pnpm 安装命令构造（纯函数，可测）。装进 profile 目录；registry 可选（市场 npm 源）。 */
+export function pnpmInstallArgs(pkg: string, profileDir: string, registry?: string): string[] {
+  const args = ['add', pkg, '--dir', profileDir];
+  if (registry) args.push('--registry', registry);
+  return args;
 }
 
 export interface AnZhuangJieGuo { ok: boolean; code: number | null; stdout: string; stderr: string; error?: string; }
 
 /** 经 pnpm 安装插件包（spawn 无 shell；pnpm 不可用如实报错）。 */
-export function installViaPnpm(pkg: string, profileDir: string, pnpmBin = 'pnpm', timeoutMs = 120000): Promise<AnZhuangJieGuo> {
+export function installViaPnpm(pkg: string, profileDir: string, pnpmBin = 'pnpm', timeoutMs = 120000, registry?: string): Promise<AnZhuangJieGuo> {
   return new Promise((resolve) => {
     try {
       fs.mkdirSync(profileDir, { recursive: true });
-      const p = spawn(pnpmBin, pnpmInstallArgs(pkg, profileDir), { cwd: profileDir, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+      const p = spawn(pnpmBin, pnpmInstallArgs(pkg, profileDir, registry), { cwd: profileDir, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
       let out = '', err = '';
       const timer = setTimeout(() => { try { p.kill('SIGKILL'); } catch { /* noop */ } }, timeoutMs);
       timer.unref?.();
@@ -76,4 +79,18 @@ export function chaJianRuKou(pluginDir: string): string | null {
     const lu = path.resolve(pluginDir, entry);
     return fs.existsSync(lu) ? lu : null;
   } catch { return null; }
+}
+
+/** R238：从市场版本安装/更新（engines 兼容门 + npm/git spec + registry）。不兼容如实拒绝，绝不装。 */
+export interface ShiChangAnZhuangXuan { hostVersion: string; hostKind?: 'dsh' | 'warmy'; pnpmBin?: string; timeoutMs?: number; }
+export async function installFromMarket(name: string, version: SuoYinBanBen, profileDir: string, opts: ShiChangAnZhuangXuan): Promise<AnZhuangJieGuo & { skipped?: boolean; spec?: string }> {
+  const hostKind = opts.hostKind || 'warmy';
+  if (!version || !version.version) return { ok: false, code: null, stdout: '', stderr: '', error: 'bad-version' };
+  if (!versionCompatible(version, opts.hostVersion, hostKind)) {
+    return { ok: false, code: null, stdout: '', stderr: '', skipped: true, error: `版本 ${version.version} 与当前 ${hostKind} ${opts.hostVersion} 不兼容（engines.${hostKind}=${version.engines?.[hostKind] || ''}）` };
+  }
+  const sp = installSpec(name, version);
+  const registry = sp.kind === 'npm' ? sp.registry : undefined;
+  const r = await installViaPnpm(sp.spec, profileDir, opts.pnpmBin || 'pnpm', opts.timeoutMs || 120000, registry);
+  return { ...r, spec: sp.spec };
 }

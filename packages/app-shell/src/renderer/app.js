@@ -335,6 +335,8 @@
     const v = state.t[k];
     return (v && v !== k) ? v : fallback;
   };
+  /** R238：暴露翻译钩子供独立渲染模块（插件面板）按当前语言取文案，缺键回退兜底。 */
+  window.__warmyT = tOr;
   /** 结构化值展示：对象绝不 textContent 直出（避免 [object Object]） */
   const fmtDisp = (v) => {
     if (v === null || v === undefined || v === '') return '—';
@@ -15992,6 +15994,7 @@ async function renderDashboard(host) {
         <div class="sheZhiSection" data-sec="plugin"><h2 style="color:var(--accent)">${escapeHtml(t('settings.tabPlugins'))}</h2></div>
         <div class="sheZhiSection sheZhiKa">
           <h2 title="${escapeHtml(tOr('settings.cordisHint', '一切皆插件：pnpm 安装或目录扫描发现 → 加载 → Config 设置。插件工具经宿主授权网关执行。'))}" style="margin:0">${escapeHtml(t('settings.chaJianJi'))}</h2>
+          <div class="shiLiHang" style="margin-top:8px"><button class="anNiuXiao" id="anNiuChaJianShiChang" type="button" title="${escapeHtml(tOr('settings.pluginMarketHint', '插件市场与管理：已装插件启用/设置/更新/卸载与确定性扩展点，发现页浏览索引源并安装。'))}">${escapeHtml(tOr('settings.pluginMarketManage', '插件市场与管理'))}</button></div>
           <!-- R218：cordis 插件（运行时）移到插件列表上面（用户要求） -->
           <div class="jinengSaoMiaoKuai" style="margin-top:10px">
             <div class="jinengSaoMiaoBiaoTi">${escapeHtml(tOr('settings.cordisTitle', 'cordis 插件（运行时）'))}</div>

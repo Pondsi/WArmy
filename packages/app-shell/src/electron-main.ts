@@ -233,7 +233,8 @@ import { daKaiZhiNengPeiZhi } from './smart-config.js';
 import { luoDianDiwenHua, yongHuKeJianLuoDian, DIWEN_LUO_DIAN, luoDianTongJi } from './diwen-integration.js';
 import { ChaJianYunXingShi, type ChaJianMoKuai } from './plugin-runtime.js';
 import { VmAdapterManager } from './vm-adapter.js';
-import { scanChaJianMuLu, installViaPnpm, chaJianRuKou } from './plugin-installer.js';
+import { scanChaJianMuLu, installViaPnpm, chaJianRuKou, installFromMarket } from './plugin-installer.js';
+import { validateIndex, validateIndexUrl, searchPlugins, sortPlugins, recommendedVersion, detectUpdate, pickLocalized, resolveIcon, versionCompatible, type SuoYin, type SuoYinBanBen } from './plugin-market.js';
 import { ConversationHost, vmSuiDaoBaoZhuang, type ForkedChild } from './conversation-host.js';
 import { KbConfidenceModel } from './kb-confidence.js';
 import { tiQuWenDang } from './doc-extract.js';
@@ -5360,7 +5361,16 @@ async function yunXingLiaoTianXunHuan(
       if (chaJianYunXing().youGongJu(gongJuMing)) {
         if (gongJuQiYongBiao()[gongJuMing] === false) return jieGuoShouWei(`[插件工具已禁用] ${gongJuMing}`, ctx.zuiDaJieGuoZiShu, gongJuMing);
         const argsP = jieXiGongJuCanShu(call && call.function ? (call.function as { arguments?: unknown }).arguments : undefined);
-        const rP = await chaJianYunXing().diaoYong(gongJuMing, argsP);
+        /** R238 确定性扩展点（非模型裁量）：工具执行前宿主固定触发，插件可否决（异步 bail，支持 async 监听器）。 */
+        const chaJianFouJue = await chaJianYunXing().faSheBailAsync('warmy/before-tool', { name: gongJuMing, args: argsP, sessionId });
+        if (chaJianFouJue && chaJianFouJue.deny) {
+          try { audit?.log('chat.plugin-tool-veto', { sessionId, tool: gongJuMing }); } catch { /* noop */ }
+          return jieGuoShouWei(`[插件扩展点否决] ${gongJuMing}${chaJianFouJue.reason ? '：' + String(chaJianFouJue.reason) : ''}`, ctx.zuiDaJieGuoZiShu, gongJuMing);
+        }
+        /** R238 确定性中间件管线包裹工具执行（拦截器形态扩展点；终端=运行时 diaoYong）。 */
+        const rP = await chaJianYunXing().paoZhongJianJian({ name: gongJuMing, args: argsP, sessionId }, () => chaJianYunXing().diaoYong(gongJuMing, argsP)) as { ok: boolean; value?: unknown; blocks?: Array<{ type: string; text: string }>; error?: string };
+        /** R238 确定性扩展点：工具执行后宿主固定触发（观测/审计类，不经模型）。 */
+        try { chaJianYunXing().faShe('warmy/after-tool', { name: gongJuMing, args: argsP, ok: rP.ok, sessionId }); } catch { /* noop */ }
         const txtP = rP.ok ? (rP.blocks || []).map((b) => b.text).join('\n') : `[插件工具失败] ${rP.error}`;
         try { audit?.log('chat.plugin-tool', { sessionId, tool: gongJuMing, ok: rP.ok }); } catch { /* noop */ }
         return jieGuoShouWei(txtP, ctx.zuiDaJieGuoZiShu, gongJuMing);
@@ -27542,6 +27552,7 @@ chuliIpc('warmy:chaJianJiaZaiYiZhuang', async (_e, mu?: { pluginDir?: string; co
     const mod = (mo.default && typeof mo.default.apply === 'function' ? mo.default : mo) as ChaJianMoKuai;
     const r = await chaJianYunXing().jiaZai(mod, mu.config || {}, { logger: {} });
     try { audit?.log('plugin.load-installed', { dir: mu.pluginDir, ok: r.ok }); } catch { /* noop */ }
+    if (r.ok) { try { const st = duChaJianZhuangTai(); st.installed[mod.name] = { version: String(mod.version || ''), dir: mu.pluginDir, name: mod.name }; if (st.enabled[mod.name] === undefined) st.enabled[mod.name] = true; cunChaJianZhuangTai(st); chaJianYunXing().faShe('warmy/plugin-loaded', { name: mod.name, tools: r.tools }); } catch { /* noop */ } }
     return r;
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
@@ -27550,7 +27561,267 @@ chuliIpc('warmy:chaJianJiaZai', async (_e, mu?: { module?: ChaJianMoKuai; config
     if (!mu?.module) return { ok: false, error: 'bad-payload' };
     const r = await chaJianYunXing().jiaZai(mu.module, mu.config || {}, { logger: {} });
     try { audit?.log('plugin.load', { name: mu.module.name, ok: r.ok, tools: r.tools }); } catch { /* noop */ }
+    if (r.ok) { try { chaJianYunXing().faShe('warmy/plugin-loaded', { name: mu.module.name, tools: r.tools }); } catch { /* noop */ } }
     return r;
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+// ── R238 插件系统对齐 dsh 官方：持久化 + 确定性扩展点 introspection + 市场发现/更新 + 设置/启用 ──
+interface ChaJianZhuangTai {
+  config: Record<string, Record<string, unknown>>;
+  enabled: Record<string, boolean>;
+  indexSources: Array<{ url: string; addedAt: number }>;
+  installed: Record<string, { version: string; dir: string; name: string }>;
+}
+function chaJianZhuangTaiLu(): string { return path.join(app.getPath('userData'), 'plugin-state.json'); }
+function duChaJianZhuangTai(): ChaJianZhuangTai {
+  try {
+    const j = JSON.parse(fs.readFileSync(chaJianZhuangTaiLu(), 'utf8')) as Partial<ChaJianZhuangTai>;
+    return { config: j.config || {}, enabled: j.enabled || {}, indexSources: Array.isArray(j.indexSources) ? j.indexSources : [], installed: j.installed || {} };
+  } catch { return { config: {}, enabled: {}, indexSources: [], installed: {} }; }
+}
+function cunChaJianZhuangTai(st: ChaJianZhuangTai): void {
+  try { fs.mkdirSync(path.dirname(chaJianZhuangTaiLu()), { recursive: true }); fs.writeFileSync(chaJianZhuangTaiLu(), JSON.stringify(st, null, 2)); } catch { /* noop */ }
+}
+function chaJianHostVer(): string { return String(app.getVersion() || '0.0.0'); }
+const chaJianSuoYinHuanCun = new Map<string, { index: SuoYin; at: number }>();
+const SUO_YIN_ZUI_DA = 128 * 1024 * 1024;
+const SUO_YIN_HUAN_CUN_SHANG = 32;
+/** R238：缓存入队——驱逐过期条目 + LRU 上限（防任意 URL 无界堆积）。 */
+function huanCunChaJianSuoYin(url: string, index: SuoYin): void {
+  const now = Date.now();
+  for (const [k, v] of chaJianSuoYinHuanCun) if (now - v.at >= 300000) chaJianSuoYinHuanCun.delete(k);
+  chaJianSuoYinHuanCun.delete(url);
+  chaJianSuoYinHuanCun.set(url, { index, at: now });
+  while (chaJianSuoYinHuanCun.size > SUO_YIN_HUAN_CUN_SHANG) { const first = chaJianSuoYinHuanCun.keys().next().value; if (first === undefined) break; chaJianSuoYinHuanCun.delete(first); }
+}
+/** 取索引：URL 合法性 + 网络门控 + 2xx 不重定向 + 流式字节封顶≤128MiB（超限 abort，不全量缓冲） + 格式校验（5min LRU 缓存）。 */
+async function quChaJianSuoYin(url: string): Promise<{ ok: boolean; index?: SuoYin; errors?: Array<{ path: string; reason: string }>; error?: string }> {
+  const u = validateIndexUrl(url);
+  if (!u.ok) return { ok: false, error: 'bad-index-url:' + u.reason };
+  const wl = wangLuoMoShiQu();
+  if (wl === 'off' || (wl === 'lan' && !shiJuYuWangZhuji(url))) return { ok: false, error: 'network-restricted（当前网络模式不允许访问该索引源）' };
+  const huan = chaJianSuoYinHuanCun.get(url);
+  if (huan && Date.now() - huan.at < 300000) return { ok: true, index: huan.index };
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 20000);
+  try {
+    const res = await fetch(url, { redirect: 'manual', signal: ac.signal, headers: { Accept: 'application/json' } });
+    if (res.status < 200 || res.status >= 300) return { ok: false, error: 'http-' + res.status + '（索引须 2xx 且不重定向）' };
+    const cl = Number(res.headers.get('content-length') || '0');
+    if (cl && cl > SUO_YIN_ZUI_DA) return { ok: false, error: 'index-too-large（Content-Length>128MiB）' };
+    let txt = '';
+    if (res.body) {
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let bytes = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) { bytes += value.byteLength; if (bytes > SUO_YIN_ZUI_DA) { ac.abort(); return { ok: false, error: 'index-too-large（>128MiB）' }; } txt += dec.decode(value, { stream: true }); }
+      }
+      txt += dec.decode();
+    } else { txt = await res.text(); if (txt.length > SUO_YIN_ZUI_DA) return { ok: false, error: 'index-too-large（>128MiB）' }; }
+    let json: unknown; try { json = JSON.parse(txt); } catch { return { ok: false, error: 'index-not-json' }; }
+    const v = validateIndex(json);
+    if (!v.ok || !v.index) return { ok: false, errors: v.errors };
+    huanCunChaJianSuoYin(url, v.index);
+    return { ok: true, index: v.index };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+  finally { clearTimeout(timer); }
+}
+/** 从目录加载 cordis 插件（cache-bust 保证更新后取新模块）。 */
+async function jiaZaiChaJianCongMuLu(dir: string, config: Record<string, unknown>): Promise<{ ok: boolean; errors: string[]; tools: string[]; name?: string }> {
+  const ruKou = chaJianRuKou(dir);
+  if (!ruKou) return { ok: false, errors: ['no-entry'], tools: [] };
+  const mo = await import(pathToFileURL(ruKou).href + '?t=' + Date.now()) as { name?: string; apply?: unknown; default?: ChaJianMoKuai };
+  const mod = (mo.default && typeof mo.default.apply === 'function' ? mo.default : mo) as ChaJianMoKuai;
+  const r = await chaJianYunXing().jiaZai(mod, config, { logger: {} });
+  if (r.ok) { try { chaJianYunXing().faShe('warmy/plugin-loaded', { name: mod.name, tools: r.tools }); } catch { /* noop */ } }
+  return { ...r, name: mod.name };
+}
+/** R238：安装目录定位 + containment 校验（防索引 name 路径穿越；纵深防御，name 文法已在 validateIndex 把关）。 */
+function chaJianAnZhuangMuLu(prof: string, name: string): string | null {
+  const gen = path.resolve(prof, 'node_modules');
+  const dir = path.resolve(gen, name);
+  if (dir !== gen && !dir.startsWith(gen + path.sep)) return null;
+  return dir;
+}
+/** 已装插件元信息 + 启用态 + 确定性扩展点（供已装列表 UI）。 */
+chuliIpc('warmy:chaJianXinXi', () => {
+  try {
+    const st = duChaJianZhuangTai(); const rt = chaJianYunXing();
+    const loaded = rt.chaJianXinXi();
+    const loadedNames = new Set(loaded.map((p) => p.name));
+    const plugins = loaded.map((p) => ({ ...p, enabled: st.enabled[p.name] !== false }));
+    // 已安装但当前未加载（被禁用）的插件仍列出，供重新启用（对齐 dsh 已装列表）
+    for (const [name, rec] of Object.entries(st.installed)) {
+      if (loadedNames.has(name)) continue;
+      plugins.push({ name, version: String(rec.version || ''), title: name, description: '', author: '', engines: null, hasConfig: false, config: st.config[name] || {}, tools: [], events: [], services: [], enabled: false });
+    }
+    return { ok: true, plugins, points: rt.kuoZhanDian(), hostVersion: chaJianHostVer() };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:chaJianKuoZhanDian', () => {
+  try { return { ok: true, points: chaJianYunXing().kuoZhanDian() }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 保存插件设置（Config 校验 → 重新 apply 生效 → 持久化）；无 Config 的插件拒绝（自行决定是否有设置）。 */
+chuliIpc('warmy:chaJianSheZhiBaoCun', async (_e, mu?: { plugin?: string; config?: Record<string, unknown> }) => {
+  try {
+    const name = String(mu?.plugin || ''); if (!name) return { ok: false, error: 'bad-payload' };
+    const rt = chaJianYunXing();
+    const info = rt.chaJianXinXi().find((p) => p.name === name);
+    if (!info) return { ok: false, error: 'plugin-not-loaded' };
+    if (!info.hasConfig) return { ok: false, error: 'plugin-has-no-config（该插件未声明设置）' };
+    const r = await rt.gengXinPeiZhi(name, mu?.config || {});
+    if (!r.ok) return { ok: false, errors: r.errors };
+    const st = duChaJianZhuangTai(); st.config[name] = rt.chaJianXinXi().find((p) => p.name === name)?.config || mu?.config || {}; cunChaJianZhuangTai(st);
+    try { audit?.log('plugin.config-save', { plugin: name }); } catch { /* noop */ }
+    return { ok: true, config: st.config[name] };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 启用/禁用插件（持久化 + 加载/卸载）。 */
+chuliIpc('warmy:chaJianQiYong', async (_e, mu?: { plugin?: string; enabled?: boolean }) => {
+  try {
+    const name = String(mu?.plugin || ''); if (!name) return { ok: false, error: 'bad-payload' };
+    const en = mu?.enabled !== false;
+    const st = duChaJianZhuangTai(); st.enabled[name] = en; cunChaJianZhuangTai(st);
+    const rt = chaJianYunXing();
+    if (!en) { rt.xieZai(name); try { audit?.log('plugin.disable', { plugin: name }); } catch { /* noop */ } return { ok: true, enabled: false }; }
+    if (rt.lieBiao().includes(name)) return { ok: true, enabled: true };
+    const rec = st.installed[name];
+    if (!rec?.dir) return { ok: false, error: 'no-installed-dir（无法重新启用：缺安装目录）' };
+    const r = await jiaZaiChaJianCongMuLu(rec.dir, st.config[name] || {});
+    try { audit?.log('plugin.enable', { plugin: name, ok: r.ok }); } catch { /* noop */ }
+    return { ok: r.ok, enabled: r.ok, errors: r.errors };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 索引源 CRUD（每 profile；http/https、禁用户名密码/#片段；最多 20）。 */
+chuliIpc('warmy:chaJianSuoYinYuan', (_e, mu?: { action?: string; url?: string }) => {
+  try {
+    const st = duChaJianZhuangTai();
+    const act = String(mu?.action || 'list');
+    if (act === 'list') return { ok: true, sources: st.indexSources };
+    if (act === 'add') {
+      const url = String(mu?.url || '').trim();
+      const v = validateIndexUrl(url); if (!v.ok) return { ok: false, error: 'bad-index-url:' + v.reason };
+      if (st.indexSources.some((s) => s.url === url)) return { ok: true, sources: st.indexSources, duplicate: true };
+      if (st.indexSources.length >= 20) return { ok: false, error: 'too-many-sources（最多 20）' };
+      st.indexSources.push({ url, addedAt: Date.now() }); cunChaJianZhuangTai(st);
+      try { audit?.log('plugin.index-source-add', { url }); } catch { /* noop */ }
+      return { ok: true, sources: st.indexSources };
+    }
+    if (act === 'remove') {
+      const url = String(mu?.url || '');
+      st.indexSources = st.indexSources.filter((s) => s.url !== url); chaJianSuoYinHuanCun.delete(url); cunChaJianZhuangTai(st);
+      return { ok: true, sources: st.indexSources };
+    }
+    return { ok: false, error: 'bad-action' };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:chaJianSuoYinQu', async (_e, mu?: { url?: string }) => {
+  const url = String(mu?.url || '');
+  const r = await quChaJianSuoYin(url);
+  try { audit?.log('plugin.index-fetch', { url, ok: r.ok }); } catch { /* noop */ }
+  return r;
+});
+/** 市场浏览：搜索/分类/标签/排序 + 推荐版本 + 已装/更新状态。 */
+chuliIpc('warmy:chaJianShiChang', async (_e, mu?: { url?: string; query?: string; sortKey?: string; order?: 'asc' | 'desc'; category?: string; label?: string }) => {
+  try {
+    const url = String(mu?.url || '');
+    const fr = await quChaJianSuoYin(url);
+    if (!fr.ok || !fr.index) return { ok: false, error: fr.error, errors: fr.errors };
+    const idx = fr.index; const lang = String((settingsStore?.load() as { yuYan?: string } | undefined)?.yuYan || 'zh-CN');
+    const category = mu?.category; const label = mu?.label; const sortKey = mu?.sortKey; const order = mu?.order || 'desc';
+    let list = idx.plugins.slice();
+    if (category) list = list.filter((p) => p.metadata?.category === category);
+    if (label) list = list.filter((p) => (p.metadata?.labels || []).includes(label));
+    list = searchPlugins(list, String(mu?.query || ''));
+    if (sortKey) list = sortPlugins(list, sortKey, order);
+    const st = duChaJianZhuangTai(); const hv = chaJianHostVer();
+    const cards = list.map((p) => {
+      const rec = recommendedVersion(p.versions, hv, 'warmy');
+      const inst = st.installed[p.name];
+      const upd = inst ? detectUpdate(inst.version, p.versions, hv, 'warmy') : { hasUpdate: false, recommended: rec?.version || null, latest: null };
+      return {
+        name: p.name, title: pickLocalized(p.title, lang) || p.name, description: pickLocalized(p.description, lang),
+        icon: resolveIcon(p.icon, url), author: p.author || '', homepage: p.homepage || '', repository: p.repository || null,
+        category: p.metadata?.category || null, labels: p.metadata?.labels || [],
+        recommended: rec ? { version: rec.version, source: rec.source, engines: rec.engines || null } : null,
+        installed: !!inst, installedVersion: inst?.version || null, hasUpdate: upd.hasUpdate,
+        versions: p.versions.map((v) => ({ version: v.version, publishTimestamp: v.publishTimestamp, source: v.source, engines: v.engines || null, compatible: versionCompatible(v, hv, 'warmy') })),
+      };
+    });
+    return { ok: true, title: pickLocalized(idx.title, lang), cards, categories: idx.metadata?.categories || {}, labels: idx.metadata?.labels || {}, sortKeys: idx.metadata?.sortKeys || {} };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 从市场安装指定版本（宿主从索引重解析来源，不信任客户端；engines 兼容门）。 */
+chuliIpc('warmy:chaJianShiChangAnZhuang', async (_e, mu?: { name?: string; version?: string; url?: string }) => {
+  try {
+    const name = String(mu?.name || ''); const ver = String(mu?.version || ''); const url = String(mu?.url || '');
+    if (!name || !ver || !url) return { ok: false, error: 'bad-payload' };
+    const fr = await quChaJianSuoYin(url);
+    if (!fr.ok || !fr.index) return { ok: false, error: fr.error || 'index-unavailable' };
+    const p = fr.index.plugins.find((x) => x.name === name);
+    if (!p) return { ok: false, error: 'plugin-not-in-index' };
+    const v = p.versions.find((x) => x.version === ver);
+    if (!v) return { ok: false, error: 'version-not-in-index' };
+    const prof = path.join(app.getPath('userData'), 'plugin-profile');
+    const r = await installFromMarket(name, v, prof, { hostVersion: chaJianHostVer(), hostKind: 'warmy' });
+    try { audit?.log('plugin.market-install', { name, version: ver, ok: r.ok, skipped: r.skipped }); } catch { /* noop */ }
+    if (!r.ok) return { ok: false, error: r.error, skipped: r.skipped };
+    const dir = chaJianAnZhuangMuLu(prof, name);
+    if (!dir) return { ok: false, error: 'unsafe-plugin-name（安装目录路径越界）' };
+    const st = duChaJianZhuangTai(); st.installed[name] = { version: ver, dir, name }; st.enabled[name] = true; cunChaJianZhuangTai(st);
+    const lr = await jiaZaiChaJianCongMuLu(dir, st.config[name] || {});
+    return { ok: true, version: ver, spec: r.spec, loaded: lr.ok, loadErrors: lr.errors };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 更新检测：遍历索引源找该插件推荐版。 */
+chuliIpc('warmy:chaJianGengXinJianCe', async (_e, mu?: { plugin?: string }) => {
+  try {
+    const name = String(mu?.plugin || ''); const st = duChaJianZhuangTai(); const inst = st.installed[name];
+    if (!inst) return { ok: false, error: 'not-installed' };
+    const hv = chaJianHostVer();
+    for (const src of st.indexSources) {
+      const fr = await quChaJianSuoYin(src.url);
+      if (!fr.ok || !fr.index) continue;
+      const p = fr.index.plugins.find((x) => x.name === name);
+      if (!p) continue;
+      const upd = detectUpdate(inst.version, p.versions, hv, 'warmy');
+      if (upd.recommended) return { ok: true, hasUpdate: upd.hasUpdate, recommended: upd.recommended, latest: upd.latest, url: src.url, name };
+    }
+    return { ok: true, hasUpdate: false, recommended: null, latest: null, name };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** 执行更新：装推荐版 → 卸载旧 → 加载新。 */
+chuliIpc('warmy:chaJianGengXin', async (_e, mu?: { plugin?: string }) => {
+  try {
+    const name = String(mu?.plugin || ''); if (!name) return { ok: false, error: 'bad-payload' };
+    const st0 = duChaJianZhuangTai(); const inst = st0.installed[name];
+    if (!inst) return { ok: false, error: 'not-installed' };
+    const hv = chaJianHostVer();
+    let muBiao: { url: string; v: SuoYinBanBen } | null = null;
+    for (const src of st0.indexSources) {
+      const fr = await quChaJianSuoYin(src.url);
+      if (!fr.ok || !fr.index) continue;
+      const p = fr.index.plugins.find((x) => x.name === name);
+      if (!p) continue;
+      const upd = detectUpdate(inst.version, p.versions, hv, 'warmy');
+      if (upd.hasUpdate && upd.recommended) { const v = p.versions.find((x) => x.version === upd.recommended); if (v) { muBiao = { url: src.url, v }; break; } }
+    }
+    if (!muBiao) return { ok: false, error: 'no-update-available' };
+    const prof = path.join(app.getPath('userData'), 'plugin-profile');
+    const r = await installFromMarket(name, muBiao.v, prof, { hostVersion: hv, hostKind: 'warmy' });
+    try { audit?.log('plugin.update', { name, version: muBiao.v.version, ok: r.ok }); } catch { /* noop */ }
+    if (!r.ok) return { ok: false, error: r.error, skipped: r.skipped };
+    const dir = chaJianAnZhuangMuLu(prof, name);
+    if (!dir) return { ok: false, error: 'unsafe-plugin-name（安装目录路径越界）' };
+    const st = duChaJianZhuangTai(); st.installed[name] = { version: muBiao.v.version, dir, name }; cunChaJianZhuangTai(st);
+    chaJianYunXing().xieZai(name);
+    // R238：已禁用的插件更新后只落盘不加载（避免 UI 显示禁用但工具仍可被模型调用）
+    if (st.enabled[name] === false) return { ok: true, version: muBiao.v.version, loaded: false, disabled: true };
+    const lr = await jiaZaiChaJianCongMuLu(dir, st.config[name] || {});
+    return { ok: true, version: muBiao.v.version, loaded: lr.ok };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:gongJuLieBiao', () => {

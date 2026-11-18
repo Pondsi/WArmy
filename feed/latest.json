@@ -1,13 +1,13 @@
 {
-  "version": "0.4.36",
-  "notes": "WArmy 0.4.36 — fix: with \"scroll records\" (auto-scroll) unchecked, the chat jumped to the very top after the workhorse finished its final reply. Root cause: final-reply delivery triggers several consecutive full chat re-renders (endOfRound -> drainQueue -> loadSessionMessages -> refreshEntityView); each renderChat rebuilds the DOM (innerHTML=\"\") and schedules its own deferred scroll-restore (requestAnimationFrame + setTimeout 140ms). Deferred callbacks from superseded renders held a now-disconnected anchor element, so chatAnchorTop fell back to Number(st.anchorTop)||0 — and anchorTop is always 0 — scrolling the whole chat to the absolute top, even though the synchronous renders had already correctly pinned the reply first content to the viewport top. Fix: chatAnchorTop now preserves the current viewport when the anchor element is lost (never falls back to 0); the scroll target records the reply timestamp, and both the post-grouping restore and the deferred restore re-resolve the reply first content block (.them only) in the current DOM before pinning. Verified with a real-device probe reproducing the actual delivery cascade over long history (before fix scrollTop=0/atTop=true; after fix pinned to reply top maoTop=0, stable across late re-renders; auto-scroll-checked contrast still follows bottom). Changed-area gates passed three consecutive clean rounds. Carries all prior features unchanged.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.36/WArmy-Setup-0.4.36.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.36/WArmy-Setup-0.4.36.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.36/WArmy-Setup-0.4.36.exe.warmyblocks",
-  "sha256": "6b2018f288112a5be7dd59e50ba9cfe0dd1caf36fbede2bb0f2236f5028ec276",
-  "size": 305419982,
+  "version": "0.4.37",
+  "notes": "WArmy 0.4.37 — feat: plugin system aligned with the official DeepSeek Harness (dsh/Cordis) plugin model. (1) Deterministic, non-model-discretion extension points: plugins register ctx.on(event) listeners fired by the host at fixed lifecycle points (before-tool veto via bail, after-tool, plugin-loaded), ctx.effect() with disposers run on unload (no resource leaks), ctx.provide()/inject services, and ctx.middleware() pipelines — alongside model-callable defineTool tools. (2) Plugins decide whether they have settings: a Schemastery-style Config schema (string/number/integer/boolean/select, defaults, required, min/max, title/description) drives an optional settings form; plugins without Config show no settings. Saving re-applies config live and persists it. (3) Update mechanism: SemVer range compatibility (engines), recommended-version selection (highest compatible non-prerelease, else prerelease), update detection and one-click update. (4) Plugin market/discovery per the dsh index spec: per-profile index sources (http/https, no userinfo/fragment), strict index validation with JSON-path errors, fuzzy multilingual search, category/label/sort-key ordering (missing values last), install confirmation showing the npm/git source, and version-detail install. A new plugin panel (installed cards with enable/disable, settings, update, uninstall and visible extension-point chips; discovery tab) is wired into Settings. Verified with offline gates (runtime 13, extension 24, market 54, installer 11, planA 10, host 33) and a real-device probe (17 assertions) over the actual load/settings/toggle/market/update flow; changed-area gates passed three consecutive clean rounds. Carries all prior features unchanged.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.37/WArmy-Setup-0.4.37.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.37/WArmy-Setup-0.4.37.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.37/WArmy-Setup-0.4.37.exe.warmyblocks",
+  "sha256": "2b805c9bdadaa3bfa5152809646c07ab852ef6d0532e309f0984a7ba3dceb2ec",
+  "size": 305441742,
   "mandatory": false,
-  "publishedAt": "2026-11-18T03:07:13.211Z",
+  "publishedAt": "2026-11-18T04:41:05.564Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.36"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.37"
 }
