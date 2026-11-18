@@ -1,13 +1,13 @@
 {
-  "version": "0.4.38",
-  "notes": "WArmy 0.4.38 — fix: chat scrolling now follows the owner's authoritative spec. (1) With \"scroll records\" unchecked, a new unread reply auto-scrolls so its top aligns with the top of the chat box (read from the start). (2) With it checked, the view always scrolls to the very bottom. (3) Regardless of the checkbox, once the user scrolls OR clicks the chat log, ALL programmatic scrolling stops and the viewport is fully handed to the user (never blocked, never jumped) until the user sends a new message, which reclaims control and returns it to the checkbox logic. Implemented via a per-session userControl takeover flag (set on real wheel/touch/keyboard/scrollbar input and on chat clicks, cleared only by a new user message or the explicit back-to-bottom arrow/bubble); renderChat and the streaming renderer preserve the user position under takeover and never auto-scroll. Contradictory legacy assertions were removed (the orphaned R128 verify-scroll-ui gate deleted; verify-scroll-repro aligned to the new spec) and a new real-device probe probe-r239-scroll covers all 13 spec assertions. Also diagnosed reported test stutter: not the dsh-our-free-model plugin (it cannot load in WArmy — missing dsh llm service — and was not running) and not a WArmy idle bug; the load was the OpenClaw host gateway plus concurrent test-probe Electron instances; stray test residue cleaned. Changed-area gates passed three consecutive clean rounds. Carries all prior features unchanged.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.38/WArmy-Setup-0.4.38.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.38/WArmy-Setup-0.4.38.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.38/WArmy-Setup-0.4.38.exe.warmyblocks",
-  "sha256": "9bfeebd7cba02a57f08978dcb1f339414fc14237dade216d0e17134b56e14415",
-  "size": 305441875,
+  "version": "0.4.39",
+  "notes": "WArmy 0.4.39 — fix: tool operation records in the \"Thinking & Execution\" log are now fully localized to the UI language; English tool names no longer leak. Previously caoMingLocal fell back to de-underscoring the raw tool name (run_shell -> \"run shell\", plan_update -> \"plan update\") whenever an op.* i18n key was missing, which happened on the interrupt/restore ledger paths (op stored the raw tool name) and for any tool without a registered key. Now: (1) a new gongJuGuiFanKey normalizes every tool name and legacy alias to a canonical op key (synonyms grouped, e.g. read_docx/read_pdf -> read_document, open_file -> open_path, exec/run_command -> run_shell); (2) caoMingLocal resolves op.<key> -> normalized canonical key -> passes through already-localized legacy text (non-ASCII) -> and otherwise falls back to a localized op.generic, NEVER returning a raw English identifier; (3) the realtime ledger (gongJuMingZhongWen) now returns the canonical i18n key instead of hardcoded Chinese, so it localizes per language like the interrupt/restore paths; (4) the segment copy-summary (segText) and the stop-summary \"recent: {op}\" line also route through caoMingLocal. Added 46 new op.* keys covering all 54 tools + generic across all 27 locales (key sets equal, no CJK in non-CJK packs, no empty values, existing 11 keys unchanged). A new real-device probe probe-r240-op-local injects all tools + aliases + an unknown tool + legacy Chinese and asserts every operation row renders the correct local label with zero English/underscore leaks (run_shell -> 运行命令, plan_update -> 更新计划), plus static en-US key verification proving true i18n. Changed-area gates (syntax, naming, i18n-locales 448/0, locale-parity 151/0, broad suites, op-local probe, R239 scroll regression) passed three consecutive clean rounds. Carries all prior features unchanged.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.39/WArmy-Setup-0.4.39.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.39/WArmy-Setup-0.4.39.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.39/WArmy-Setup-0.4.39.exe.warmyblocks",
+  "sha256": "d82d65107ac107cba500f2d502087e006ca05a338c16645ce334a41ec5c52f6f",
+  "size": 305454931,
   "mandatory": false,
-  "publishedAt": "2026-11-18T05:29:47.477Z",
+  "publishedAt": "2026-11-18T06:40:16.665Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.38"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.39"
 }

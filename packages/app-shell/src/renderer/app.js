@@ -5501,7 +5501,7 @@ async function langDuWenBen(text, btnEl) {
       const ts = cur[0].ts || 0;
       const nAct = cur.filter((x) => x.kind === 'act').length;
       const segText = cur.filter((x) => x.kind === 'think').map((x) => x.text).join('\n')
-        || cur.filter((x) => x.kind === 'act').map((x) => String(x.op || x.tool || '')).join('\n');
+        || cur.filter((x) => x.kind === 'act').map((x) => caoMingLocal(x.op || x.tool)).join('\n');
       const cao = ctx?.mkey
         ? guoChengCaoZuoHtml({ model: (cur.find((x) => x.moXing)?.moXing) || ctx.moXing, ts: ts || ctx.ts, text: segText, key: ctx.mkey + ':seg:' + fen + ':' + guoChengHash(segText) })
         : '';
@@ -6086,13 +6086,41 @@ async function langDuWenBen(text, btnEl) {
    *   失败 ·2026/10/18 01:03:12 · 耗时 2秒
    * 也就是：**状态写在前面**、写明**是什么操作**、**删掉那条重复的「更新 …」**。
    */
-  /** R183 项9：操作名本地化（wait_seconds 等工具名 → 当前语言）。未知操作回退为去下划线可读形。 */
+  /**
+   * R240：工具名 → 规范 op 键（供 i18n 本地化）。覆盖全部工具与旧别名；同义工具归并到一个
+   * 规范键（read_docx/read_pdf… → read_document、open_file → open_path），未知工具原样返回，
+   * 由 caoMingLocal 兜底成 op.generic —— 绝不把英文工具名直接显示给用户。
+   */
+  function gongJuGuiFanKey(ming) {
+    const m = String(ming || '').trim().toLowerCase();
+    if (!m) return '';
+    const BIE_MING = {
+      create_file: 'write_file', save_file: 'write_file', write_text: 'write_file',
+      append_file: 'edit_file', patch_file: 'edit_file', replace_in_file: 'edit_file',
+      exec: 'run_shell', shell: 'run_shell', run_command: 'run_shell',
+      search: 'search_files', find_files: 'search_files', local_search: 'search_files',
+      wait: 'wait_seconds', delete: 'delete_file', open: 'open_path', open_file: 'open_path',
+      read_docx: 'read_document', read_pptx: 'read_document', read_xlsx: 'read_document', read_pdf: 'read_document',
+    };
+    return BIE_MING[m] || m;
+  }
+  /**
+   * R183 项9 / R240：操作名本地化（工具名 → 当前语言）。依次：
+   * ① 直接查 op.<键>；② 别名归一后再查；③ 旧台账里已本地化的文案（非 ASCII，如中文）原样保留；
+   * ④ 其余一律兜底 op.generic —— **绝不回退成英文工具名**（run_shell→“run shell” 这种泄漏即此修）。
+   */
   function caoMingLocal(op) {
     const k = String(op || '').trim();
     if (!k) return '';
     const yi = tOr('op.' + k, '');
     if (yi) return yi;
-    return k.replace(/[_-]+/g, ' ');
+    const gf = gongJuGuiFanKey(k);
+    if (gf && gf !== k) {
+      const yi2 = tOr('op.' + gf, '');
+      if (yi2) return yi2;
+    }
+    if (/[^\x00-\x7F]/.test(k)) return k;
+    return tOr('op.generic', '执行操作');
   }
   function xingDongHangNode(m) {
     const shiFen = (ts) => TZ.hm(ts);
@@ -7217,7 +7245,7 @@ async function langDuWenBen(text, btnEl) {
         const benLunGongJu = xingDongQuan.filter((x) => Number(x.ts) > shangYiYongHuTs && Number(x.ts) <= ts + 1);
         const zuiJin = benLunGongJu.length ? benLunGongJu[benLunGongJu.length - 1] : null;
         const zuiJinWen = zuiJin
-          ? ' · ' + tOr('chat.stopSummaryRecent', '最近：{op}').replace('{op}', String(zuiJin.op || zuiJin.tool || ''))
+          ? ' · ' + tOr('chat.stopSummaryRecent', '最近：{op}').replace('{op}', caoMingLocal(zuiJin.op || zuiJin.tool))
           : '';
         const duanShu = Array.isArray(m.reasoningDuan) ? m.reasoningDuan.filter((x) => x && String(x.text || '').trim()).length : 0;
         const zhengWenQuan = String(boLiFuJianWenZi(m.text) || '').trim();
@@ -26237,25 +26265,9 @@ async function renderDashboard(host) {
      * 不能写成「创建文件 牛马演示.docx ·Desktop/牛马演示.docx」这种重复又不完整的形态）。
      * `luJing` 参数保留只为旧调用兼容，不再拼到动作名里。
      */
-    if (/write_file|create_file|save_file|write_text/.test(m)) return '写入文件';
-    if (/make_docx/.test(m)) return '生成文档';
-    if (/make_pptx/.test(m)) return '生成演示文稿';
-    if (/make_xlsx/.test(m)) return '生成表格';
-    if (/make_pdf/.test(m)) return '生成 PDF';
-    if (/edit_file|append_file|patch_file|replace_in_file/.test(m)) return '修改文件';
-    if (/delete/.test(m)) return '删除文件';
-    if (/move_/.test(m)) return '移动文件';
-    if (/copy_/.test(m)) return '复制文件';
-    if (/list_dir/.test(m)) return '查看文件夹';
-    if (/find_files|search_files/.test(m)) return '搜索文件';
-    if (/open_/.test(m)) return '打开文件';
-    if (/run_shell|exec/.test(m)) return '运行命令';
-    if (/plan_update/.test(m)) return '更新计划任务';
-    if (/plan_verify/.test(m)) return '验证计划步骤';
-    if (/schedule_task/.test(m)) return '登记定时任务';
-    if (/read_document|read_docx|read_pptx|read_xlsx|read_pdf/.test(m)) return '读取文档';
-    if (/read_/.test(m)) return '读取文件';
-    return m || '执行操作';
+    /** R240：操作名统一走 i18n 规范键（gongJuGuiFanKey → caoMingLocal），不再硬编码中文，
+     *  这样实时台账与中断/恢复台账一样，都按当前语言本地化，且未知工具兜底 op.generic 不泄漏英文。 */
+    return gongJuGuiFanKey(m);
   }
   (function bindConsoleStream() {
     try {
