@@ -111,7 +111,7 @@ You send a brief → the duty agent routes it → a workhorse plans and calls to
 
 **Download, install, use.** No account, no server setup.
 
-1. Open the [latest release](https://github.com/Pondsi/WArmy/releases) and download `WArmy-Setup-0.4.43.exe` (the current release; newer assets appear on the release page).
+1. Open the [latest release](https://github.com/Pondsi/WArmy/releases) and download `WArmy-Setup-0.4.44.exe` (the current release; newer assets appear on the release page).
 2. Run the installer, choose a folder, launch **WArmy / 无限牛马**.
 3. First run: choose a language, create an identity, save the 24-word mnemonic. Add a model provider and create your first workhorse.
 

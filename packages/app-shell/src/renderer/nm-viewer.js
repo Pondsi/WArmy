@@ -5311,29 +5311,27 @@
   })();
 })();
 
-  /* 第 123/124 轮：源码/开发者工具双栏 —— 拖动调整（双击复位）+ 打开完整 DevTools
-     （第 124 轮用户要求：DevTools 内嵌右栏，随分栏拖动/窗口尺寸同步边界） */
+  /* 第 123/124 轮＋R264：源码/开发者工具双栏。网站模式会重绘 DOM⇒一次性绑定丢失，
+     改文档级委托（mousedown/dblclick/keydown/click 都按 closest 判定），拖动/DevTools 始终有效。 */
   (function bindYuanDev() {
-    const ge = el('yuanDevFenGe');
-    const lan = el('yuanDevLan');
-    const yuan = el('wangYeYuan');
-    if (!ge || !lan || !yuan) return;
+    const lanOf = () => el('yuanDevLan');
+    const yuanOf = () => el('wangYeYuan');
     const devKuang = () => {
+      const lan = lanOf(); if (!lan) return { x: 0, y: 0, width: 0, height: 0 };
       const r = lan.getBoundingClientRect();
       return { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
     };
-    const tongBuDev = () => {
-      try { window.warmy.nmDevToolsKuang?.({ id: chuangKouId, kuang: devKuang() }); } catch { /* noop */ }
-    };
+    const tongBuDev = () => { try { window.warmy.nmDevToolsKuang?.({ id: chuangKouId, kuang: devKuang() }); } catch { /* noop */ } };
     let tuo = false;
-    /** R255 报障22：按下先隐藏原生 DevTools 视图——原生视图盖在 DOM 上会吃掉 mousemove，
-        不隐藏的话分割线一拖进右栏区域就断拖；拖动期间也不同步边界（防中途重新显示） */
-    ge.addEventListener('mousedown', (e) => {
+    document.addEventListener('mousedown', (e) => {
+      const g = e.target && e.target.closest ? e.target.closest('#yuanDevFenGe') : null;
+      if (!g) return;
       tuo = true; e.preventDefault(); document.body.style.cursor = 'col-resize';
       try { window.warmy.nmDevToolsKuang?.({ id: chuangKouId, kai: false }); } catch { /* noop */ }
     });
     document.addEventListener('mousemove', (e) => {
       if (!tuo) return;
+      const yuan = yuanOf(), lan = lanOf(); if (!yuan || !lan) return;
       const r = yuan.getBoundingClientRect();
       const kuan = Math.max(140, Math.min(r.width * 0.7, r.right - e.clientX));
       lan.style.flex = '0 0 ' + kuan + 'px';
@@ -5341,33 +5339,30 @@
     const jieShuYuanTuo = () => { if (!tuo) return; tuo = false; document.body.style.cursor = ''; tongBuDev(); };
     document.addEventListener('mouseup', jieShuYuanTuo);
     window.addEventListener('blur', jieShuYuanTuo);
-    ge.addEventListener('dblclick', () => { lan.style.flex = ''; tongBuDev(); });
-    /** R255：分割线可键盘微调（左/右箭头 = DevTools 加宽/收窄 24px） */
-    ge.addEventListener('keydown', (e) => {
+    document.addEventListener('dblclick', (e) => {
+      if (!(e.target.closest && e.target.closest('#yuanDevFenGe'))) return;
+      const lan = lanOf(); if (lan) lan.style.flex = ''; tongBuDev();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (!(e.target.closest && e.target.closest('#yuanDevFenGe'))) return;
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       e.preventDefault();
+      const yuan = yuanOf(), lan = lanOf(); if (!yuan || !lan) return;
       const r = yuan.getBoundingClientRect();
       const cur = lan.getBoundingClientRect().width || r.width * 0.32;
       const kuan = Math.max(140, Math.min(r.width * 0.7, cur + (e.key === 'ArrowLeft' ? 24 : -24)));
-      lan.style.flex = '0 0 ' + kuan + 'px';
-      tongBuDev();
+      lan.style.flex = '0 0 ' + kuan + 'px'; tongBuDev();
     });
-    const dk = el('anNiuDevDaKai');
-    if (dk) dk.addEventListener('click', () => {
-      try { window.warmy.nmDevTools?.({ id: chuangKouId, tabKey: (wangYeDangQian() || {}).tab, kuang: devKuang() }); zhuangTaiWen('已打开开发者工具（内嵌右栏）'); } catch { /* noop */ }
-    });
-    const gb = el('anNiuDevGuan');
-    if (gb) gb.addEventListener('click', () => {
-      lan.style.display = lan.style.display === 'none' ? '' : 'none';
-      /** 收起右栏同步收起内嵌 DevTools 视图（原生视图盖 DOM，必须主进程配合） */
-      try { window.warmy.nmDevToolsKuang?.({ id: chuangKouId, kai: false }); } catch { /* noop */ }
-    });
-    /** 窗口尺寸变化 / 右栏恢复显示时同步边界 */
-    try {
-      if (typeof ResizeObserver === 'function') {
-        new ResizeObserver(() => { if (!tuo) tongBuDev(); }).observe(lan);
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (t.closest && t.closest('#anNiuDevDaKai')) {
+        try { window.warmy.nmDevTools?.({ id: chuangKouId, tabKey: (wangYeDangQian() || {}).tab, kuang: devKuang() }); zhuangTaiWen('已打开开发者工具（内嵌右栏）'); } catch { /* noop */ }
+      } else if (t.closest && t.closest('#anNiuDevGuan')) {
+        const lan = lanOf(); if (lan) lan.style.display = lan.style.display === 'none' ? '' : 'none';
+        try { window.warmy.nmDevToolsKuang?.({ id: chuangKouId, kai: false }); } catch { /* noop */ }
       }
-    } catch { /* noop */ }
+    });
+    window.addEventListener('resize', () => { if (!tuo) tongBuDev(); });
   })();
 
   /* R259 报障26：WPS/Office 编辑——调本机 WPS/Office 打开当前文件编辑（未装则系统默认）。 */

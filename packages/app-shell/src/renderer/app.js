@@ -13074,7 +13074,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
     const winner = (pair && pair.winner) || (live && curE && curE.winner) || null;
     const decided = !reverted && !!winner;
     const order = decided ? (winner === 'B' ? ['B', 'A'] : ['A', 'B']) : ['A', 'B'];
-    const av = (o && o.avatar) ? '<img class="touXiangTuPian zjhAv" src="' + escapeHtml(o.avatar) + '" alt=""/>' : '';
+    const av = '<img class="touXiangTuPian zjhAv" src="' + escapeHtml((o && o.avatar) || '') + '" alt=""/>';
     /* R264 项4：未完成（running）禁选；选后按钮消失改纯标签；弃用淡删除线；单头像（pair 级一个） */
     const notDone = !!(live && curE && curE.status === 'running');
     const col = (k) => {
