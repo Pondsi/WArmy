@@ -4187,6 +4187,23 @@
       { sep: true },
       { label: '插入对话', disabled: !wen, onClick: () => { void chaRuDuiHua(wen.slice(0, 200000)); } },
     );
+    /** R260：正在打开文件时右键加「复制文件路径 / 打开文件所在目录」。
+     *  包内条目用压缩包本体路径（条目不是磁盘文件）；远程网页没有本地路径⇒不显示。 */
+    const wenJianLu = (() => {
+      if (zt.wangYe.kai) {
+        const ka = zt.wangYe.ka[zt.wangYe.dang];
+        return ka && ka.shiBenDi ? String(ka.luJing || '') : '';
+      }
+      if (zt.yaSuoBao && zt.tiaoMu) return String(zt.yaSuoBao.luJing || '');
+      return String(zt.luJing || '');
+    })();
+    if (wenJianLu) {
+      xiang.push(
+        { sep: true },
+        { label: '复制文件路径', onClick: () => { try { window.warmy.copyText?.(wenJianLu); zhuangTaiWen('文件路径已复制'); } catch { /* noop */ } } },
+        { label: '打开文件所在目录', onClick: () => { try { void window.warmy.shellShowItemInFolder?.(wenJianLu); } catch { /* noop */ } } },
+      );
+    }
     kaiCaiDan(null, xiang, 'youJian', { x: e.clientX, y: e.clientY });
   }
 

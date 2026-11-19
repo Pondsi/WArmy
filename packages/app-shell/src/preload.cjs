@@ -326,6 +326,8 @@ contextBridge.exposeInMainWorld('warmy', {
   mimicDongZuoCiQu: () => ipcRenderer.invoke('warmy:mimicDongZuoCiQu'),
   mimicDongZuoCiShe: (p) => ipcRenderer.invoke('warmy:mimicDongZuoCiShe', p),
   onMimicOpenChat: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicOpenChat', h); return () => ipcRenderer.removeListener('warmy:mimicOpenChat', h); },
+  /** R260：拟态「阅读回复/静音」同一开关变更广播（桌面右键静音 ⇄ 聊天窗三点阅读回复） */
+  onMimicAutoReadBian: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicAutoReadBian', h); return () => ipcRenderer.removeListener('warmy:mimicAutoReadBian', h); },
   modelCapsGet: () => ipcRenderer.invoke('warmy:moXingNengLiQu'),
   /** 模型额度（右键某个拉取到的模型）：读当前值 + 拉取默认值；写/恢复默认 */
   modelQuotaGet: (p) => ipcRenderer.invoke('warmy:moXingYuEDu', p),

@@ -2986,10 +2986,13 @@ function quBingQingZiDongFangXing(sessionId: string): string[] {
   return arr;
 }
 
-/** 「自动选择」开关（设置里那个勾选；默认关）。关着时任何卡都必须等人点。 */
-function ziDongXuanZe(): boolean {
+/** 「自动选择」开关（设置里那个勾选；默认关）。关着时任何卡都必须等人点。
+ *  R260：拟态会话独立默认开（mimicAutoSelect，默认 true）——语音对话场景不等人点卡；
+ *  授权卡永不标推荐（见 qingQiuKaPian），自动选择不会代答授权，安全口径不变。 */
+function ziDongXuanZe(sessionId?: string): boolean {
   try {
-    const s = settingsStore?.load() as { autoSelectRecommended?: unknown } | undefined;
+    const s = settingsStore?.load() as { autoSelectRecommended?: unknown; mimicAutoSelect?: unknown } | undefined;
+    if (String(sessionId || '') === MIMIC_SID) return s?.mimicAutoSelect !== false;
     return s?.autoSelectRecommended === true;
   } catch { return false; }
 }
@@ -3146,7 +3149,7 @@ async function qingQiuKaPian(
    * 没有标「推荐」的卡**一律不代选** —— 宁可停下来等人，也不替人拿主意。
    * 仍然先开卡再作答，这样决策记录照旧进 `contextFor`（模型下一轮知道选了什么）。
    */
-  if (ziDongXuanZe()) {
+  if (ziDongXuanZe(sessionId)) {
     const tui = q.options.find((o) => o.tuiJian) || null;
     if (tui) {
       aiQuestions.answer(q.id, tui.id);
@@ -13071,8 +13074,9 @@ function tongBuMimicYuYinKa(force = false): void {
   if (!force && token === mimicYuYinKaToken) return;
   mimicYuYinKaToken = token;
   const s = settingsStore?.load();
-  /* R253：卡片朗读跟随拟态语音互动模式——关闭语音(off)则不读出来（卡片仍显示）。 */
-  const yuYinKai = mimicYuYinPeiZhi().moShi !== 'off';
+  /* R253：卡片朗读跟随拟态语音互动模式——关闭语音(off)则不读出来（卡片仍显示）。
+   * R260：静音（mimicAutoRead=false，与聊天窗三点「阅读回复」同开关）同样不读。 */
+  const yuYinKai = mimicYuYinPeiZhi().moShi !== 'off' && (s as { mimicAutoRead?: boolean } | undefined)?.mimicAutoRead !== false;
   const text = (q && yuYinKai) ? kaPianYuYinWen(q, {
     authorization: tMain('mimic.card.authorization', '授权卡'),
     choice: tMain('mimic.card.choice', '选择卡'),
@@ -13214,6 +13218,8 @@ async function mimicHuiHuaShuo(text: string): Promise<void> {
   try {
     /* R253：关闭语音互动(off)则不朗读回复（字幕已显示）——与卡片朗读同口径。 */
     if (mimicYuYinPeiZhi().moShi === 'off') return;
+    /* R260：静音＝不自动阅读回复（桌面右键「静音」与聊天窗三点「阅读回复」同一开关 mimicAutoRead，默认开）；字幕不受影响 */
+    if ((settingsStore?.load() as { mimicAutoRead?: boolean } | undefined)?.mimicAutoRead === false) return;
     let s: string;
     try { s = String(text || '').slice(0, 300); } catch { return; }
     if (!s) return;
@@ -13419,6 +13425,8 @@ chuliIpc('warmy:mimicCaiDanKai', () => {
       zmKai: s.mimicSubtitle !== false,
       moShi: String(s.mimicVoiceMode || 'smart'),
       speakerOn: duQuanXian().speaker,
+      /* R260：静音项改与「阅读回复」联动（mimicAutoRead，默认开）；扬声器权限仍是独立设备开关 */
+      autoReadOn: (s as { mimicAutoRead?: boolean }).mimicAutoRead !== false,
       wen: {
         duiHua: tMain('mimic.menu.duiHua', '对话框'), kai: tMain('mimic.menu.kai', '开'), guan: tMain('mimic.menu.guan', '关'),
         yinShen: tMain('mimic.yinShen', '隐身'), chuangKou: tMain('mimic.menu.chuangKou', '窗口'),
@@ -13469,11 +13477,16 @@ chuliIpc('warmy:mimicCaiDanDong', (_e, p0?: { item?: string; value?: string }) =
       }
       return { ok: true };
     }
-    /* R260 项28：静音＝切换扬声器权限（与设置→拟态扬声器勾选联动，全窗广播） */
+    /* R260：静音＝切换「阅读回复」（mimicAutoRead，默认开），与拟态聊天窗三点菜单同功能同开关；全窗广播联动 */
     if (item === 'jingYin') {
-      const next = sheQuanXian('speaker', !duQuanXian().speaker);
-      try { audit?.log('mimic.menu-action', { item: 'jingYin', speaker: next.speaker }); } catch { /* noop */ }
-      return { ok: true, speakerOn: next.speaker };
+      const cur = (settingsStore?.load() as { mimicAutoRead?: boolean } | undefined)?.mimicAutoRead !== false;
+      const next = !cur;
+      try { settingsStore?.save({ mimicAutoRead: next } as never); } catch { /* noop */ }
+      try { audit?.log('mimic.menu-action', { item: 'jingYin', autoRead: next }); } catch { /* noop */ }
+      try { broadcastToWindows('warmy:mimicAutoReadBian', { on: next }); } catch { /* noop */ }
+      /* 待播卡片按新开关重算（静音⇒text 空不读；取消静音⇒恢复播报） */
+      try { tongBuMimicYuYinKa(true); } catch { /* noop */ }
+      return { ok: true, autoReadOn: next };
     }
     return { ok: false, error: 'bad-item' };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
@@ -16598,7 +16611,7 @@ async function zhenZhengFaSongBen(
                 '③ 若**只有一个明显可用**（置信度≥0.7）而其余置信度很低(<0.4)⇒ **不弹卡**，直接用该唯一明显可用方案，并在汇报里说明为何排除其余；\n' +
                 '④ 纯技术细节且不影响用户可见结果的，自己定并说明；用户已明确交代过的照做不要反问。\n' +
                 '**禁止**只把选项写进回复正文（Markdown 表格/"A)…B)…"/"请告诉我选哪个"都算违规）；**禁止**没验证就瞎猜一个继续干。\n' +
-                (ziDongXuanZe()
+                (ziDongXuanZe(sessionId)
                   ? '当前【自动选择=开】：按你的推荐自己定即可，**不要弹选择卡**（宿主也会自动按推荐作答）。\n'
                   : '当前【自动选择=关】：各有利弊时必须弹卡等用户选，不要替用户拍板。\n') +
                 '收尾汇报时如果列出了"需要用户决策的地方"，**其中最重要的那一条必须同时用 ask_user 弹卡**。'
@@ -16712,6 +16725,7 @@ async function zhenZhengFaSongBen(
                   return parts.join('\n\n');
                 } catch { return ''; }
               })(),
+              '【拟态 · 语音对话】你的中间回复和最终回复都会自动朗读给用户听（你和用户在语音对话）。回复正文**只写想让用户知道的、与用户对话的内容**：自然口语、像日常语音聊天一样亲切简短；不得出现文件路径、代码、Markdown 符号、列表编号、工具调用/搜索/读写文件的操作过程、内部思考等任何不适合朗读的内容。触摸/语音互动时**不要**调用 local_search/read_file/write_file 等工具去搜索磁盘或读写文件（除非用户明确交代了文件任务），直接自然回应。情绪/行为仍用单独一行【动作:名字】表达（该行不朗读）。',
               '（语音互动场景回复控制在 80 字以内。）',
             ].filter(Boolean).join('\n\n');
             shenFenTou.push({ role: 'system', content: zhuo } as LiaoTianXiaoXi);

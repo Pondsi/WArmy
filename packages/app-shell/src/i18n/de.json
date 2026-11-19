@@ -3958,5 +3958,5 @@
   "localSpeech.followSpeak": "Sprechmodell folgen",
   "localSpeech.followNote": "Folgt aktuell Hör-/Sprechmodell; Whisper/sherpa-onnx für lokale Offline-Verarbeitung wählen.",
   "localSpeech.followState": "Folgt Modell (keine lokale Installation nötig)",
-  "localSpeech.needInstallSuffix": " (erst installieren)"
+  "localSpeech.needInstallSuffix": "(erst installieren)"
 }

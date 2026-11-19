@@ -39,8 +39,8 @@
       b.dataset.mode = mode; b.classList.toggle('on', r.moShi === mode);
     }
     gen.appendChild(zi);
-    /* R260 项28：静音（切换扬声器权限，与设置→拟态扬声器勾选联动）；已静音时显示“取消静音” */
-    xiang(r.speakerOn === false ? (w.quXiaoJingYin || '取消静音') : (w.jingYin || '静音'), () => dong('jingYin'));
+    /* R260：静音＝关「阅读回复」（与拟态聊天窗三点菜单同功能同开关，默认开）；已静音时显示“取消静音” */
+    xiang(r.autoReadOn === false ? (w.quXiaoJingYin || '取消静音') : (w.jingYin || '静音'), () => dong('jingYin'));
     xiang(w.sheZhi, () => dong('sheZhi'));
     gen.querySelector('button')?.focus();
   } catch { await guan(); }

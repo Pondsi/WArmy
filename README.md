@@ -1,5 +1,7 @@
 # WArmy · 无限牛马
 
+**WArmy = Workhorse Army.** *An army that's yours.*
+
 ### You don't command the workhorses. You command the commanders.
 
 **A workhorse army that is yours alone — local-first, private by default, and it gets more efficient the more you use it, never more flattering.**
@@ -77,11 +79,39 @@ One person can use all three. A small studio can start with the assistant and gr
 
 ![Settings and control](docs/screenshots/readme-settings.png)
 
+## What you get
+
+- A desktop workspace with a team of agents, a duty dispatcher, a shared plan board, and a local memory service — installed on your machine, owned by you.
+- A desktop companion (mimic) that lives on your screen, reacts to touch and voice, and speaks only when it should.
+- The built-in nm viewer: Markdown source/preview, Office/PDF extraction, hex editing, archives, and a tabbed browser.
+- An audit trail for every tool call, approval cards for dangerous moves, and rollback points for self-evolution.
+
+## What you can do
+
+- Run a private assistant, a private expert team, or a shared project room — one person can use all three.
+- Draft → build → review pipelines where the reviewer checks claims against the actual files.
+- Research that remembers: archive sources and recall them by pointer next week.
+- Scheduled night shifts with honest stop reasons; local-only model setups that never leave your machine.
+
+## The system
+
+Electron main process + renderer workspace + isolated subprocesses for native work (SQLite/FTS5, segmentation, analytics, local speech). The main and renderer load **zero native modules**; Python/torch/whisper.cpp live only in child processes. Plugins (dsh-compatible), skills, and MCP servers extend the harness without giving models discretion over the host.
+
+## How it works
+
+You send a brief → the duty agent routes it → a workhorse plans and calls tools → dangerous calls stop at an approval card → artifacts are verified on disk → the round is appended to the local memory log and recalled inside the next thinking chain. Self-evolution runs A/B branches against evidence and merges only what proves better.
+
+## Small details and technical notes
+
+- **Memory you can inspect.** The append-only jsonl log is the source of truth; `recall` finds anchors and `retrieve` dereferences them to the original record. Nothing is silently compressed away.
+- The local memory/service port is **59599** (loopback only); project networking (LAN/DHT/relay) is opt-in.
+- 27 UI languages; pinyin-named IPC channels; per-session authorization levels; container isolation reported honestly when unavailable.
+
 ## Install
 
 **Download, install, use.** No account, no server setup.
 
-1. Open the [latest release](https://github.com/Pondsi/WArmy/releases) and download `WArmy-Setup-<version>.exe`.
+1. Open the [latest release](https://github.com/Pondsi/WArmy/releases) and download `WArmy-Setup-0.4.41.exe` (the current release; newer assets appear on the release page).
 2. Run the installer, choose a folder, launch **WArmy / 无限牛马**.
 3. First run: choose a language, create an identity, save the 24-word mnemonic. Add a model provider and create your first workhorse.
 
@@ -89,7 +119,7 @@ Your data lives in `WArmyData` inside the install folder and survives upgrades a
 
 **Environment:** Windows 10 / 11 x64. A model endpoint (local server, OpenAI-compatible, or Anthropic). For local models, start your server and enter its base URL — the key field stays empty when the server does not need one. Web search, cloud models, and IM need network; everything else works offline.
 
-**27 UI languages:** 简体中文 · 繁體中文 · English · 日本語 · 한국어 · Русский · Español · Français · Português · Esperanto · Deutsch · Italiano · Nederlands · Polski · Svenska · Čeština · Magyar · Dansk · Norsk bokmål · Türkçe · Українська · Bahasa Indonesia · Tiếng Việt · ไทย · हिन्दी · العربية · فارسی.
+**Languages / 语言 — 27 UI languages:** 简体中文 · 繁體中文 · English · 日本語 · 한국어 · Русский · Español · Français · Português · Esperanto · Deutsch · Italiano · Nederlands · Polski · Svenska · Čeština · Magyar · Dansk · Norsk bokmål · Türkçe · Українська · Bahasa Indonesia · Tiếng Việt · ไทย · हिन्दी · العربية · فارسی.
 
 ## Status and honesty
 

@@ -246,6 +246,15 @@
 
     // 主进程推来的说话/状态
     window.warmyMimic?.onSay?.((d) => window.__shuo(d && d.text, d && d.ms));
+    /* R260：静音联动——「阅读回复」关时立即停掉当前卡片朗读/回复语音（字幕不受影响），并恢复录音 */
+    window.warmyMimic?.onAutoReadBian?.((d) => {
+      if (d && d.on === false) {
+        kaBoBaoZhong = false; kaYuYinToken = '';
+        window.speechSynthesis?.cancel();
+        try { document.getElementById('yinPin').pause(); } catch { /* noop */ }
+        tongBuYuYinMoShi();
+      }
+    });
     window.warmyMimic?.onDot?.((d) => window.__dian(d && d.on));
     window.warmyMimic?.onSetTi?.((d) => {
       /* R218：外观对象（{xingTai, zhuSe, fuSe, ...} 或 {src} 旧格式） → 2D/3D 渲染 */

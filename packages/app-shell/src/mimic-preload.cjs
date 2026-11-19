@@ -40,4 +40,6 @@ contextBridge.exposeInMainWorld('warmyMimic', {
   /** R260 拟态情绪反馈（valence/arousal 映射出的动作/语气） */
   onQingXu: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicQingXu', h); return () => ipcRenderer.removeListener('warmy:mimicQingXu', h); },
   onKouXing: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicKouXing', h); return () => ipcRenderer.removeListener('warmy:mimicKouXing', h); },
+  /** R260：阅读回复/静音同一开关变更（桌面右键静音 ⇄ 聊天窗三点阅读回复）；静音时本体窗立即停声 */
+  onAutoReadBian: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicAutoReadBian', h); return () => ipcRenderer.removeListener('warmy:mimicAutoReadBian', h); },
 });

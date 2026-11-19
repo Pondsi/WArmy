@@ -1,13 +1,13 @@
 {
-  "version": "0.4.40",
-  "notes": "WArmy 0.4.40 — feat: speech engine selection + UI fixes + agent tooling. Speech & text conversion card renamed and reworked: the enable checkbox is replaced by two dropdowns — speech-to-text (Whisper / sherpa-onnx / follow listening model) and text-to-speech (sherpa-onnx / follow speaking model). Whisper and sherpa-onnx show install-first when not installed; defaults follow the listening/speaking models since local engines are not installed by default. Whisper (MIT, whisper.cpp subprocess) does speech-to-text only; text-to-speech stays sherpa-onnx (Apache-2.0) or the speaking model. Backend ASR/TTS routing honors the selection and falls back to cloud when a local engine is absent. Fixed the Thinking & Execution box width: constant whether expanded or collapsed, equal to the reply bubble; all bubbles (user/workhorse/other) share one width; the side facing the other avatar leaves two avatar widths. New agent tooling: neuro-symbolic prediction constraint gate (ETA/difficulty/subagent/Diwen), hard-gate appeal review, memory-graph enhanced recall, skill semver update detection, evolution A/B experiment analysis, VM snapshot/clone, mimic emotion feedback, local .ics calendar tools, parallel read-only tool calls, Docling/Tree-sitter subprocess parsers (honest gating), smart-voice perception self-improvement + prediction file, anti-sycophancy self-modification gate. MCP bridge plugin restored and bundled. Tool operation records fully localized. Carries all prior features unchanged.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.40/WArmy-Setup-0.4.40.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.40/WArmy-Setup-0.4.40.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.40/WArmy-Setup-0.4.40.exe.warmyblocks",
-  "sha256": "42d88e17dfec22545df6a1668c1ec11acff3b93228dd983f7e676fc6781a2c0d",
-  "size": 322978583,
+  "version": "0.4.41",
+  "notes": "WArmy 0.4.41 — fix: mimic model cards no longer show empty available models / fallback chain. The settings page (mimic section), instance settings, and the chat window's model management card now initialize the model list on render, falling back to the full provider catalog when the capability table has not loaded yet (the old cancel-and-recheck-all workaround is no longer needed). Mimic chat window defaults: the authorization dropdown follows the global default security mode; auto-select and read-aloud replies are checked by default for the mimic session only, and authorization cards are never auto-answered. Desktop right-click Mute now toggles the very same read-aloud switch as the chat window's three-dot menu, live-synced across windows; muting stops voice immediately while subtitles stay. Mimic voice replies are constrained to natural conversational content only (no file paths, code, markdown, tool/search narration, internal thinking); touch and voice interactions no longer trigger disk searches or file reads/writes unless the user explicitly assigns a file task. nm viewer: right-click on an open file adds Copy file path and Open containing folder. Gate/spec syncs: bubble margin two avatar widths (64px), insert icon left of Evolution, six-item mimic menu, sculpt saves into characters2d, i18n suffix trimming, session-summary anchor assertion scoped to the summary function. Carries all prior features unchanged.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.41/WArmy-Setup-0.4.41.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.41/WArmy-Setup-0.4.41.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.41/WArmy-Setup-0.4.41.exe.warmyblocks",
+  "sha256": "75dd720b0e5d4be687050e7daa58b4ddf1d5282cdcd773fa1270be4d98fb8c8b",
+  "size": 322980783,
   "mandatory": false,
-  "publishedAt": "2026-11-18T19:25:34.779Z",
+  "publishedAt": "2026-11-19T04:36:35.024Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.40"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.41"
 }
