@@ -129,15 +129,36 @@ WArmy does not claim to be "unhackable" or to hold a security certification. The
 
 ## Acknowledgments
 
-WArmy stands on open-source work. The complete transitive dependency tree, with each package's license, is in `pnpm-lock.yaml` and the package manifests.
+WArmy stands on open-source work. The complete transitive dependency tree, with each package's license, is in `pnpm-lock.yaml` and the package manifests. Every item below links to its upstream project.
 
-- **DeepSeek Harness (dsh)** — MIT — [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). WArmy bundles the dsh runtime for the optional dsh execution path and is compatible with its plugin system. Its plugin-first design shaped how we keep the host in control while agents stay extensible.
-- **Diwen** — see its own license — [Pondsi/dsh-diwen](https://github.com/Pondsi/dsh-diwen). A separate open-source project: a structured, verifiable machine-layer representation for facts. WArmy integrates Diwen (Chinese portion available today) for machine-layer structuring; user-visible content always stays natural language. Diwen is also published on npm as `diwen`. Thank you to its author and contributors.
-- **Electron** — MIT — the desktop shell. **Chromium** — BSD-3-Clause — the rendering engine. **Node.js** — MIT — the runtime. **TypeScript** — Apache-2.0. **pnpm** — MIT. **electron-builder** — MIT.
-- **SQLite** — Public Domain — the local database (FTS5). **better-sqlite3** — MIT. **better-sqlite3-multiple-ciphers / SQLCipher** — MIT / BSD-style — optional memory encryption.
-- **ONNX Runtime Web** — MIT — optional local embeddings. **sherpa-onnx** — Apache-2.0 — optional local speech. **@node-rs/jieba** — MIT — optional Chinese segmentation for Diwen. **DuckDB** — MIT — optional local analytics.
-- **qrcode-generator** — MIT — © Kazuhiko Arase. **jsQR** — Apache-2.0.
-- **Ollama**, **ComfyUI**, **LibreOffice**, **WPS / Office**, and other model servers or creative tools are optional external services, not bundled code; their own licenses and terms apply.
+**Bundled runtime & UI**
+
+- **Electron** — MIT — <https://github.com/electron/electron> — the desktop shell. **Chromium** — BSD-3-Clause — <https://github.com/chromium/chromium> — the rendering engine. **Node.js** — MIT — <https://github.com/nodejs/node> — the runtime; a bundled `node.exe` runs the memory service in its own process.
+- **three.js** — MIT — <https://github.com/mrdoob/three.js> — 3D rendering for the mimic. **@pixiv/three-vrm** — MIT — <https://github.com/pixiv/three-vrm> — VRM avatar loading (license text bundled beside the vendor bundle).
+- **hash-wasm** — MIT — <https://github.com/Daninet/hash-wasm> — argon2id / hashing in pure WASM.
+- **DeepSeek Harness (dsh)** — MIT — <https://github.com/deepseek-ai/deepseek-harness> — WArmy bundles the dsh runtime for the optional dsh execution path and is compatible with its plugin system. Its plugin-first design shaped how we keep the host in control while agents stay extensible. Bundled dsh companions: **@nanmicoder/dsh-agent-teams** — <https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams>; **node-pty** — MIT — <https://github.com/microsoft/node-pty>; **koffi** — MIT — <https://github.com/Koromix/koffi>; **protobufjs** — BSD-3-Clause — <https://github.com/protobufjs/protobuf.js>; **@google/genai** — Apache-2.0 — <https://github.com/googleapis/js-genai>.
+- **Diwen** — see its own license — <https://github.com/Pondsi/dsh-diwen> — a separate open-source project: a structured, verifiable machine-layer representation for facts. WArmy integrates Diwen (Chinese portion available today); user-visible content always stays natural language. Also published on npm as `diwen`. Thank you to its author and contributors.
+- **SQLite** — Public Domain — <https://www.sqlite.org/> — the local database (FTS5). **better-sqlite3** — MIT — <https://github.com/WiseLibs/better-sqlite3>; **better-sqlite3-multiple-ciphers** — MIT — <https://github.com/m4heshd/better-sqlite3-multiple-ciphers>; **SQLCipher** — BSD-style — <https://github.com/sqlcipher/sqlcipher> — optional memory encryption; **bindings** — MIT — <https://github.com/TooTallNate/node-bindings> and **file-uri-to-path** — MIT — <https://github.com/TooTallNate/file-uri-to-path> — the native loading chain (subprocess only).
+- **DuckDB** — MIT — <https://github.com/duckdb/duckdb> with **@duckdb/node-api** — MIT — <https://github.com/duckdb/duckdb-node-neo> — optional local analytics (subprocess only).
+- **ONNX Runtime Web** — MIT — <https://github.com/microsoft/onnxruntime> — optional local embeddings via WASM SIMD/WebGPU.
+- **sherpa-onnx / sherpa-onnx-node** — Apache-2.0 — <https://github.com/k2-fsa/sherpa-onnx> — optional local speech (subprocess only).
+- **qrcode-generator** — MIT — © Kazuhiko Arase — <https://github.com/kazuhikoarase/qrcode-generator>; **jsQR** — Apache-2.0 — <https://github.com/cozmo/jsQR>.
+
+**Build & installer**
+
+- **TypeScript** — Apache-2.0 — <https://github.com/microsoft/TypeScript>; **pnpm** — MIT — <https://github.com/pnpm/pnpm>; **electron-builder** — MIT — <https://github.com/electron-userland/electron-builder>; **esbuild** — MIT — <https://github.com/evanw/esbuild>; **NSIS** — zlib/libpng-style — <https://nsis.sourceforge.io/> — the Windows installer engine.
+
+**On-demand subprocess tools** (not bundled; downloaded or installed only with your consent, hash-pinned)
+
+- **whisper.cpp** — MIT — <https://github.com/ggml-org/whisper.cpp> — optional local speech-to-text.
+- **TripoSR** — MIT — <https://github.com/VAST-AI-Research/TripoSR> — single-image → mesh for 3D mimic sculpting; runs on **PyTorch** — BSD-3-Clause — <https://github.com/pytorch/pytorch> under **Python** — PSF License — <https://www.python.org/>; model weights fetched from **Hugging Face** — <https://huggingface.co/> — per-model licenses apply.
+- **Docling** — MIT — <https://github.com/docling-project/docling> — layout-faithful document parsing.
+- **Tree-sitter / web-tree-sitter** — MIT — <https://github.com/tree-sitter/tree-sitter> — incremental AST parsing in a WASM subprocess.
+
+**Protocols & optional external services** (not bundled code; their own licenses and terms apply)
+
+- **Model Context Protocol** — <https://modelcontextprotocol.io/> — our bundled mcp-bridge plugin implements the MCP stdio JSON-RPC contract so external MCP servers become ordinary agent tools.
+- **Ollama** — MIT — <https://github.com/ollama/ollama>; **ComfyUI** — GPL-3.0 — <https://github.com/comfyanonymous/ComfyUI>; **LibreOffice** — MPL-2.0 — <https://www.libreoffice.org/>; **WPS / Office** — proprietary — <https://www.wps.com/> — optional model servers or creative/office tools.
 - Every other dependency retains its own copyright and license. If you redistribute WArmy, keep the upstream notices and license texts.
 
 **无限牛马** is the Chinese name. The pixel ox is the mascot. The work is the point.
