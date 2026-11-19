@@ -83,6 +83,19 @@ packages/app-shell/scripts/verify-local-search.mjs
 /docs/*
 !/docs/PRIVACY.md
 !/docs/TERMS.md
+# R260：README/说明 引用的首启主题截图须入库（主人提供原图＋readme-* 副本）；其余 docs 仍不入库
+!/docs/screenshots/
+/docs/screenshots/*
+!/docs/screenshots/readme-hero.png
+!/docs/screenshots/readme-chat.png
+!/docs/screenshots/readme-mimic.png
+!/docs/screenshots/readme-multiagent.png
+!/docs/screenshots/readme-settings.png
+!/docs/screenshots/9ac720fec83f7db18457580f9c01cea2.png
+!/docs/screenshots/47010b7744e0a237aeeb7eea174ec18e.png
+!/docs/screenshots/724781bb82a356b69dc3743f21d3a272.png
+!/docs/screenshots/7793065c86f38ed042bd59e3fca62e1a.png
+!/docs/screenshots/ae29c0d6a4ded1e289fbe9987d4c5f9f.png
 /dev/
 /references/
 /spikes/
