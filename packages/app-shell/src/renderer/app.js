@@ -13129,8 +13129,21 @@ window.__keYiLiaoTian = keYiLiaoTian;
     ta.value = '';
     try { await window.warmy.ziJinHuaFaSong({ sessionId: c.sessionId, arm, content: v }); } catch (e) { showToast(String((e && e.message) || e)); }
   }
-  /* self-evolve-ui 广播进化状态后调：重画聊天（live 并排块）＋同步输入分栏；R263：选支/合并后自动滚底 */
-  window.__ziJinHuaChongHua = (gunDaoDi) => { try { jinHuaShuRuFenLan(); renderChat({ keepScroll: !gunDaoDi }); } catch { /* noop */ } };
+  /* self-evolve-ui 广播进化状态后调：原位更新 live 并排块（不整聊重绘⇒滚动如常）＋同步输入分栏；选支/合并后滚底 */
+  window.__ziJinHuaChongHua = (gunDaoDi) => { try {
+    jinHuaShuRuFenLan();
+    const live = document.querySelector('.zjhPairLive');
+    const c = window.__ziJinHuaCur && window.__ziJinHuaCur();
+    if (live && c && (c.status === 'split' || c.status === 'running')) {
+      const he = live.closest('#xiaoXiJi') || live.parentElement;
+      const atBottom = he ? (he.scrollHeight - he.scrollTop - he.clientHeight < 48) : false;
+      const avSrc = (live.querySelector('.zjhAv') || {}).src || '';
+      live.innerHTML = zjhPairHtml(c, { live: true, canChoose: state.nav !== 'internalGroup', avatar: avSrc });
+      if (he && (gunDaoDi || atBottom)) he.scrollTop = he.scrollHeight;
+    } else {
+      renderChat({ keepScroll: !gunDaoDi });
+    }
+  } catch { /* noop */ } };
 
   /**
    * 发送总闸：**任何异常都必须看得见**。

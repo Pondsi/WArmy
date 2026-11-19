@@ -1071,6 +1071,8 @@
       /* R264 项3：标签拖拽重排＋标签右击菜单（空白右击无菜单） */
       b.draggable = true;
       b.addEventListener('dragstart', (e) => { try { e.dataTransfer.setData('text/nm-tab', String(i)); e.dataTransfer.effectAllowed = 'move'; } catch { /* noop */ } });
+      /* R264 项3：拖出标签栏＝拆分到新窗口（跨原生窗合并受平台限制，用右击菜单「合并到窗口」） */
+      b.addEventListener('dragend', (e) => { try { const lieR = lie.getBoundingClientRect(); const outside = e.clientX < lieR.left || e.clientX > lieR.right || e.clientY < lieR.top || e.clientY > lieR.bottom; if (outside && e.dataTransfer.dropEffect === 'none') { const k = zt.wangYe.ka[i]; if (k) { if (k.shiBenDi) window.warmy.nmKai({ luJing: k.luJing }); else window.warmy.nmKai({ kaiWangYe: k.url }); void guanWangYeKa(i); } } } catch { /* noop */ } });
       b.addEventListener('dragover', (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('text/nm-tab')) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; b.classList.add('dragOver'); } });
       b.addEventListener('dragleave', () => { b.classList.remove('dragOver'); });
       b.addEventListener('drop', (e) => { b.classList.remove('dragOver'); const from = Number(e.dataTransfer.getData('text/nm-tab')); if (!Number.isNaN(from)) { e.preventDefault(); chongPaiWangYeTab(from, i); } });
@@ -5334,12 +5336,12 @@
       if (!tuo) return;
       const r = yuan.getBoundingClientRect();
       const kuan = Math.max(140, Math.min(r.width * 0.7, r.right - e.clientX));
-      lan.style.width = kuan + 'px';
+      lan.style.flex = '0 0 ' + kuan + 'px';
     });
     const jieShuYuanTuo = () => { if (!tuo) return; tuo = false; document.body.style.cursor = ''; tongBuDev(); };
     document.addEventListener('mouseup', jieShuYuanTuo);
     window.addEventListener('blur', jieShuYuanTuo);
-    ge.addEventListener('dblclick', () => { lan.style.width = ''; tongBuDev(); });
+    ge.addEventListener('dblclick', () => { lan.style.flex = ''; tongBuDev(); });
     /** R255：分割线可键盘微调（左/右箭头 = DevTools 加宽/收窄 24px） */
     ge.addEventListener('keydown', (e) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -5347,7 +5349,7 @@
       const r = yuan.getBoundingClientRect();
       const cur = lan.getBoundingClientRect().width || r.width * 0.32;
       const kuan = Math.max(140, Math.min(r.width * 0.7, cur + (e.key === 'ArrowLeft' ? 24 : -24)));
-      lan.style.width = kuan + 'px';
+      lan.style.flex = '0 0 ' + kuan + 'px';
       tongBuDev();
     });
     const dk = el('anNiuDevDaKai');

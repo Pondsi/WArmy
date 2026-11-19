@@ -12950,6 +12950,26 @@ function qiDongMimicXianGuang(): void {
     } catch { /* 闲逛失败不影响业务 */ }
   }, 45000);
   mimicXianGuangTick.unref?.();
+  /* R264 项6：找活——每 5 分钟查看授权工作区有无待整理/未写完文档；发现先询问，用户同意才动作（保守：打开/定位＋建议，不擅自删改） */
+  const zhaoHuoTick = setInterval(() => { void mimicZhaoHuo(); }, 300000);
+  zhaoHuoTick.unref?.();
+}
+let mimicZhaoHuoShangCi = 0;
+async function mimicZhaoHuo(): Promise<void> {
+  try {
+    if (!mimicWin || mimicWin.isDestroyed() || !mimicWin.isVisible()) return;
+    if ((settingsStore?.load() as { mimicFixed?: boolean } | undefined)?.mimicFixed) return;
+    if (Date.now() - mimicZhaoHuoShangCi < 30 * 60 * 1000) return;
+    const ws = workspaceDirOf(app.getPath('userData'), 'mimic-pet');
+    if (!fs.existsSync(ws)) return;
+    const names = fs.readdirSync(ws).filter((n) => /\.(md|txt|docx|markdown)$/i.test(n)).slice(0, 3);
+    if (!names.length) return;
+    mimicZhaoHuoShangCi = Date.now();
+    const da = await qingQiuKaPian('mimic-pet', '拟态找活', '发现可整理/续写的文档：' + names.join('、') + '。是否同意拟态打开并给出整理建议？（不会擅自删除/覆盖）', [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }]);
+    if (!/^同意/.test(da)) return;
+    try { await shell.openPath(ws); } catch { /* noop */ }
+    jiXiTongXiaoXi('system', '拟态找活', '已打开工作区。建议检查：' + names.join('、') + '（未写完/可整理）。拟态不会擅自删改，需你明确指派。');
+  } catch { /* 找活失败不影响业务 */ }
 }
 /** R264 项6：右键「固定: 是/否」—— 是=不走动只原地动；否=可走到图标边/闲逛 */
 chuliIpc('warmy:mimicGuDing', (_e, p0?: { fixed?: boolean }) => {

@@ -1379,6 +1379,16 @@ body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
   0% { background: color-mix(in srgb, var(--accent, #2f81f7) 22%, transparent); }
   100% { background: transparent; }
 }
+/* R264 项3：源码/开发者工具双栏布局＋可拖分隔条（此前缺 CSS 导致分隔条不可拖、DevTools 边界错乱） */
+#yuanDevRongQi { display: flex; flex: 1 1 auto; min-height: 0; align-items: stretch; }
+#yuanDevRongQi #wangYeYuanWen { flex: 1 1 auto; min-width: 0; width: auto; }
+#yuanDevFenGe { flex: 0 0 7px; cursor: col-resize; background: var(--line); position: relative; }
+#yuanDevFenGe:hover, body.tuoYuanDev #yuanDevFenGe { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+#yuanDevFenGe::after { content: ''; position: absolute; top: 50%; left: 50%; width: 3px; height: 34px; transform: translate(-50%,-50%); border-radius: 2px; background: var(--muted); }
+#yuanDevLan { flex: 0 0 32%; min-width: 140px; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel-bg); }
+#yuanDevTou { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-bottom: 1px solid var(--line); background: var(--gongJu-bg); }
+#yuanDevTou span { font-size: 11px; color: var(--muted); margin-right: auto; }
+#yuanDevRiZhi { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 6px 8px; font-family: var(--font-mono); font-size: 11px; white-space: pre-wrap; word-break: break-word; }
 
 /* 加密压缩包密码框 */
 #mimaZheZhao {
