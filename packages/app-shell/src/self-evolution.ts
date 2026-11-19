@@ -19,7 +19,7 @@ export interface YanShouGuiZe {
   primary?: boolean;
 }
 export interface ChaYiJian { checkId: string; arm: ZhiXian; outcome: 'pass' | 'fail' | 'unknown'; ts: number }
-export interface ZhiXianZhuangTai { turns: number; files: string[]; reply: string; overlay?: string; history?: Array<{ role: 'user' | 'them'; content: string }> }
+export interface ZhiXianZhuangTai { turns: number; files: string[]; reply: string; overlay?: string; history?: Array<{ role: 'user' | 'them' | 'tool' | 'system'; kind?: string; content: string; ts?: number }> }
 export interface ZiJinHuaShiYan {
   id: string; sessionId: string; projectId?: string; createdAt: number; forkSeq: number;
   status: 'running' | 'split' | 'staged' | 'merged' | 'cancelled';

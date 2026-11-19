@@ -1269,6 +1269,9 @@ body.tuoYaSuoFenGe { cursor: col-resize; user-select: none; }
   color: var(--muted);
 }
 #wangYeGongJu button.tabJia:hover { color: var(--ink); }
+/* R264：收藏夹按钮主题色；标签拖拽悬停高亮 */
+#wangYeGongJu #anNiuWangYeShouCang { color: var(--accent); }
+.wangYeTab.dragOver { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* 网站模式正文：4 态分栏（0 只网页 / 1 网页左源码右 / 2 源码左网页右 / 3 网页上源码下）
    分隔条可左右/上下拖动；比例存在**每个标签页自己**身上（切换标签不会串）。 */

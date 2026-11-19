@@ -2213,6 +2213,8 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 }
 .lieBiaoTiaoMu.isJinYong .name, .lieBiaoTiaoMu.isJinYong .fu, .lieBiaoTiaoMu.isJinYong .av { color: var(--ink-dim); }
 .lieBiaoTiaoMu.isJinYong .name.struck, .chengYuanHang .chengYuanMing.struck { text-decoration: line-through; }
+/* R263：停用（isTingYong）的会话名称也加删除线 */
+.lieBiaoTiaoMu.isTingYong .name.struck, .lieBiaoTiaoMu .name.struck { text-decoration: line-through; }
 .hangHuiZhang {
   flex-shrink: 0; font-size: var(--fs-xs); padding: 1px 6px; border-radius: 99px;
   background: var(--hover); color: var(--ink-dim);
@@ -3657,6 +3659,13 @@ html { font-weight: var(--fw-ui, 400); }
 /* 话筒图标：**中空描边**（真机反馈：要中空的） */
 .anNiuTuBiao .ico.hollowIco { fill: none !important; stroke: currentColor; }
 .siKaoBiaoQian { font-size: var(--fs-xs); opacity: .75; margin-left: 2px; }
+/* R264 项2：思考级别灯泡 —— 去右侧文字；主题色发光随级别自上而下（微觉=顶、参悟=全）；自然仅中线发光 */
+.siKaoBiaoQian { display: none; }
+.siKaoIco .dkMid { opacity: 0; }
+.siKaoIco .dkGlow { stroke: var(--accent); filter: drop-shadow(0 0 2.5px var(--accent)); }
+.siKaoIco .dkClipRect { height: var(--siKaoGlow, 0%); }
+.siKaoZiRan .siKaoIco .dkGlow { display: none; }
+.siKaoZiRan .siKaoIco .dkMid { opacity: 1; stroke: var(--accent); filter: drop-shadow(0 0 2.5px var(--accent)); }
 
 /* 聊天气泡里的 Markdown 排版（模型回复基本都是 Markdown） */
 .bubble.md .mdP { margin: 0 0 6px; }
@@ -3724,10 +3733,12 @@ html { font-weight: var(--fw-ui, 400); }
  * 旧值是 calc(100% - 84px) ≈ 占满，现改成上限 70% 且最大 680px。 */
 .bubbleWrap { display: flex; flex-direction: column; min-width: 0; width: auto; max-width: none; align-items: flex-start; flex: 1 1 auto; }
 .xiaoXi.wo .bubbleWrap { align-items: flex-end; width: auto; max-width: none; }
-/* R260：朝向对方头像的一侧让出 2 个头像宽（聊天头像 32×2 = 64px）。
+/* R260：朝向对方头像的一侧让出 2 个头像宽；R263：再加一个头像宽＝3×32=96px。
  * 我的消息靠右 ⇒ 左侧留白；对方消息靠左 ⇒ 右侧留白。两份 CSS 同步（verify-css-consistency）。 */
-.xiaoXi.wo .bubbleWrap { margin-left: 64px; } /* R260：2 头像 */
-.xiaoXi:not(.wo) .bubbleWrap { margin-right: 64px; } /* R260：2 头像 */
+.xiaoXi.wo .bubbleWrap { margin-left: 96px; } /* R263：3 头像 */
+.xiaoXi:not(.wo) .bubbleWrap { margin-right: 96px; } /* R263：3 头像 */
+/* R263：聊天区恒预留滚动条位（出现滚动条时内容宽度不变） */
+#xiaoXiJi, .xiaoXiJi { scrollbar-gutter: stable; }
 /* R129 铁律（内容位置不移动）：md 内联图固定 16:9 占位，加载前/后布局一致 */
 .md img { display: block; max-width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--hover, #ececec); border-radius: 6px; }
 /* 主动显示的时间（跨时/跨日）：浅分隔线 + 居中小字 */
@@ -4034,6 +4045,8 @@ html { font-weight: var(--fw-ui, 400); }
   font-size: 10px; color: var(--muted); margin-top: 3px;
   opacity: 0; transition: opacity .15s ease;
   text-align: start; /* R183 项10：单行截断，不再换行 */
+  /* R263：flex 行＋满宽，赞/踩 margin-inline-start:auto 才能真右对齐 */
+  display: flex; align-items: center; gap: 6px; width: 100%;
 }
 .xiaoXiMoXing .moXingWen { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xiaoXi.wo .xiaoXiMoXing { text-align: end; }
@@ -4058,6 +4071,7 @@ html { font-weight: var(--fw-ui, 400); }
   /* R130：内容靠上（占位内顶对齐，不垂直居中） */
   justify-content: flex-start; align-items: flex-start;
   min-height: 2.4em;
+  width: 100%; /* R263：满宽，图标组右对齐才有空间 */
 }
 .xiaoXi.wo .xiaoXiJiao { left: auto; right: 0; }
 .xiaoXi:hover .xiaoXiJiao { visibility: visible; }
@@ -4067,7 +4081,7 @@ html { font-weight: var(--fw-ui, 400); }
 .xiaoXiMoXing:hover, .xiaoXiJiao:hover { visibility: visible; }
 /* 第 35 轮 项 8：第二行**必须和第一行（模型名）左对齐** —— 以前这里挂着 inline `margin-left:12px`，
  * 于是模型名在 x=0、时间行在 x=12px，看着就是"缩进错位"。改为 0，对齐交给同一列。 */
-.xiaoXiJiaoHang { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--muted); margin-left: 0; }
+.xiaoXiJiaoHang { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--muted); margin-left: 0; width: 100%; }
 .xiaoXi.wo .xiaoXiJiaoHang { justify-content: flex-end; }
 /* R243：喇叭/引用/复制图标组靠右对齐（margin-left:auto 把图标推到行尾；时间/词元仍靠左） */
 .xiaoXiLangDu { margin-left: auto; }
@@ -4406,6 +4420,10 @@ html { font-weight: var(--fw-ui, 400); }
  * 现在：整行仍可见（朗读按钮要靠它显示），但行里**除朗读按钮之外**的按钮在非悬停时隐藏。
  */
 .xiaoXi:hover .xiaoXiJiao, .xiaoXi:has(.langDuZhong) .xiaoXiJiao { visibility: visible; }
+/* R263：音量浮条还在时，喇叭/模型行/整行信息不消失 */
+.xiaoXi.yinLiangZai .xiaoXiMoXing { opacity: 1; }
+.xiaoXi.yinLiangZai .xiaoXiJiao { visibility: visible; }
+.xiaoXi.yinLiangZai .xiaoXiJiaoHang > * { visibility: visible; }
 .xiaoXi:not(:hover):has(.langDuZhong) .xiaoXiJiaoHang > :not(.xiaoXiLangDu) {
   visibility: hidden;
 }

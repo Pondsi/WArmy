@@ -6,6 +6,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('warmy', {
   hardware: () => ipcRenderer.invoke('warmy:yingJian'),
   mimicHuiTu: (p) => ipcRenderer.invoke('warmy:mimicHuiTu', p),
+  mimicHuiTuMoXingLie: () => ipcRenderer.invoke('warmy:mimicHuiTuMoXingLie'),
   ziJinHuaZhuangTai: (sid) => ipcRenderer.invoke('warmy:ziJinHuaZhuangTai', sid),
   ziJinHuaFaSong: (p) => ipcRenderer.invoke('warmy:ziJinHuaFaSong', p),
   ziJinHuaXuanZe: (p) => ipcRenderer.invoke('warmy:ziJinHuaXuanZe', p),
@@ -16,6 +17,17 @@ contextBridge.exposeInMainWorld('warmy', {
   benDiShengChengAnZhuang: () => ipcRenderer.invoke('warmy:benDiShengChengAnZhuang'),
   nengLiGeZhengCeShe: (p) => ipcRenderer.invoke('warmy:nengLiGeZhengCeShe', p),
   onZiJinHua: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:ziJinHuaGengXin', h); return () => ipcRenderer.removeListener('warmy:ziJinHuaGengXin', h); },
+  /* R262：空闲全量更新检查状态＋迪文导入/导出/更新 */
+  gengXinZhuangTaiQu: () => ipcRenderer.invoke('warmy:gengXinZhuangTaiQu'),
+  onGengXinZhuangTai: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:gengXinZhuangTai', h); return () => ipcRenderer.removeListener('warmy:gengXinZhuangTai', h); },
+  diwenSiYouDaoChu: () => ipcRenderer.invoke('warmy:diwenSiYouDaoChu'),
+  diwenSiYouDaoRu: () => ipcRenderer.invoke('warmy:diwenSiYouDaoRu'),
+  diwenSiYouBaoLieBiao: () => ipcRenderer.invoke('warmy:diwenSiYouBaoLieBiao'),
+  diwenSiYouBaoDaoRu: () => ipcRenderer.invoke('warmy:diwenSiYouBaoDaoRu'),
+  diwenSiYouBaoDaoChu: () => ipcRenderer.invoke('warmy:diwenSiYouBaoDaoChu'),
+  diwenSiYouBaoShanChu: (p) => ipcRenderer.invoke('warmy:diwenSiYouBaoShanChu', p),
+  diwenGengXinJianCha: () => ipcRenderer.invoke('warmy:diwenGengXinJianCha'),
+  diwenGengXinAnZhuang: () => ipcRenderer.invoke('warmy:diwenGengXinAnZhuang'),
   trustedFoldersList: () => ipcRenderer.invoke('warmy:shouXinMuLuLieBiao'),
   trustedFolderAdd: (p) => ipcRenderer.invoke('warmy:shouXinMuLuTianJia', p),
   trustedFolderRemove: (p) => ipcRenderer.invoke('warmy:shouXinMuLuShanChu', p),
@@ -358,10 +370,11 @@ contextBridge.exposeInMainWorld('warmy', {
   dshShiChangZiLiao: () => ipcRenderer.invoke('warmy:dshShiChangZiLiao'),
   // 本地语音（sherpa-onnx）：状态 / 安装 / 删除（下次更新不再装）/ 启用 / 自检 / 清单
   benDiYuYinZhuangTai: () => ipcRenderer.invoke('warmy:benDiYuYinZhuangTai'),
+  yinSeLieBiao: () => ipcRenderer.invoke('warmy:yinSeLieBiao'),
   benDiYuYinAnZhuang: () => ipcRenderer.invoke('warmy:benDiYuYinAnZhuang'),
   benDiYuYinShanChu: (p) => ipcRenderer.invoke('warmy:benDiYuYinShanChu', p),
   benDiYuYinQiYong: (p) => ipcRenderer.invoke('warmy:benDiYuYinQiYong', p),
-  benDiYuYinZiJian: () => ipcRenderer.invoke('warmy:benDiYuYinZiJian'),
+  benDiYuYinZiJian: (p) => ipcRenderer.invoke('warmy:benDiYuYinZiJian', p),
   benDiYuYinQingDan: () => ipcRenderer.invoke('warmy:benDiYuYinQingDan'),
   onBenDiYuYinJinDu: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:benDiYuYinJinDu', h); return () => ipcRenderer.removeListener('warmy:benDiYuYinJinDu', h); },
   // R260：Whisper ASR 引擎（只语音转文字；TTS 仍 sherpa-onnx）
@@ -783,6 +796,7 @@ contextBridge.exposeInMainWorld('warmy', {
   daKaiZhenDuanChuang: () => ipcRenderer.invoke('warmy:daKaiZhenDuanChuang'),
   // R185 中继站 TLS 信任（FWArmy 自签指纹固定 / CA 校验）
   zhongJiTlsTanZhen: (p) => ipcRenderer.invoke('warmy:zhongJiTlsTanZhen', p),
+  providerPingZhengWei: (p) => ipcRenderer.invoke('warmy:providerPingZhengWei', p),
   zhongJiTlsXinRen: (p) => ipcRenderer.invoke('warmy:zhongJiTlsXinRen', p),
   zhongJiTlsJuJue: (p) => ipcRenderer.invoke('warmy:zhongJiTlsJuJue', p),
   zhongJiTlsGengXin: (p) => ipcRenderer.invoke('warmy:zhongJiTlsGengXin', p),
@@ -794,6 +808,7 @@ contextBridge.exposeInMainWorld('warmy', {
 diagNmKai: () => ipcRenderer.invoke('warmy:zhenDuanNmDaKai'), // R223 项2
   joinRecords: () => ipcRenderer.invoke('warmy:jiaRuJiLuLieBiao'),
   systemMessages: () => ipcRenderer.invoke('warmy:xiTongXiaoXiLieBiao'),
+  systemMessageAdd: (p) => ipcRenderer.invoke('warmy:xiTongXiaoXiTianJia', p),
   systemMessageRead: (id) => ipcRenderer.invoke('warmy:xiTongXiaoXiYiDu', id),
   systemMessagesReadAll: () => ipcRenderer.invoke('warmy:xiTongXiaoXiQuanBuYiDu'),
   onSystemMessage: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:xiTongXiaoXiXin', h); return () => ipcRenderer.removeListener('warmy:xiTongXiaoXiXin', h); },
@@ -940,6 +955,7 @@ diagNmKai: () => ipcRenderer.invoke('warmy:zhenDuanNmDaKai'), // R223 项2
   // R125 任务15：终端同步（配对 / 选项 / 手动触发 / 自锁 / 强制解锁）
   syncStateGet: () => ipcRenderer.invoke('warmy:syncStateGet'),
   syncNow: () => ipcRenderer.invoke('warmy:syncNow'),
+  syncHuiHuaQieHuan: (p) => ipcRenderer.invoke('warmy:syncHuiHuaQieHuan', p),
   syncCreatePairCode: () => ipcRenderer.invoke('warmy:syncCreatePairCode'),
   syncAcceptPairCode: (input) => ipcRenderer.invoke('warmy:syncAcceptPairCode', input),
   syncSetEnabled: (on) => ipcRenderer.invoke('warmy:syncSetEnabled', on),

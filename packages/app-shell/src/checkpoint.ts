@@ -27,6 +27,8 @@ export interface Jianchadian extends JianchadianZengliang {
   summary: string;
   /** R246：自进化合并前的回退点标记（渲染右侧自进化图标） */
   evolve?: boolean;
+  /** R263：进化回退点携带的实验快照（回滚时恢复到选支前） */
+  evolveSnap?: unknown;
   detail: JianChaDianXiangQing;
   bytes: number;
 }
@@ -39,13 +41,27 @@ export interface JianChaDianKongJian {
 
 const FICLONE = 2; // fs.constants.COPYFILE_FICLONE
 
+/** R264 项5：Windows 占用类错误（EPERM/EBUSY/EACCES）短重试；同步上下文用 Atomics.wait 小睡，上限几百毫秒 */
+function chongShi<T>(fn: () => T, ci = 3, jianGeMs = 120): T {
+  let last: unknown;
+  for (let i = 0; i <= ci; i++) {
+    try { return fn(); } catch (e) {
+      last = e;
+      const m = String((e as Error)?.message || e);
+      if (!/EPERM|EBUSY|EACCES|resource busy or locked/i.test(m) || i === ci) throw e;
+      try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, jianGeMs); } catch { /* noop */ }
+    }
+  }
+  throw last;
+}
+
 function kaoBeiZhi(src: string, dest: string): 'cow' | 'shadow' {
   try {
     fs.copyFileSync(src, dest, FICLONE);
     return 'cow';
   } catch {
     try {
-      fs.copyFileSync(src, dest);
+      chongShi(() => fs.copyFileSync(src, dest));
       return 'shadow';
     } catch {
       return 'shadow';
@@ -69,6 +85,8 @@ function kaoBeiMuLu(src: string, dest: string): 'cow' | 'shadow' {
 
 export class JianChaDianCang {
   private items: Jianchadian[] = [];
+  /** R264 项5：最近一次回滚因占用跳过的条目（如实上报，不假装全恢复） */
+  lastSkipped: string[] = [];
 
   constructor(private root: string) {
     fs.mkdirSync(path.join(root, 'shadows'), { recursive: true });
@@ -92,7 +110,7 @@ export class JianChaDianCang {
   }
 
   create(opts: {
-    phase: 'round_start' | 'round_end';
+    phase: 'round_start' | 'round_end' | 'evolve_select';
     logSeq: number;
     jsonlPath?: string;
     workspace?: string;
@@ -104,6 +122,8 @@ export class JianChaDianCang {
     detail?: Partial<JianChaDianXiangQing>;
     /** 会话级回滚标记（见 Jianchadian.sessionId） */
     sessionId?: string;
+    /** R263：进化实验快照（选支前状态） */
+    evolveSnap?: unknown;
   }): Jianchadian {
     const id = `cp-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
     const dir = path.join('shadows', id);
@@ -169,6 +189,7 @@ export class JianChaDianCang {
     };
     if (opts.sessionId) cp.sessionId = String(opts.sessionId);
     if (opts.evolve) cp.evolve = true;
+    if (opts.evolveSnap) cp.evolveSnap = opts.evolveSnap;
     this.items.push(cp);
     const limit = opts.limit ?? 50;
     while (this.items.length > limit) {
@@ -205,19 +226,21 @@ export class JianChaDianCang {
   rollback(id: string, targets: { jsonlPath?: string; workspace?: string }): boolean {
     const cp = this.items.find((x) => x.id === id);
     if (!cp) return false;
+    this.lastSkipped = [];
     const jueDuiLu = path.join(this.root, cp.dir);
     if (targets.jsonlPath) {
       const src = path.join(jueDuiLu, 'fast-memory.jsonl');
       if (fs.existsSync(src)) {
-        const suo = new JsonlSuo(targets.jsonlPath);
+        const jl = targets.jsonlPath;
+        const suo = new JsonlSuo(jl);
         const naDao = suo.acquire(5000);
         try {
           let beiFenLu = '';
-          if (fs.existsSync(targets.jsonlPath)) {
-            beiFenLu = `${targets.jsonlPath}.bak-${Date.now().toString(36)}`;
-            fs.copyFileSync(targets.jsonlPath, beiFenLu);
+          if (fs.existsSync(jl)) {
+            beiFenLu = `${jl}.bak-${Date.now().toString(36)}`;
+            chongShi(() => fs.copyFileSync(jl, beiFenLu));
           }
-          fs.copyFileSync(src, targets.jsonlPath);
+          chongShi(() => fs.copyFileSync(src, jl));
           // 显式例外标记：写在回退**后**的账上，声明"历史被改写过、备份在哪"
           const biaoJi = {
             seq: 0,
@@ -231,7 +254,7 @@ export class JianChaDianCang {
             rolledBackAt: Date.now(),
           };
           try {
-            fs.appendFileSync(targets.jsonlPath, JSON.stringify(biaoJi) + '\n', 'utf8');
+            fs.appendFileSync(jl, JSON.stringify(biaoJi) + '\n', 'utf8');
           } catch {
             /* 标记写不进去也要把回退结果如实返回；备份仍在 */
           }
@@ -243,12 +266,32 @@ export class JianChaDianCang {
     if (targets.workspace) {
       const src = path.join(jueDuiLu, 'workspace');
       if (fs.existsSync(src)) {
-        fs.rmSync(targets.workspace, { recursive: true, force: true });
-        kaoBeiMuLu(src, targets.workspace);
+        /* R264 项5：绝不整删工作区根目录 —— Windows 上它常是会话子进程的 cwd，整删必 EPERM。
+         * 改为「保根目录・清内容・覆盖还原」：占用短重试，仍失败则跳过并如实记录。 */
+        try { fs.mkdirSync(targets.workspace, { recursive: true }); } catch { /* noop */ }
+        for (const e of fs.readdirSync(targets.workspace, { withFileTypes: true })) {
+          const p = path.join(targets.workspace, e.name);
+          try { jieChuZhiDu(p); chongShi(() => fs.rmSync(p, { recursive: true, force: true })); } catch { this.lastSkipped.push(e.name); }
+        }
+        for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+          const s = path.join(src, e.name); const d = path.join(targets.workspace, e.name);
+          try {
+            if (e.isDirectory()) kaoBeiMuLu(s, d);
+            else { jieChuZhiDu(d); chongShi(() => fs.copyFileSync(s, d)); }
+          } catch { this.lastSkipped.push(e.name); }
+        }
       }
     }
     return true;
   }
+}
+
+/** R264 项5：只读目标先解除只读（Windows 上删/覆只读文件＝EPERM 的另一来源），best-effort */
+function jieChuZhiDu(p: string): void {
+  try {
+    const st = fs.statSync(p);
+    if ((st.mode & 0o222) === 0) fs.chmodSync(p, st.isDirectory() ? 0o777 : 0o666);
+  } catch { /* noop */ }
 }
 
 function muLuDaXiao(dir: string): number {

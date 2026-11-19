@@ -7,5 +7,15 @@
 .mimicHuiTuSvg [data-part].xuan { filter: drop-shadow(0 0 2px var(--accent, #a87654)); }
 .mimicHuiTuBox { position: absolute; border: 1px solid var(--accent, #a87654); background: #a8765433; pointer-events: none; }
 .mimicHuiTu textarea { display: block; width: 100%; box-sizing: border-box; margin: 12px 0; resize: vertical; min-height: 70px; }
-.mimicHuiTuActions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.mimicHuiTuActions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; position: relative; z-index: 6; }
 .mimicHuiTuActions button:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(1); }
+/* R263：模型下拉行＋生成冻结罩＋无模型遮罩 */
+.mimicHuiTuMoRow { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+.mimicHuiTuMoRow select { flex: 1; min-width: 0; }
+.mimicHuiTuDong { position: absolute; inset: 0; z-index: 4; background: rgba(120,120,120,.45); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; border-radius: 12px; }
+.mimicHuiTuDong[hidden] { display: none; }
+.mimicHuiTuZhuan { width: 42px; height: 42px; border-radius: 50%; border: 4px solid rgba(255,255,255,.35); border-top-color: var(--accent, #a87654); animation: mhtZhuan 0.9s linear infinite; }
+@keyframes mhtZhuan { to { transform: rotate(360deg); } }
+.mimicHuiTuDongWen { color: #fff; font-size: 13px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.mimicHuiTuWu { position: absolute; inset: 0; z-index: 5; background: rgba(120,120,120,.55); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; border-radius: 12px; color: #fff; font-size: 14px; }
+.mimicHuiTuWu[hidden] { display: none; }

@@ -1,13 +1,13 @@
 {
-  "version": "0.4.41",
-  "notes": "WArmy 0.4.41 — fix: mimic model cards no longer show empty available models / fallback chain. The settings page (mimic section), instance settings, and the chat window's model management card now initialize the model list on render, falling back to the full provider catalog when the capability table has not loaded yet (the old cancel-and-recheck-all workaround is no longer needed). Mimic chat window defaults: the authorization dropdown follows the global default security mode; auto-select and read-aloud replies are checked by default for the mimic session only, and authorization cards are never auto-answered. Desktop right-click Mute now toggles the very same read-aloud switch as the chat window's three-dot menu, live-synced across windows; muting stops voice immediately while subtitles stay. Mimic voice replies are constrained to natural conversational content only (no file paths, code, markdown, tool/search narration, internal thinking); touch and voice interactions no longer trigger disk searches or file reads/writes unless the user explicitly assigns a file task. nm viewer: right-click on an open file adds Copy file path and Open containing folder. Gate/spec syncs: bubble margin two avatar widths (64px), insert icon left of Evolution, six-item mimic menu, sculpt saves into characters2d, i18n suffix trimming, session-summary anchor assertion scoped to the summary function. Carries all prior features unchanged.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.41/WArmy-Setup-0.4.41.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.41/WArmy-Setup-0.4.41.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.41/WArmy-Setup-0.4.41.exe.warmyblocks",
-  "sha256": "75dd720b0e5d4be687050e7daa58b4ddf1d5282cdcd773fa1270be4d98fb8c8b",
-  "size": 322980783,
+  "version": "0.4.42",
+  "notes": "WArmy 0.4.42 — release round.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.42/WArmy-Setup-0.4.42.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.42/WArmy-Setup-0.4.42.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.42/WArmy-Setup-0.4.42.exe.warmyblocks",
+  "sha256": "30513008923e16e5dbd62dfcd7ac8856ca7b3057a187c25796648e7bcdca0fea",
+  "size": 323878614,
   "mandatory": false,
-  "publishedAt": "2026-11-19T04:36:35.024Z",
+  "publishedAt": "2026-11-19T23:03:32.101Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.41"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.42"
 }

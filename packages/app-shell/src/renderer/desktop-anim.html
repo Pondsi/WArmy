@@ -25,17 +25,23 @@
   const fx = document.getElementById('fx');
   const dpr = window.devicePixelRatio || 1;
   let icons = [];
+  let mimicOn = false, mimicFixed = false;
   async function load(){ try { const r = await window.warmyMimic.zhuoMianTuBiao(); icons = (r && r.icons) || []; } catch { icons = []; } }
-  load(); setInterval(load, 15000);
+  async function loadZt(){ try { const r = await window.warmyMimic.mimicZhuangTai(); mimicOn = !!(r && r.on); } catch { mimicOn = false; } try { const g = await window.warmyMimic.mimicGuDing?.(); mimicFixed = !!(g && g.fixed); } catch { mimicFixed = false; } }
+  load(); loadZt(); setInterval(load, 15000); setInterval(loadZt, 5000);
+  /* R264 项19：显隐/固定即时广播 —— 隐身瞬间清场停播，不等轮询 */
+  try { window.warmyMimic.onMimicState?.((d) => { if (!d) return; mimicOn = !!d.on; if (typeof d.fixed === 'boolean') mimicFixed = d.fixed; if (!mimicOn) fx.innerHTML = ''; }); } catch { /* noop */ }
   function spr(x, y, cls, emoji, dx, dy){ const d = document.createElement('div'); d.className = 'spr ' + cls; d.textContent = emoji || '';
     d.style.left = (x / dpr) + 'px'; d.style.top = (y / dpr) + 'px'; if (dx !== undefined){ d.style.setProperty('--dx', (dx / dpr) + 'px'); d.style.setProperty('--dy', (dy / dpr) + 'px'); }
     fx.appendChild(d); setTimeout(() => d.remove(), 1400); }
   function centerOf(ic){ return { x: ic.rect.x + ic.rect.width / 2, y: ic.rect.y + ic.rect.height / 2 }; }
-  // 平时纯视觉互动：推/晃/踢/捏，恢复原样（不改文件）
-  setInterval(() => { if (!icons.length) return; const ic = icons[Math.floor(Math.random() * icons.length)]; const c = centerOf(ic);
-    const kinds = ['push', 'shake', 'kick', 'squash']; spr(c.x, c.y, kinds[Math.floor(Math.random() * 4)], ''); }, 12000);
-  // 真实操作结果驱动动画
-  window.warmyMimic.onZhuoMianDongHua((d) => { if (!d) return;
+  // 平时纯视觉互动：R263/R264 仅当拟态可见且未固定才走到图标边＋手脚动作；隐藏/固定不互动
+  setInterval(() => { if (!icons.length || !mimicOn || mimicFixed) return; const ic = icons[Math.floor(Math.random() * icons.length)]; const c = centerOf(ic);
+    const kinds = ['push', 'shake', 'kick', 'squash']; const kind = kinds[Math.floor(Math.random() * 4)];
+    try { window.warmyMimic?.mimicTuBiaoHuDong?.({ x: c.x, y: c.y, kind }); } catch { /* noop */ }
+    spr(c.x, c.y, kind, ''); }, 12000);
+  // 真实操作结果驱动动画（仅拟态可见时）
+  window.warmyMimic.onZhuoMianDongHua((d) => { if (!d || !mimicOn) return;
     const ic = icons.find((i) => i.filePath === d.path); const c = ic ? centerOf(ic) : { x: innerWidth * dpr / 2, y: innerHeight * dpr / 2 };
     if (!d.ok) { spr(c.x, c.y, 'fail', '✕'); return; }
     const emo = { move: '➜', create: '✨', delete: '🗑', modify: '🔧', open: '📂' }[d.op] || '';

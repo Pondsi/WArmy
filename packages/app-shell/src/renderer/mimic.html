@@ -272,8 +272,8 @@
     window.warmyMimic?.onZouLu?.((d) => {
       const ph = String((d && d.phase) || '');
       tupian.classList.remove('dz-zouLu', 'dz-huDong');
-      if (ph === 'walk' || ph === 'back') tupian.classList.add('dz-zouLu');
-      else if (ph === 'arrive') tupian.classList.add('dz-huDong');
+      if (ph === 'walk' || ph === 'back') { tupian.classList.add('dz-zouLu'); try { window.__mimicDongZuo('zouLu'); } catch { /* noop */ } }
+      else if (ph === 'arrive') { tupian.classList.add('dz-huDong'); try { window.__mimicDongZuo(String((d && d.dongZuo) || 'tuiShou')); } catch { /* noop */ } }
       if (ph === 'arrive') window.__shuo({ open: '打开看看～', create: '放好啦～', delete: '收走啦～', modify: '改好～', move: '搬好～' }[String((d && d.op) || '')] || '到啦～', 1400);
     });
     /* R218：说话口型（语音合成/ASR 期间） */

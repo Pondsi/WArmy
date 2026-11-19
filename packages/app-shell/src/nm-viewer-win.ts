@@ -1998,9 +1998,15 @@ export function nmMoTaiKai(id: number, html: string, opts?: { width?: number; he
   if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '窗口不存在' };
   try { if (Z.moTaiWin && !Z.moTaiWin.isDestroyed()) Z.moTaiWin.destroy(); } catch { /* noop */ }
   try {
+    const cb = Z.win.getContentBounds();
+    const mw = Math.max(360, Number(opts?.width) || 480);
+    const mh = Math.max(240, Number(opts?.height) || 460);
+    /* R264：模态框相对 nm 窗居中（而非屏幕中心） */
+    const mx = Math.round(cb.x + (cb.width - mw) / 2);
+    const my = Math.round(cb.y + (cb.height - mh) / 2);
     const w = new BrowserWindow({
-      parent: Z.win, modal: true, show: false,
-      width: Math.max(360, Number(opts?.width) || 480), height: Math.max(240, Number(opts?.height) || 460),
+      parent: Z.win, modal: true, show: false, x: mx, y: my,
+      width: mw, height: mh,
       frame: false, resizable: false, minimizable: false, maximizable: false, skipTaskbar: true,
       backgroundColor: '#20232b',
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
@@ -2020,7 +2026,7 @@ export function nmMoTaiGuan(id: number): { ok: boolean } {
 }
 
 /** R244 报障11c：收藏夹悬停面板改原生弹出窗——非模态、定位在按钮下方，网页视图保持可见不再被隐藏变空白 */
-export function nmTanChuangKai(id: number, html: string, opts?: { rectLeft?: number; rectBottom?: number; width?: number; height?: number }): { ok: boolean; cuo?: string } {
+export function nmTanChuangKai(id: number, html: string, opts?: { rectLeft?: number; rectBottom?: number; width?: number; height?: number; center?: boolean }): { ok: boolean; cuo?: string } {
   const Z = CHUANG_KOU.get(Number(id) || 0);
   if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '窗口不存在' };
   try { if (Z.tanChuangWin && !Z.tanChuangWin.isDestroyed()) Z.tanChuangWin.destroy(); } catch { /* noop */ }
@@ -2028,8 +2034,9 @@ export function nmTanChuangKai(id: number, html: string, opts?: { rectLeft?: num
     const cb = Z.win.getContentBounds();
     const w = Math.max(200, Number(opts?.width) || 260);
     const h = Math.max(120, Number(opts?.height) || 360);
-    let x = Math.round(cb.x + (Number(opts?.rectLeft) || 0));
-    let y = Math.round(cb.y + (Number(opts?.rectBottom) || 0) + 6);
+    /* R264：收藏夹弹窗相对 nm 窗居中（center）；否则定位按钮下方 */
+    let x = opts?.center ? Math.round(cb.x + (cb.width - w) / 2) : Math.round(cb.x + (Number(opts?.rectLeft) || 0));
+    let y = opts?.center ? Math.round(cb.y + (cb.height - h) / 2) : Math.round(cb.y + (Number(opts?.rectBottom) || 0) + 6);
     try {
       const wa = screen.getDisplayMatching(cb).workArea;
       x = Math.min(Math.max(wa.x, x), wa.x + wa.width - w);

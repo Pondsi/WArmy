@@ -56,12 +56,23 @@ function buJiebaCi(words) {
   const buf = Buffer.from(xin.map((w) => w + ' 1000000 n').join('\n') + '\n', 'utf8');
   for (const inst of jiebaInstances) { try { inst.loadDict(buf); } catch { /* skip */ } }
 }
-try { dw = await import('diwen'); } catch {
+/* R262：优先加载更新目录（安装更新后的新版），否则回退随包 npm diwen。 */
+const gengXinDir = String(process.env.WARMY_DIWEN_DIR || '');
+if (gengXinDir) { try { dw = await import(pathToFileURL(gengXinDir.replace(/\\/g, '/') + '/src/index.js').href); } catch { dw = null; } }
+if (!dw) { try { dw = await import('diwen'); } catch {
   const dir = String(process.env.WARMY_DIWEN_DIR || '');
   if (dir) { try { dw = await import(pathToFileURL(dir.replace(/\\/g, '/') + '/src/index.js').href); } catch { dw = null; } }
-}
+} }
 
 const siYouPath = () => String(process.env.DIWEN_PRIVATE_LEXICON || '');
+const siYouBaoDir = () => String(process.env.DIWEN_PRIVATE_DIR || '');
+/** R263：pinyin-pro（纯 JS，子进程合规）——私有概念 pinyin 逐字带调（最新规范必需） */
+let pinYinFn = null;
+try { pinYinFn = req('pinyin-pro').pinyin; } catch { pinYinFn = null; }
+const pinYinOf = (w) => {
+  if (!pinYinFn) return [];
+  try { return pinYinFn(String(w || ''), { toneType: 'symbol', type: 'array' }); } catch { return []; }
+};
 /** worker 自持词典引用：npm loadLexicon(noCache) 不回写模块缓存，刷新后必须换引用。 */
 let lexHuan = null;
 const lex = () => { if (!lexHuan) lexHuan = dw.loadLexicon(); return lexHuan; };
@@ -77,27 +88,27 @@ function jiChu() { return lex().roots.filter((r) => !r.private); }
 const HAN = (ch) => { const c = ch.codePointAt(0) || 0; return c >= 0x4e00 && c <= 0x9fff; };
 const ciGanJing = (w) => w && !w.includes('_') && !['__proto__', 'constructor', 'prototype'].includes(w) && [...w].length <= 24;
 
-/** 构造一条私有词根（id/字形坐标自动取空闲位），相对基础+现有私有做碰撞校验。 */
+/** 构造一条私有词根（R263 最新规范：id∈[699051,1048576)、无字形坐标 s3a/s3b=null、pinyin 逐字带调、definitionZh 必需）。 */
 function gouZaoSiYou(word, meaning, bfoType, source) {
   if (!dw) return { ok: false, errors: ['迪文不可用'] };
   const base = jiChu();
   const cur = duSiYou();
-  if (cur.length >= (dw.MAX_CUSTOM_ROOTS || 695)) return { ok: false, errors: ['私有迪文已达上限'] };
+  if (cur.length >= (dw.MAX_CUSTOM_ROOTS || 145)) return { ok: false, errors: ['私有迪文已达上限'] };
   if (!ciGanJing(String(word || ''))) return { ok: false, errors: ['概念词须为≤24字中文/词形，不含内部标记'] };
   const usedIds = new Set([...base.map((r) => r.id), ...cur.map((r) => r.id)]);
   let id = dw.PRIVATE_ID_MIN;
   while (usedIds.has(id)) id += 1;
   if (id > dw.PRIVATE_ID_MAX) return { ok: false, errors: ['私有 ID 分区已满'] };
-  const coord = dw.freeCoordinates([...base, ...cur], 1)[0];
-  if (!coord) return { ok: false, errors: ['无空闲字形坐标'] };
   const bfoOk = ['Object', 'Process', 'Quality', 'Role', 'Function', 'Site', 'MaterialEntity'];
+  const tpl = (dw.privateTemplate && dw.privateTemplate()[0]) || {};
   const root = {
-    id, s3a: coord.s3a, s3b: coord.s3b,
-    field: 'userPrivate',
+    id, s3a: null, s3b: null,
+    field: tpl.field || 'privateDomain',
     lemma_zh: String(word),
     bfo_type: bfoOk.includes(String(bfoType)) ? String(bfoType) : 'Object',
-    place: [{ role: 'C', type: 'Any' }],
+    place: [{ role: 'C', type: 'Object' }],
     nsm: ['SOMETHING'],
+    pinyin: pinYinOf(word),
     definitionZh: String(meaning || word).slice(0, 200),
     source: source === 'summary' ? 'summary' : 'user',
     createdAt: Date.now(),
@@ -168,6 +179,43 @@ function chuLi(req) {
       const all = cur.filter((r) => Number(r.id) !== Number(args.id));
       const v = dw.validatePrivateRoots(all, jiChu());
       return hui(true, v.valid ? { ok: true, all: v.roots } : { ok: false, errors: v.errors });
+    }
+    /* R263：私有包 CLI 同口径的程序化 API（导入/导出/卸载/列出；冲突自动裁决，基础不可变） */
+    if (fn === 'pkgList') {
+      const dir = siYouBaoDir();
+      let lie = [];
+      try { lie = dw.listPrivatePackages(dir || undefined) || []; } catch { lie = []; }
+      const legacy = duSiYou();
+      if (legacy.length) lie = [...lie, { namespace: '__legacy__', name: '本机单文件私有概念', concepts: legacy.length, legacy: true }];
+      return hui(true, lie);
+    }
+    if (fn === 'pkgImport') {
+      const pkg = dw.readPrivatePackage(String(args.path || ''));
+      const base = jiChu();
+      let installed = [];
+      try { installed = dw.listPrivatePackages(siYouBaoDir() || undefined) || []; } catch { installed = []; }
+      const v = dw.validatePrivatePackage(pkg, base, installed);
+      if (!v.valid) return hui(true, { ok: false, errors: v.errors, conflicts: v.conflicts || null });
+      const r = dw.importPrivatePackage(pkg, base, installed, { dir: siYouBaoDir() || undefined });
+      lexHuan = dw.loadLexicon(undefined, { noCache: true });
+      return hui(true, { ok: (r.errors || []).length === 0, ...r });
+    }
+    if (fn === 'pkgExport') {
+      const l = lex();
+      const pkg = dw.exportPrivatePackage(l, { namespace: String(args.namespace || 'warmy.local'), name: String(args.name || 'warmy-private'), candidates: true, enhance: true });
+      dw.writePrivatePackage(String(args.path || ''), pkg, { zip: false });
+      return hui(true, { ok: true, concepts: (pkg.concepts || []).length, warnings: pkg.warnings || [] });
+    }
+    if (fn === 'pkgUninstall') {
+      const ns = String(args.namespace || '');
+      if (ns === '__legacy__') {
+        const v = dw.validatePrivateRoots([], jiChu());
+        lexHuan = dw.loadLexicon(undefined, { noCache: true });
+        return hui(true, { ok: true, all: v.roots, legacyCleared: true });
+      }
+      const r = dw.uninstallPrivatePackage(ns, { dir: siYouBaoDir() || undefined });
+      lexHuan = dw.loadLexicon(undefined, { noCache: true });
+      return hui(true, { ok: !r.notFound, ...r });
     }
     if (fn === 'improve') return hui(true, waJue(args.text));
     if (fn === 'call') {

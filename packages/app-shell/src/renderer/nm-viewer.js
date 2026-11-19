@@ -1011,6 +1011,38 @@
     else w.dingShi = setTimeout(() => { w.dingShi = null; pao(); }, 160);
   }
 
+  /* R264 项3：标签拖拽重排（保持当前标签跟随） */
+  function chongPaiWangYeTab(from, to) {
+    const ka = zt.wangYe.ka;
+    if (from === to || from < 0 || to < 0 || from >= ka.length || to >= ka.length) return;
+    const dangObj = ka[zt.wangYe.dang];
+    const [m] = ka.splice(from, 1);
+    ka.splice(to, 0, m);
+    zt.wangYe.dang = Math.max(0, ka.indexOf(dangObj));
+    huaWangYeTab();
+  }
+  /* R264 项3：标签右击菜单（关闭/复制）；空白右击无菜单 */
+  function wangYeTabYouJian(i, e) {
+    document.querySelectorAll('.nmTabCaiDan').forEach((n) => n.remove());
+    const cd = document.createElement('div');
+    cd.className = 'nmTabCaiDan';
+    cd.style.cssText = 'position:fixed;z-index:999;left:' + e.clientX + 'px;top:' + e.clientY + 'px;background:var(--card,#fff);border:1px solid var(--line,#ddd);border-radius:8px;padding:4px;display:flex;flex-direction:column;gap:2px;box-shadow:0 6px 20px rgba(0,0,0,.25);min-width:120px';
+    const xiang = (txt, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.style.cssText = 'border:0;background:transparent;color:inherit;text-align:left;padding:6px 10px;border-radius:6px;cursor:pointer;font:inherit'; b.onmouseenter = () => { b.style.background = 'var(--hover,#f5f5f5)'; }; b.onmouseleave = () => { b.style.background = 'transparent'; }; b.onclick = () => { cd.remove(); fn(); }; cd.appendChild(b); };
+    xiang('关闭标签', () => { void guanWangYeKa(i); });
+    xiang('复制标签', () => { const k = zt.wangYe.ka[i]; if (!k) return; const nk = JSON.parse(JSON.stringify(k)); zt.wangYe.ka.splice(i + 1, 0, nk); zt.wangYe.dang = i + 1; huaWangYeTab(); void qieHuanWangYeKa(i + 1); });
+    /* R264 项3：拆分＝该标签独立成新 nm 窗；合并＝移入其它已开 nm 窗 */
+    const k0 = zt.wangYe.ka[i];
+    if (k0) {
+      xiang('拆分到新窗口', () => { try { if (k0.shiBenDi) window.warmy.nmKai({ luJing: k0.luJing }); else window.warmy.nmKai({ kaiWangYe: k0.url }); } catch { /* noop */ } void guanWangYeKa(i); });
+      if (!k0.shiBenDi && k0.url) {
+        xiang('合并到窗口 ▸', () => { void (async () => { try { const r = await window.warmy.nmLieBiao(); const others = ((r && r.chuangKou) || []).filter((w) => Number(w.id) !== Number(chuangKouId)); if (!others.length) { zhuangTaiWen('没有其它 nm 窗口可合并'); return; } const target = others[0]; await window.warmy.nmWangYeKai({ id: Number(target.id), url: k0.url }); void guanWangYeKa(i); } catch { /* noop */ } })(); });
+      }
+    }
+    document.body.appendChild(cd);
+    const guan = () => { cd.remove(); document.removeEventListener('click', guan, true); document.removeEventListener('keydown', esc, true); };
+    const esc = (ev) => { if (ev.key === 'Escape') guan(); };
+    setTimeout(() => { document.addEventListener('click', guan, true); document.addEventListener('keydown', esc, true); }, 0);
+  }
   function huaWangYeTab() {
     const lie = el('wangYeTabLie');
     if (!lie) return;
@@ -1036,8 +1068,17 @@
       b.appendChild(s);
       b.addEventListener('click', () => { void qieHuanWangYeKa(i); });
       b.addEventListener('dblclick', (e) => { e.stopPropagation(); void guanWangYeKa(i); });
+      /* R264 项3：标签拖拽重排＋标签右击菜单（空白右击无菜单） */
+      b.draggable = true;
+      b.addEventListener('dragstart', (e) => { try { e.dataTransfer.setData('text/nm-tab', String(i)); e.dataTransfer.effectAllowed = 'move'; } catch { /* noop */ } });
+      b.addEventListener('dragover', (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('text/nm-tab')) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; b.classList.add('dragOver'); } });
+      b.addEventListener('dragleave', () => { b.classList.remove('dragOver'); });
+      b.addEventListener('drop', (e) => { b.classList.remove('dragOver'); const from = Number(e.dataTransfer.getData('text/nm-tab')); if (!Number.isNaN(from)) { e.preventDefault(); chongPaiWangYeTab(from, i); } });
+      b.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); wangYeTabYouJian(i, e); });
       lie.appendChild(b);
     });
+    /* 空白处右击：不弹任何菜单（仅阻止原生） */
+    if (!lie.dataset.ctxBound) { lie.dataset.ctxBound = '1'; lie.addEventListener('contextmenu', (e) => { if (e.target === lie) e.preventDefault(); }); }
     gengXinTabGun();
     try { gengXinYinSiAnNiu(); } catch { /* noop */ }
     try { gengXinShouCangZhuangTai(); } catch { /* noop */ }
@@ -1381,6 +1422,14 @@
   }
   /* R244 报障11d：模态面板通用样式 */
   const MO_CSS = 'body{margin:0;font:13px/1.5 system-ui,sans-serif;background:#20232b;color:#e6e6e6;padding:16px;box-sizing:border-box}h3{margin:0 0 8px;font-size:15px}input[type=text]{width:100%;box-sizing:border-box;margin:4px 0 2px;padding:6px 8px;border:1px solid #444;border-radius:6px;background:#2a2d36;color:#e6e6e6;font:inherit}label{display:flex;gap:6px;align-items:center;margin:6px 0}.hang{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}button{padding:6px 14px;border-radius:6px;border:1px solid #444;background:#2a2d36;color:#e6e6e6;cursor:pointer}button.zhu{background:#a87654;border-color:#a87654;color:#fff}.jingYin{color:#9aa0a6}.lie{display:flex;width:100%;text-align:left;gap:8px;align-items:center;padding:8px 10px;margin:4px 0;border:1px solid #444;border-radius:8px;background:transparent;color:#e6e6e6;cursor:pointer}';
+  /* R264：模态/弹出窗随 nm 主题（--card/--ink/--accent/--line/--hover/--muted）＋自绘滚动条 */
+  function nmZhuTiCss() {
+    const cs = getComputedStyle(document.documentElement);
+    const g = (n, f) => ((cs.getPropertyValue(n) || '').trim()) || f;
+    const card = g('--card', '#20232b'), ink = g('--ink', '#e6e6e6'), accent = g('--accent', '#a87654'), line = g('--line', '#444'), hover = g('--hover', '#2a2d36'), muted = g('--muted', '#9aa0a6');
+    return 'body{background:' + card + ';color:' + ink + '}button{background:' + hover + ';border-color:' + line + ';color:' + ink + '}button.zhu{background:' + accent + ';border-color:' + accent + ';color:#fff}input[type=text],select{background:' + hover + ';border-color:' + line + ';color:' + ink + '}.jingYin{color:' + muted + '}h3{color:' + ink + '}.lie{border-color:' + line + ';color:' + ink + '}'
+      + '::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:' + card + '}::-webkit-scrollbar-thumb{background:' + accent + ';border-radius:4px}';
+  }
   /* ── 收藏夹（本机 localStorage，独立于主进程配置；人/牛马共用） ── */
   const SC_KEY = 'nm_shouCangJia_v1';
   /** R218：网页视图隐藏时的暗化铺底层（避免「网页变白」；面板在其上） */
@@ -1417,7 +1466,7 @@
     const yu = ka && !ka.shiBenDi && ka.url ? ka.url : '';
     const yuMing = yu ? (() => { try { return new URL(yu).host || yu; } catch { return yu; } })() : '';
     const d = scDu();
-    const html = '<!doctype html><html><head><meta charset="utf-8"><style>' + MO_CSS + '</style></head><body>'
+    const html = '<!doctype html><html><head><meta charset="utf-8"><style>' + MO_CSS + nmZhuTiCss() + '</style></head><body>'
       + '<h3>收藏到收藏夹</h3>'
       + '<label><span style="width:70px" class="jingYin">名称</span><input id="scMing" type="text" maxlength="80"></label>'
       + '<label><span style="width:70px" class="jingYin">网站地址</span><input id="scUrl" type="text" placeholder="https://…"></label>'
@@ -1452,13 +1501,17 @@
     if (scTing) { clearTimeout(scTing); scTing = null; }
     const d = scDu();
     const fang = b.getBoundingClientRect();
+    /* R264：收藏夹主题色＋自绘滚动条（随 nm 主题 --accent） */
+    const zhuSe = ((getComputedStyle(document.documentElement).getPropertyValue('--accent') || '').trim()) || '#a87654';
+    const accentCss = '.zhu{background:' + zhuSe + ';border-color:' + zhuSe + '}.scJiaMing{color:' + zhuSe + '}.scXinJian:hover{border-color:' + zhuSe + '}.scLianJie:hover{background:#2a2d36;color:' + zhuSe + '}'
+      + '::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#20232b}::-webkit-scrollbar-thumb{background:' + zhuSe + ';border-radius:4px}::-webkit-scrollbar-thumb:hover{background:' + zhuSe + '}';
     const lieHtml = (d.wenJianJia.length ? '<div class="scFenGe"></div>' : '')
       + d.wenJianJia.map((f, i) => '<div class="scJia"><span class="scJiaMing">' + escapeHtml(f.ming || ('收藏夹 ' + (i + 1))) + '</span><div class="scJiaNei" hidden>' + (f.items || []).map(scLianJieHtml).join('') + '</div></div>').join('')
       + (d.dingCeng.length ? '<div class="scFenGe"></div>' : '')
       + d.dingCeng.map(scLianJieHtml).join('')
       + '<div class="scKong"' + ((d.dingCeng.length || d.wenJianJia.length) ? ' hidden' : '') + '>还没有收藏内容。点收藏夹图标可收藏当前网页。</div>';
-    const html = '<!doctype html><html><head><meta charset="utf-8"><style>' + MO_CSS
-      + 'body{padding:8px;overflow:auto}.scXinJian{display:block;width:100%;text-align:left;padding:8px 10px;margin:0 0 6px;border:1px solid #444;border-radius:8px;background:#2a2d36;color:#e6e6e6;cursor:pointer}.scJia{border:1px solid #444;border-radius:8px;margin:4px 0;padding:6px 8px}.scJiaMing{font-weight:600}.scJiaNei{margin:4px 0 0 6px}.scLianJie{display:block;padding:5px 8px;margin:2px 0;border-radius:6px;color:#cdd3e0;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.scLianJie:hover{background:#2a2d36}.scFenGe{height:1px;background:#444;margin:6px 0}.scKong{color:#9aa0a6;padding:8px}.scXinJianKuang{display:flex;gap:6px;margin:0 0 6px}.scXinJianKuang input{flex:1;margin:0}</style></head><body>'
+    const html = '<!doctype html><html><head><meta charset="utf-8"><style>' + MO_CSS + nmZhuTiCss()
+      + 'body{padding:8px;overflow:auto}.scXinJian{display:block;width:100%;text-align:left;padding:8px 10px;margin:0 0 6px;border:1px solid #444;border-radius:8px;background:#2a2d36;color:#e6e6e6;cursor:pointer}.scJia{border:1px solid #444;border-radius:8px;margin:4px 0;padding:6px 8px}.scJiaMing{font-weight:600}.scJiaNei{margin:4px 0 0 6px}.scLianJie{display:block;padding:5px 8px;margin:2px 0;border-radius:6px;color:#cdd3e0;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.scLianJie:hover{background:#2a2d36}.scFenGe{height:1px;background:#444;margin:6px 0}.scKong{color:#9aa0a6;padding:8px}.scXinJianKuang{display:flex;gap:6px;margin:0 0 6px}.scXinJianKuang input{flex:1;margin:0}' + accentCss + '</style></head><body>'
       + '<button type="button" class="scXinJian" id="scXinJian">＋ 新建收藏夹</button>'
       + '<div class="scXinJianKuang" id="scXinJianKuang" hidden><input id="scXinMing" type="text" maxlength="40" placeholder="收藏夹名称"><button id="scXinQue" class="zhu">建</button></div>'
       + '<div id="scLie"></div>'
@@ -1477,7 +1530,7 @@
       + '</scr' + 'ipt></body></html>';
     scXuanTingGuan = guanScTanChuang;
     scTanChuangKaiShi = performance.now();
-    try { window.warmy.nmTanChuangKai?.({ id: chuangKouId, html, rectLeft: Math.round(fang.left), rectBottom: Math.round(fang.bottom), width: 260, height: 360 }); } catch { /* noop */ }
+    try { window.warmy.nmTanChuangKai?.({ id: chuangKouId, html, rectLeft: Math.round(fang.left), rectBottom: Math.round(fang.bottom), width: 260, height: 360, center: false }); } catch { /* noop */ }
   }
   /* R244 报障11c：收藏夹模态窗添加收藏 → 主进程转发回本窗保存（模态窗读不到本窗 localStorage） */
   try { window.warmy.onNmShouCangTianJiaHui?.((d) => { try { const xiang = d && d.xiang; if (!xiang || !xiang.url) return; const nd = scDu(); const jia = Number(d.jia); if (jia >= 0 && nd.wenJianJia[jia]) { nd.wenJianJia[jia].items = nd.wenJianJia[jia].items || []; nd.wenJianJia[jia].items.push(xiang); } else nd.dingCeng.push(xiang); scCun(nd); zhuangTaiWen('已收藏：' + (xiang.ming || xiang.url)); } catch { /* noop */ } }); } catch { /* noop */ }
@@ -1485,14 +1538,10 @@
   try { window.warmy.onNmShouCangDaKaiHui?.((d) => { try { const u = d && d.url; if (u) wangYeXin(String(u)); } catch { /* noop */ } }); } catch { /* noop */ }
   /* R244 报障11c：收藏夹弹出窗新建收藏夹 → 主进程转发回本窗保存 */
   try { window.warmy.onNmShouCangXinJianHui?.((d) => { try { const m = String((d && d.ming) || '').trim(); if (!m) return; const nd = scDu(); nd.wenJianJia.push({ ming: m, items: [] }); scCun(nd); zhuangTaiWen('已创建收藏夹：' + m); } catch { /* noop */ } }); } catch { /* noop */ }
-  /* R244 报障11c：弹出窗打开后鼠标移回 nm 页面区域（非按钮）即收起；鼠标在弹出窗上时 nm 收不到 mousemove 不会误收 */
-  document.addEventListener('mousemove', (e) => {
-    if (!scTanChuangKaiShi) return;
-    if (performance.now() - scTanChuangKaiShi < 400) return;
-    const t = e.target;
-    if (t && t.closest && t.closest('#anNiuWangYeShouCang')) return;
-    guanScTanChuang();
-  });
+  /* R264：悬停面板要能移入——不再用 nm mousemove 立即收（那会在鼠标走向弹窗途中关掉）。
+   * 改为：鼠标移出 nm 窗／点击 nm 他处 才收；弹窗自身 mouseleave 也会收（见弹窗 html）。 */
+  document.addEventListener('mouseleave', () => { if (scTanChuangKaiShi) setTimeout(() => { if (scTanChuangKaiShi) guanScTanChuang(); }, 220); });
+  document.addEventListener('mousedown', (e) => { if (!scTanChuangKaiShi) return; const t = e.target; if (t && t.closest && t.closest('#anNiuWangYeShouCang')) return; guanScTanChuang(); });
   function scLianJieHtml(x) {
     const ming = String((x && x.ming) || (x && x.url) || '');
     const url = String((x && x.url) || '');
@@ -1718,7 +1767,7 @@
     const p = zt.wangYe.peiZhi || {};
     const mo = p.qiDongMoShi === 'kongbai' ? 'kongbai' : 'ziDingYi';
     const url = String(p.qiDongYe || WANG_YE_XIN_MO_REN);
-    const html = '<!doctype html><html><head><meta charset="utf-8"><style>' + MO_CSS + '</style></head><body>'
+    const html = '<!doctype html><html><head><meta charset="utf-8"><style>' + MO_CSS + nmZhuTiCss() + '</style></head><body>'
       + '<h3>启动页设置</h3>'
       + '<label><input type="radio" name="qdyMo" value="kongbai"' + (mo === 'kongbai' ? ' checked' : '') + '><span>空白页（停在地址栏）</span></label>'
       + '<label><input type="radio" name="qdyMo" value="ziDingYi"' + (mo === 'ziDingYi' ? ' checked' : '') + '><span>自定义网址</span></label>'
@@ -1781,7 +1830,7 @@
   /* R244 报障11d：清理数据改原生模态子窗——网页保持可见不再空白；历史清理经 IPC，本窗获焦时重读 */
   async function kaiQingLiShuJu() {
     const liuLan = zt.wangYe.ka.flatMap((x) => (x.history || []).slice());
-    const html = '<!doctype html><html><head><meta charset="utf-8"><style>' + MO_CSS + '</style></head><body>'
+    const html = '<!doctype html><html><head><meta charset="utf-8"><style>' + MO_CSS + nmZhuTiCss() + '</style></head><body>'
       + '<h3>清理数据</h3>'
       + '<div id="qlFenLei" style="display:flex;gap:6px;margin:8px 0 12px"></div>'
       + '<div id="qlLieBiao"></div>'
@@ -1815,7 +1864,7 @@
         ? xiang.map((x) => '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid #444"><span class="jingYin" style="width:80px">' + escapeHtml(x[0]) + '</span><span>' + escapeHtml(String(x[1])) + '</span></div>').join('')
         : '<div class="jingYin">还没有保存的账号资料。</div>';
     } catch { t = '<div class="jingYin">账号资料暂时读不到。</div>'; }
-    const html = '<!doctype html><html><head><meta charset="utf-8"><style>' + MO_CSS + '</style></head><body>'
+    const html = '<!doctype html><html><head><meta charset="utf-8"><style>' + MO_CSS + nmZhuTiCss() + '</style></head><body>'
       + '<h3 title="密码由本机加密保管，任何界面都不会显示明文；牛马在得到授权时才能使用，不会外发。">保存的账号和密码</h3>'
       + '<div>' + t + '</div>'
       + '<div class="hang"><button id="zhGuan">关闭</button></div>'

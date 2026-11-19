@@ -345,8 +345,8 @@ export interface GongzuozheJieguo {
  */
 export interface JianchadianZengliang {
     id: string;
-    /** 轮起 / 轮末 */
-    phase: 'round_start' | 'round_end';
+    /** 轮起 / 轮末 / R263 选支前 */
+    phase: 'round_start' | 'round_end' | 'evolve_select';
     /** 对话状态：日志 seq 截断点（回退时会话日志回到这里） */
     logSeq: number;
     /** 文件状态：reflink 优先（cow），失败退回普通拷贝（shadow） */

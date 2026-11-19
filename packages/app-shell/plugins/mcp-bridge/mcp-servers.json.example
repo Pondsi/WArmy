@@ -9,6 +9,15 @@
       "timeoutMs": 15000,
       "enabled": false,
       "description": "Built-in demo MCP server shipped with this plugin. Flip enabled to true to see tools appear."
+    },
+    "agent-desktop": {
+      "command": "agent-desktop",
+      "args": ["--mcp"],
+      "cwd": ".",
+      "env": {},
+      "timeoutMs": 20000,
+      "enabled": true,
+      "description": "R264 方案A：桌面自动化可选 MCP，默认开。需本机安装 agent-desktop MCP server（不在 PATH 时桥接如实报不可用，不伪造工具）。"
     }
   }
 }

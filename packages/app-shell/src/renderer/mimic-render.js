@@ -279,6 +279,22 @@
     li.push(dingDongZuo('zhaoshou', '招手', 'shejiao', [
       { obj: 'armR', key: 'rotation.z', from: 0, to: -1.2, ms: 220, fanFu: true },
     ], 1200, 'trigger'));
+    /* R263：推手/踢脚/走路步态——桌面图标互动用自己的手脚，符合常识与物理法则 */
+    li.push(dingDongZuo('tuiShou', '推手', 'shejiao', [
+      { obj: 'armL', key: 'rotation.x', from: 0, to: -1.1, ms: 260 },
+      { obj: 'armR', key: 'rotation.x', from: 0, to: -1.1, ms: 260 },
+      { obj: 'body', key: 'position.y', from: 0, to: 0.12, ms: 260 },
+    ], 900, 'trigger'));
+    li.push(dingDongZuo('tiJiao', '踢脚', 'shejiao', [
+      { obj: 'legR', key: 'rotation.x', from: 0, to: -1.2, ms: 220, fanFu: true },
+      { obj: 'body', key: 'rotation.z', from: 0, to: -0.12, ms: 220 },
+    ], 900, 'trigger'));
+    li.push(dingDongZuo('zouLu', '走路', 'shejiao', [
+      { obj: 'legL', key: 'rotation.x', from: -0.5, to: 0.5, ms: 240, fanFu: true },
+      { obj: 'legR', key: 'rotation.x', from: 0.5, to: -0.5, ms: 240, fanFu: true },
+      { obj: 'armL', key: 'rotation.x', from: 0.4, to: -0.4, ms: 240, fanFu: true },
+      { obj: 'armR', key: 'rotation.x', from: -0.4, to: 0.4, ms: 240, fanFu: true },
+    ], 700, 'trigger'));
     // 点头
     li.push(dingDongZuo('dianTou', '点头', 'shejiao', [
       { obj: 'tou', key: 'rotation.x', from: 0, to: 0.5, ms: 220, fanFu: true },

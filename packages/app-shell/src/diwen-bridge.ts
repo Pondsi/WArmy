@@ -21,6 +21,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let qiYong = false; // 主进程按 settings.diwenEnabled 注入；首启落定前默认关
 let siYouPath = '';
+let siYouBaoDir = ''; // R263：私有包目录（~/.diwen/private 同口径，DIWEN_PRIVATE_DIR 注入）
+let updateDir = ''; // R262：迪文安装更新后的目录（worker 优先加载）
 let worker: ChildProcessWithoutNullStreams | null = null;
 let workerFailed = false;
 let daiId = 1;
@@ -29,10 +31,18 @@ const pending = new Map<number, { resolve: (v: any) => void; timer: ReturnType<t
 /** 启用开关（settings.diwenEnabled；首启简/繁中文默认开，换语言不变，手动可改）。 */
 export function sheZhiDiwenQiYong(v: boolean): void { qiYong = !!v; if (v) workerFailed = false; }
 export function diwenQiYong(): boolean { return qiYong; }
+/** R262：迪文更新目录注入＋重启 worker（安装更新后生效）。 */
+export function sheZhiDiwenUpdateDir(d: string): void { updateDir = String(d || ''); }
+export function chongQiDiwenWorker(): void {
+  if (worker) { try { worker.kill(); } catch { /* noop */ } worker = null; }
+  workerFailed = false;
+}
 /** 私有迪文文件初始化（userData 目录）；不存在则建空数组。 */
 export function chuShiHuaDiwenSiYou(dir: string): void {
   siYouPath = path.join(String(dir || ''), 'diwen-private.json');
+  siYouBaoDir = path.join(String(dir || ''), 'diwen-private');
   try { if (!fs.existsSync(siYouPath)) fs.writeFileSync(siYouPath, '[]', 'utf8'); } catch { /* 落盘失败不阻断 */ }
+  try { fs.mkdirSync(siYouBaoDir, { recursive: true }); } catch { /* noop */ }
 }
 
 function nodeLuJing(): string {
@@ -55,6 +65,8 @@ function qiWorker(): Promise<ChildProcessWithoutNullStreams | null> {
       env: {
         ...process.env,
         DIWEN_PRIVATE_LEXICON: siYouPath,
+        DIWEN_PRIVATE_DIR: siYouBaoDir,
+        ...(updateDir ? { WARMY_DIWEN_DIR: updateDir } : {}),
         ...(useElectronAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -204,10 +216,10 @@ export async function diwenXiangDeng(a: any, b: any): Promise<boolean> {
 
 // ── R257：启用状态 / 私有迪文 / 总结完善 ──
 /** 设置页状态（force：未启用也能看版本/词根数）。 */
-export async function diwenZhuangTai(): Promise<{ available: boolean; enabled: boolean; version?: string; size?: number; privateCount?: number; jieba?: boolean }> {
+export async function diwenZhuangTai(): Promise<{ ok: boolean; available: boolean; enabled: boolean; version?: string; size?: number; privateCount?: number; jieba?: boolean }> {
   const r = await dwCall('status', {}, true);
-  if (!r || !r.ok || !r.result) return { available: false, enabled: qiYong };
-  return { available: true, enabled: qiYong, version: r.result.version, size: r.result.size, privateCount: r.result.privateCount, jieba: !!r.result.jieba };
+  if (!r || !r.ok || !r.result) return { ok: true, available: false, enabled: qiYong };
+  return { ok: true, available: true, enabled: qiYong, version: r.result.version, size: r.result.size, privateCount: r.result.privateCount, jieba: !!r.result.jieba };
 }
 /** 私有词根变更后刷新子进程词典缓存。 */
 export async function shuaXinDiwenCiDian(): Promise<boolean> {
@@ -259,4 +271,33 @@ export async function zongJieGaiJinDiwen(text: string): Promise<{ ok: boolean; a
     await shuaXinDiwenCiDian();
   }
   return { ok: true, added };
+}
+
+// ── R263：私有包（导入/导出/冲突裁决/卸载，diwen@6.10.1 规范） ──
+/** 列出已装私有包（含本机单文件伪包 __legacy__）。 */
+export async function diwenSiYouBaoLieBiao(): Promise<any[]> {
+  const r = await dwCall('pkgList', {}, true);
+  return r && r.ok && Array.isArray(r.result) ? r.result : [];
+}
+/** 导入私有包（撞基础整包拒；私有间冲突自动裁决）。 */
+export async function diwenSiYouBaoDaoRu(p: string): Promise<{ ok: boolean; errors?: string[]; conflicts?: any; added?: number; remapped?: number }> {
+  const r = await dwCall('pkgImport', { path: String(p || '') }, true);
+  if (!r || !r.ok || !r.result) return { ok: false, errors: [String(r?.error || '迪文不可用')] };
+  return r.result;
+}
+/** 导出当前私有概念为规范包（manifest/concepts/candidates/enhance）。 */
+export async function diwenSiYouBaoDaoChu(p: string, ns?: string, name?: string): Promise<{ ok: boolean; concepts?: number; warnings?: string[]; errors?: string[] }> {
+  const r = await dwCall('pkgExport', { path: String(p || ''), namespace: ns, name }, true);
+  if (!r || !r.ok || !r.result) return { ok: false, errors: [String(r?.error || '迪文不可用')] };
+  return r.result;
+}
+/** 卸载私有包（完美卸载：基础零丢失，冲突自动重裁决）；__legacy__＝清空本机单文件。 */
+export async function diwenSiYouBaoShanChu(ns: string): Promise<{ ok: boolean; errors?: string[]; all?: any[]; legacyCleared?: boolean }> {
+  const r = await dwCall('pkgUninstall', { namespace: String(ns || '') }, true);
+  if (!r || !r.ok || !r.result) return { ok: false, errors: [String(r?.error || '迪文不可用')] };
+  if (r.result.legacyCleared && Array.isArray(r.result.all)) {
+    if (!xieSiYou(r.result.all)) return { ok: false, errors: ['私有迪文落盘失败'] };
+  }
+  await shuaXinDiwenCiDian();
+  return r.result;
 }

@@ -6,6 +6,21 @@
     if (existing) { existing.focus(); return; }
     const dlg = document.createElement('dialog'); dlg.id = 'mimicHuiTu'; dlg.className = 'mimicHuiTu';
     const header = document.createElement('h2'); header.textContent = labels.title;
+    /* R263：模型下拉＝统一链管理可用模型（默认第一个）；无模型⇒灰罩＋重新检测 */
+    const moRow = document.createElement('div'); moRow.className = 'mimicHuiTuMoRow';
+    const moLab = document.createElement('span'); moLab.className = 'jingYin'; moLab.textContent = '模型';
+    const moSel = document.createElement('select'); moSel.id = 'mimicHuiTuMoXing';
+    moRow.append(moLab, moSel);
+    /* R263：生成冻结罩（灰色半透＋进度动画，除关闭外不可点） */
+    const dong = document.createElement('div'); dong.className = 'mimicHuiTuDong'; dong.hidden = true;
+    const zhuan = document.createElement('div'); zhuan.className = 'mimicHuiTuZhuan';
+    const dongWen = document.createElement('div'); dongWen.className = 'mimicHuiTuDongWen'; dongWen.textContent = '生成中…';
+    dong.append(zhuan, dongWen);
+    /* R263：无可用模型遮罩（只有关闭与重新检测可点） */
+    const wu = document.createElement('div'); wu.className = 'mimicHuiTuWu'; wu.hidden = true;
+    const wuWen = document.createElement('div'); wuWen.textContent = '没有可用模型';
+    const jian = document.createElement('button'); jian.type = 'button'; jian.className = 'anNiuXiao'; jian.textContent = '重新检测模型';
+    wu.append(wuWen, jian);
     const stage = document.createElement('div'); stage.className = 'mimicHuiTuStage';
     const picture = document.createElement('div'); picture.className = 'mimicHuiTuSvg'; stage.appendChild(picture);
     const box = document.createElement('div'); box.className = 'mimicHuiTuBox'; box.hidden = true; stage.appendChild(box);
@@ -48,12 +63,25 @@
       if (names.length) { prompt.setRangeText('【' + names.join(', ') + '】', prompt.selectionStart, prompt.selectionEnd, 'end'); prompt.focus(); }
     };
     const generate = button(labels.generate, async () => {
-      if (busy || !prompt.value.trim()) return;
+      if (busy || !prompt.value.trim() || wu.hidden === false) return;
       busy = true; generate.disabled = true; save.disabled = true;
+      undoBtn.disabled = true; clearBtn.disabled = true;
       const ticket = ++seq, before = structuredClone(scene), baseHash = hash;
       status.textContent = '…';
+      /* R263：冻结罩＋进度动画＋超时 watchdog（防卡死无法关闭） */
+      dong.hidden = false; dongWen.textContent = '生成中…';
+      const t0 = Date.now();
+      const dongJi = setInterval(() => { dongWen.textContent = '生成中… ' + Math.round((Date.now() - t0) / 1000) + 's'; }, 500);
+      const watch = setTimeout(() => {
+        if (busy && ticket === seq) {
+          busy = false; dong.hidden = true; clearInterval(dongJi);
+          generate.disabled = false; save.disabled = !scene.parts.length;
+          status.textContent = '生成超时，已解锁界面（可重试或关闭）';
+          void invoke({ action: 'cancel' });
+        }
+      }, 130000);
       try {
-        const r = await invoke({ action: 'generate', prompt: prompt.value, scene: before, selection: [...selected] });
+        const r = await invoke({ action: 'generate', prompt: prompt.value, scene: before, selection: [...selected], model: moSel.value || undefined });
         if (!dlg.open || ticket !== seq || hash !== baseHash) return;
         if (!r?.ok) throw new Error(r?.error || 'generation-failed');
         history.push(before); if (history.length > 16) history.shift();
@@ -70,7 +98,7 @@
           status.textContent = labels.saved + ' (3D)';
         }
       } catch (e) { if (ticket === seq) status.textContent = e.message; }
-      finally { if (ticket === seq) { busy = false; generate.disabled = false; save.disabled = !scene.parts.length; } }
+      finally { clearInterval(dongJi); clearTimeout(watch); if (ticket === seq) { busy = false; dong.hidden = true; generate.disabled = false; save.disabled = !scene.parts.length; undoBtn.disabled = false; clearBtn.disabled = false; } }
     });
     const save = button(labels.save, async () => {
       if (busy) return;
@@ -79,14 +107,28 @@
       catch (e) { status.textContent = e.message; }
       finally { busy = false; generate.disabled = false; save.disabled = !scene.parts.length; }
     });
-    button(labels.undo, async () => {
+    const undoBtn = button(labels.undo, async () => {
       if (busy || !history.length) return;
       try { update(await invoke({ action: 'preview', scene: history[history.length - 1] })); history.pop(); }
       catch (e) { status.textContent = e.message; }
     });
-    button(labels.clear, () => { selected = []; mark(); });
+    const clearBtn = button(labels.clear, () => { selected = []; mark(); });
     button(labels.cancel, () => dlg.close());
-    dlg.append(header, stage, selectionText, prompt, status, actions); document.body.appendChild(dlg); dlg.showModal();
+    /* R263：打开时检测可用模型；无模型⇒除关闭/重新检测外全灰 */
+    const jianCe = async () => {
+      let models = [];
+      try { const r = await window.warmy.mimicHuiTuMoXingLie?.(); models = (r && r.models) || []; } catch { models = []; }
+      moSel.innerHTML = models.map((m) => '<option value="' + String(m).replace(/"/g, '&quot;') + '">' + String(m).replace(/</g, '&lt;') + '</option>').join('');
+      const you = models.length > 0;
+      wu.hidden = you;
+      moSel.disabled = !you; prompt.disabled = !you; generate.disabled = !you; save.disabled = !you || !scene.parts.length;
+      if (you) { moSel.value = models[0]; status.textContent = ''; }
+      else status.textContent = '';
+      return you;
+    };
+    jian.onclick = () => { void jianCe(); };
+    dlg.append(header, moRow, stage, selectionText, prompt, status, actions, dong, wu); document.body.appendChild(dlg); dlg.showModal();
+    void jianCe();
     dlg.addEventListener('click', (e) => { if (e.target === dlg) { const r = dlg.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close(); } });
     dlg.addEventListener('close', () => { seq++; void invoke({ action: 'cancel' }); dlg.remove(); });
     let start = null;

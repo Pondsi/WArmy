@@ -240,7 +240,7 @@ import { jueCeMoXing, jieMoXingMing, qiYongLian, type MoXingJueCeShuRu } from '.
 import { taoTtsChatBody, jieXiTtsChatResponse, taoAsrChatBody, jieXiAsrChatResponse, yingGaiHuanChatShi, guiFanAsrGeShi, jieShouGeShi, yanShouGeShi, jianBieGeShi } from '@warmy/providers';
 import { daKaiZhiNengPeiZhi } from './smart-config.js';
 import { luoDianDiwenHua, yongHuKeJianLuoDian, DIWEN_LUO_DIAN, luoDianTongJi } from './diwen-integration.js';
-import { chuShiHuaDiwenSiYou, sheZhiDiwenQiYong, diwenZhuangTai, duSiYouDiwen, tianJiaSiYouDiwen, shanChuSiYouDiwen, diwenShiTan, zongJieGaiJinDiwen } from './diwen-bridge.js';
+import { chuShiHuaDiwenSiYou, sheZhiDiwenQiYong, diwenZhuangTai, duSiYouDiwen, tianJiaSiYouDiwen, shanChuSiYouDiwen, diwenShiTan, zongJieGaiJinDiwen, sheZhiDiwenUpdateDir, chongQiDiwenWorker, diwenSiYouBaoLieBiao, diwenSiYouBaoDaoRu, diwenSiYouBaoDaoChu, diwenSiYouBaoShanChu } from './diwen-bridge.js';
 import { ChaJianYunXingShi, type ChaJianMoKuai } from './plugin-runtime.js';
 import { VmAdapterManager } from './vm-adapter.js';
 import { scanChaJianMuLu, installViaPnpm, chaJianRuKou, installFromMarket } from './plugin-installer.js';
@@ -10121,6 +10121,8 @@ async function yindao() {
       settingsStore.save({ ...cfg0, diwenEnabled: String(cfg0.yuYan || '').startsWith('zh') } as never);
     }
     chuShiHuaDiwenSiYou(userData);
+    /* R262：迪文更新目录（安装更新后 worker 优先加载新版） */
+    sheZhiDiwenUpdateDir(String((settingsStore.load() as { diwenUpdateDir?: string }).diwenUpdateDir || ''));
     tongBuDiwenKaiGuan();
   } catch { /* 迪文初始化失败不挡启动 */ }
   // 第 98 轮：首启空闲时对免 key 的链内成员自动测一次（通过留链内；失败移回待测区）
@@ -10424,20 +10426,20 @@ async function yindao() {
     domainApply: (domain, entries) => syncDomainApply(domain, entries),
     domainExport: (domain, sessions) => syncDomainExport(domain, sessions, userData),
   });
-  /* R218：定时同步 —— 勾选了「同步」（联系人/群聊）或「对接」（牛马/项目）会话后，
-   * 每 5 分钟向所有在线的我的设备推送一次（保持对接会话/同步会话最新） */
+  /* R218/R263：定时同步——默认开启；后续定时检查在空闲时完成，不妨碍使用 */
   {
     const dingShiTongBu = setInterval(() => {
       try {
         const s = syncService?.state();
-        if (!s) return;
-        const hasSess = s.sessions && Object.keys(s.sessions).length > 0;
-        const hasDuijie = !!(settingsStore?.load() as { duijieSessions?: unknown } | undefined)?.duijieSessions;
-        if (hasSess || hasDuijie) void syncService?.syncNow();
+        if (!s || !s.enabled) return;
+        if (!kongXian()) return;
+        void syncService?.syncNow();
       } catch { /* 定时同步失败不打扰 */ }
     }, 5 * 60 * 1000);
     (dingShiTongBu as unknown as { unref?: () => void }).unref?.();
   }
+  /* R263：启动即完成一次同步（群/联系人默认注册后） */
+  try { r263TongBuMoRenZhuCe(); void syncService?.syncNow(); } catch { /* noop */ }
   /**
    * 第 104 轮：一次性令牌已经解开了数据仓库；这里把 AuthService 也恢复到已登录状态
    * （身份库用同一主密钥解锁）。失败就清空令牌路径，用户走正常登录。
@@ -10574,6 +10576,20 @@ async function yindao() {
               for (const dom of SYNC_DOMAINS) {
                 const ents = (Array.isArray(p.entries) ? p.entries : []).filter((e) => e.domain === dom && e.kind !== 'del');
                 if (ents.length) syncDomainApply(dom, ents);
+              }
+              /* R263：chat 域 del⇒宿主反删（对方删过的群/会话本机也有⇒删掉，防复活） */
+              for (const d of (Array.isArray(p.dels) ? p.dels : [])) {
+                if (d.domain !== 'chat') continue;
+                const did = String(d.id || '');
+                if (!did) continue;
+                try {
+                  if (groupStore?.getGroup(did)) {
+                    groupStore.removeGroup(did);
+                    jiR263ShanChu(did, 'group');
+                    try { broadcastToWindows('warmy:huiHuaYiShanChu', { sessionId: did }); } catch { /* noop */ }
+                    try { broadcastToWindows('warmy:syncState', syncService.state()); } catch { /* noop */ }
+                  }
+                } catch { /* noop */ }
               }
               syncService.recordLastSync(Number(p.ts) || Date.now());
               replyTo({ type: 'device-sync-ack', deviceSync: { from: localNodeId, accepted: r.accepted, deleted: r.deleted, refilled: r.refilled } });
@@ -12624,6 +12640,8 @@ let desktopAnimWin: BrowserWindow | null = null;
 /** R232 全屏透明动画覆盖窗（不拦截鼠标），供桌面操作/空闲视觉互动。 */
 function ensureDesktopAnimWin(): void {
   if (desktopAnimWin && !desktopAnimWin.isDestroyed()) return;
+  /* R264 项19：覆盖窗随本体存亡 —— 隐身/未化形时绝不重建覆盖窗，杜绝「隐藏后仍和图标互动」 */
+  if (!mimicWin || mimicWin.isDestroyed()) return;
   try {
     const b = mimicWin && !mimicWin.isDestroyed() ? mimicWin.getBounds() : screen.getPrimaryDisplay().workArea;
     const disp = screen.getDisplayMatching(b).workArea;
@@ -12633,6 +12651,12 @@ function ensureDesktopAnimWin(): void {
     desktopAnimWin.loadFile(path.join(__dirname, 'renderer', 'desktop-anim.html'));
     desktopAnimWin.on('closed', () => { desktopAnimWin = null; });
   } catch { desktopAnimWin = null; }
+}
+/** R264 项19：隐身时同步销毁桌面动画覆盖窗（本体关了覆盖窗还在＝隐藏后仍播图标互动的根因） */
+function guanDesktopAnimWin(): void {
+  const w = desktopAnimWin;
+  desktopAnimWin = null;
+  if (w && !w.isDestroyed()) { try { w.close(); } catch { /* noop */ } }
 }
 function guanMimicCaiDan(): void {
   const menu = mimicMenuWin;
@@ -12882,8 +12906,9 @@ chuliIpc('warmy:mimicStart', async (_e, p0?: { character?: string }) => {
     mimicWin.on('closed', () => { guanMimicCaiDan(); mimicStopHoverPoll(); mimicWin = null; });
     mimicStartHoverPoll();
     ensureDesktopAnimWin();
+    qiDongMimicXianGuang();
     tongBuMimicYuYinKa(true);
-    try { broadcastToWindows('warmy:mimicState', { on: true }); } catch { /* noop */ }
+    try { broadcastToWindows('warmy:mimicState', { on: true, fixed: !!(settingsStore?.load() as { mimicFixed?: boolean })?.mimicFixed }); } catch { /* noop */ }
     audit?.log('mimic.start', { character: cap });
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
@@ -12896,6 +12921,7 @@ function mimicStopShiXian(): { ok: boolean; error?: string } {
     mimicStopHoverPoll();
     if (mimicWin && !mimicWin.isDestroyed()) mimicWin.close();
     mimicWin = null;
+    guanDesktopAnimWin();
     try { broadcastToWindows('warmy:mimicState', { on: false }); } catch { /* noop */ }
     audit?.log('mimic.stop', {});
     return { ok: true };
@@ -12903,7 +12929,49 @@ function mimicStopShiXian(): { ok: boolean; error?: string } {
 }
 chuliIpc('warmy:mimicStop', () => mimicStopShiXian());
 
-chuliIpc('warmy:mimicZhuangTai', () => ({ ok: true, on: !!(mimicWin && !mimicWin.isDestroyed()) }));
+chuliIpc('warmy:mimicZhuangTai', () => ({ ok: true, on: !!(mimicWin && !mimicWin.isDestroyed() && mimicWin.isVisible()) }), ['mimic.html', 'desktop-anim.html']);
+/** R264 项6：闲逛/休息——可见且未固定时偶尔随机走到一个图标边再走回，或原地休息。
+ *  找活（查看授权文件帮整理/补写）须先询问用户，属待决策的审批流，暂不自动执行。 */
+let mimicXianGuangTick: NodeJS.Timeout | null = null;
+function qiDongMimicXianGuang(): void {
+  if (mimicXianGuangTick) return;
+  mimicXianGuangTick = setInterval(() => {
+    try {
+      if (!mimicWin || mimicWin.isDestroyed() || !mimicWin.isVisible() || mimicDragging) return;
+      if ((settingsStore?.load() as { mimicFixed?: boolean } | undefined)?.mimicFixed) return;
+      if (Math.random() < 0.45) { try { mimicWin.webContents.send('warmy:mimicZouLu', { phase: 'idle', op: 'rest' }); } catch { /* noop */ } return; }
+      void (async () => {
+        const kuai = await duZhuoMianTuBiao();
+        const icons = kuai.icons || [];
+        if (!icons.length) return;
+        const ic = icons[Math.floor(Math.random() * icons.length)];
+        if (ic) await mimicZouQuHuDong('wander', '', { rect: ic.rect, dongZuo: 'zhaoshou' });
+      })();
+    } catch { /* 闲逛失败不影响业务 */ }
+  }, 45000);
+  mimicXianGuangTick.unref?.();
+}
+/** R264 项6：右键「固定: 是/否」—— 是=不走动只原地动；否=可走到图标边/闲逛 */
+chuliIpc('warmy:mimicGuDing', (_e, p0?: { fixed?: boolean }) => {
+  try {
+    if (p0 && typeof p0.fixed === 'boolean') {
+      settingsStore?.save({ mimicFixed: p0.fixed } as never);
+      try { broadcastToWindows('warmy:mimicState', { on: !!(mimicWin && !mimicWin.isDestroyed()), fixed: p0.fixed }); } catch { /* noop */ }
+      return { ok: true, fixed: p0.fixed };
+    }
+    return { ok: true, fixed: !!(settingsStore?.load() as { mimicFixed?: boolean })?.mimicFixed };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+}, ['mimic.html', 'desktop-anim.html']);
+/** R264：主机服务商凭证只回最后 5 位（其余掩码），绝不回显全文 */
+chuliIpc('warmy:providerPingZhengWei', async (_e, p0?: { id?: string }) => {
+  try {
+    const id = String(p0?.id || '');
+    if (!id || !secureKeys) return { ok: true, tail: '' };
+    const raw = await secureKeys.load('net-provider:' + id);
+    const s = String(raw || '');
+    return { ok: true, tail: s ? s.slice(-5) : '' };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 
 /** 让拟态说话（字幕 + 可选语音由渲染层负责） */
 chuliIpc('warmy:mimicShuo', (_e, p0?: { text?: string; ms?: number }) => {
@@ -13397,7 +13465,13 @@ chuliIpc('warmy:mimicCaiDanXian', async (e) => {
   mimicMenuWin = menu;
   menu.setAlwaysOnTop(true, 'screen-saver');
   menu.on('closed', () => { if (mimicMenuWin === menu) mimicMenuWin = null; });
-  menu.on('blur', () => { if (mimicMenuWin === menu) guanMimicCaiDan(); });
+  /* R264：blur 关菜单仅在「拿到过焦点」后生效 —— 应用无前台焦点时（它_app 右键拟态/自动化）
+   * focus() 被 Windows 前台锁拒绝⇒blur 立即触发⇒菜单闪消。未获焦时 3s 兄底关；
+   * 点击菜单会立即获焦，恢复失焦即关的原行为。 */
+  let menuYouFocus = false;
+  menu.on('focus', () => { menuYouFocus = true; });
+  menu.on('blur', () => { if (mimicMenuWin === menu && menuYouFocus) guanMimicCaiDan(); });
+  setTimeout(() => { if (mimicMenuWin === menu && !menuYouFocus) guanMimicCaiDan(); }, 3000);
   try {
     await menu.loadFile(path.join(__dirname, 'renderer', 'mimic-menu.html'));
     if (menu.isDestroyed()) return { ok: false };
@@ -13424,6 +13498,7 @@ chuliIpc('warmy:mimicCaiDanKai', () => {
       locale: s.yuYan || 'en-US',
       zmKai: s.mimicSubtitle !== false,
       moShi: String(s.mimicVoiceMode || 'smart'),
+      guDing: !!(s as { mimicFixed?: boolean }).mimicFixed,
       speakerOn: duQuanXian().speaker,
       /* R260：静音项改与「阅读回复」联动（mimicAutoRead，默认开）；扬声器权限仍是独立设备开关 */
       autoReadOn: (s as { mimicAutoRead?: boolean }).mimicAutoRead !== false,
@@ -13432,6 +13507,7 @@ chuliIpc('warmy:mimicCaiDanKai', () => {
         yinShen: tMain('mimic.yinShen', '隐身'), chuangKou: tMain('mimic.menu.chuangKou', '窗口'),
         yuYin: tMain('mimic.voiceMode', '语音互动模式'), sheZhi: tMain('mimic.menu.sheZhi', '设置'),
         jingYin: tMain('mimic.menu.jingYin', '静音'), quXiaoJingYin: tMain('mimic.menu.quXiaoJingYin', '取消静音'),
+        guDing: tMain('mimic.menu.guDing', '固定'), guDingShi: tMain('mimic.menu.guDingShi', '是'), guDingFou: tMain('mimic.menu.guDingFou', '否'),
         modes,
       },
     };
@@ -13466,6 +13542,14 @@ chuliIpc('warmy:mimicCaiDanDong', (_e, p0?: { item?: string; value?: string }) =
       try { audit?.log('mimic.menu-action', { item: 'yuYin', moShi: m }); } catch { /* noop */ }
       mimicWin.webContents.send('warmy:mimicDot', { on: m !== 'off' });
       return { ok: true, moShi: m };
+    }
+    /* R264 项6：右键「固定: 是/否」—— 是=不走动只原地动；否=可走到图标边/闲逛 */
+    if (item === 'guDing') {
+      const next = String(p0?.value || '') === 'shi';
+      settingsStore?.save({ mimicFixed: next } as never);
+      try { audit?.log('mimic.menu-action', { item: 'guDing', fixed: next }); } catch { /* noop */ }
+      try { broadcastToWindows('warmy:mimicState', { on: true, fixed: next }); } catch { /* noop */ }
+      return { ok: true, fixed: next };
     }
     if (item === 'sheZhi') {
       try { audit?.log('mimic.menu-action', { item: 'sheZhi' }); } catch { /* noop */ }
@@ -13611,7 +13695,7 @@ chuliIpc('warmy:benJiKongZhiTai', async (_e, p0?: { action?: string; sessionId?:
 /** R232：显式点击生成才调用已配置的拟态模型；仅生成场景数据，不给文件/网络/执行工具。 */
 const mimicHuiTuRenWu = new Map<number, AbortController>();
 let mimicHuiTuBaoCunZhong = false;
-chuliIpc('warmy:mimicHuiTu', async (e, p0?: { action?: string; prompt?: string; scene?: unknown; selection?: string[] }) => {
+chuliIpc('warmy:mimicHuiTu', async (e, p0?: { action?: string; prompt?: string; scene?: unknown; selection?: string[]; model?: string }) => {
   const id = e.sender.id;
   try {
     const action = String(p0?.action || 'preview');
@@ -13650,7 +13734,10 @@ chuliIpc('warmy:mimicHuiTu', async (e, p0?: { action?: string; prompt?: string; 
     if (!prompt || prompt.length > 2000) return { ok: false, error: 'prompt-size' };
     const selection = p0?.selection || [];
     if (!Array.isArray(selection) || selection.some((s) => typeof s !== 'string' || !base.parts.some((p) => p.id === s))) return { ok: false, error: 'selection-missing' };
-    const lian = mimicMoXingLian().filter((m) => yunXuDuiHua(m));
+    const lian0 = mimicMoXingLian().filter((m) => yunXuDuiHua(m));
+    /* R263：下拉选中的模型优先，失败顺延其余（统一链管理可用模型） */
+    const xuan = String(p0?.model || '');
+    const lian = xuan && lian0.includes(xuan) ? [xuan, ...lian0.filter((m) => m !== xuan)] : lian0;
     if (!lian.length) return { ok: false, error: 'model-not-configured' };
     const ctrl = new AbortController(); mimicHuiTuRenWu.set(id, ctrl);
     const abort = () => ctrl.abort();
@@ -13681,6 +13768,10 @@ chuliIpc('warmy:mimicHuiTu', async (e, p0?: { action?: string; prompt?: string; 
       clearTimeout(timeout); e.sender.removeListener('destroyed', abort); mimicHuiTuRenWu.delete(id);
     }
   } catch (err) { return { ok: false, error: xiJingCuoWu(err) }; }
+});
+/* R263：捏脸对话框模型下拉＝统一链管理可用模型 */
+chuliIpc('warmy:mimicHuiTuMoXingLie', async () => {
+  try { return { ok: true, models: mimicMoXingLian().filter((m) => yunXuDuiHua(m)) }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:mimicWaiGuanShe', (_e, p0?: Record<string, unknown>) => {
   try {
@@ -15432,6 +15523,7 @@ async function zhenZhengFaSong(
   xiaoXi: { sessionId: string; internal?: boolean; [k: string]: unknown },
 ): Promise<{ ok: boolean; reply: string; [k: string]: unknown }> {
   const sid = String((xiaoXi && xiaoXi.sessionId) || '');
+  zuiHouHuoDongTs = Date.now(); // R262：空闲判定用（任何真实发送都算活动）
   if (xiaoXi && xiaoXi.internal && sid && zaiTuLiao.has(sid)) {
     try { audit?.log('chat.dispatch-skipped-inflight', { sessionId: sid, kaiShi: zaiTuLiao.get(sid) }); } catch { /* noop */ }
     return { ok: false, reply: '', error: 'in-flight（这个会话上一轮还在跑，内部续派已跳过，不重复开工）', skipped: 'in-flight' };
@@ -21119,7 +21211,18 @@ chuliIpc('warmy:checkpointHuiGun', (_e, id: string, opts?: { stopFirst?: boolean
     const ws = sid ? workspaceDirOf(app.getPath('userData'), sid) : '';
     // workspace 快照还原；**不传 jsonlPath** —— 聊天记录是上下文，不随回档删除。
     const ok = checkpoints.rollback(id, { ...(ws ? { workspace: ws } : {}) });
+    const skipped = checkpoints.lastSkipped || [];
     const journal = sid ? huiDangHuiFu(sid, cp.dir) : { restored: 0, removed: 0, failed: 0 };
+    /* R263：进化回退点⇒恢复实验到选支前（split），聊天并排块回到原顺序＋可选支 */
+    const evolveSnap = (cp as { evolveSnap?: { expId?: string; arms?: unknown; mode?: string; rules?: unknown[]; projectId?: string; forkHashes?: Record<string, string>; checks?: unknown[] } }).evolveSnap;
+    if (evolveSnap && evolveSnap.expId && sid) {
+      try {
+        const e2 = { id: String(evolveSnap.expId), sessionId: sid, projectId: evolveSnap.projectId, createdAt: Date.now(), forkSeq: Date.now(), status: 'split', mode: evolveSnap.mode === 'objective' ? 'objective' : 'subjective', rules: (evolveSnap.rules || []) as never, arms: (evolveSnap.arms || { A: { turns: 0, files: [], reply: '' }, B: { turns: 0, files: [], reply: '' } }) as never, checks: (evolveSnap.checks || []) as never } as ZiJinHuaShiYan;
+        (e2 as unknown as { forkHashes?: Record<string, string> }).forkHashes = evolveSnap.forkHashes;
+        ziJinHuaBiao.set(sid, e2);
+        ziJinHuaGuangBo(e2);
+      } catch { /* noop */ }
+    }
     // 环境指纹仍如实对比
     const jilu = (settingsStore?.load()?.checkpointEnv || {})[String(id)] || null;
     const current = currentEnvFingerprint(sid);
@@ -21135,7 +21238,7 @@ chuliIpc('warmy:checkpointHuiGun', (_e, id: string, opts?: { stopFirst?: boolean
           sessionId: sid,
           role: 'system',
           system: true,
-          content: `回档到 ${label}（${when}）：已停止当前 AI/工具，并恢复所有本程序记录到的文件改动；聊天记录保留。`,
+          content: `回档到 ${label}（${when}）：已停止当前 AI/工具，并恢复所有本程序记录到的文件改动；聊天记录保留。` + (skipped.length ? `个别文件被占用跳过：${skipped.join('、')}。` : ''),
         } as never);
       } catch { /* 上下文消息写不进去也要如实返回回档结果 */ }
     }
@@ -21150,6 +21253,7 @@ chuliIpc('warmy:checkpointHuiGun', (_e, id: string, opts?: { stopFirst?: boolean
       ok,
       cpId: cp.id,
       workspaceRestored: !!ws,
+      skipped,
       journal,
       chatKept: true,
       env: { jilu, current, changed: envChanged, jiHuo: current.jiHuo },
@@ -21824,6 +21928,8 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
         completionTokens: (e as { completionTokens?: number }).completionTokens || 0,
         /** 第 35 轮 项 8：这一轮跑了几轮（工具循环）—— 悬停词元时要显示 */
         turnCount: Number((e as { turnCount?: number }).turnCount || 0) || 0,
+        /* R261 项6：进化双支线并排块（聊天记录的一部分）必须原样带回渲染层 */
+        evolvePair: (e as { evolvePair?: unknown }).evolvePair || null,
       })),
     };
   } catch (e2) {
@@ -22076,7 +22182,7 @@ chuliIpc('warmy:diwenSheZhi', (_e, p?: { enabled?: boolean }) => {
     return { ok: true, enabled: v };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-chuliIpc('warmy:diwenZhuangTai', async () => { try { return { ok: true, ...(await diwenZhuangTai()) }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; } });
+chuliIpc('warmy:diwenZhuangTai', async () => { try { return await diwenZhuangTai(); } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; } });
 chuliIpc('warmy:diwenSiYouList', async () => { try { return { ok: true, items: await duSiYouDiwen() }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; } });
 chuliIpc('warmy:diwenSiYouTian', async (_e, p?: { word?: string; meaning?: string; bfoType?: string }) => { try { return await tianJiaSiYouDiwen(p || {}); } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; } });
 chuliIpc('warmy:diwenSiYouShan', async (_e, p?: { id?: number }) => { try { return await shanChuSiYouDiwen(Number(p?.id) || 0); } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; } });
@@ -26842,7 +26948,7 @@ async function zhaoSkiLlMd(
   return { ok: true, luJing: di, url: 'https://raw.githubusercontent.com/' + wanZhu + '/' + zhi + '/' + di };
 }
 
-chuliIpc('warmy:skillMarketInstall', async (_e, p0?: { id?: string; name?: string; skillUrl?: string; owner?: string; repo?: string }) => {
+chuliIpc('warmy:skillMarketInstall', async (_e, p0?: { id?: string; name?: string; skillUrl?: string; owner?: string; repo?: string; targetDir?: string }) => {
   try {
     let url = String(p0?.skillUrl || '');
     let luJing = '';
@@ -26866,17 +26972,27 @@ chuliIpc('warmy:skillMarketInstall', async (_e, p0?: { id?: string; name?: strin
     /**
      * **装到那个不可删除的默认自动发现目录**（第 27 轮 项 2）：
      * 原来取 jinengGen()[0].root，顺序一变就会把技能装进用户可以删掉的临时目录。
+     * R262：更新（targetDir）可写回原技能目录，但必须是已扫描根下的现有技能目录。
      */
-    const gen0 = moRenSaoMiaoLuJing('skills');
-    if (!gen0) return { ok: false, error: 'no-skill-dir' };
-    const dir = path.join(gen0, id);
+    let dir = '';
+    const muBiao = String(p0?.targetDir || '');
+    if (muBiao) {
+      const jue = path.resolve(muBiao);
+      const heFa = jinengGen().some((r) => { const rr = path.resolve(r.root); return jue === rr || path.dirname(jue) === rr; }) && fs.existsSync(path.join(jue, 'SKILL.md'));
+      if (!heFa) return { ok: false, error: 'bad-target-dir（更新目标必须是已扫描的技能目录）' };
+      dir = jue;
+    } else {
+      const gen0 = moRenSaoMiaoLuJing('skills');
+      if (!gen0) return { ok: false, error: 'no-skill-dir' };
+      dir = path.join(gen0, id);
+    }
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'SKILL.md'), text, 'utf8');
     qingKongJiNengSuoYin();
     audit?.log('skill.market-install', { id, url: url.slice(0, 120) });
     // R205：迪文化落点 skill-contract（技能契约经三态门控；不可用不阻断）
     try { void luoDianDiwenHua('skill-contract', { text: String(text).slice(0, 2000) }).catch(() => { /* noop */ }); } catch { /* noop */ }
-    return { ok: true, id, dir, luJing, muLu: gen0 };
+    return { ok: true, id, dir, luJing, muLu: path.dirname(dir) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 /**
@@ -26905,17 +27021,33 @@ chuliIpc('warmy:benDiYuYinQiYong', (_e, p0?: { kai?: boolean }) => {
  * **自检**：本地合成一句中文，再把这段音频交给本地识别转回文字。
  * 一圈跑通才算真能用（只测「能不能加载模型」是不够的 —— 加载成功但不出字同样是废的）。
  */
-chuliIpc('warmy:benDiYuYinZiJian', async () => {
+chuliIpc('warmy:benDiYuYinZiJian', async (_e, p0?: { asr?: string }) => {
   try {
     const st = zhuangTaiBenDiYuYin();
-    if (!st.moXing.shiBie || !st.moXing.heCheng) return { ok: false, error: '模型没装全（识别 ' + st.moXing.shiBie + ' / 合成 ' + st.moXing.heCheng + '）' };
+    /* R262 项4：自检跟随所选——asr=whisper 用 whisper.cpp 识别（不要求 sherpa 识别模型）；asr=none 只测合成（识别跟随听话模型）。 */
+    const asrMode = String(p0?.asr || '') === 'whisper' ? 'whisper' : String(p0?.asr || '') === 'none' ? 'none' : 'sherpa-onnx';
+    const wSt = asrMode === 'whisper' ? whisperZhuangTai(false) : null;
+    const wAn = !!(wSt && (wSt.zhuangTai === 'yi_an_zhuang' || wSt.zhuangTai === 'bu_ke_yong'));
+    const shiOk = asrMode === 'whisper' ? wAn : asrMode === 'none' ? true : !!st.moXing.shiBie;
+    if (!shiOk || !st.moXing.heCheng) return { ok: false, error: '模型没装全（识别 ' + (asrMode === 'whisper' ? (wAn ? 'whisper.cpp' : '未装') : String(st.moXing.shiBie)) + ' / 合成 ' + st.moXing.heCheng + '）' };
     if (!st.yunXing.keYiBao) return { ok: false, error: '运行环境加载不了：' + (st.cuoWu || st.yunXing.luJing) };
     const yuan = '今天天气很好';
     const t0 = Date.now();
     /** 自检可在未启用时运行，但绝不临时改写用户选择（包括失败早退）。 */
     const he = await benDiHeCheng(yuan, 0, 1, true);
     if (!he.ok || !he.wav) return { ok: false, error: '合成失败：' + String(he.error || '') };
-    const shi = await benDiShiBie(he.wav, 'wav', undefined, true);
+    if (asrMode === 'none') return { ok: true, yuan, huiZhuan: '', yiZhi: false, onlyTts: true, heChengMs: Date.now() - t0, heChengMoXing: he.moXing, yangBenMB: Math.round(he.wav.length / 1024), sampleRate: he.sampleRate };
+    /* R262：自检识别引擎跟随设置页「语音转文字」所选（whisper⇒whisper.cpp；否则 sherpa） */
+    let shi: { ok: boolean; text?: string; error?: string; moXing?: string };
+    if (asrMode === 'whisper') {
+      const lin = path.join(app.getPath('temp'), 'warmy-zijian-' + Date.now() + '.wav');
+      try { fs.writeFileSync(lin, he.wav); } catch (e) { return { ok: false, error: '写临时音频失败：' + xiJingCuoWu(e) }; }
+      const wr = await whisperShiBie(lin, 'zh');
+      try { fs.unlinkSync(lin); } catch { /* noop */ }
+      shi = { ok: !!wr.ok, text: wr.text, error: wr.error, moXing: 'whisper.cpp' };
+    } else {
+      shi = await benDiShiBie(he.wav, 'wav', undefined, true);
+    }
     if (!shi.ok) return { ok: false, error: '识别失败：' + String(shi.error || ''), heChengMB: Math.round(he.wav.length / 1024) };
     const yiZhi = String(shi.text || '').replace(/[，。,.!?！？\s]/g, '') === yuan.replace(/[，。,.!?！？\s]/g, '');
     return {
@@ -26927,6 +27059,40 @@ chuliIpc('warmy:benDiYuYinZiJian', async () => {
 });
 chuliIpc('warmy:benDiYuYinQingDan', () => {
   try { return { ok: true, qingDan: BEN_DI_QING_DAN }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R263：音色清单——本地仅 sherpa-onnx 装好才显（VITS 多说话人 sid）；
+ *  云端从说话模型链拉取（试 /audio/voices，失败回退协议预设；无模型⇒空，不造假选项）。 */
+chuliIpc('warmy:yinSeLieBiao', async () => {
+  try {
+    const st = zhuangTaiBenDiYuYin();
+    const localOn = (st.zhuangTai === 'yi_an_zhuang' || st.zhuangTai === 'bu_ke_yong') && !!st.moXing.heCheng;
+    const sm = (settingsStore?.load() as { specialModels?: Record<string, unknown> } | undefined)?.specialModels || {};
+    const lian = Array.isArray(sm.ttsChain) ? (sm.ttsChain as string[]) : [];
+    const jin = Array.isArray(sm.ttsDisabled) ? (sm.ttsDisabled as string[]) : [];
+    const keYong = [...new Set(lian.filter((m) => m && !jin.includes(m)))];
+    const mo = keYong[0] || '';
+    let voices: string[] = [];
+    let source = 'none';
+    if (mo) {
+      const an = await jieMoXingGongYingShang(mo);
+      if (an) {
+        try {
+          const r = await fetch(pinJieUrl(an.baseURL, 'audio/voices'), { headers: { Authorization: `Bearer ${an.apiKey}` }, signal: AbortSignal.timeout(8000) });
+          if (r.ok) {
+            const j = (await r.json()) as { data?: Array<{ id?: string; voice?: string }> | string[] };
+            const arr = Array.isArray(j) ? j : (Array.isArray(j?.data) ? j.data : []);
+            voices = arr.map((x) => String(typeof x === 'string' ? x : (x?.id || x?.voice || ''))).filter(Boolean).slice(0, 64);
+            if (voices.length) source = 'provider';
+          }
+        } catch { /* 拉取失败回退协议预设 */ }
+        if (!voices.length) {
+          voices = an.protocol === 'openai-compatible' ? ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] : [];
+          source = voices.length ? 'protocol' : 'none';
+        }
+      }
+    }
+    return { ok: true, local: { available: localOn, speakers: 5 }, cloud: { model: mo, voices, source } };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 /** R260：Whisper ASR 引擎（只做语音转文字；TTS 仍 sherpa-onnx）。状态/安装/删除/识别。 */
 chuliIpc('warmy:whisperZhuangTai', () => {
@@ -28241,7 +28407,21 @@ chuliIpc('warmy:chaJianQiYong', async (_e, mu?: { plugin?: string; enabled?: boo
   try {
     const name = String(mu?.plugin || ''); if (!name) return { ok: false, error: 'bad-payload' };
     const en = mu?.enabled !== false;
+    /* R262：warmy-memory-system 启用中⇒其他记忆系统强制不生效（不可启用）；启用它时强制卸载其他记忆系统 */
+    const shiJiYiChaJian = (n: string) => n !== 'warmy-memory' && /memory/.test(n);
+    const st0 = duChaJianZhuangTai();
+    if (en && shiJiYiChaJian(name) && st0.enabled['warmy-memory'] !== false) {
+      return { ok: false, error: 'memory-exclusive（warmy-memory-system 启用中，其他记忆系统强制不生效）' };
+    }
     const st = duChaJianZhuangTai(); st.enabled[name] = en; cunChaJianZhuangTai(st);
+    if (name === 'warmy-memory' && en) {
+      for (const n of Object.keys(st.installed || {})) {
+        if (!shiJiYiChaJian(n)) continue;
+        st.enabled[n] = false;
+        try { chaJianYunXing().xieZai(n); } catch { /* noop */ }
+      }
+      cunChaJianZhuangTai(st);
+    }
     const rt = chaJianYunXing();
     if (!en) { rt.xieZai(name); try { audit?.log('plugin.disable', { plugin: name }); } catch { /* noop */ } return { ok: true, enabled: false }; }
     if (rt.lieBiao().includes(name)) return { ok: true, enabled: true };
@@ -28333,10 +28513,10 @@ chuliIpc('warmy:chaJianShiChangAnZhuang', async (_e, mu?: { name?: string; versi
     return { ok: true, version: ver, spec: r.spec, loaded: lr.ok, loadErrors: lr.errors };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
-/** 更新检测：遍历索引源找该插件推荐版。 */
-chuliIpc('warmy:chaJianGengXinJianCe', async (_e, mu?: { plugin?: string }) => {
+/** 更新检测：遍历索引源找该插件推荐版（R262 抽函数：空闲全量检查复用）。 */
+async function chaJianGengXinJianCeNei(name: string): Promise<{ ok: boolean; hasUpdate?: boolean; recommended?: string | null; latest?: string | null; url?: string; name?: string; error?: string }> {
   try {
-    const name = String(mu?.plugin || ''); const st = duChaJianZhuangTai(); const inst = st.installed[name];
+    const st = duChaJianZhuangTai(); const inst = st.installed[name];
     if (!inst) return { ok: false, error: 'not-installed' };
     const hv = chaJianHostVer();
     for (const src of st.indexSources) {
@@ -28349,7 +28529,8 @@ chuliIpc('warmy:chaJianGengXinJianCe', async (_e, mu?: { plugin?: string }) => {
     }
     return { ok: true, hasUpdate: false, recommended: null, latest: null, name };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
+}
+chuliIpc('warmy:chaJianGengXinJianCe', async (_e, mu?: { plugin?: string }) => chaJianGengXinJianCeNei(String(mu?.plugin || '')));
 /** 执行更新：装推荐版 → 卸载旧 → 加载新。 */
 chuliIpc('warmy:chaJianGengXin', async (_e, mu?: { plugin?: string }) => {
   try {
@@ -28517,6 +28698,8 @@ chuliIpc('warmy:jinengJiLieBiao', () => {
         mtime,
         enabled,
         removable: source !== 'discovered',
+        banBen: tiQuSkillBanBen(md),
+        dir: path.dirname(md),
       });
     };
     // A discovered root may itself be a skill package (SKILL.md at the root)
@@ -30315,37 +30498,232 @@ async function dshZhiXingAnZhuang(_opts?: { force?: boolean }): Promise<{ ok: bo
 }
 chuliIpc('warmy:dshAnZhuang', async (_e, opts?: { force?: boolean }) => dshZhiXingAnZhuang(opts));
 
+/* ══ R262：迪文私有词库导入/导出＋迪文更新检查/安装（设置页只留这三个按钮） ══ */
+chuliIpc('warmy:diwenSiYouDaoChu', async () => {
+  try {
+    if (!win) return { ok: false, error: 'no window' };
+    const yuan = path.join(app.getPath('userData'), 'diwen-private.json');
+    if (!fs.existsSync(yuan)) return { ok: false, error: 'empty' };
+    const r = await dialog.showSaveDialog(win, { defaultPath: 'diwen-private.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+    fs.copyFileSync(yuan, r.filePath);
+    return { ok: true, path: r.filePath };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:diwenSiYouDaoRu', async () => {
+  try {
+    if (!win) return { ok: false, error: 'no window' };
+    const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
+    if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
+    const j = JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8'));
+    if (!Array.isArray(j)) return { ok: false, error: 'bad-format' };
+    /* R263：旧单文件导入走正规校验（id 分区/无字形/pinyin），不再直写原始 {word} 形状 */
+    let tian = 0;
+    const errs: string[] = [];
+    for (const x of j) {
+      const w = String((x || {}).lemma_zh || (x || {}).word || '').trim();
+      if (!w) continue;
+      const rr = await tianJiaSiYouDiwen({ word: w, meaning: String((x || {}).definitionZh || (x || {}).meaning || ''), bfoType: String((x || {}).bfo_type || (x || {}).bfoType || 'Object') });
+      if (rr.ok) tian++;
+      else errs.push(...(rr.errors || []));
+    }
+    const cur = await duSiYouDiwen();
+    return { ok: true, added: tian, total: cur.length, errors: errs.slice(0, 6) };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/* R263：私有包列出/导入/导出/卸载（diwen@6.10.1 规范；冲突自动裁决，撞基础整包拒） */
+chuliIpc('warmy:diwenSiYouBaoLieBiao', async () => {
+  try { return { ok: true, items: await diwenSiYouBaoLieBiao() }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:diwenSiYouBaoDaoRu', async () => {
+  try {
+    if (!win) return { ok: false, error: 'no window' };
+    const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Diwen package', extensions: ['diwenpkg', 'json'] }] });
+    if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
+    const rr = await diwenSiYouBaoDaoRu(r.filePaths[0]);
+    return rr;
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:diwenSiYouBaoDaoChu', async () => {
+  try {
+    if (!win) return { ok: false, error: 'no window' };
+    const r = await dialog.showSaveDialog(win, { defaultPath: 'warmy-private.diwenpkg', filters: [{ name: 'Diwen package', extensions: ['diwenpkg'] }] });
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+    return await diwenSiYouBaoDaoChu(r.filePath, 'warmy.local', 'warmy-private');
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:diwenSiYouBaoShanChu', async (_e, p0?: { namespace?: string }) => {
+  try { return await diwenSiYouBaoShanChu(String(p0?.namespace || '')); } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+function diwenYiAnZhuangBanBen(): string | null {
+  const s = settingsStore?.load() as { diwenUpdateDir?: string } | undefined;
+  /* R264 项15：开发态 getAppPath()=dist/，候选路径全落空⇒「检查更新」空文案像无反应；
+   * 用 require.resolve locating 随包 diwen（dev/打包/asar 都适用） */
+  let suiBao = '';
+  try { suiBao = path.dirname(require.resolve('diwen/package.json')); } catch { /* noop */ }
+  const hou = [
+    String(s?.diwenUpdateDir || ''),
+    suiBao,
+    path.join(process.resourcesPath || '', 'app', 'node_modules', 'diwen'),
+    path.join(app.getAppPath(), 'node_modules', 'diwen'),
+    path.join(app.getAppPath(), '..', 'node_modules', 'diwen'),
+  ];
+  for (const d of hou) {
+    if (!d) continue;
+    try { const j = JSON.parse(fs.readFileSync(path.join(d, 'package.json'), 'utf8')); if (j.version) return String(j.version); } catch { /* next */ }
+  }
+  return null;
+}
+chuliIpc('warmy:diwenGengXinJianCha', async () => {
+  try {
+    const installed = diwenYiAnZhuangBanBen();
+    let latest: string | null = null; let err = '';
+    try {
+      const r = await fetch('https://registry.npmjs.org/diwen', { signal: AbortSignal.timeout(20000) });
+      const j = (await r.json()) as { 'dist-tags'?: { latest?: string } };
+      latest = String(j?.['dist-tags']?.latest || '') || null;
+      if (!latest) err = 'registry-empty';
+    } catch (e) { err = xiJingCuoWu(e).slice(0, 160); }
+    return { ok: true, installed, latest, hasUpdate: !!(installed && latest && installed !== latest), error: err || undefined };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:diwenGengXinAnZhuang', async () => {
+  try {
+    const jc = await (async () => {
+      const r = await fetch('https://registry.npmjs.org/diwen', { signal: AbortSignal.timeout(20000) });
+      const j = (await r.json()) as { 'dist-tags'?: { latest?: string } };
+      return String(j?.['dist-tags']?.latest || '') || null;
+    })();
+    if (!jc) return { ok: false, error: 'registry-empty' };
+    const dir = path.join(app.getPath('userData'), 'diwen-update');
+    fs.mkdirSync(dir, { recursive: true });
+    const bj = path.join(dir, 'package.json');
+    if (!fs.existsSync(bj)) fs.writeFileSync(bj, JSON.stringify({ name: 'warmy-diwen-update', private: true, dependencies: {} }, null, 2));
+    const r = await npmSpawnSync(['install', 'diwen@' + jc, '--prefix', dir, '--no-audit', '--no-fund'], { timeout: 10 * 60 * 1000 });
+    if (r.status !== 0) return { ok: false, error: String(r.stderr || r.error || 'npm-failed').slice(0, 200) };
+    const mu = path.join(dir, 'node_modules', 'diwen');
+    if (!fs.existsSync(path.join(mu, 'package.json'))) return { ok: false, error: 'install-missing' };
+    settingsStore?.save({ diwenUpdateDir: mu } as never);
+    sheZhiDiwenUpdateDir(mu);
+    chongQiDiwenWorker();
+    return { ok: true, version: jc, dir: mu };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+
+/* ══ R262：空闲定时全量更新检查（仅检查不升级不改动・一天最多一次・必须空闲） ══
+ * 覆盖本体：应用 feed + dsh；其余（whisper/sherpa/迪文/插件/skill）只产出状态供设置页显示，手动更新。 */
+let zuiHouHuoDongTs = Date.now();
+function kongXian(): boolean {
+  return zaiTuLiao.size === 0 && (Date.now() - zuiHouHuoDongTs > 5 * 60 * 1000);
+}
+async function jianChaQuanBuGengXin(): Promise<{ checkedAt: number; items: Array<Record<string, unknown>> }> {
+  const items: Array<Record<string, unknown>> = [];
+  const push = (kind: string, id: string, name: string, current: string | null, latest: string | null, err?: string) => {
+    items.push({ kind, id, name, current, latest, hasUpdate: !!(current && latest && current !== latest), error: err || undefined });
+  };
+  /* 应用本体 */
+  try {
+    const r = await fetch('https://api.github.com/repos/Pondsi/WArmy/releases/latest', { signal: AbortSignal.timeout(20000), headers: { Accept: 'application/vnd.github+json' } });
+    const j = (await r.json()) as { tag_name?: string };
+    push('app', 'warmy', 'WArmy', app.getVersion(), String(j?.tag_name || '').replace(/^v/, '') || null);
+  } catch (e) { push('app', 'warmy', 'WArmy', app.getVersion(), null, xiJingCuoWu(e).slice(0, 120)); }
+  /* dsh 本体 */
+  try {
+    const d = await chaDshGengXinNei();
+    push('dsh', 'dsh', 'DeepSeek Harness (dsh)', d.installed, d.latest, d.error);
+  } catch (e) { push('dsh', 'dsh', 'DeepSeek Harness (dsh)', null, null, xiJingCuoWu(e).slice(0, 120)); }
+  /* 按需运行时：whisper.cpp / sherpa-onnx */
+  try {
+    const r = await fetch('https://api.github.com/repos/ggml-org/whisper.cpp/releases/latest', { signal: AbortSignal.timeout(20000) });
+    const j = (await r.json()) as { tag_name?: string };
+    push('runtime', 'whisper', 'whisper.cpp', 'v1.7.2', String(j?.tag_name || '') || null);
+  } catch (e) { push('runtime', 'whisper', 'whisper.cpp', 'v1.7.2', null, xiJingCuoWu(e).slice(0, 120)); }
+  try {
+    let cur: string | null = null;
+    try { cur = String(JSON.parse(fs.readFileSync(path.join(process.resourcesPath || '', 'app', 'node_modules', 'sherpa-onnx-node', 'package.json'), 'utf8')).version || ''); } catch { cur = '1.13.8'; }
+    const r = await fetch('https://registry.npmjs.org/sherpa-onnx-node', { signal: AbortSignal.timeout(20000) });
+    const j = (await r.json()) as { 'dist-tags'?: { latest?: string } };
+    push('runtime', 'sherpa-onnx', 'sherpa-onnx', cur, String(j?.['dist-tags']?.latest || '') || null);
+  } catch (e) { push('runtime', 'sherpa-onnx', 'sherpa-onnx', null, null, xiJingCuoWu(e).slice(0, 120)); }
+  /* 迪文 */
+  try {
+    const r = await fetch('https://registry.npmjs.org/diwen', { signal: AbortSignal.timeout(20000) });
+    const j = (await r.json()) as { 'dist-tags'?: { latest?: string } };
+    push('diwen', 'diwen', '迪文 (Diwen)', diwenYiAnZhuangBanBen(), String(j?.['dist-tags']?.latest || '') || null);
+  } catch (e) { push('diwen', 'diwen', '迪文 (Diwen)', diwenYiAnZhuangBanBen(), null, xiJingCuoWu(e).slice(0, 120)); }
+  /* 插件（非内置）：索引推荐版 */
+  try {
+    const st = duChaJianZhuangTai();
+    for (const name of Object.keys(st.installed || {})) {
+      const inst = st.installed[name];
+      if (!inst) continue;
+      const r = await chaJianGengXinJianCeNei(name);
+      push('plugin', name, name, String(inst.version || ''), r.ok ? (r.recommended || r.latest || null) : null, r.ok ? undefined : r.error);
+    }
+  } catch { /* 插件检查失败不挡其余 */ }
+  /* skill：市场同名最新版 vs 已装 semver（jinengGen 是扫描根目录，需下钻到每个技能目录） */
+  try {
+    const mu = await duShiChangMuLu();
+    const catalog = (mu && Array.isArray(mu.xiang) ? mu.xiang : []) as Array<{ name?: string; version?: string }>;
+    const yiTiao = (dir: string) => {
+      let md = '';
+      try { md = fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8'); } catch { return; }
+      const installed = tiQuSkillBanBen(md);
+      if (!installed) return;
+      const ming = path.basename(dir);
+      const hit = catalog.find((x) => String(x?.name || '') === ming);
+      const latest = String(hit?.version || '') || null;
+      push('skill', ming, ming, installed, latest, !latest ? 'market-no-version' : undefined);
+    };
+    for (const r of jinengGen()) {
+      if (!fs.existsSync(r.root)) continue;
+      if (fs.existsSync(path.join(r.root, 'SKILL.md'))) yiTiao(r.root);
+      let dirs: string[] = [];
+      try { dirs = fs.readdirSync(r.root, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { continue; }
+      for (const d of dirs) yiTiao(path.join(r.root, d));
+    }
+  } catch { /* skill 检查失败不挡其余 */ }
+  const jie = { checkedAt: Date.now(), items };
+  try { settingsStore?.save({ idleUpdateCheck: jie } as never); } catch { /* noop */ }
+  try { broadcastToWindows('warmy:gengXinZhuangTai', jie); } catch { /* noop */ }
+  return jie;
+}
+async function chaDshGengXinNei(): Promise<{ installed: string | null; latest: string | null; error?: string }> {
+  const dir = findDshPackageDir(dshHouXuanLuJing());
+  let installed: string | null = null;
+  if (dir) { try { installed = String(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version || '') || null; } catch { /* noop */ } }
+  let latest: string | null = null; let err = '';
+  try {
+    const r = await npmSpawnSync(['view', '@deepseek-ai/dsh', 'version', '--json'], { timeout: 30000 });
+    const out = String(r.stdout || '').trim();
+    try { const j = out ? JSON.parse(out) : null; latest = typeof j === 'string' ? j : (j && typeof j.version === 'string' ? j.version : null); } catch { latest = out.replace(/^"|"$/g, '') || null; }
+    if (!latest) err = String(r.stderr || 'registry-empty').slice(0, 160);
+  } catch (e) { err = xiJingCuoWu(e).slice(0, 160); }
+  return { installed, latest, error: err || undefined };
+}
+chuliIpc('warmy:gengXinZhuangTaiQu', () => {
+  try { return { ok: true, ...( (settingsStore?.load() as { idleUpdateCheck?: unknown })?.idleUpdateCheck || { checkedAt: 0, items: [] }) }; }
+  catch { return { ok: true, checkedAt: 0, items: [] }; }
+});
+setInterval(() => {
+  try {
+    const s = settingsStore?.load() as { idleUpdateCheck?: { checkedAt?: number } } | undefined;
+    const last = Number(s?.idleUpdateCheck?.checkedAt || 0);
+    if (!kongXian()) return;
+    if (Date.now() - last < 24 * 3600 * 1000) return;
+    void jianChaQuanBuGengXin().catch(() => { /* 检查失败不重试轰炸，下个空闲窗口再试 */ });
+  } catch { /* noop */ }
+}, 20 * 60 * 1000);
+
 /**
  * 关于页「检查更新」要一并查 DeepSeek Shell（产品要求）。
  * 对比本地已装版本 vs npm registry 最新版；查不到 registry 就如实说查不到，不编「已是最新」。
  */
 chuliIpc('warmy:dshGengXinJianCha', async () => {
   try {
-    const dir = findDshPackageDir(dshHouXuanLuJing());
-    let installed: string | null = null;
-    if (dir) {
-      try {
-        const j = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
-        installed = typeof j.version === 'string' ? j.version : null;
-      } catch { /* noop */ }
-    }
-    let latest: string | null = null;
-    let registryError = '';
-    try {
-      const r = await npmSpawnSync(['view', '@deepseek-ai/dsh', 'version', '--json'], { timeout: 30000 });
-      const out = String(r.stdout || '').trim();
-      try {
-        const j = out ? JSON.parse(out) : null;
-        latest = typeof j === 'string' ? j : (j && typeof j.version === 'string' ? j.version : null);
-      } catch {
-        latest = out.replace(/^"|"$/g, '') || null;
-      }
-      if (!latest) registryError = String(r.stderr || 'registry-empty').slice(0, 160);
-    } catch (e) {
-      registryError = xiJingCuoWu(e).slice(0, 160);
-    }
-    const needUpdate = !!(installed && latest && installed !== latest);
-    return { ok: true, installed, latest, needUpdate, installedButNoRegistry: !!(installed && !latest), error: registryError || undefined };
+    const d = await chaDshGengXinNei();
+    const needUpdate = !!(d.installed && d.latest && d.installed !== d.latest);
+    return { ok: true, installed: d.installed, latest: d.latest, needUpdate, installedButNoRegistry: !!(d.installed && !d.latest), error: d.error || undefined };
   } catch (e) {
     return { ok: false, error: xiJingCuoWu(e) };
   }
@@ -30628,7 +31006,11 @@ function syncChatExport(userDataDir: string, sessions: Record<string, { sid: str
       if (!s) continue;
       let lastTs = 0;
       for (const m of Array.isArray(s.msgs) ? s.msgs : []) lastTs = Math.max(lastTs, Number(m?.ts) || 0);
-      out.push({ id: sid, ts: lastTs || Date.now(), data: JSON.stringify(s.msgs || []) });
+      /* R263：随带群壳（统一编号＝sid）＋工作区文本文件，接收端据此建群/同步工作区 */
+      const g = groupStore?.getGroup(sid);
+      const shell = g ? { name: g.ming, type: g.type, creatorFingerprint: g.creatorFingerprint || '', stoppedAt: g.stoppedAt ?? null } : null;
+      const ws = g ? r263GongZuoQuDaoChu(sid) : [];
+      out.push({ id: sid, ts: lastTs || Date.now(), data: JSON.stringify({ msgs: s.msgs || [], shell, ws }) });
     }
     return out.length ? out : null;
   } catch { return null; }
@@ -30642,7 +31024,32 @@ function syncChatApply(userDataDir: string, entries: Array<{ id: string; data?: 
     for (const e of entries) {
       const sid = String(e.id || '').slice(0, 120);
       if (!sid) continue;
-      const incoming = Array.isArray(e.data) ? e.data : (() => { try { const j = JSON.parse(String(e.data || '[]')); return Array.isArray(j) ? j : []; } catch { return []; } })();
+      /* R263：新格式 {msgs,shell,ws}；旧格式纯数组兼容 */
+      let incoming: Array<Record<string, unknown>> = [];
+      let shell: { name?: string; type?: string; creatorFingerprint?: string; stoppedAt?: number | null } | null = null;
+      let ws: Array<{ rel?: string; ts?: number; content?: string }> = [];
+      try {
+        const j = JSON.parse(String(e.data || '[]'));
+        if (Array.isArray(j)) incoming = j;
+        else if (j && typeof j === 'object') {
+          incoming = Array.isArray((j as { msgs?: unknown[] }).msgs) ? (j as { msgs: Array<Record<string, unknown>> }).msgs : [];
+          shell = ((j as { shell?: { name?: string; type?: string; creatorFingerprint?: string; stoppedAt?: number | null } }).shell) || null;
+          ws = Array.isArray((j as { ws?: unknown[] }).ws) ? (j as { ws: Array<{ rel?: string; ts?: number; content?: string }> }).ws : [];
+        }
+      } catch { incoming = []; }
+      /* R263：本机没有该群⇒先查删除台账：删过⇒不复活＋记墓碑反删对方；没删过⇒建群（统一编号） */
+      if (shell && !groupStore?.getGroup(sid)) {
+        if (r263YiShanChu(sid)) {
+          try { syncService?.recordTombstone('chat', sid); } catch { /* noop */ }
+          continue;
+        }
+        try {
+          groupStore?.upsertGroup({ groupId: sid, ming: String(shell.name || sid), type: shell.type === 'external' ? 'external' : 'internal', creatorFingerprint: shell.creatorFingerprint || undefined, stoppedAt: shell.stoppedAt ?? null });
+          fs.mkdirSync(workspaceDirOf(userDataDir, sid), { recursive: true });
+          try { broadcastToWindows('warmy:qunLieBiaoGengXin', {}); } catch { /* noop */ }
+        } catch { /* 建群失败不挡消息 */ }
+      }
+      if (shell && groupStore?.getGroup(sid) && ws.length) r263GongZuoQuYingYong(sid, ws);
       const cur = Array.isArray(meta.sessions[sid]?.msgs) ? meta.sessions[sid].msgs : [];
       const curTs = cur.reduce((a, m) => Math.max(a, Number(m?.ts) || 0), 0);
       const incTs = incoming.reduce((a, m) => Math.max(a, Number(m?.ts) || 0), 0);
@@ -30656,6 +31063,86 @@ function syncChatApply(userDataDir: string, entries: Array<{ id: string; data?: 
     }
   } catch { /* 应用失败不影响其它条目 */ }
   return applied;
+}
+
+// ── R263：删除台账（10 万条防复活）＋工作区同步＋群/联系人默认自动同步 ──
+const R263_TAI_ZHANG_MAX = 100000;
+let r263TaiZhangHuan: Array<{ id: string; kind: string; ts: number; name?: string }> | null = null;
+function r263TaiZhangPath(): string { return path.join(app.getPath('userData'), 'sync', 'delete-ledger.json'); }
+function duR263TaiZhang(): Array<{ id: string; kind: string; ts: number; name?: string }> {
+  if (r263TaiZhangHuan) return r263TaiZhangHuan;
+  try { const j = JSON.parse(fs.readFileSync(r263TaiZhangPath(), 'utf8')); r263TaiZhangHuan = Array.isArray(j) ? j : []; } catch { r263TaiZhangHuan = []; }
+  return r263TaiZhangHuan;
+}
+function jiR263ShanChu(id: string, kind: string, name?: string): void {
+  if (!id) return;
+  const lie = duR263TaiZhang();
+  if (!lie.some((x) => x.id === id)) {
+    lie.push({ id, kind, ts: Date.now(), name: String(name || '').slice(0, 120) });
+    while (lie.length > R263_TAI_ZHANG_MAX) lie.shift();
+    try { fs.mkdirSync(path.dirname(r263TaiZhangPath()), { recursive: true }); fs.writeFileSync(r263TaiZhangPath(), JSON.stringify(lie)); } catch { /* noop */ }
+  }
+  try { syncService?.recordTombstone('chat', id); } catch { /* noop */ }
+}
+function r263YiShanChu(id: string): boolean { return duR263TaiZhang().some((x) => x.id === id); }
+/** 工作区导出：文本文件、有界（≤100 个/单≤512KB/总≤8MB） */
+function r263GongZuoQuDaoChu(sid: string): Array<{ rel: string; ts: number; content: string }> {
+  const base = workspaceDirOf(app.getPath('userData'), sid);
+  const out: Array<{ rel: string; ts: number; content: string }> = [];
+  let zong = 0;
+  const walk = (dir: string, rel: string): void => {
+    let ents: fs.Dirent[] = [];
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const en of ents) {
+      if (out.length >= 100 || zong > 8 * 1024 * 1024) return;
+      if (en.name === 'node_modules' || en.name === '.git') continue;
+      const p = path.join(dir, en.name); const r = rel ? rel + '/' + en.name : en.name;
+      if (en.isDirectory()) { walk(p, r); continue; }
+      if (!en.isFile()) continue;
+      try {
+        const st = fs.statSync(p);
+        if (st.size > 512 * 1024) continue;
+        const buf = fs.readFileSync(p);
+        if (buf.includes(0)) continue;
+        zong += st.size;
+        out.push({ rel: r.slice(0, 200), ts: st.mtimeMs, content: buf.toString('utf8') });
+      } catch { /* skip */ }
+    }
+  };
+  walk(base, '');
+  return out;
+}
+/** 工作区写回：路径越界防护＋LWW（mtime）＋自动创建目录 */
+function r263GongZuoQuYingYong(sid: string, ws: Array<{ rel?: string; ts?: number; content?: string }>): number {
+  const base = workspaceDirOf(app.getPath('userData'), sid);
+  let n = 0;
+  for (const f of ws || []) {
+    const rel = String(f.rel || '').replace(/\\/g, '/');
+    if (!rel || rel.startsWith('/') || rel.split('/').some((s) => s === '..' || s === '')) continue;
+    const p = path.join(base, rel);
+    if (!path.resolve(p).startsWith(path.resolve(base) + path.sep)) continue;
+    try {
+      const cur = fs.existsSync(p) ? fs.statSync(p).mtimeMs : 0;
+      if (cur >= Number(f.ts || 0)) continue;
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, String(f.content ?? ''), 'utf8');
+      try { fs.utimesSync(p, new Date(Number(f.ts) || Date.now()), new Date(Number(f.ts) || Date.now())); } catch { /* noop */ }
+      n += 1;
+    } catch { /* skip */ }
+  }
+  return n;
+}
+/** R263：群/联系人默认注册同步（默认自动和所有在线我的设备同步） */
+function r263TongBuMoRenZhuCe(): void {
+  try {
+    if (!syncService) return;
+    syncService.setEnabled(true);
+    for (const g of groupStore?.listGroups() || []) syncService.setSessionSync(g.groupId, g.ming, true);
+    const chats = ((settingsStore?.load() as { chats?: Array<{ id?: string; kind?: string; name?: string }> })?.chats) || [];
+    for (const c of chats) {
+      if (c && c.kind === 'extdm' && c.id) syncService.setSessionSync(String(c.id), String(c.name || c.id), true);
+    }
+  } catch { /* 注册失败不挡启动 */ }
 }
 /**
  * R218：对接会话域（duijie）。
@@ -30757,7 +31244,7 @@ function leaseHolder(): string {
  * （`error` 字段）并**保持 requestedPort 不变** —— 不自动换端口、不改设置。
  * 用户由界面引导自己选（见 settings-store 的 WARMY_SUGGESTED_NET_PORTS）。
  */
-async function qiDongAnQuanWangZhuang(port: number, opts: { discovery?: boolean; announce?: boolean } = {}) {
+async function qiDongAnQuanWangZhuang(port: number, opts: { discovery?: boolean; announce?: boolean } = {}, chongShi = false) {
   refreshLocalNodeId();
   if (!secureMesh) {
     fachuKongzhitai({ cat: 'net', code: 'net.unavailable' });
@@ -30776,6 +31263,11 @@ async function qiDongAnQuanWangZhuang(port: number, opts: { discovery?: boolean;
       code: r.errorCode === 'port-bind-failed' ? 'net.bind-failed' : 'net.enable-failed',
       data: { port, requestedPort: (r as { requestedPort?: number }).requestedPort ?? port, errorCode: r.errorCode, error: r.error },
     });
+    /* R264 项12：port-bind-failed 常因旧实例未释放端口（TIME_WAIT）。
+     * 同端口延时单次重试（不换端口、不改设置，符合 T194），自愈减少误报；仅一次防循环。 */
+    if (r.errorCode === 'port-bind-failed' && !chongShi) {
+      setTimeout(() => { void qiDongAnQuanWangZhuang(port, opts, true).then((r2) => { if (r2.ok) { try { audit?.log('net.bind-retry-ok', { port }); } catch { /* noop */ } } }); }, 6000);
+    }
     return r;
   }
   audit?.log('net.enable', {
@@ -30800,14 +31292,11 @@ async function qiDongAnQuanWangZhuang(port: number, opts: { discovery?: boolean;
   return r;
 }
 
-/** 默认锚点（稳定引导节点，供新节点入网）；R135 与 FWArmy 对齐 DHT/DHT2 × 443/62666；R195 增 dht.numumu.com × 443/62666。
+/** 默认锚点（稳定引导节点，供新节点入网）；R263：内置引导节点改为 dht2×443/62666＋dht×62666。
  *  **不可更改、不可删除**：默认锚点恒在有效列表最前，用户只能追加自有锚点，不能改删默认项。 */
 const MO_REN_MAO_DIAN: string[] = [
-  'DHT.pondsi.com:443',
-  'DHT.pondsi.com:62666',
-  'DHT2.pondsi.com:443',
-  'DHT2.pondsi.com:62666',
-  'dht.numumu.com:443',
+  'dht2.numumu.com:443',
+  'dht2.numumu.com:62666',
   'dht.numumu.com:62666',
 ];
 
@@ -30995,22 +31484,33 @@ function zhuJiPeiZhiKuai() {
     autoDetect: net.autoDetect || null,
   };
 }
-/** 检测本机 + 公网地址（主机模式与 DHT 宣告共用）；事实落盘，界面只读 */
-async function ziDongJianCeGongWang(): Promise<{ ok: boolean; localIp: string; publicIp: string; behindNat: boolean; at: number }> {
+/** 检测本机 + 公网地址（主机模式与 DHT 宣告共用）；事实落盘，界面只读。
+ *  R264：IPv4 与 IPv6 **同时探测**，但**优先使用 IPv4**（preferred/preferredIp）。 */
+async function ziDongJianCeGongWang(): Promise<{ ok: boolean; localIp: string; publicIp: string; behindNat: boolean; at: number; ipv4?: string[]; ipv6?: unknown; preferred?: string; preferredIp?: string }> {
   let r: Awaited<ReturnType<typeof benjiDizhiXinxi>> | null = null;
   try { r = await benjiDizhiXinxi({ timeoutMs: 5000 }); } catch { r = null; }
+  const ipv4 = Array.isArray(r?.interfaces) ? r!.interfaces : [];
+  const v6 = (r?.ipv6 || null) as { hasGlobalUnicast?: boolean; publicCandidate?: string | null } | null;
+  const hasV4 = ipv4.length > 0;
+  const hasV6 = !!(v6 && v6.hasGlobalUnicast);
+  const preferred = hasV4 ? 'ipv4' : (hasV6 ? 'ipv6' : '');
+  const preferredIp = hasV4 ? String(r?.localIp || '') : String(v6?.publicCandidate || '');
   const facts = {
-    ok: !!(r && r.localIp),
+    ok: !!(r && (r.localIp || hasV6)),
     localIp: String(r?.localIp || ''),
     publicIp: String(r?.publicIp || ''),
     behindNat: !!(r?.behindNat),
     at: Date.now(),
+    ipv4,
+    ipv6: v6,
+    preferred,
+    preferredIp,
   };
   try {
     const cur = (settingsStore?.load()?.net || {}) as Record<string, unknown>;
     settingsStore?.save({ net: { ...cur, hostDetect: facts, autoDetect: facts } } as never);
   } catch { /* 检测事实尽力而为 */ }
-  try { audit?.log('net.auto-detect', { ok: facts.ok, local: facts.localIp, public: facts.publicIp }); } catch { /* noop */ }
+  try { audit?.log('net.auto-detect', { ok: facts.ok, local: facts.localIp, public: facts.publicIp, preferred, v6: hasV6 }); } catch { /* noop */ }
   return facts;
 }
 /** 启动自动加入 DHT：有公网地址就自动对外宣告（端口默认 62666）；mesh 没起先起 mesh */
@@ -31057,17 +31557,25 @@ chuliIpc('warmy:zhuJiJianCe', async () => {
 chuliIpc('warmy:zhuJiPingZhengShengCheng', async (_e, p0?: { port?: number }) => {
   try {
     const pz = zhuJiPeiZhiKuai();
-    const jian = pz.detect as { ok?: boolean; publicIp?: string } | null;
+    const jian = pz.detect as { ok?: boolean; publicIp?: string; localIp?: string; ipv6?: { hasGlobalUnicast?: boolean; publicCandidate?: string | null } } | null;
     if (!(jian && jian.ok === true)) return { ok: false, error: 'detect-required' };
     const portRaw = Number(p0?.port);
     const port = Number.isInteger(portRaw) && portRaw > 0 && portRaw <= 65535 ? portRaw : ZHU_JI_DEFAULT_PORT;
-    const rawHosts = pz.hosts.length ? pz.hosts : (jian.publicIp ? [jian.publicIp] : []);
+    /* R264：IPv4/IPv6 同时探测、优先 IPv4 —— 默认地址先 IPv4 公网，再 IPv6 全局单播候选 */
+    const defHosts: string[] = [];
+    if (jian.publicIp) defHosts.push(String(jian.publicIp));
+    const v6c = jian.ipv6 && jian.ipv6.hasGlobalUnicast ? String(jian.ipv6.publicCandidate || '') : '';
+    if (v6c) defHosts.push(v6c);
+    const rawHosts = pz.hosts.length ? pz.hosts : defHosts;
     const entries: string[] = [];
     for (const h of rawHosts) {
       const a = jieXiFaXianDiZhi(String(h || ''), port);
       if (a) entries.push((String(a.host).includes(':') ? '[' + a.host + ']' : a.host) + ':' + a.port);
     }
     if (!entries.length) return { ok: false, error: 'no-hosts' };
+    /* 优先使用 IPv4：同存时 IPv4 排前（凭证 h 取第一条） */
+    const fam = (x: string) => { const a = jieXiFaXianDiZhi(x, port); return a && String(a.host).includes(':') ? 1 : 0; };
+    entries.sort((a, b) => fam(a) - fam(b));
     const first = jieXiFaXianDiZhi(entries[0]!, port);
     if (!first) return { ok: false, error: 'no-hosts' };
     const payload = Buffer.from(JSON.stringify({ h: first.host, p: first.port, r: crypto.randomBytes(16).toString('base64url'), hs: entries }), 'utf8').toString('base64url');
@@ -33508,6 +34016,16 @@ chuliIpc('warmy:syncNow', async () => {
   if (!syncService) return { ok: false, error: 'sync-unavailable' };
   return { ok: true, state: await syncService.syncNow() };
 });
+/* R263：切换会话即查——距上次同步>10min 才查，且只查该会话，不妨碍使用 */
+chuliIpc('warmy:syncHuiHuaQieHuan', (_e, p0?: { sid?: string }) => {
+  try {
+    if (!syncService) return { ok: false, error: 'sync-unavailable' };
+    const st = syncService.state();
+    if (Date.now() - Number(st.lastSyncAt || 0) < 10 * 60 * 1000) return { ok: true, skipped: 'recent' };
+    void syncService.syncNow(String(p0?.sid || '') || undefined);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 chuliIpc('warmy:syncCreatePairCode', () => {
   if (!syncService) return { ok: false, error: 'sync-unavailable' };
   return { ok: true, ...syncService.createPairCode() };
@@ -33692,8 +34210,8 @@ chuliIpc('warmy:nmMoTaiGuan', (_e, p0?: { id?: number }) => {
   try { return nmMoTaiGuan(Number(p0?.id) || 0); } catch { return { ok: false }; }
 });
 /* R244 报障11c：收藏夹悬停面板的原生弹出窗（非模态、定位按钮下方，网页保持可见） */
-chuliIpc('warmy:nmTanChuangKai', (_e, p0?: { id?: number; html?: string; rectLeft?: number; rectBottom?: number; width?: number; height?: number }) => {
-  try { return nmTanChuangKai(Number(p0?.id) || 0, String(p0?.html || ''), { rectLeft: p0?.rectLeft, rectBottom: p0?.rectBottom, width: p0?.width, height: p0?.height }); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+chuliIpc('warmy:nmTanChuangKai', (_e, p0?: { id?: number; html?: string; rectLeft?: number; rectBottom?: number; width?: number; height?: number; center?: boolean }) => {
+  try { return nmTanChuangKai(Number(p0?.id) || 0, String(p0?.html || ''), { rectLeft: p0?.rectLeft, rectBottom: p0?.rectBottom, width: p0?.width, height: p0?.height, center: p0?.center === true }); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:nmTanChuangGuan', (_e, p0?: { id?: number }) => {
   try { return nmTanChuangGuan(Number(p0?.id) || 0); } catch { return { ok: false }; }
@@ -34508,13 +35026,15 @@ interface SouSuoPeiZhiXiang {
   addedAt?: number;
 }
 
-/** 首启默认：Firecrawl + Jina 免 key 默认在链内（待测），DeepSeek 进待测区 */
+/** 首启默认：Firecrawl + Jina 免 key 默认在链内（待测），DeepSeek 进待测区。
+ *  R262：默认条目必须带链接地址（旧版 url 空⇒设置地址栏空白）。 */
 function souSuoMoRenPeiZhi(): SouSuoPeiZhiXiang[] {
   const now = Date.now();
+  const u = (id: string) => (SOU_SUO_YU_SHE.find((p) => p.id === id) || {}).url || '';
   return [
-    { id: 'firecrawl', name: 'Firecrawl Keyless', kind: 'firecrawl', inChain: true, state: 'daice', addedAt: now },
-    { id: 'jina-reader', name: 'Jina Reader', kind: 'jina-reader', inChain: true, state: 'daice', addedAt: now },
-    { id: 'deepseek', name: 'DeepSeek Search', kind: 'deepseek', inChain: false, state: 'daice', addedAt: now },
+    { id: 'firecrawl', name: 'Firecrawl Keyless', kind: 'firecrawl', url: u('firecrawl'), inChain: true, state: 'daice', addedAt: now },
+    { id: 'jina-reader', name: 'Jina Reader', kind: 'jina-reader', url: u('jina-reader'), inChain: true, state: 'daice', addedAt: now },
+    { id: 'deepseek', name: 'DeepSeek Search', kind: 'deepseek', url: u('deepseek'), inChain: false, state: 'daice', addedAt: now },
   ];
 }
 
@@ -34538,7 +35058,8 @@ function souSuoPeiZhiLie(): SouSuoPeiZhiXiang[] {
           id, name, kind,
           inChain: o.inChain !== false,
           state,
-          url: String(o.url || ''),
+          /* R262：旧数据 url 空⇒按预设补齐链接（地址栏不再空白） */
+          url: String(o.url || '') || (SOU_SUO_YU_SHE.find((p) => p.id === id || p.kind === kind) || {}).url || '',
           ...(typeof o.pausedUntil === 'number' ? { pausedUntil: o.pausedUntil } : {}),
           ...(typeof o.failCount === 'number' ? { failCount: o.failCount } : {}),
           ...(typeof o.addedAt === 'number' ? { addedAt: o.addedAt } : { addedAt: Date.now() - i }),
@@ -34718,8 +35239,11 @@ chuliIpc('warmy:souSuoChainCaoZuo', async (_e, p0?: { action?: string; id?: stri
     if (action === 'add') {
       const yushe = SOU_SUO_YU_SHE.find((p) => p.id === id);
       if (!yushe) return { ok: false, error: 'bad-preset' };
-      if (lie.some((x) => x.id === yushe.id)) return { ok: false, error: 'exists', id: yushe.id };
-      lie.push({ id: yushe.id, name: yushe.name, kind: yushe.kind, url: yushe.url, inChain: false, state: 'daice', addedAt: now });
+      /* R262：允许添加多个相同预设（旧版报 exists 异常）；同名自动重命名「名称 (2)」 */
+      const chong = lie.filter((x) => x.id === yushe.id || x.id.startsWith(yushe.id + '-')).length;
+      const nid = chong ? yushe.id + '-' + (chong + 1) : yushe.id;
+      const nname = chong ? yushe.name + ' (' + (chong + 1) + ')' : yushe.name;
+      lie.push({ id: nid, name: nname, kind: yushe.kind, url: yushe.url, inChain: false, state: 'daice', addedAt: now });
     } else if (action === 'addCustom') {
       const name = String(p0?.name || '').trim().slice(0, 80);
       const url = String(p0?.url || '').trim().slice(0, 500);
@@ -35526,6 +36050,8 @@ chuliIpc('warmy:huiHuaShanChu', async (_e, p0?: { id?: string; kind?: string; mo
     try {
       if (syncService && syncService.isSessionSynced(id)) syncService.recordTombstone('chat', id);
     } catch { /* tombstone 记录失败不阻断删除 */ }
+    /* R263：群/项目/联系人删除记入台账（防复活＋反删） */
+    if (kind === 'group' || kind === 'project' || kind === 'contact') jiR263ShanChu(id, kind, String(p0?.name || ''));
     /**
      * **删除前先给回收站留一份快照**（第 41 轮，用户口径：右击删除不再二次确认，
      * 误删靠"最近删除"在 48 小时内恢复）。这里必须在清聊天日志/知识库/工作区**之前**取，
@@ -37653,6 +38179,8 @@ chuliIpc('warmy:qunJieSan', async (_e, groupId: string) => {
     // 持久化的群记录与成员一起删掉
     const r = groupStore?.removeGroup(gid);
     if (r && !r.ok) return { ok: false, error: 'cannot persist dissolve' };
+    /* R263：解散记入删除台账（10 万条）＋墓碑反删其他设备 */
+    jiR263ShanChu(gid, (g as { type?: string }).type === 'internal' ? 'project' : 'group', (g as { ming?: string }).ming);
     /**
      * R241 报障8：解散 = 真实删除会话（与 huiHuaShanChu purge 同一套）。
      * 旧实现只删群记录，聊天记录/工作区/会话知识都留着，且渲染层不过滤 state.groups ⇒ “解散后 session 仍在”。
@@ -38305,6 +38833,14 @@ function jiXiTongXiaoXi(kind: XiTongXiaoXi['kind'], title: string, body: string)
 }
 duXiTongXiaoXi();
 chuliIpc('warmy:xiTongXiaoXiLieBiao', () => ({ ok: true, items: xiTongXiaoXiJi.slice().reverse() }));
+/** R264 项8：拟态异常走系统消息（不弹提示音/不亮未读圆点），渲染层上报 */
+chuliIpc('warmy:xiTongXiaoXiTianJia', (_e, p0?: { kind?: string; title?: string; body?: string }) => {
+  try {
+    const kind = (['update', 'remote', 'ssh', 'system'].includes(String(p0?.kind || '')) ? String(p0?.kind) : 'system') as XiTongXiaoXi['kind'];
+    jiXiTongXiaoXi(kind, String(p0?.title || ''), String(p0?.body || ''));
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 chuliIpc('warmy:xiTongXiaoXiYiDu', (_e, id?: string) => {
   const m = xiTongXiaoXiJi.find((x) => x.id === String(id || ''));
   if (m) { m.read = true; cunXiTongXiaoXi(); }
@@ -38389,7 +38925,14 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
   const moXing = (await lieKeYongMoXing())[0] || '';
   const an = moXing ? await jieMoXingGongYingShang(moXing) : null;
   const zt = e.arms[arm];
-  if (!an || !moXing) { zt.reply = '无可用模型，支线未执行。'; zt.turns++; return; }
+  if (!an || !moXing) {
+    zt.reply = '无可用模型，支线未执行。'; zt.turns++;
+    /* R261：无模型也要记历史（并排块要显示真实轮次，不能空着） */
+    zt.history = zt.history || [];
+    zt.history.push({ role: 'user', content: String(content).slice(0, 4000) });
+    zt.history.push({ role: 'them', content: zt.reply });
+    return;
+  }
   const provider = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL }, an.protocol);
   const overlay = arm === 'B' ? (zt.overlay || xuanOverlay(ziJinHuaXueXi, e.sessionId) || '交付前自检：写文件后读回核对；金额用整数分；不得过滤负数行。') : '';
   const yongHu = dangQianYongHuMing().trim();
@@ -38398,6 +38941,8 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
   const xiTong = shenFen + '你正在自进化实验的支线 ' + arm + ' 中独立完成用户任务，身份与要求与主线完全一致；需要写文件就写（工作区相对路径），最后给出可交付结论。' + (overlay ? '\n【改进要求】' + overlay : '')
     + '\n【反谄媚约束】以高效与正确为目的，不得为迎合用户而降低标准/隐瞒错误/夸大成果；任何自我改进须有可验证证据（A/B 胜率/正确率/回合），无实证的讨好性改动不采纳。必要时才迎合（用户明确偏好且无害）。';
   const kong = new AbortController();
+  /* R263：支线工具调用记录（onEvent 收集），并排块要显示思考/工具/中间回复 */
+  const gongJuJiLu: Array<{ tool: string; ok: boolean }> = [];
   try {
     const loop = await liaoTianDaiGongJu(provider, {
       model: jieMoXingMing(moXing),
@@ -38409,14 +38954,23 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
       const out = runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } });
       if (out.meta.ok && out.meta.abs) { const rel = path.relative(base, out.meta.abs); if (rel && !zt.files.includes(rel)) zt.files.push(rel); }
       return String(out.content).slice(0, 2000);
-    }, { zuiDaLunShu: 4, zuiDaJieGuoZiShu: 4000, signal: kong.signal });
+    }, { zuiDaLunShu: 4, zuiDaJieGuoZiShu: 4000, signal: kong.signal, onEvent: (ev: { kind?: string; tool?: string; ok?: boolean }) => { if (ev && ev.kind === 'tool') gongJuJiLu.push({ tool: String(ev.tool || ''), ok: ev.ok !== false }); } });
     zt.reply = String(loop.xiangYingTi?.choices?.[0]?.message?.content || '').slice(0, 4000);
-  } catch (err) { zt.reply = '支线执行失败：' + xiJingCuoWu(err); }
+    /* R263：思考/工具/中间回复入历史（渲染层并排块显示；用户内容不显示） */
+    zt.history = zt.history || [];
+    zt.history.push({ role: 'user', content: String(content).slice(0, 4000) });
+    const siKaoWen = String((loop.xiangYingTi?.choices?.[0]?.message as { reasoning?: unknown } | undefined)?.reasoning || '');
+    if (siKaoWen.trim()) zt.history.push({ role: 'them', kind: 'sikao', content: siKaoWen.slice(0, 8000), ts: Date.now() });
+    for (const g of gongJuJiLu) zt.history.push({ role: 'tool', kind: 'tool', content: g.tool + (g.ok ? '' : '（失败）'), ts: Date.now() });
+    for (const z of (loop.zhongJianHuiFu || [])) zt.history.push({ role: 'them', kind: 'zhongjian', content: String(z.text || '').slice(0, 8000), ts: Number(z.ts) || Date.now() });
+    if (zt.reply) zt.history.push({ role: 'them', kind: 'final', content: zt.reply });
+  } catch (err) {
+    zt.reply = '支线执行失败：' + xiJingCuoWu(err);
+    zt.history = zt.history || [];
+    zt.history.push({ role: 'user', content: String(content).slice(0, 4000) });
+    zt.history.push({ role: 'them', kind: 'final', content: zt.reply });
+  }
   zt.turns++;
-  /* R246：记录支线对话历史（用户消息+回复），合并时当作主线记录追加。 */
-  zt.history = zt.history || [];
-  zt.history.push({ role: 'user', content: String(content).slice(0, 4000) });
-  if (zt.reply) zt.history.push({ role: 'them', content: zt.reply });
   // 客观验收：读支线工作区文件
   for (const r of e.rules) {
     const outcome = paoGuiZe(r, (p) => { try { return fs.readFileSync(path.join(base, p), 'utf8'); } catch { return null; } });
@@ -38451,11 +39005,11 @@ async function ziJinHuaHeBing(e: ZiJinHuaShiYan, winner: ZhiXian, by: string, au
       if (fs.existsSync(mainP)) { const d = path.join(snapDir, rel); fs.mkdirSync(path.dirname(d), { recursive: true }); fs.copyFileSync(mainP, d); }
     }
   } catch { /* 快照失败不阻断合并但记录 */ }
-  /* R246：把合并前状态打进回退点（标记 evolve）——自进化历史回退并入回退点功能。 */
+  /* R246/R263：把选支/合并前状态打进回退点（phase=evolve_select 可见于第四列卡片；携带实验快照供回滚恢复） */
   try {
     if (checkpoints) {
       const jl = path.join(app.getPath('userData'), 'memory', 'fast-memory.jsonl');
-      checkpoints.create({ phase: 'round_end', logSeq: (chatLogs.get(e.sessionId) || []).length, sessionId: e.sessionId, jsonlPath: fs.existsSync(jl) ? jl : undefined, workspace: mainBase, summary: ('自进化合并前 · 支线 ' + winner).slice(0, 40), evolve: true, limit: 50 });
+      checkpoints.create({ phase: 'evolve_select', logSeq: (chatLogs.get(e.sessionId) || []).length, sessionId: e.sessionId, jsonlPath: fs.existsSync(jl) ? jl : undefined, workspace: mainBase, summary: ('选择支线前 · 支线 ' + winner).slice(0, 40), evolve: true, limit: 50, evolveSnap: { expId: e.id, projectId: e.projectId, mode: e.mode, rules: e.rules, checks: e.checks, forkHashes: (e as unknown as { forkHashes?: Record<string, string> }).forkHashes, arms: JSON.parse(JSON.stringify(e.arms)) } });
     }
   } catch { /* noop */ }
   for (const rel of e.arms[winner].files) {
@@ -38467,11 +39021,16 @@ async function ziJinHuaHeBing(e: ZiJinHuaShiYan, winner: ZhiXian, by: string, au
     ziJinHuaXueXi.push({ family: e.sessionId, text: e.arms.B.overlay, basis: 'objective-win', expId: e.id, ts: Date.now() });
     cunZiJinHuaXueXi();
   }
-  /* R246：合并后把胜出支线的对话当作主线记录追加（无任何系统提示消息）；牛马回复带 evolve 标记供渲染自进化图标。 */
+  /* R261 项6：合并后把「双支线并排块」写入聊天记录（聊天记录的一部分、永显、随滚动）；
+   * 并入主线者左、弃用者右（渲染层按 winner 排序）；不再单独追加胜出支线、不挂进化图标。 */
   try {
-    for (const h of (e.arms[winner].history || [])) {
-      zhuiJiaLiaoTianRiZhi(e.sessionId, { role: h.role === 'user' ? 'user' : 'them', content: h.content, ts: Date.now(), evolve: h.role !== 'user' } as never);
-    }
+    zhuiJiaLiaoTianRiZhi(e.sessionId, {
+      role: 'them', content: '', ts: Date.now(),
+      evolvePair: {
+        expId: e.id, winner, mode: e.mode,
+        arms: { A: { history: e.arms.A.history || [] }, B: { history: e.arms.B.history || [] } },
+      },
+    } as never);
   } catch { /* noop */ }
   ziJinHuaGuangBo(e);
   return { ok: true };
@@ -38512,28 +39071,37 @@ async function zhiXingZhuoMianCaoZuo(op: string, abs: string, dest: string, cont
   try { audit?.log('desktop.op', { op, ok, path: abs, error: err }); } catch { /* noop */ }
   ensureDesktopAnimWin();
   broadcastToWindows('warmy:zhuoMianDongHua', { op, ok, path: abs });
-  void mimicZouQuHuDong(op, abs);
+  void mimicZouQuHuDong(op, abs, { dongZuo: { open: 'zhaoshou', create: 'tuiShou', delete: 'tiJiao', modify: 'tuiShou', move: 'tuiShou' }[op] || 'tuiShou' });
   return { ok, error: err };
 }
-/** R259 报障26：拟态角色本体走到桌面图标旁互动（走路→互动→走回）。
+/** R259/R263：拟态角色本体走到桌面图标旁互动（走路→手脚互动→走回）。
  *  图标坐标为 physical-pixels ⇒ 除 scaleFactor 转 DIP；拖动中不打断用户。 */
-async function mimicZouQuHuDong(op: string, abs: string): Promise<void> {
+async function mimicZouQuHuDong(op: string, abs: string, opts?: { rect?: { x: number; y: number; width: number; height: number }; dongZuo?: string }): Promise<void> {
   try {
     if (!mimicWin || mimicWin.isDestroyed() || mimicDragging) return;
+    /* R264 项6/19：固定=是 ⇒ 不走到图标边（只原地_idle 动作）；隐藏时本体窗已销毁，上面已挡 */
+    if ((settingsStore?.load() as { mimicFixed?: boolean } | undefined)?.mimicFixed) return;
     const win = mimicWin;
-    const kuai = await duZhuoMianTuBiao();
-    const ic = (kuai.icons || []).find((i) => i.filePath === abs);
-    if (!ic) return;
+    let rect = opts?.rect;
+    if (!rect) {
+      const kuai = await duZhuoMianTuBiao();
+      const ic = (kuai.icons || []).find((i) => i.filePath === abs);
+      if (!ic) return;
+      rect = ic.rect;
+    }
     const dpr = screen.getPrimaryDisplay().scaleFactor || 1;
-    const tx = (ic.rect.x + ic.rect.width / 2) / dpr;
-    const ty = (ic.rect.y + ic.rect.height / 2) / dpr;
+    const tx = (rect.x + rect.width / 2) / dpr;
+    const ty = (rect.y + rect.height / 2) / dpr;
     const b0 = win.getBounds();
     const ox = b0.x, oy = b0.y;
     const nx = Math.round(tx - b0.width / 2);
     const ny = Math.round(ty - b0.height + 24);
     const zou = async (fx: number, fy: number, tx2: number, ty2: number, phase: string) => {
       try { win.webContents.send('warmy:mimicZouLu', { phase, op }); } catch { /* noop */ }
-      const steps = 22;
+      /* R264 项6：自然步行速度（≈140 DIP/s，随距离定步数）——原来固定22步×30ms，
+       * 远距离像瞬移、近距离像慢放；现按距离换算，观感为正常走路。 */
+      const dist = Math.hypot(tx2 - fx, ty2 - fy);
+      const steps = Math.max(12, Math.min(60, Math.round(dist / 140 / 0.03)));
       for (let i = 1; i <= steps; i++) {
         if (win.isDestroyed() || mimicDragging) return;
         const t = i / steps; const e = t * t * (3 - 2 * t);
@@ -38543,12 +39111,23 @@ async function mimicZouQuHuDong(op: string, abs: string): Promise<void> {
       }
     };
     await zou(ox, oy, nx, ny, 'walk');
-    try { win.webContents.send('warmy:mimicZouLu', { phase: 'arrive', op }); } catch { /* noop */ }
+    try { win.webContents.send('warmy:mimicZouLu', { phase: 'arrive', op, dongZuo: opts?.dongZuo || 'tuiShou' }); } catch { /* noop */ }
     await new Promise((r) => setTimeout(r, 1300));
     await zou(nx, ny, ox, oy, 'back');
     try { win.webContents.send('warmy:mimicZouLu', { phase: 'idle', op }); } catch { /* noop */ }
   } catch { /* 走路失败不影响操作本身 */ }
 }
+/* R263：桌面图标纯视觉互动也走「走到图标边＋手脚动作」（desktop-anim 定时触发） */
+chuliIpc('warmy:mimicTuBiaoHuDong', async (_e, p0?: { x?: number; y?: number; kind?: string }) => {
+  try {
+    const x = Number(p0?.x || 0), y = Number(p0?.y || 0);
+    if (!x && !y) return { ok: false, error: 'bad-coords' };
+    const kind = String(p0?.kind || 'push');
+    const dongZuo = { push: 'tuiShou', kick: 'tiJiao', shake: 'zhaoshou', squash: 'bengTiao' }[kind] || 'tuiShou';
+    await mimicZouQuHuDong(kind, '', { rect: { x: x - 22, y: y - 22, width: 44, height: 44 }, dongZuo });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+}, ['mimic.html', 'desktop-anim.html']);
 /** R259：子进程跑 CLI（无 shell，超时杀），返回退出码+输出尾部。 */
 function paoMingLingZiJinCheng(cmd: string, args: string[], cwd: string, timeoutMs: number): Promise<{ ok: boolean; code: number; out: string }> {
   return new Promise((resolve) => {
@@ -38743,8 +39322,8 @@ chuliIpc('warmy:ziJinHuaXuanZe', async (_e, p0?: { sessionId?: string; arm?: str
   const arm: ZhiXian = p0?.arm === 'B' ? 'B' : 'A';
   e.status = 'staged'; e.stagedAt = Date.now(); e.winner = arm;
   ziJinHuaGuangBo(e);
-  const t = setTimeout(() => { ziJinHuaDingShi.delete(sid); void ziJinHuaHeBing(e, arm, 'human', false); }, 5000);
-  ziJinHuaDingShi.set(sid, t);
+  /* R263：选支后立即合并（不再等 5s）；回退点已在合并前创建，撤销走回退点 */
+  void ziJinHuaHeBing(e, arm, 'human', false);
   return { ok: true, exp: e };
 });
 chuliIpc('warmy:ziJinHuaQuXiao', (_e, sid?: string) => {

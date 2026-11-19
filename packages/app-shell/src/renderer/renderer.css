@@ -309,7 +309,7 @@ body.pingTaiDarwin .biaoTiLanMacExtra {
   display: none; align-items: center; justify-content: space-between;
 }
 .lieBiaoHead h2 { font-size: var(--fs-lg); margin: 0; font-weight: 600; }
-.souSuoBaoGuo { padding: 0 var(--sp-3) 10px; display: flex; align-items: center; gap: 6px; }
+.souSuoBaoGuo { padding: 10px var(--sp-3) 10px; display: flex; align-items: center; gap: 6px; }
 .souSuoBaoGuo input {
   flex: 1; min-width: 0; width: auto; border: none; border-radius: var(--radius-sm);
   background: var(--hover); padding: 8px 10px; font-size: var(--fs-base);
@@ -2243,8 +2243,10 @@ body.liaoTianChuangKou #appTi {
   flex: 1 1 auto;
 }
 /* R260：朝向对方头像的一侧让出 2 个头像宽（聊天头像 32×2 = 64px） */
-.xiaoXi.wo .bubbleWrap { margin-left: 64px; align-items: flex-end; } /* R260：2 头像 */
-.xiaoXi:not(.wo) .bubbleWrap { margin-right: 64px; align-items: flex-start; } /* R260：2 头像 */
+.xiaoXi.wo .bubbleWrap { margin-left: 96px; align-items: flex-end; } /* R263：3 头像 */
+.xiaoXi:not(.wo) .bubbleWrap { margin-right: 96px; align-items: flex-start; } /* R263：3 头像 */
+/* R263：聊天区恒预留滚动条位 */
+#xiaoXiJi, .xiaoXiJi { scrollbar-gutter: stable; }
 /* T150：气泡随行宽拉满（思考/执行块天然是块级，等宽后与气泡一致） */
 .xiaoXi .bubble { width: 100%; max-width: 100%; }
 /* 任务标题行不参与等宽（强制整行居中） */
@@ -2829,13 +2831,23 @@ html { font-weight: var(--fw-ui, 400); }
   --net-provider-row: 46px;
   display: flex;
   flex-direction: column;
-  max-height: calc(var(--net-provider-row) * 7 + 2px);
-  overflow-y: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  /* R263：全部直显不用滚轮；条数由 10/更多/全部/收起 控制 */
+  overflow-y: visible;
   box-sizing: border-box;
-  background: var(--card);
 }
+.wangLuoProviderHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+/* R263：列表底部小字按钮＋编辑弹窗 */
+.wangLuoProviderMore { display: flex; gap: 10px; margin-top: 4px; }
+.wangLuoMoreBtn { border: none; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; padding: 2px 4px; text-decoration: underline; }
+.wangLuoMoreBtn:hover { color: var(--accent); }
+.zjEditCeng { position: fixed; inset: 0; z-index: 12000; background: rgba(0,0,0,.35); display: grid; place-items: center; }
+.zjEditCeng.yinCang { display: none; }
+.zjEditKuang { width: min(480px, 92vw); max-height: 86vh; overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
 .wangLuoProviderHang {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

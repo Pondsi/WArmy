@@ -4248,7 +4248,12 @@ async function langDuWenBen(text, btnEl) {
       xuanRanFenZu(state.nav, items, (g) => {
         const hangYuanSu = hang(
           g.name,
-          `${t('group.type.' + g.type)} · ${g.members?.length || 0}`,
+          /* R263：副标题＝最新消息内容（截断由 .fu CSS），不再显「外部群/几个人」 */
+          (function () {
+            const zuiXin = ((window.__msgs && window.__msgs[g.id]) || []).slice(-1)[0];
+            const wen = String(g.lastPreview || (zuiXin && (zuiXin.text || zuiXin.content)) || '').replace(/\s+/g, ' ').trim();
+            return wen || t('list.noReply');
+          })(),
           (g.ming || g.name || '?')[0],
           () => openChat(g.type === 'internal' ? 'internal' : 'extgroup', g.id, xianShiMing(g)),
           state.selectedChat?.id === g.id,
@@ -4322,6 +4327,8 @@ async function langDuWenBen(text, btnEl) {
     const sidKai = String(id == null ? '' : id).trim();
     if (!sidKai) { try { showToast(tOr('chat.badSession', '这条会话缺少标识，暂时打不开')); } catch { /* noop */ } return; }
     state.selectedChat = { kind, id: sidKai, ming };
+    /* R263：切会话即查同步（主进程判 >10min 才查、只查该会话） */
+    try { window.warmy.syncHuiHuaQieHuan?.({ sid: sidKai }); } catch { /* noop */ }
     state.membersGeneration = (state.membersGeneration || 0) + 1;
     state.filesGeneration = (state.filesGeneration || 0) + 1;
     yunXingZhuangTaiHuiFu();
@@ -4499,6 +4506,8 @@ async function langDuWenBen(text, btnEl) {
         artifacts: Array.isArray(m.artifacts) ? m.artifacts : [],
         /** 第 38 轮 项 8：这一轮跑过的操作（重启后「执行过程」不再空白） */
         xingDong: Array.isArray(m.xingDong) ? m.xingDong : [],
+        /* R261 项6：进化并排块字段随日志带回（重启/跨窗同步后仍并排永显） */
+        evolvePair: m.evolvePair || null,
       }));
       /**
        * 第 38 轮 项 2/8：把带回来的操作**灌进行动台账**（与实时那条同一个 `hao`，天然去重），
@@ -6795,6 +6804,8 @@ async function langDuWenBen(text, btnEl) {
    */
   function shouYinLiangHuaKuai(_el, x, y) {
     document.querySelectorAll('.yinLiangHuaKuai').forEach((n) => n.remove());
+    /* R263：清掉旧浮条的「保持显示」标记 */
+    document.querySelectorAll('.xiaoXi.yinLiangZai').forEach((n) => n.classList.remove('yinLiangZai'));
     const mkEl = document.createElement('div');
     mkEl.className = 'yinLiangHuaKuai';
     mkEl.style.cssText = 'position:fixed;z-index:12000;min-width:180px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:12px 14px;';
@@ -6825,12 +6836,16 @@ async function langDuWenBen(text, btnEl) {
     };
     mkEl.appendChild(lab); mkEl.appendChild(sl); mkEl.appendChild(val);
     document.body.appendChild(mkEl);
+    /* R263：浮条在期间，所属消息的喇叭/模型行/信息行保持显示 */
+    const suoZai = _el && _el.closest ? _el.closest('.xiaoXi') : null;
+    if (suoZai) suoZai.classList.add('yinLiangZai');
+    const qingGan = () => { if (suoZai) suoZai.classList.remove('yinLiangZai'); };
     const mw = mkEl.offsetWidth || 180, mh = mkEl.offsetHeight || 100;
     mkEl.style.left = Math.min(x, window.innerWidth - mw - 8) + 'px';
     mkEl.style.top = Math.min(y, window.innerHeight - mh - 8) + 'px';
     const guan = (ev) => {
       if (mkEl.contains(ev.target)) return;
-      mkEl.remove();
+      mkEl.remove(); qingGan();
       document.removeEventListener('mousedown', guan, true);
       document.removeEventListener('contextmenu', guan, true);
     };
@@ -6841,7 +6856,7 @@ async function langDuWenBen(text, btnEl) {
     /** R260 项31：宽限收起——鼠标离开浮条后稍候再收，期间进入浮条即取消；
      *  喇叭 mouseout 也走同一宽限（不再立即 remove），鼠标穿过间隙/下方对话移到浮条上不会被误收。 */
     let closeTimer = null;
-    const scheduleClose = () => { clearTimeout(closeTimer); closeTimer = setTimeout(() => { if (!mkEl.matches(':hover') && !mkEl.dataset.pinned) mkEl.remove(); }, 320); };
+    const scheduleClose = () => { clearTimeout(closeTimer); closeTimer = setTimeout(() => { if (!mkEl.matches(':hover') && !mkEl.dataset.pinned) { mkEl.remove(); qingGan(); } }, 320); };
     const cancelClose = () => { clearTimeout(closeTimer); };
     mkEl._scheduleClose = scheduleClose; mkEl._cancelClose = cancelClose;
     mkEl.addEventListener('mouseenter', cancelClose);
@@ -7178,6 +7193,25 @@ async function langDuWenBen(text, btnEl) {
     slice.forEach((m, i) => {
       // **内部指令不进聊天记录**（自动续派的「继续执行计划…」只给模型看，不是用户说的话）
       if (m && m.hidden) return;
+      /* R261 项6：进化双支线并排块＝聊天记录的一部分（随滚动、永显）；
+       * 并入主线的支线在左、弃用的在右；不再挂进化图标（并排已可区分）。 */
+      if (m && m.evolvePair) {
+        const pd = document.createElement('div');
+        pd.className = 'xiaoXi them zjhPair';
+        pd.innerHTML = zjhPairHtml(m.evolvePair, { live: false, avatar: themAvatar, canChoose: state.nav !== 'internalGroup' });
+        heZi.appendChild(pd);
+        lastXiaoXiEl = pd;
+        /* R263：回退到选支前的 persisted 块＝可选支；项目角色 gating 异步补 */
+        try {
+          const curP = window.__ziJinHuaCur && window.__ziJinHuaCur();
+          if (curP && curP.id === m.evolvePair.expId && curP.status === 'split' && state.nav === 'internalGroup') {
+            window.__ziJinHuaQiao.isAdmin(curP.sessionId).then((ok) => {
+              pd.querySelectorAll('.zjhChoose').forEach((b) => { b.disabled = !ok; if (!ok) b.title = tOr('evolve.confirmTip', '只有项目创建者和管理员可以选择合并支线。'); });
+            }).catch(() => {});
+          }
+        } catch { /* noop */ }
+        return;
+      }
       // ── 主动显示时间：与上次主动显示的"时"不同才显示；跨自然日加浅分隔线 ──
       const ts = Number(m.ts || 0) || Date.now();
       if (m.role === 'wo') shangYiYongHuTs = ts;
@@ -7297,12 +7331,10 @@ async function langDuWenBen(text, btnEl) {
       }
       /** 只有 thinking/中间回复存在时才显示斑马头；纯最终回复不显示，避免与牛马头像位置冲突。 */
       const youBanMa = m.role !== 'wo' && (siKaoDuan.length > 0 || zhongJianXian.length > 0);
-      /** R259 报障26：进化图标移回复左侧；马头恒显——无思考/执行时放头像下方（绝对定位不占间距，对话间距始终不变）。 */
-      const jinHuaSvg = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 2.5v4a3 3 0 0 0 3 3h4M12 2.5v4a3 3 0 0 1-3 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="4" cy="2.5" r="1.4" fill="currentColor"/><circle cx="12" cy="2.5" r="1.4" fill="currentColor"/><circle cx="8" cy="12.5" r="1.6" fill="currentColor"/></svg>';
-      const jinHuaTip = escapeHtml(tOr('chat.evolveTip', '进化支线中产生的回复'));
+      /* R261 项6：消息不再挂进化图标（支线并排块已可区分）；马头恒显口径不变。 */
       const xiaMaTou = (m.role !== 'wo' && !youBanMa && i === zuiHouThem) ? '<span class="banMaTou" aria-hidden="true"></span>' : '';
-      const zuoXiaRow = (m.role !== 'wo' && (xiaMaTou || m.evolve))
-        ? '<span class="zuoXiaRow">' + (m.evolve ? '<span class="xiaoXiEvolveIco" title="' + jinHuaTip + '">' + jinHuaSvg + '</span>' : '') + xiaMaTou + '</span>'
+      const zuoXiaRow = (m.role !== 'wo' && xiaMaTou)
+        ? '<span class="zuoXiaRow">' + xiaMaTou + '</span>'
         : '';
       const themZuo = '<div class="xiaoXiZuoLan">' + themAv + zuoXiaRow + '</div>';
       div.innerHTML = (m.role === 'wo' ? av : themZuo)
@@ -7323,7 +7355,7 @@ async function langDuWenBen(text, btnEl) {
               if (wx) return wx;
               const bub = '<div class="bubble md">' + mdHtml(wen) + '</div>';
               return youBanMa
-                ? '<div class="zuiZhongHang">' + (m.evolve ? '<span class="xiaoXiEvolveIcoZuo" title="' + jinHuaTip + '">' + jinHuaSvg + '</span>' : '') + '<span class="banMaTou banMaTouJing" aria-hidden="true"></span>' + bub + '</div>'
+                ? '<div class="zuiZhongHang"><span class="banMaTou banMaTouJing" aria-hidden="true"></span>' + bub + '</div>'
                 : bub;
             })())
         + (m.role === 'wo' ? '' : tingZhiZhaiYaoHtml
@@ -7333,7 +7365,7 @@ async function langDuWenBen(text, btnEl) {
           + '<div class="xiaoXiMoXing" title="' + escapeHtml(xiaoXiTip) + '">' +
             '<span class="moXingWen">' + escapeHtml(String(m.moXing || '').replace(/^本轮模型[：:]\s*/, '')) +
             (m.moXingJiangJi ? ' <span class="moXingJiangJiKuo">(' + escapeHtml(jiangJiDuan(m.moXingJiangJi)) + ')</span>' : '') + '</span>' +
-            '<span class="zanCaiJi" style="margin-left:24px">' +
+            '<span class="zanCaiJi">' +
             (m.role === 'wo' ? '' :
               '<button type="button" class="zanCaiBtn' + ((state.votes && state.votes[maoYao(m)] === 'up') ? ' qiYong' : '') + '" data-zan="1" data-mkey="' + escapeHtml(maoYao(m)) + '" title="' + escapeHtml(tOr('chat.voteUp', '赞')) + '">' +
               '<svg viewBox="0 0 24 24" class="zanCaiIco" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
@@ -7410,8 +7442,8 @@ async function langDuWenBen(text, btnEl) {
             if (window.__yinLiangFor === b && yiYou) return;
             window.__yinLiangFor = b;
             const r = b.getBoundingClientRect();
-            /* R260 项31：贴喇叭底边（-4 重叠）消除 6px 间隙，鼠标下移直接进浮条 */
-            shouYinLiangHuaKuai(b, Math.max(8, r.left - 70), r.bottom - 4);
+            /* R263：音量浮条下移到喇叭下方（不遮喇叭图标） */
+            shouYinLiangHuaKuai(b, Math.max(8, r.left - 70), r.bottom + 6);
           } catch { /* noop */ }
         });
         heZi.addEventListener('mouseout', (e) => {
@@ -7572,6 +7604,25 @@ async function langDuWenBen(text, btnEl) {
       /** 记下最后一条真实消息节点：未勾选自动滚动时把它的开头钉在视口顶部 */
       lastXiaoXiEl = div;
     });
+    /* R261 项6：活跃实验的 live 并排块追加在聊天记录末尾（随滚动）；选支按钮角色 gating 异步补 */
+    try {
+      const curE = window.__ziJinHuaCur && window.__ziJinHuaCur();
+      if (curE && curE.sessionId === String(sidNow) && (curE.status === 'split' || curE.status === 'running' || curE.status === 'staged')) {
+        const ld = document.createElement('div');
+        ld.className = 'xiaoXi them zjhPairLive';
+        ld.innerHTML = zjhPairHtml(curE, { live: true, canChoose: state.nav !== 'internalGroup', avatar: themAvatar });
+        heZi.appendChild(ld);
+        lastXiaoXiEl = ld;
+        if (state.nav === 'internalGroup') {
+          try {
+            window.__ziJinHuaQiao.isAdmin(curE.sessionId).then((ok) => {
+              ld.querySelectorAll('.zjhChoose').forEach((b) => { b.disabled = !ok; if (!ok) b.title = tOr('evolve.confirmTip', '只有项目创建者和管理员可以选择合并支线。'); });
+            }).catch(() => { /* noop */ });
+          } catch { /* noop */ }
+        }
+      }
+      jinHuaShuRuFenLan();
+    } catch { /* 进化块画不出来不影响聊天 */ }
     chatRendered.set(sidNow, { n: xiaoXi.length, lastTs: zuiTs });
     /**
      * 用户点执行过程/中间回复的 summary ⇒ 记住"这一次是他手动开/关的"，整块重绘后恢复。
@@ -8118,7 +8169,7 @@ async function langDuWenBen(text, btnEl) {
        * 任何元素（消息区/输入框/按钮）才清零 —— 所以这里不做"当前会话就跳过"的判断。
        * 用户主动停止留下的现场不算“新回复”，不加角标。
        */
-      if (role === 'them' && !(opts && opts.system) && !(opts && opts.stopped)) {
+      if (role === 'them' && !(opts && opts.system) && !(opts && opts.stopped) && !shiNiTaiBenTi(chatId)) {
         state.unread = state.unread || Object.create(null); // R233：同上
         // 单会话上限 999（防长跑把数字撑得没法看；到顶就停）
         const xianZai = Number(state.unread[chatId] || 0);
@@ -10410,6 +10461,26 @@ window.__keYiLiaoTian = keYiLiaoTian;
   (function bindWenHao() {
     if (window.__ddWenBound) return;
     window.__ddWenBound = 1;
+    /* R263 双提示治理：ddWen 带 native title 的→统一转 ddDesc 单气泡；
+     * data-tip 与 title 同元素→自定义气泡赢；祖先 title 与气泡重复/包含→删祖先 title。 */
+    try {
+      document.querySelectorAll('button.ddWen[title]').forEach((b) => {
+        const t0 = b.getAttribute('title') || '';
+        if (!t0) return;
+        if (!b.querySelector('.ddDesc')) { const s = document.createElement('span'); s.className = 'ddDesc'; s.textContent = t0; b.appendChild(s); }
+        b.removeAttribute('title');
+      });
+      document.querySelectorAll('[data-tip][title]').forEach((el) => el.removeAttribute('title'));
+      document.querySelectorAll('.tiShiAiGai[data-tip], .ddDesc').forEach((tipEl) => {
+        const tip = String(tipEl.getAttribute('data-tip') || tipEl.textContent || '');
+        let p = tipEl.parentElement;
+        while (p && p !== document.body) {
+          const pt = p.getAttribute ? String(p.getAttribute('title') || '') : '';
+          if (pt && (pt === tip || tip.includes(pt) || pt.includes(tip))) p.removeAttribute('title');
+          p = p.parentElement;
+        }
+      });
+    } catch { /* noop */ }
     document.addEventListener('click', (e) => {
       const b = e.target && e.target.closest && e.target.closest('.ddWen');
       // 点其它地方时收起所有已展开的问号
@@ -10957,119 +11028,172 @@ window.__keYiLiaoTian = keYiLiaoTian;
     update();
   })();
 
-  /** R257 报障24：设置→功能 迪文卡（启用勾选/私有迪文自完善/试探映射/状态）。 */
+  /** R257/R262/R264：设置→功能 迪文卡。设置 DOM 懒加载⇒用文档级委托＋出现时刷新，避免启动期失绑。 */
   (function bindDiwenKa() {
-    const gou = $('diwenQiYongGou');
-    if (!gou) return;
-    const chip = $('diwenZhuangTaiChip'), wen = $('diwenZhuangTaiWen'), lie = $('diwenSiYouLie'), shu = $('diwenSiYouShu'), xiao = $('diwenXiaoXi');
-    const tanRu = $('diwenShiTanRu'), tanJie = $('diwenShiTanJie');
+    const chip = () => $('diwenZhuangTaiChip'), wen = () => $('diwenZhuangTaiWen'), xiao = () => $('diwenXiaoXi'), gou = () => $('diwenQiYongGou');
     const shuaZhuangTai = async () => {
+      const g = gou(); if (!g) return;
       try {
         const r = await window.warmy.diwenZhuangTai?.();
         if (!r || !r.ok) return;
-        gou.checked = !!r.enabled;
-        if (chip) { chip.textContent = r.enabled ? tOr('diwen.on', '已启用') : tOr('diwen.off', '已关闭'); chip.classList.toggle('kai', !!r.enabled); }
-        if (wen) wen.textContent = r.available
-          ? 'v' + (r.version || '?') + ' · ' + tOr('diwen.roots', '词根') + ' ' + (Number(r.size || 0) - Number(r.privateCount || 0)) + ' + ' + tOr('diwen.privateN', '私有') + ' ' + (r.privateCount || 0) + ' · ' + tOr('diwen.summaryNote', '总结时自动完善私有迪文')
+        g.checked = !!r.enabled;
+        /* R264 项12：幂等写入 —— 值相同不碰 DOM，否则 textContent 写入触发 childList mutation⇒observer 自激循环⇒界面抖动 */
+        const c = chip();
+        if (c) { const txt = r.enabled ? tOr('diwen.on', '已启用') : tOr('diwen.off', '已关闭'); if (c.textContent !== txt) c.textContent = txt; const disp = txt ? '' : 'none'; if (c.style.display !== disp) c.style.display = disp; c.classList.toggle('kai', !!r.enabled); }
+        const w = wen();
+        const wTxt = r.available
+          ? 'v' + (r.version || '?') + ' · ' + tOr('diwen.roots', '词根') + ' ' + (Number(r.size || 0) - Number(r.privateCount || 0)) + ' + ' + tOr('diwen.privateN', '私有') + ' ' + (r.privateCount || 0)
           : tOr('diwen.unavailable', '迪文不可用（机器层回退原文，不阻断业务）');
+        if (w && w.textContent !== wTxt) w.textContent = wTxt;
       } catch { /* noop */ }
     };
-    const shuaLie = async () => {
-      try {
-        const r = await window.warmy.diwenSiYouList?.();
-        const items = (r && r.ok && r.items) || [];
-        if (shu) shu.textContent = String(items.length);
-        if (!lie) return;
-        lie.innerHTML = '';
-        for (const it of items) {
-          const hang = document.createElement('div');
-          hang.className = 'diwenLieHang';
-          const ming = document.createElement('span'); ming.className = 'diwenLieCi'; ming.textContent = String(it.lemma_zh || '');
-          const shi = document.createElement('span'); shi.className = 'jingYin'; shi.textContent = String(it.definitionZh || '');
-          const lai = document.createElement('span'); lai.className = 'diwenChip'; lai.textContent = it.source === 'summary' ? tOr('diwen.srcSummary', '总结') : tOr('diwen.srcUser', '手动');
-          const shan = document.createElement('button'); shan.className = 'anNiuXiao'; shan.type = 'button'; shan.textContent = tOr('common.delete', '删除');
-          shan.addEventListener('click', async () => {
-            const rr = await window.warmy.diwenSiYouShan?.({ id: Number(it.id) });
-            if (rr && rr.ok) { void shuaLie(); void shuaZhuangTai(); }
-            else if (xiao) xiao.textContent = String((rr && rr.errors && rr.errors[0]) || (rr && rr.error) || '');
-          });
-          hang.append(ming, shi, lai, shan);
-          lie.appendChild(hang);
+    /* 迪文卡**出现/消失边沿**才刷新（懒加载）；任何 mutation 都刷会自激。
+     * R264：设置重渲染后 chip 可能被重建为空而边沿未触发⇒「空文案即补刷」（幂等，不形成环）。 */
+    try {
+      let youGou = false;
+      const mo = new MutationObserver(() => {
+        const now = !!gou();
+        if (now !== youGou) { youGou = now; if (now) void shuaZhuangTai(); }
+        else if (now) { const c = chip(); if (c && !c.textContent) void shuaZhuangTai(); }
+      });
+      mo.observe(document.body, { childList: true, subtree: true });
+    } catch { /* noop */ }
+    document.addEventListener('change', (e) => {
+      const g = e.target && e.target.id === 'diwenQiYongGou' ? e.target : null;
+      if (!g) return;
+      void (async () => { try { await window.warmy.diwenSheZhi?.({ enabled: g.checked }); } catch { /* noop */ } void shuaZhuangTai(); })();
+    });
+    document.addEventListener('click', (e) => {
+      const id = e.target && e.target.closest ? (e.target.closest('#diwenSiYouBaoDaoRuAn,#diwenSiYouBaoDaoChuAn,#diwenSiYouBaoShanChuAn,#diwenGengXinAn') || {}).id : null;
+      if (!id) return;
+      if (id === 'diwenSiYouBaoDaoRuAn') { void (async () => { const r = await window.warmy.diwenSiYouBaoDaoRu?.().catch(() => null); const x = xiao(); if (x) x.textContent = r && r.ok ? tOr('diwen.pkgImported', '已导入 {a} 个概念（重映射 {r}）').replace('{a}', String(r.added || 0)).replace('{r}', String(r.remapped || 0)) : (r && r.canceled ? '' : ((r && (r.errors || [r.error])) || [tOr('common.error', '出错了')]).join('；').slice(0, 200)); void shuaZhuangTai(); })(); return; }
+      if (id === 'diwenSiYouBaoDaoChuAn') { void (async () => { const r = await window.warmy.diwenSiYouBaoDaoChu?.().catch(() => null); const x = xiao(); if (x) x.textContent = r && r.ok ? tOr('diwen.pkgExported', '已导出 {n} 个概念为私有包').replace('{n}', String(r.concepts || 0)) : (r && r.canceled ? '' : String((r && (r.errors || [r.error])) || tOr('common.error', '出错了')).slice(0, 200)); })(); return; }
+      if (id === 'diwenSiYouBaoShanChuAn') { void shanChuBao(); return; }
+      if (id === 'diwenGengXinAn') { void gxJianCha(); return; }
+    });
+    const shanChuBao = async () => {
+      const r = await window.warmy.diwenSiYouBaoLieBiao?.().catch(() => null);
+      const lie = (r && r.items) || [];
+      let ceng = document.getElementById('diwenBaoShanChuCeng');
+      if (!ceng) { ceng = document.createElement('div'); ceng.id = 'diwenBaoShanChuCeng'; ceng.className = 'zjEditCeng yinCang'; document.body.appendChild(ceng); }
+      ceng.innerHTML = '';
+      const kuang = document.createElement('div'); kuang.className = 'zjEditKuang';
+      const tou = document.createElement('div'); tou.style.cssText = 'font-weight:600;margin-bottom:8px';
+      tou.textContent = tOr('diwen.pkgDeleteTitle', '删除私有包（基础词库零丢失）');
+      kuang.appendChild(tou);
+      if (!lie.length) { const kong = document.createElement('div'); kong.className = 'jingYin'; kong.textContent = tOr('diwen.pkgNone', '没有已安装的私有包'); kuang.appendChild(kong); }
+      for (const b of lie) {
+        const hang = document.createElement('div'); hang.style.cssText = 'display:flex;align-items:center;gap:8px;margin:6px 0';
+        const ming = document.createElement('span'); ming.style.cssText = 'flex:1;min-width:0';
+        ming.textContent = String(b.name || b.namespace || '') + '（' + String(b.namespace || '') + ' · ' + String(b.concepts ?? (b.roots || []).length ?? 0) + '）';
+        const shan = document.createElement('button'); shan.className = 'anNiuXiao'; shan.textContent = tOr('common.delete', '删除');
+        shan.onclick = async () => {
+          if (!(await uiConfirm(tOr('diwen.pkgDeleteConfirm', '删除该私有包？先前冲突裁决会自动重新调整，基础词库不受影响。') + '\n' + String(b.namespace || '')))) return;
+          const rr = await window.warmy.diwenSiYouBaoShanChu?.({ namespace: String(b.namespace || '') }).catch(() => null);
+          const x = xiao(); if (x) x.textContent = rr && rr.ok ? tOr('diwen.pkgDeleted', '已删除私有包') : String((rr && (rr.errors || [rr.error])) || '').slice(0, 200);
+          ceng.classList.add('yinCang'); void shuaZhuangTai();
+        };
+        hang.appendChild(ming); hang.appendChild(shan); kuang.appendChild(hang);
+      }
+      const guan = document.createElement('button'); guan.className = 'anNiuXiao'; guan.textContent = tOr('common.close', '关闭');
+      guan.onclick = () => ceng.classList.add('yinCang');
+      kuang.appendChild(guan); ceng.appendChild(kuang); ceng.classList.remove('yinCang');
+    };
+    /* R262：检查更新→发现更新后变「安装更新」 */
+    const gxAn = () => $('diwenGengXinAn'), gxWen = () => $('diwenGengXinWen');
+    let gxAvail = null;
+    const shuaGengXin = async () => {
+      const a = gxAn(), w = gxWen();
+      const r = await window.warmy.diwenGengXinJianCha?.().catch(() => null);
+      if (!r || !r.ok) { if (w) w.textContent = String((r && r.error) || ''); return; }
+      gxAvail = r.hasUpdate ? r : null;
+      if (a) a.textContent = gxAvail ? tOr('diwen.installUpdate', '安装更新') : tOr('diwen.checkUpdate', '检查更新');
+      if (w) w.textContent = r.hasUpdate
+        ? tOr('diwen.updateFound', '发现新版') + ' v' + r.latest + '（' + tOr('diwen.current', '当前') + ' v' + (r.installed || '?') + '）'
+        : (r.installed ? tOr('diwen.upToDate', '已是最新') + ' v' + r.installed : (r.error ? String(r.error) : tOr('diwen.notInstalled', '未检测到已安装版本')));
+    };
+    const gxJianCha = async () => {
+      const a = gxAn(), w = gxWen();
+      if (!gxAvail) { await shuaGengXin(); return; }
+      if (a) a.disabled = true;
+      if (w) w.textContent = tOr('diwen.installing', '正在安装更新…');
+      const r = await window.warmy.diwenGengXinAnZhuang?.().catch(() => null);
+      if (a) a.disabled = false;
+      if (w) w.textContent = r && r.ok ? tOr('diwen.updated', '已更新到') + ' v' + r.version : String((r && r.error) || '');
+      gxAvail = null;
+      void shuaGengXin(); void shuaZhuangTai();
+    };
+    void shuaZhuangTai(); void shuaGengXin();
+  })();
+
+  /** R264：拟态创建2D/3D＋下载后端＋缺说话模型提示——顶层委托，设置懒加载/重绘不失绑。 */
+  (function bindMimicChuangJian() {
+    const xingTai = () => { try { return String(document.querySelector('input[name="mimicXingTai"]:checked')?.value || '2d'); } catch { return '2d'; } };
+    const kai = async () => {
+      const sanD = xingTai() === '3d';
+      if (sanD) {
+        const hj = await window.warmy.sanDHuiTuHuanJing?.().catch(() => null);
+        if (!hj || !hj.ready) {
+          const r = await window.warmy.benDiShengChengAnZhuang?.().catch(() => null);
+          if (!r || !r.ok) { showToast(String((r && (r.error === 'source-unverified' ? tOr('mimic.localGenUnverified', '暂无已验证的免费商用后端，来源核验后开放下载。') : r.error)) || tOr('common.error', '出错了'))); return; }
         }
-        if (!items.length) { const kong = document.createElement('div'); kong.className = 'jingYin'; kong.textContent = tOr('diwen.empty', '暂无私有概念：上方添加，或让总结自动完善。'); lie.appendChild(kong); }
+      }
+      void window.__kaiMimicHuiTu?.({
+        title: sanD ? tOr('mimic.create3d', '创建3D形象') : tOr('mimic.create2d', '创建2D形态'), prompt: tOr('mimic.sculpt.prompt', '描述形象，或框选部位后描述修改。'),
+        generate: tOr('mimic.sculpt.generate', '生成 / 改进'), selection: tOr('mimic.sculpt.selection', '选中部位'),
+        clear: tOr('mimic.sculpt.clear', '清除选区'), undo: tOr('mimic.sculpt.undo', '撤销编辑'),
+        save: t('common.save'), saved: t('common.saved'), cancel: t('common.cancel'),
+      });
+    };
+    document.addEventListener('click', (e) => {
+      const b = e.target && e.target.closest ? e.target.closest('#anNiuMimicHuiTu') : null;
+      if (b) { e.preventDefault(); void kai(); }
+    });
+    /* 缺说话模型（云端＋本地 sherpa）⇒ 拟态标题右侧主题色提示，指引去设置功能 */
+    const shuaQueSheng = async () => {
+      const h2 = document.querySelector('.sheZhiSection[data-sec="mimic"] h2');
+      if (!h2) return;
+      let tip = document.getElementById('mimicQueShengTiShi');
+      const hasCloud = await (async () => { try { const r = await window.warmy.mimicHuiTuMoXingLie?.(); return !!(r && r.models && r.models.length); } catch { return false; } })();
+      const hasLocal = await (async () => { try { const r = await window.warmy.benDiYuYinZhuangTai?.(); return !!(r && (r.zhuangTai === 'yi_an_zhuang' || r.zhuangTai === 'bu_ke_yong') && r.moXing && r.moXing.heCheng); } catch { return false; } })();
+      const que = !hasCloud && !hasLocal;
+      if (que && !tip) { tip = document.createElement('span'); tip.id = 'mimicQueShengTiShi'; tip.style.cssText = 'color:var(--accent);font-size:12px;margin-left:8px;font-weight:400'; tip.style.cursor = 'pointer'; tip.onclick = () => { try { setNav('settings'); setTimeout(() => document.querySelector('#peiZhiDaoHang button[data-sec="func"]')?.click(), 60); } catch { /* noop */ } }; h2.appendChild(tip); }
+      /* R264 项12：幂等写入破自激环 */
+      if (tip) { const disp = que ? '' : 'none'; if (tip.style.display !== disp) tip.style.display = disp; const txt = tOr('mimic.queSheng', '缺少说话模型：请到 设置→功能 安装 sherpa-onnx 或添加云端说话模型'); if (que && tip.textContent !== txt) tip.textContent = txt; }
+    };
+    /* 拟态分区出现/消失边沿＋点击拟态导航时刷新；任何 mutation 都刷会自激抖动 */
+    try {
+      let youH2 = false;
+      new MutationObserver(() => { const now = !!document.querySelector('.sheZhiSection[data-sec="mimic"] h2'); if (now !== youH2) { youH2 = now; if (now) void shuaQueSheng(); } }).observe(document.body, { childList: true, subtree: true });
+      document.addEventListener('click', (e) => { if (e.target && e.target.closest && e.target.closest('#peiZhiDaoHang button[data-sec="mimic"]')) setTimeout(() => void shuaQueSheng(), 120); });
+    } catch { /* noop */ }
+    void shuaQueSheng();
+  })();
+
+  /** R258 报障25／R262：记忆系统卡——仅启用勾（默认勾）；启用时其他记忆系统强制不生效；无上下文预算。 */
+  (function bindDshJiYiKa() {
+    const gou = $('dshJiYiQiYongGou'), zt = $('dshJiYiZhuangTai');
+    if (!gou) return;
+    const shua = async () => {
+      try {
+        const r = await window.warmy.chaJianXinXi?.().catch(() => null);
+        const lie = (r && (r.installed || r.plugins)) || [];
+        const zhu = (Array.isArray(lie) ? lie : Object.values(lie)).find((p) => p && (p.id === 'warmy-memory' || p.name === 'warmy-memory'));
+        gou.checked = zhu ? zhu.enabled !== false : true;
+        if (zt) zt.textContent = gou.checked ? tOr('dshMem.on', '记忆系统启用中') : tOr('dshMem.off', '已禁用：没有记忆系统，可安装其他记忆系统');
       } catch { /* noop */ }
     };
     gou.addEventListener('change', async () => {
-      try { await window.warmy.diwenSheZhi?.({ enabled: gou.checked }); } catch { /* noop */ }
-      void shuaZhuangTai();
-    });
-    let tanShi = 0;
-    const tanCha = async () => {
-      const q = String(tanRu?.value || '').trim();
-      if (!tanJie) return;
-      tanJie.innerHTML = '';
-      if (!q) return;
+      const r = await window.warmy.chaJianQiYong?.({ plugin: 'warmy-memory', enabled: gou.checked }).catch(() => null);
+      if (r && r.ok === false) { uiAlert(String(r.error || '')); gou.checked = !gou.checked; return; }
       try {
-        const r = await window.warmy.diwenShiTan?.({ text: q });
-        if (!r || !r.ok) return;
-        const zt = document.createElement('span'); zt.className = 'diwenChip' + (r.status === 'STRUCTURED' ? ' kai' : '');
-        zt.textContent = r.status === 'STRUCTURED' ? tOr('diwen.stStructured', '结构化') : r.status === 'FALLBACK_TEXT' ? tOr('diwen.stPartial', '部分映射') : tOr('diwen.stNone', '无映射');
-        const fg = document.createElement('span'); fg.className = 'jingYin'; fg.textContent = tOr('diwen.coverage', '覆盖') + ' ' + Math.round((Number(r.coverage) || 0) * 100) + '%';
-        tanJie.append(zt, fg);
-        for (const w of (r.uncovered || []).slice(0, 8)) {
-          const p = document.createElement('span'); p.className = 'diwenPian'; p.textContent = w;
-          p.title = tOr('diwen.uncoveredTip', '未覆盖：点击填入添加行，可补为私有概念');
-          p.addEventListener('click', () => { const a = $('diwenSiYouCi'); if (a) { a.value = w; a.focus(); } });
-          tanJie.appendChild(p);
-        }
+        const s = await window.warmy.settingsGet?.();
+        if (s && s.settings) { /* 状态以主进程为准 */ }
       } catch { /* noop */ }
-    };
-    $('diwenSiYouTianAn')?.addEventListener('click', async () => {
-      const ci = String($('diwenSiYouCi')?.value || '').trim();
-      const shi = String($('diwenSiYouShi')?.value || '').trim();
-      if (!ci) { if (xiao) xiao.textContent = tOr('diwen.needWord', '先填概念词'); return; }
-      if (xiao) xiao.textContent = '';
-      const r = await window.warmy.diwenSiYouTian?.({ word: ci, meaning: shi, bfoType: String($('diwenSiYouType')?.value || 'Object') });
-      if (r && r.ok) {
-        const a = $('diwenSiYouCi'), b = $('diwenSiYouShi');
-        if (a) a.value = ''; if (b) b.value = '';
-        void shuaLie(); void shuaZhuangTai(); void tanCha();
-      } else if (xiao) xiao.textContent = String((r && r.errors && r.errors[0]) || (r && r.error) || tOr('common.error', '出错了'));
+      void shua();
+      try { renderPluginList(); } catch { /* noop */ }
     });
-    tanRu?.addEventListener('input', () => { clearTimeout(tanShi); tanShi = setTimeout(() => void tanCha(), 300); });
-    void shuaZhuangTai(); void shuaLie();
-  })();
-
-  /** R258 报障25：dsh 记忆接管卡——上下文预算百分比（相对当前模型上下文大小）滑杆+数字同步落设置。 */
-  (function bindDshJiYiKa() {
-    const hua = $('dshYuSuanHuaGan'), shu = $('dshYuSuanBaiFenBi'), shuo = $('dshYuSuanShuoMing'), zt = $('dshJiYiZhuangTai');
-    if (!hua || !shu) return;
-    const xie = (v) => {
-      const n = Math.min(100, Math.max(10, Math.round(Number(v) || 80)));
-      hua.value = String(n); shu.value = String(n);
-      if (shuo) shuo.textContent = tOr('dshMem.percentNote', '相对当前模型上下文大小；dsh 上下文超过该比例即强制摘要接管。下次派生 dsh 实例生效。');
-      return n;
-    };
-    let cunShi = 0;
-    const baoCun = (v) => {
-      const n = xie(v);
-      clearTimeout(cunShi);
-      cunShi = setTimeout(() => { void window.warmy.dshContextPercent?.({ percent: n }); }, 300);
-    };
-    hua.addEventListener('input', () => baoCun(hua.value));
-    shu.addEventListener('change', () => baoCun(shu.value));
-    void (async () => {
-      try {
-        const r = await window.warmy.dshContextPercentGet?.();
-        xie(r && r.ok ? r.percent : 80);
-      } catch { xie(80); }
-      try {
-        const a = await window.warmy.dshAvailable?.();
-        if (zt) zt.textContent = a && a.ok
-          ? tOr('dshMem.ready', 'dsh 可用') + (a.version ? ' v' + a.version : '') + ' · ' + tOr('dshMem.takeover', '派生实例时自动挂载 warmy-memory 接管')
-          : tOr('dshMem.absent', 'dsh 未安装：设置→插件可安装；安装后派生实例即接管。');
-      } catch { /* noop */ }
-    })();
+    void shua();
   })();
 
   /**
@@ -12570,9 +12694,13 @@ window.__keYiLiaoTian = keYiLiaoTian;
           huiBao = 'notice';
         } else if (r?.ok) {
           try { window.__startGuideChatDone?.(); } catch { /* noop */ }
+          /* R261 项7：进化开启首发送返回 reply:''＋evolve 标记⇒不贴空消息；
+           * 支线回复在聊天记录并排块里（live pair），这里只刷新不推送。 */
+          const shiJinHuaKaiShi = !!r.evolve;
+          if (shiJinHuaKaiShi) { try { window.__ziJinHuaChongHua && window.__ziJinHuaChongHua(); } catch { /* noop */ } }
           // 空回复如实显示占位（真事故：第二条回复「完成了」但界面上什么都没有）
-          const huiFu = (r.reply && youShiZhiWenBen(r.reply)) ? String(r.reply) : tOr('chat.emptyReply', '（本条回复无内容）');
-          tuisongXiaoxi(chatId, 'them', huiFu, { reasoning: r.reasoning || '', reasoningDuan: Array.isArray(r.reasoningDuan) ? r.reasoningDuan : undefined, moXing: r.moXing || '', moXingJiangJi: r.moXingJiangJi || null, artifacts: Array.isArray(r.artifacts) ? r.artifacts : [], usage: r.usage || null, zhongJian: Array.isArray(r.zhongJian) ? r.zhongJian : undefined });
+          const huiFu = shiJinHuaKaiShi ? '' : ((r.reply && youShiZhiWenBen(r.reply)) ? String(r.reply) : tOr('chat.emptyReply', '（本条回复无内容）'));
+          if (!shiJinHuaKaiShi) tuisongXiaoxi(chatId, 'them', huiFu, { reasoning: r.reasoning || '', reasoningDuan: Array.isArray(r.reasoningDuan) ? r.reasoningDuan : undefined, moXing: r.moXing || '', moXingJiangJi: r.moXingJiangJi || null, artifacts: Array.isArray(r.artifacts) ? r.artifacts : [], usage: r.usage || null, zhongJian: Array.isArray(r.zhongJian) ? r.zhongJian : undefined });
           /**
            * **降级 ⇒ 记下"当前模型"并黏住这一整段对话**（产品要求）。
            *
@@ -12636,7 +12764,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
              * 收掉「继续 / 重试」的钉住状态，避免旧按钮留在历史消息中间
              * （下一次真中断会重新钉在新的位置，见上面 taskIncomplete 分支）。
              */
-            if (!planPending) huiBao = true;
+            if (!planPending) huiBao = shiJinHuaKaiShi ? 'notice' : true;
             else huiBao = 'running';
             try {
               state.planInterrupted?.delete?.(String(cur.id || ''));
@@ -12647,7 +12775,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
           }
           // **本轮模型调用可见**：模型名单独一行（在气泡下方，与时间行一起），不再居中占一行
           // 自动阅读回复：提示音先播完再读，避免重叠（R260：拟态会话用 mimicAutoRead，默认开）
-          if (autoReadOf(chatId) && !planPending) {
+          if (!shiJinHuaKaiShi && autoReadOf(chatId) && !planPending) {
             void (async () => {
               try {
                 await chuanBoYinXiao('complete');
@@ -12679,7 +12807,13 @@ window.__keYiLiaoTian = keYiLiaoTian;
            */
           const juTi = r && typeof r.reply === 'string' && youShiZhiWenBen(r.reply) ? String(r.reply) : '';
           const cuo = juTi || tOr('chat.failed', '本轮回复失败') + '：' + String(r?.error || t('common.error'));
-          tuisongXiaoxi(chatId, 'them', cuo);
+          /* R264 项8：拟态异常走系统消息（不弹提示音/不亮未读圆点），聊天里只留系统行 */
+          if (String(chatId || '') === 'mimic-pet') {
+            try { void window.warmy.systemMessageAdd?.({ kind: 'system', title: tOr('mimic.errTitle', '拟态异常'), body: cuo }); } catch { /* noop */ }
+            tuisongXiaoxi(chatId, 'them', cuo, { system: true });
+          } else {
+            tuisongXiaoxi(chatId, 'them', cuo);
+          }
           if (r && (r.budgetStopped || r.imageStopped)) {
             try {
               state.planInterrupted = state.planInterrupted || new Set();
@@ -12929,6 +13063,75 @@ window.__keYiLiaoTian = keYiLiaoTian;
   window.__qingYinYong = qingYinYong;
   $('yinYongGuan')?.addEventListener('click', () => qingYinYong());
 
+  /* R261/R263：进化双支线并排块 HTML（live 与 persisted 共用）。
+   * R263：左留牛马头像；不显「支线A/轮数」与用户内容；显思考/工具/中间/最终/系统；
+   * 选支按钮在回复下方；已选＝胜者左「主线」/败者右「弃用」；回退/撤销回到选支前＝原顺序＋「选此支线」。 */
+  function zjhPairHtml(pair, o) {
+    const arms = (pair && pair.arms) || {};
+    const live = !!(o && o.live);
+    const curE = window.__ziJinHuaCur && window.__ziJinHuaCur();
+    const reverted = !!(curE && pair && curE.id === pair.expId && curE.status === 'split');
+    const winner = (pair && pair.winner) || (live && curE && curE.winner) || null;
+    const decided = !reverted && !!winner;
+    const order = decided ? (winner === 'B' ? ['B', 'A'] : ['A', 'B']) : ['A', 'B'];
+    const av = (o && o.avatar) ? '<img class="touXiangTuPian zjhAv" src="' + escapeHtml(o.avatar) + '" alt=""/>' : '';
+    /* R264 项4：未完成（running）禁选；选后按钮消失改纯标签；弃用淡删除线；单头像（pair 级一个） */
+    const notDone = !!(live && curE && curE.status === 'running');
+    const col = (k) => {
+      const zt = arms[k] || {};
+      const hist = Array.isArray(zt.history) ? zt.history : [];
+      const msgs = hist.filter((h) => h).map((h) => {
+        const kind = String(h.kind || (h.role === 'user' ? 'user' : h.role === 'tool' ? 'tool' : h.role === 'system' ? 'system' : 'final'));
+        const wen = String(h.content || '');
+        if (kind === 'user') return '<div class="zjhMsg zjhWo">' + mdHtml(wen) + '</div>';
+        if (kind === 'sikao') return '<details class="zjhSiKao" open><summary>' + escapeHtml(tOr('evolve.think', '思考')) + '</summary><pre>' + escapeHtml(wen) + '</pre></details>';
+        if (kind === 'tool') return '<div class="zjhTool">' + escapeHtml(tOr('evolve.tool', '工具')) + '：' + escapeHtml(wen) + '</div>';
+        if (kind === 'zhongjian') return '<div class="zjhZhongJian"><span class="jingYin">' + escapeHtml(tOr('evolve.mid', '中间回复')) + '</span>' + escapeHtml(wen) + '</div>';
+        if (kind === 'system') return '<div class="zjhXiTong jingYin">' + escapeHtml(wen) + '</div>';
+        return '<div class="zjhMsg zjhThem">' + mdHtml(wen) + '</div>';
+      }).join('') || '<div class="jingYin">…</div>';
+      const isWin = decided && k === winner;
+      const foot = decided
+        ? '<span class="zjhBiaoQian' + (isWin ? ' zjhWinBiao' : ' zjhDropBiao') + '">' + escapeHtml(isWin ? tOr('evolve.mainline', '主线') : tOr('evolve.discarded', '弃用')) + '</span>'
+        : '<button type="button" class="anNiuZhuYao zjhChoose" data-arm="' + k + '"' + (((o && o.canChoose) && !notDone) ? '' : ' disabled title="' + escapeHtml(notDone ? tOr('evolve.notDoneTip', '支线还在跑，完成后才能选择。') : tOr('evolve.confirmTip', '只有项目创建者和管理员可以选择合并支线。')) + '"') + '>' + escapeHtml(tOr('evolve.choose', '选此支线')) + '</button>';
+      return '<div class="zjhCol' + (decided ? (isWin ? ' zjhWin' : ' zjhDrop') : '') + '"><div class="zjhColNei"><div class="zjhMsgs">' + msgs + '</div>' + foot + '</div></div>';
+    };
+    return '<div class="zjhPair">' + av + '<div class="zjhPairRow">' + order.map(col).join('') + '</div></div>';
+  }
+  /* R261 项6：输入框原位分栏（左 A 右 B 两个一样的 textarea）；图标行与发送行共用一套不分栏 */
+  function jinHuaShuRuFenLan() {
+    const a = $('shuRu'); const qu = a && a.closest('.shuRuQu');
+    const c = window.__ziJinHuaCur && window.__ziJinHuaCur();
+    const active = !!(c && state.selectedChat && c.sessionId === String(state.selectedChat.id) && (c.status === 'split' || c.status === 'running'));
+    let b = $('shuRuB');
+    if (active && qu) {
+      if (!b) {
+        b = document.createElement('textarea'); b.id = 'shuRuB'; b.rows = Number(a.rows) || 2;
+        b.placeholder = tOr('evolve.armInput', '发送到支线') + ' B';
+        b.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void jinHuaFaSongZhiXian('B'); } });
+        qu.appendChild(b);
+        if (a.dataset.yuanPlaceholder === undefined) a.dataset.yuanPlaceholder = a.placeholder || '';
+        a.placeholder = tOr('evolve.armInput', '发送到支线') + ' A';
+      }
+      document.body.classList.add('zjh-split');
+    } else {
+      if (b) b.remove();
+      document.body.classList.remove('zjh-split');
+      if (a && a.dataset.yuanPlaceholder !== undefined) a.placeholder = a.dataset.yuanPlaceholder;
+    }
+  }
+  async function jinHuaFaSongZhiXian(arm) {
+    const c = window.__ziJinHuaCur && window.__ziJinHuaCur();
+    if (!c || !state.selectedChat || c.sessionId !== String(state.selectedChat.id)) return;
+    const ta = arm === 'B' ? $('shuRuB') : $('shuRu');
+    const v = String((ta && ta.value) || '').trim();
+    if (!v) return;
+    ta.value = '';
+    try { await window.warmy.ziJinHuaFaSong({ sessionId: c.sessionId, arm, content: v }); } catch (e) { showToast(String((e && e.message) || e)); }
+  }
+  /* self-evolve-ui 广播进化状态后调：重画聊天（live 并排块）＋同步输入分栏；R263：选支/合并后自动滚底 */
+  window.__ziJinHuaChongHua = (gunDaoDi) => { try { jinHuaShuRuFenLan(); renderChat({ keepScroll: !gunDaoDi }); } catch { /* noop */ } };
+
   /**
    * 发送总闸：**任何异常都必须看得见**。
    * 真事故（本轮修的"发送后没反应"）：`faSong` 内部抛 `ReferenceError: nul is not defined`
@@ -12951,6 +13154,19 @@ window.__keYiLiaoTian = keYiLiaoTian;
   async function faSongNeiBu() {
     /** 语音流程没走完（录音/最终转写/重组）⇒ 不允许发送，连回车也不放行 */
     if (yuYinJinZhi || yuYinZhengLiZhong || yuYinZhuangTai) return;
+    /* R261 项6：进化分栏中⇒共用发送按钮按栏派发（左→A、右→B，非空才发）；不走主线引擎 */
+    {
+      const jc = window.__ziJinHuaCur && window.__ziJinHuaCur();
+      if (jc && state.selectedChat && jc.sessionId === String(state.selectedChat.id) && (jc.status === 'split' || jc.status === 'running')) {
+        const a = $('shuRu'); const b = $('shuRuB');
+        const L = String((a && a.value) || '').trim(); const R = b ? String(b.value || '').trim() : '';
+        if (!L && !R) return;
+        if (a) a.value = ''; if (b) b.value = '';
+        if (L) { try { await window.warmy.ziJinHuaFaSong({ sessionId: jc.sessionId, arm: 'A', content: L }); } catch (e) { showToast(String((e && e.message) || e)); } }
+        if (R) { try { await window.warmy.ziJinHuaFaSong({ sessionId: jc.sessionId, arm: 'B', content: R }); } catch (e) { showToast(String((e && e.message) || e)); } }
+        return;
+      }
+    }
     const text = $('shuRu').value.trim();
     /**
      * **有内容才能发**：文字或**附件**（截图/文件）任一存在即可。
@@ -13673,10 +13889,10 @@ async function renderDashboard(host) {
    * 为什么必须按牛马分：Telegram 的 `getUpdates` 是**同一个 bot token 共享 offset**，
    * 两头牛马配同一个 token 会互相"吃掉"对方的消息；按牛马分开才是对的。
    */
-  function sheJiaoJieRuKuaiHtml(inst) {
+  function sheJiaoJieRuKuaiHtml(inst, skipBiaoTi) {
     const iid = String((inst && inst.id) || '');
-    return '<h3 style="margin:16px 0 8px;font-size:13px">'
-      + escapeHtml(tOr('social.jieRuTi', '社交接入（外部 IM）')) + '</h3>'
+    return (skipBiaoTi ? '' : '<h3 style="margin:16px 0 8px;font-size:13px">'
+      + escapeHtml(tOr('social.jieRuTi', '社交接入（外部 IM）')) + '</h3>')
       + '<div class="jingYin" style="margin-bottom:8px;line-height:1.6">'
       + escapeHtml(tOr('social.jieRuHint',
         '把这只牛马接到外部聊天工具：填好凭据 → 保存 → 连接。连上后，那边收到的消息会交给这只牛马处理；'
@@ -13692,12 +13908,12 @@ async function renderDashboard(host) {
    * （本地配对框架，真实平台 OAuth 待渠道凭据）→ 确认后绑定记录落盘 socialBindByInstance。
    * 旧的独立「扫码接入」面板（微信/支付宝/Telegram/Discord 模拟绑定）按用户要求已删除。
    */
-  function sheJiaoKuaiHtml(inst, rootId) {
+  function sheJiaoKuaiHtml(inst, rootId, skipBiaoTi) {
     const sj = sheJiaoOf(inst);
     const root = rootId ? String(rootId) : 'sheJiaoKa';
     /* 派生 id：默认容器沿用旧固定 id（牛马设置弹窗），拟态页容器用前缀区分，避免同屏冲突 */
     const p = (ming) => (root === 'sheJiaoKa' ? ming : root + '-' + ming);
-    return '<h3 style="margin:16px 0 8px;font-size:13px">' + escapeHtml(tOr('social.biaoTi', '社交信息')) + '</h3>' +
+    return (skipBiaoTi ? '' : '<h3 style="margin:16px 0 8px;font-size:13px">' + escapeHtml(tOr('social.biaoTi', '社交信息')) + '</h3>') +
       '<div class="jingYin" style="margin-bottom:8px">' +
       escapeHtml(tOr('social.hint', '这些信息属于这只牛马自己：邮箱 / 网站账号 / 手机号 / 钱包（各最多 987 条，超过 10 行出现滚动条与搜索框）、社交头像、社交昵称。')) +
       '</div>' +
@@ -13839,6 +14055,12 @@ async function renderDashboard(host) {
     });
     // 首帧量一次行高 → 限高 = 行高 × 10（"限高定位 10 个的高度"）
     try { requestAnimationFrame(() => sheJiaoDingGao(ka)); } catch { sheJiaoDingGao(ka); }
+    /* R261 项3：默认折叠后首帧量不到行高（details 关闭时 rect=0）⇒ 展开时补量一次 */
+    const zhe = ka.closest('details');
+    if (zhe && !zhe.dataset.sjBound) {
+      zhe.dataset.sjBound = '1';
+      zhe.addEventListener('toggle', () => { if (zhe.open) { try { requestAnimationFrame(() => sheJiaoDingGao(ka)); } catch { sheJiaoDingGao(ka); } } });
+    }
   }
 
   /**
@@ -13901,9 +14123,12 @@ async function renderDashboard(host) {
 
   /** 当前牛马设置弹窗的渲染目标（原牛马管理局页面已删除，内部重绘都回到这个容器） */
   let instanceDetailTarget = null;
+  /* R263：弹窗模式下停止按钮不在正文，移到「确定」左侧 */
+  let instanceDetailInDialog = false;
 
   function closeNiuMaSettings() {
     instanceDetailTarget = null;
+    instanceDetailInDialog = false;
     const root = $('duiHuaKuangGen');
     if (!root) return;
     root.classList.remove('niuMaSheZhi');
@@ -13935,6 +14160,14 @@ async function renderDashboard(host) {
     ti.appendChild(host);
     const dong = $('duiHuaKuangDongZuoJi');
     dong.innerHTML = '';
+    /* R263：停止按钮放确定左侧（复用 iQiDongTingZhi id，既有绑定/状态刷新照常生效） */
+    instanceDetailInDialog = true;
+    const ting = document.createElement('button');
+    ting.className = 'anNiuXiao';
+    ting.id = 'iQiDongTingZhi';
+    ting.textContent = inst.status === 'running' ? t('instances.stop') : t('instances.start');
+    ting.title = ting.textContent;
+    dong.appendChild(ting);
     const close = document.createElement('button');
     close.className = 'anNiuZhuYao';
     close.textContent = t('common.ok') || '确定';
@@ -14092,13 +14325,13 @@ async function renderDashboard(host) {
           </div>
           </div>
         </div>
-        <!-- 第 36 轮【项 2】：社交接入搬到**每只牛马自己的设置里**，放在「社交信息」上面 -->
-        ${sheJiaoJieRuKuaiHtml(inst)}
-        ${sheJiaoKuaiHtml(inst)}
+        <!-- 第 36 轮【项 2】：社交接入搬到**每只牛马自己的设置里**；R261 项3：默认折叠（details 不带 open） -->
+        <details id="sjJieRuZhe" style="margin-top:14px"><summary>${escapeHtml(tOr('social.jieRuTi', '社交接入（外部 IM）'))}</summary>${sheJiaoJieRuKuaiHtml(inst, true)}</details>
+        <details id="sjXinXiZhe" style="margin-top:8px"><summary>${escapeHtml(tOr('social.biaoTi', '社交信息'))}</summary>${sheJiaoKuaiHtml(inst, null, true)}</details>
         <div class="shiLiHang" style="margin-top:14px">
           <!-- 底部「保存」已删除（产品要求）：头像/模型/名称/md 改完立即生效；
                只有「写入认知」需要点确定。 -->
-          <button class="anNiuXiao" id="iQiDongTingZhi" title="${escapeHtml(inst.status === 'running' ? t('instances.stop') : t('instances.start'))}">${escapeHtml(inst.status === 'running' ? t('instances.stop') : t('instances.start'))}</button>
+          ${instanceDetailInDialog ? '' : '<button class="anNiuXiao" id="iQiDongTingZhi" title="' + escapeHtml(inst.status === 'running' ? t('instances.stop') : t('instances.start')) + '">' + escapeHtml(inst.status === 'running' ? t('instances.stop') : t('instances.start')) + '</button>'}
           <button class="anNiuDanger" id="iDel" title="${escapeHtml(t('instances.delete'))}">${escapeHtml(t('instances.delete'))}</button>
           <span class="huiZhang ${inst.status === 'running' ? '' : 'off'}">${inst.status === 'running' ? t('instances.running') : t('instances.stopped')}</span>
         </div>
@@ -14206,10 +14439,12 @@ async function renderDashboard(host) {
           const lab = $('iThinkLabel');
           if (lab) lab.textContent = thinkLabelOf(THINK_STOPS[Number(thinkEl.value) || 0] || 'auto');
           doSave();
+          try { window.__refreshThink?.(); } catch { /* noop */ }
         };
         thinkEl.oninput = () => {
           const lab = $('iThinkLabel');
           if (lab) lab.textContent = thinkLabelOf(THINK_STOPS[Number(thinkEl.value) || 0] || 'auto');
+          try { window.__refreshThink?.(); } catch { /* noop */ }
         };
       }
       const xiaoDiEl = $('iXiaoDiShu');
@@ -15083,6 +15318,7 @@ async function renderDashboard(host) {
           if (lab) lab.textContent = thinkLabelOf(v);
           inst2.thinkLevel = v;
           saveInst();
+          try { window.__refreshThink?.(); } catch { /* noop */ }
         };
       }
 
@@ -15882,7 +16118,6 @@ async function renderDashboard(host) {
       heZi.innerHTML = `
         <div class="peiZhiBuJu">
         <div class="peiZhiDaoHang" id="peiZhiDaoHang">
-          <h2 class="peiZhiDaoHangBiaoTi">${escapeHtml(tOr('settings.title', '设置'))}</h2>
           <input id="peiZhiSouSuo" class="hkFilter" placeholder="${escapeHtml(tOr('settings.search', '搜索设置…'))}" style="margin-bottom:8px"/>
           <button data-sec="ui" class="qiYong">${escapeHtml(t('settings.section.ui'))}</button>
           <button data-sec="notify">${escapeHtml(t('settings.section.notify'))}</button>
@@ -16110,9 +16345,9 @@ async function renderDashboard(host) {
           </div>
           <!-- R254：音色（语音 timbre）定制——本地 VITS 音色 / 云端预设音色 / 自定义；写入 specialModels.ttsVoice，拟态/朗读共用 -->
           <div class="shiLiHang" style="align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
-            <span class="jingYin" style="min-width:160px;display:inline-flex;align-items:center;gap:4px">${escapeHtml(tOr('audio.timbre', '音色'))}<button type="button" class="ddWen" title="${escapeHtml(tOr('audio.timbreHint', '定制语音的音色。启用「本地语音与文字互转」时用本地音色（1–5，离线、不烧 token）；否则用云端说话模型的音色（预设名或供应商自定义名）。点「试听」用当前音色合成一句。'))}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.1.9-1.1 1.8"/><circle cx="12" cy="17" r="0.8" fill="currentColor" stroke="none"/></svg></button></span>
+            <span class="jingYin" style="min-width:160px;display:inline-flex;align-items:center;gap:4px">${escapeHtml(tOr('audio.timbre', '音色'))}<button type="button" class="ddWen" title="${escapeHtml(tOr('audio.timbreHint', '定制语音的音色。本地音色仅在安装 sherpa-onnx 后出现（离线、不烧 token）；云端音色从统一链配置的说话模型拉取（供应商支持列表时实时拉，否则协议预设）。未配置时不显示假选项。点「试听」用当前音色合成一句。'))}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.1.9-1.1 1.8"/><circle cx="12" cy="17" r="0.8" fill="currentColor" stroke="none"/></svg></button></span>
             <select id="yinSeXuanZe" style="min-width:200px">
-              <optgroup label="${escapeHtml(tOr('audio.timbreLocal', '本地音色（启用本地语音时）'))}">
+              <optgroup label="${escapeHtml(tOr('audio.timbreLocal', '本地音色（sherpa-onnx 已安装）'))}">
                 <option value="0">${escapeHtml(tOr('audio.timbreN', '音色'))} 1</option>
                 <option value="1">${escapeHtml(tOr('audio.timbreN', '音色'))} 2</option>
                 <option value="2">${escapeHtml(tOr('audio.timbreN', '音色'))} 3</option>
@@ -16168,46 +16403,31 @@ async function renderDashboard(host) {
             <span class="diwenChip" id="diwenZhuangTaiChip"></span>
           </div>
           <div class="jingYin" id="diwenZhuangTaiWen" style="margin-top:4px"></div>
-          <div style="margin-top:10px">
-            <div style="font-weight:600;font-size:12px">${escapeHtml(tOr('diwen.private', '私有迪文'))}（<span id="diwenSiYouShu">0</span>）<span class="jingYin" style="font-weight:400">　${escapeHtml(tOr('diwen.privateNote', '使用中自行添加；总结时也会自动完善'))}</span></div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-              <input type="text" id="diwenSiYouCi" maxlength="24" placeholder="${escapeHtml(tOr('diwen.wordPh', '概念词（中文）'))}" style="width:140px"/>
-              <input type="text" id="diwenSiYouShi" maxlength="200" placeholder="${escapeHtml(tOr('diwen.meaningPh', '释义'))}" style="width:200px"/>
-              <select id="diwenSiYouType" title="BFO">
-                <option value="Object">Object 实体</option>
-                <option value="Process">Process 过程</option>
-                <option value="Quality">Quality 性质</option>
-                <option value="Role">Role 角色</option>
-                <option value="Function">Function 功能</option>
-                <option value="Site">Site 场所</option>
-              </select>
-              <button class="anNiuXiao" id="diwenSiYouTianAn" type="button">${escapeHtml(tOr('diwen.add', '添加'))}</button>
-            </div>
-            <div class="jingYin" id="diwenXiaoXi" style="margin-top:4px"></div>
-            <div id="diwenSiYouLie" style="margin-top:6px"></div>
+          <!-- R263：私有迪文包操作（导入/导出/删除包，diwen@6.10.1 规范）＋检查更新 -->
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center">
+            <button class="anNiuXiao" id="diwenSiYouBaoDaoRuAn" type="button">${escapeHtml(tOr('diwen.pkgImport', '导入私有包'))}</button>
+            <button class="anNiuXiao" id="diwenSiYouBaoDaoChuAn" type="button">${escapeHtml(tOr('diwen.pkgExport', '导出私有包'))}</button>
+            <button class="anNiuXiao" id="diwenSiYouBaoShanChuAn" type="button">${escapeHtml(tOr('diwen.pkgDelete', '删除私有包'))}</button>
+            <button class="anNiuXiao" id="diwenGengXinAn" type="button">${escapeHtml(tOr('diwen.checkUpdate', '检查更新'))}</button>
+            <span class="jingYin" id="diwenGengXinWen"></span>
           </div>
-          <div style="margin-top:10px">
-            <div style="font-weight:600;font-size:12px">${escapeHtml(tOr('diwen.probe', '试探映射'))}</div>
-            <input type="text" id="diwenShiTanRu" placeholder="${escapeHtml(tOr('diwen.probePh', '输入中文看迪文覆盖与未覆盖概念'))}" style="width:100%;margin-top:6px"/>
-            <div id="diwenShiTanJie" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
-          </div>
+          <div class="jingYin" id="diwenXiaoXi" style="margin-top:4px"></div>
         </div>
-        <!-- R258 报障25：dsh 记忆接管（warmy-memory-system dsh 插件）+ 上下文预算百分比设置 -->
+        <!-- R258 报障25／R262：warmy-memory-system（记忆系统）——仅启用勾（默认勾）；启用时其他记忆系统强制不生效 -->
         <div class="sheZhiSection sheZhiKa" id="dshJiYiKa" data-sec="func">
-          <h2 title="${escapeHtml(tOr('dshMem.hint', '记忆系统以 cordis 插件形式接管 dsh：上下文摘要走 WArmy 结构化提炼、会话消息镜像记忆库、每轮注入召回；超过预算百分比强制压缩。'))}">${escapeHtml(tOr('dshMem.title', 'dsh 记忆接管（warmy-memory-system）'))}</h2>
-          <div class="jingYin">${escapeHtml(tOr('dshMem.desc', '强制接管 dsh 的上下文摘要/记忆/预算：摘要走 WArmy 结构化提炼，消息镜像 memory-os，召回每轮注入；不可用时如实回退 dsh 默认。'))}</div>
+          <h2 title="${escapeHtml(tOr('dshMem.hint', '记忆系统以 cordis 插件形式接管 dsh：上下文摘要走 WArmy 结构化提炼、会话消息镜像记忆库、每轮注入召回。'))}">${escapeHtml(tOr('dshMem.title', 'warmy-memory-system（记忆系统）'))}</h2>
+          <div class="jingYin">${escapeHtml(tOr('dshMem.desc', '禁用后将没有记忆系统，可以安装其他记忆系统。'))}</div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
-            <label for="dshYuSuanBaiFenBi">${escapeHtml(tOr('dshMem.percent', '上下文预算百分比'))}</label>
-            <input type="range" id="dshYuSuanHuaGan" min="10" max="100" step="5" style="width:220px"/>
-            <input type="number" id="dshYuSuanBaiFenBi" min="10" max="100" step="5" style="width:70px"/>
-            <span>%</span>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="dshJiYiQiYongGou" checked/><span>${escapeHtml(tOr('dshMem.enable', '启用'))}</span></label>
+            <span class="jingYin" id="dshJiYiZhuangTai"></span>
           </div>
-          <div class="jingYin" id="dshYuSuanShuoMing" style="margin-top:4px"></div>
-          <div class="jingYin" id="dshJiYiZhuangTai" style="margin-top:6px"></div>
+          <div class="jingYin" style="margin-top:4px">${escapeHtml(tOr('dshMem.exclusive', '启用状态下，安装的其他记忆系统都强制不生效，必须只能使用 warmy-memory-system。'))}</div>
         </div>
         <!-- 搜索（原「网络搜索」，用户要求改名并移到「本地语音与文字互转」下方）：默认全部关闭。启用至少一个供应商后模型才能联网。 -->
         <div class="sheZhiSection sheZhiKa" id="souSuoPeiZhiKa" data-sec="func">
-          <h2 title="${escapeHtml(tOr('souSuo.hint', '默认全部关闭。启用至少一个搜索供应商后，模型才能使用「联网搜索 / 抓正文」；Jina Reader 只负责抓取，不能搜索。'))}">${escapeHtml(tOr('souSuo.title', '搜索'))}</h2>
+          <!-- R263：去掉开头「搜索」二字标题（分区子标题保留） -->
+          <!-- R262 项8：搜索分网络搜索/本地搜索；全盘后台索引归本地搜索 -->
+          <h3 style="margin:10px 0 4px">${escapeHtml(tOr('souSuo.netTitle', '网络搜索'))}</h3>
           <!-- T5（R127）：预设下拉 + 待测区/搜索调用链两分区；供应商先测试通过才进链 -->
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
             <label for="souSuoYuSheXuan">${escapeHtml(tOr('souSuo.preset', '预设'))}</label>
@@ -16225,7 +16445,9 @@ async function renderDashboard(host) {
             <span class="jingYin" id="souSuoYuSheTiShi"></span>
           </div>
           <div id="souSuoPeiZhiLie"></div>
-          <label style="display:flex;align-items:center;gap:6px;margin-top:12px">
+          <h3 style="margin:14px 0 4px">${escapeHtml(tOr('souSuo.localTitle', '本地搜索'))}</h3>
+          <div class="jingYin">${escapeHtml(tOr('souSuo.localHint', '本地搜索走全盘后台索引：空闲时建立，不联网、不出本机。'))}</div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px">
             <input type="checkbox" id="quanPanSuoYinKaiGuan"/>
             <span>${escapeHtml(tOr('souSuo.fullDiskIndex', '全盘搜索后台索引（默认开；空闲时建立，更快更完整）'))}</span>
           </label>
@@ -16272,6 +16494,8 @@ async function renderDashboard(host) {
           </div>
 
           <h3 title="${escapeHtml(tOr('rc.wamyHintNew', '在联系人列表中鼠标右击该联系人，选择「远程控制」，等待对方确认即可。对方允许后即可开始控制。'))}" style="font-size:13px;margin:12px 0 4px">${escapeHtml(tOr('rc.wamyDevicesNew', '安装了 WArmy 的设备（不同账号）'))}</h3>
+          <!-- R262 项9：标题下加可见使用提示行（原来只有悬停 title） -->
+          <div class="jingYin" style="margin:0 0 4px">${escapeHtml(tOr('rc.devicesHint', '使用提示：在联系人列表中鼠标右击该设备的联系人，选择「远程控制」，对方确认后即可使用。'))}</div>
 
           <h3 style="font-size:13px;margin:12px 0 4px">${escapeHtml(tOr('ssh.title', '其他设备（SSH）'))}</h3>
           <div class="shiLiHang" style="flex-direction:column;gap:6px;align-items:stretch">
@@ -16580,17 +16804,19 @@ async function renderDashboard(host) {
             </div>
           </details>
 
-          <!-- R63 主机服务商：最多 1000 条，列表固定 7 行可见、超出滚动；凭证只进 SecureKeyStore。 -->
-          <details class="wangLuoProviderDetails" id="wangLuoProviderMode">
-            <summary>
-              <span class="wangLuoFoldTitle">${escapeHtml(tOr('net.provider.detailsTitle', '添加主机服务商'))}</span>
+          <!-- R63 主机服务商：最多 1000 条；R262 项11：去折叠框直显，列表固定 5 行可见、超出滚动；凭证只进 SecureKeyStore。 -->
+          <div class="wangLuoProviderDetails" id="wangLuoProviderMode">
+            <div class="wangLuoProviderHead">
+              <span class="wangLuoFoldTitle" id="wangLuoProviderHeadTitle" style="cursor:pointer" title="${escapeHtml(tOr('net.provider.headTip', '点击折叠/展开添加表单；折叠时列表只留 10 条'))}">${escapeHtml(tOr('net.provider.detailsTitle', '添加主机服务商'))}</span>
               <span class="jingYin wangLuoFoldSummary" id="wangLuoProviderSummary" aria-live="polite"></span>
-            </summary>
+            </div>
             <div class="wangLuoProviderBody">
               <p class="jingYin wangLuoProviderHint">${escapeHtml(tOr('net.provider.hint', '这里登记“提供主机接入的服务商”。名称 + 地址 + 端口（默认 59599）+ 凭证；凭证只交给主进程的 SecureKeyStore，界面不回显明文。'))}</p>
               <div class="wangLuoProviderList" id="wangLuoProviderList" role="list"
                    aria-label="${escapeHtml(tOr('net.provider.listAria', '主机服务商列表'))}"
-                   data-max="1000" data-visible-rows="7" data-row-height="46"></div>
+                   data-max="1000" data-visible-rows="5" data-row-height="46"></div>
+              <!-- R263：列表底部小字按钮：显示更多/显示全部/收起 -->
+              <div class="wangLuoProviderMore" id="wangLuoProviderMore"></div>
               <div class="wangLuoProviderForm yinCang" id="wangLuoProviderForm">
                 <div class="wangLuoProviderFormTitle" id="wangLuoProviderFormTitle"></div>
                 <label class="wangLuoProviderField"><span>${escapeHtml(tOr('net.provider.name', '名称'))}</span>
@@ -16618,7 +16844,7 @@ async function renderDashboard(host) {
               <div class="wangLuoHostMsg" id="wangLuoProviderMsg" role="status" aria-live="polite"></div>
               <div class="jingYin wangLuoProviderAddressHint">${escapeHtml(tOr('net.provider.addressHint', '地址 + 端口（默认 59599）+ 凭证。fwnexp_v2_ 凭证可自动填地址端口；地址不能重复。'))}</div>
             </div>
-          </details>
+          </div>
 
           <!-- C 方案：发现开放 + 消息走自选服务器；公开可发现默认关。
                打开后只发布「地址/端口/指纹/在线时间」，聊天内容永不进入发现层。 -->
@@ -16996,7 +17222,7 @@ async function renderDashboard(host) {
           <div class="field" style="margin-top:8px">
             <!-- R242 报障9：文件夹图标移到「外观模型」文字右侧（同一行） -->
             <div style="display:flex;align-items:center;gap:6px">
-              <label title="${escapeHtml(tOr('mimic.characterTip', '点选预设或文件夹模型即用；下方「AI 捏脸」用提示词生成专属形象（2D=SVG，3D=TripoSR）。'))}">${escapeHtml(tOr('mimic.character', '外观模型'))}</label>
+              <label title="${escapeHtml(tOr('mimic.characterTip', '点选预设或文件夹模型即用；「创建2D形态」用提示词生成专属 SVG 形象；3D 需先下载本地生成后端，装好后按钮变「创建3D形象」。'))}">${escapeHtml(tOr('mimic.character', '外观模型'))}</label>
               <button class="anNiuXiao" id="anNiuMimicMoXingMuLu" title="${escapeHtml(tOr('mimic.openModelDir', '打开模型文件夹') + '\n' + tOr('mimic.characterHint2d', '把模型放进 resources/mimic/characters/ 会被自动识别（静态图 / 精灵图 / Live2D）。'))}" style="width:24px;height:24px;padding:0;display:inline-flex;align-items:center;justify-content:center;flex:none">
                 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>
               </button>
@@ -17397,15 +17623,26 @@ async function renderDashboard(host) {
           souSuo.dataset.bound = '1';
           souSuo.addEventListener('input', () => {
             const q = String(souSuo.value || '').trim().toLowerCase();
-            const groups = window.__settingsGroups || {};
-            const dangQian = new Set(groups[settingsSection] || []);
-            Array.from(neirongYuansu.querySelectorAll('.sheZhiKa')).forEach((ka) => {
-              // 非当前分区的卡片：交给 showSec 管，这里一个字都不动
-              if (!dangQian.has(ka)) return;
-              if (!q) { ka.style.display = ''; return; }
-              const txt = (ka.textContent || '').toLowerCase();
-              ka.style.display = txt.includes(q) ? '' : 'none';
+            /* R261 项2：搜索覆盖设置界面上出现的全部内容（跨分区）；空查询恢复当前分区。
+             * 旧口径「只搜当前分区」已被主人新口径取代。 */
+            if (!q) { try { showSec(settingsSection); } catch { /* noop */ } return; }
+            try { void renderSkillScanDirs(); void renderSkillList(); } catch { /* noop */ }
+            const groups = {}; let cur = 'ui';
+            Array.from(neirongYuansu.children).forEach((el) => {
+              const ds = el.getAttribute && el.getAttribute('data-sec');
+              if (ds) cur = ds === 'jineng' ? 'skill' : ds;
+              (groups[cur] = groups[cur] || []).push(el);
             });
+            for (const k of Object.keys(groups)) {
+              const lie = groups[k] || [];
+              const youMatch = lie.some((el) => el.classList && el.classList.contains('sheZhiKa') && (el.textContent || '').toLowerCase().includes(q));
+              lie.forEach((el) => {
+                const isKa = el.classList && el.classList.contains('sheZhiKa');
+                const show = isKa ? (el.textContent || '').toLowerCase().includes(q) : youMatch;
+                el.style.display = show ? '' : 'none';
+                el.classList.toggle('yinCang', !show);
+              });
+            }
           });
         })();
         const secIds = ['ui', 'notify', 'model', 'func', 'skill', 'tool', 'plugin', 'gate', 'hotkey', 'about', 'mimic', 'sponsor'];
@@ -17425,6 +17662,7 @@ async function renderDashboard(host) {
         const showSec = (s) => {
           const key = s === 'jineng' ? 'skill' : s;
           settingsSection = key;   // 记住当前分区：renderPage() 后要回到这里
+          const ss = $('peiZhiSouSuo'); if (ss) ss.value = '';  // R261：切分区清搜索，避免搜索态与分区态打架
           secIds.forEach((k) => (groups[k] || []).forEach((yuanSu) => {
             const show = (k === key);
             yuanSu.style.display = show ? '' : 'none';
@@ -17836,7 +18074,12 @@ async function renderDashboard(host) {
         if (pick) {
           pick.innerHTML = yiZhi.map((k) => '<option value="' + escapeHtml(k) + '">' + escapeHtml(k) + '</option>').join('');
         }
+        /* R262 项2/3：插件行内「检查更新/安装更新」＋空闲全量检查徽标 */
+        const gxZt = window.__gengXinZhuangTai || { items: [] };
+        const gxCache = window.__chaJianGxCache || (window.__chaJianGxCache = {});
         heZi.innerHTML = (state.chaJianJi || []).map((p, suoYin) => {
+          /* R263：warmy-memory-system 与 nm 文件是内置功能，不是插件——插件列表不显示（索引保持与 state 一致） */
+          if (p.id === 'warmy-memory' || p.id === 'nm-file') return '';
           // desc 可能是 i18n key（内置）或纯文本（扫描/文件夹）
           const descText = (p.desc && state.t && state.t[p.desc]) ? t(p.desc) : (p.desc || '');
           const provider = p.id === 'agent-teams'
@@ -17862,6 +18105,10 @@ async function renderDashboard(host) {
             : '';
           // **内置插件不可删除**（产品要求：warmy-memory-system 是核心记忆系统）
           const isBuiltin = p.id === 'warmy-memory';
+          const gx0 = gxCache[p.id] || ((gxZt.items || []).find((x) => x && x.kind === 'plugin' && x.id === p.id) || null);
+          const gxWen0 = !gx0 ? '' : gx0.hasUpdate ? tOr('upd.available', '可更新') + ' → ' + String(gx0.latest || gx0.recommended || '')
+            : gx0.error ? (String(gx0.error).startsWith('not-installed') ? tOr('upd.builtinNoUpd', '内置/声明式，随应用更新') : tOr('upd.checkFail', '检查失败'))
+              : (gx0.latest || gx0.recommended) ? tOr('upd.current', '已是最新') : tOr('upd.notInIndex', '索引无此插件（无独立更新）');
           return '<div class="ctgHang" data-plugin-idx="' + suoYin + '">' +
             '<div style="font-weight:600">' + escapeHtml(p.ming || p.name || p.id) + '</div>' +
             '<div class="jingYin">' + escapeHtml(descText) + '</div>' +
@@ -17877,14 +18124,38 @@ async function renderDashboard(host) {
             (isBuiltin
               ? '<button class="anNiuXiao" disabled style="opacity:0.45;cursor:not-allowed" title="' + escapeHtml(tOr('plugin.builtinNoDelete', '内置插件不可删除')) + '">' + escapeHtml(t('settings.pluginDelete')) + '</button>'
               : '<button class="anNiuXiao" data-plug-act="del" data-idx="' + suoYin + '">' + escapeHtml(t('settings.pluginDelete')) + '</button>') +
+            (isBuiltin ? '' :
+              '<button class="anNiuXiao" data-plug-act="gxjc" data-idx="' + suoYin + '">' + escapeHtml(tOr('upd.check', '检查更新')) + '</button>' +
+              '<button class="anNiuXiao" data-plug-act="gxaz" data-idx="' + suoYin + '"' + (gx0 && gx0.hasUpdate ? '' : ' style="display:none"') + '>' + escapeHtml(tOr('upd.install', '安装更新')) + '</button>' +
+              '<span class="jingYin" data-plug-gxzt="' + escapeHtml(p.id) + '">' + escapeHtml(gxWen0) + '</span>') +
             '</div></div>';
         }).join('') || '<div class="jingYin">' + escapeHtml(t('settings.skillsEmpty') || '—') + '</div>';
         heZi.querySelectorAll('[data-plug-act]').forEach((el) => {
           if (el.tagName === 'INPUT') {
-            el.onchange = () => {
+            el.onchange = async () => {
               const suoYin = Number(el.getAttribute('data-idx'));
-              if (!state.chaJianJi[suoYin]) return;
-              state.chaJianJi[suoYin].enabled = !!el.checked;
+              const p = state.chaJianJi[suoYin];
+              if (!p) return;
+              const id = String(p.id || '');
+              const en = !!el.checked;
+              /* R262：启用走主进程（记忆排他拦截）；不在运行时的声明式内置回退旧落盘路径 */
+              let ok = true; let err = '';
+              try {
+                const rr = await window.warmy.chaJianQiYong?.({ plugin: id, enabled: en });
+                if (rr && rr.ok === false) {
+                  err = String(rr.error || '');
+                  if (!err.startsWith('no-installed-dir') && err !== 'not-installed') ok = false;
+                }
+              } catch { /* IPC 缺失走旧路径 */ }
+              if (!ok) {
+                el.checked = !en;
+                showToast(err.startsWith('memory-exclusive') ? tOr('dshMem.exclusive', 'warmy-memory-system 启用中，其他记忆系统强制不生效；如需使用请先禁用 warmy-memory-system。') : err.slice(0, 120));
+                return;
+              }
+              p.enabled = en;
+              if (id === 'warmy-memory' && en) {
+                for (const q of state.chaJianJi) { if (q && q.id !== 'warmy-memory' && /memory/.test(String(q.id || ''))) q.enabled = false; }
+              }
               cunChaJianJi();
               renderPluginList();
             };
@@ -17894,6 +18165,41 @@ async function renderDashboard(host) {
             const suoYin = Number(el.getAttribute('data-idx'));
             const act = el.getAttribute('data-plug-act');
             if (!state.chaJianJi[suoYin]) return;
+            const id = String(state.chaJianJi[suoYin].id || '');
+            if (act === 'gxjc' || act === 'gxaz') {
+              const hang = el.closest('.ctgHang');
+              const ztEl = hang && hang.querySelector('[data-plug-gxzt]');
+              const azEl = hang && hang.querySelector('[data-plug-act="gxaz"]');
+              const cache = window.__chaJianGxCache || (window.__chaJianGxCache = {});
+              if (act === 'gxjc') {
+                el.disabled = true;
+                if (ztEl) ztEl.textContent = '…';
+                const rr = await window.warmy.chaJianGengXinJianCe?.({ plugin: id }).catch(() => null);
+                el.disabled = false;
+                if (rr && rr.ok) {
+                  cache[id] = { hasUpdate: !!rr.hasUpdate, latest: rr.recommended || rr.latest || null, error: null };
+                  if (ztEl) ztEl.textContent = rr.hasUpdate ? tOr('upd.available', '可更新') + ' → ' + String(rr.recommended || rr.latest || '') : (rr.recommended || rr.latest ? tOr('upd.current', '已是最新') : tOr('upd.notInIndex', '索引无此插件（无独立更新）'));
+                  if (azEl) azEl.style.display = rr.hasUpdate ? '' : 'none';
+                } else {
+                  const err = String((rr && rr.error) || 'ipc-unavailable');
+                  cache[id] = { hasUpdate: false, latest: null, error: err };
+                  if (ztEl) ztEl.textContent = err.startsWith('not-installed') ? tOr('upd.builtinNoUpd', '内置/声明式，随应用更新') : tOr('upd.checkFail', '检查失败') + '：' + err.slice(0, 80);
+                  if (azEl) azEl.style.display = 'none';
+                }
+                return;
+              }
+              el.disabled = true;
+              const rr = await window.warmy.chaJianGengXin?.({ plugin: id }).catch(() => null);
+              el.disabled = false;
+              if (rr && rr.ok) {
+                showToast(tOr('upd.updated', '已更新到') + ' ' + String(rr.version || ''));
+                cache[id] = { hasUpdate: false, latest: rr.version || null, error: null };
+              } else {
+                showToast(tOr('upd.updateFail', '更新失败') + '：' + String((rr && rr.error) || '').slice(0, 120));
+              }
+              renderPluginList();
+              return;
+            }
             if (act === 'del') {
               const delId = String(state.chaJianJi[suoYin].id || '');
               const nm = String(state.chaJianJi[suoYin].ming || state.chaJianJi[suoYin].name || delId);
@@ -18301,20 +18607,29 @@ async function renderDashboard(host) {
             } catch { /* noop */ }
           }
           document.querySelectorAll('input[name="mimicXingTai"]').forEach((r) => {
-            r.onchange = () => { wg.xingTai = r.value; delete wg.modelId; delete wg.imgSrc; delete wg.extId; delete wg.kind; delete wg.sheetJson; delete wg.svg; cun(); hua(); }; /* R223 项8：teZheng 保留 ⇒ logo牛马跨 2D/3D 连续 */
+            r.onchange = () => {
+              const tz = wg.teZheng; /* R223 项8：teZheng 保留 ⇒ logo牛马跨 2D/3D 连续 */
+              wg.xingTai = r.value; delete wg.modelId; delete wg.imgSrc; delete wg.extId; delete wg.kind; delete wg.sheetJson; delete wg.svg;
+              /* R263：切换形态后无模型⇒回退该形态第一个预设，避免「没有的形象」 */
+              const moRen = (r.value === '3d' ? NEI_ZHI_3D : NEI_ZHI_2D)[0];
+              if (moRen) { wg.modelId = moRen.id; wg = Object.assign({}, wg, moRen.a); if (tz) wg.teZheng = tz; }
+              cun(); hua();
+            };
           });
-          /* R246/R259 报障26：3D 形态 AI 捏脸门控——按安装态+推理环境复检（打开/切换形态时），中途卸载/环境缺失如实置灰。 */
+          /* R246/R259/R263：3D 门控＋按钮语义——2D＝创建2D形态；3D 未装＝下载3D生成后端；已装＝创建3D形象 */
           async function fuJianSanDHuiTu() {
             const huiTuAn = $('anNiuMimicHuiTu');
             if (!huiTuAn) return;
             const sanD = String(wg.xingTai || '2d') === '3d';
-            if (!sanD) { huiTuAn.disabled = false; huiTuAn.title = ''; return; }
+            if (!sanD) { huiTuAn.disabled = false; huiTuAn.textContent = tOr('mimic.create2d', '创建2D形态'); huiTuAn.title = ''; huiTuAn.dataset.ready = '1'; return; }
             try {
               const r = await window.warmy.sanDHuiTuHuanJing?.();
               const ready = !!(r && r.ready);
-              huiTuAn.disabled = !ready;
+              huiTuAn.disabled = false;
+              huiTuAn.dataset.ready = ready ? '1' : '0';
+              huiTuAn.textContent = ready ? tOr('mimic.create3d', '创建3D形象') : tOr('mimic.download3d', '下载3D生成后端');
               huiTuAn.title = ready ? '' : ((r && r.hint) || tOr('mimic.sculpt3dDisabled', '3D 捏脸需先安装本地生成后端（约1.6GB），点下载按钮安装后可用。'));
-            } catch { huiTuAn.disabled = true; }
+            } catch { huiTuAn.dataset.ready = '0'; huiTuAn.textContent = tOr('mimic.download3d', '下载3D生成后端'); }
           }
           void fuJianSanDHuiTu();
           /* R223 项10：捏脸面板折叠开关（默认展开；重画不重置折叠态） */
@@ -18395,7 +18710,7 @@ async function renderDashboard(host) {
           // 自动创建「拟态」实例（id 固定，名称默认「拟态」，用户可改；走完整牛马链路）
           inst = {
             id: 'mimic-pet', ming: tOr('mimic.petDefaultName', '拟态'), name: tOr('mimic.petDefaultName', '拟态'),
-            devEnv: 'host', status: 'running', dutyEligible: false, notify: true,
+            devEnv: 'host', status: 'running', dutyEligible: false, notify: false,
             model: '', memoryFile: 'persona/mimic-pet.md',
             persona: tOr('mimic.petDefaultPersona', '你是用户桌面上的 AI 拟态：亲切、自然、话不多，像个桌面上的小宠物。'),
             avatarPreset: '', avatarDataUrl: '',
@@ -18613,14 +18928,7 @@ async function renderDashboard(host) {
           } catch { /* noop */ }
         })();
         /* R219：「设置音视频设备」按钮已删（说明文字保留，音视频仍是全局设置） */
-        $('anNiuMimicHuiTu')?.addEventListener('click', () => {
-          void window.__kaiMimicHuiTu?.({
-            title: tOr('mimic.faceSculpt', 'AI 捏脸'), prompt: tOr('mimic.sculpt.prompt', '描述形象，或框选部位后描述修改。'),
-            generate: tOr('mimic.sculpt.generate', '生成 / 改进'), selection: tOr('mimic.sculpt.selection', '选中部位'),
-            clear: tOr('mimic.sculpt.clear', '清除选区'), undo: tOr('mimic.sculpt.undo', '撤销编辑'),
-            save: t('common.save'), saved: t('common.saved'), cancel: t('common.cancel'),
-          });
-        });
+        /* R264：创建2D/3D 改顶层委托（bindMimicChuangJian），此处不再重复绑定 */
         $('anNiuMimicMoXingMuLu')?.addEventListener('click', () => {
           try { window.warmy.mimicModelDirOpen?.({ xingTai: $('mimicXt3d')?.checked ? '3d' : '2d' }); } catch { /* noop */ }
         });
@@ -20059,18 +20367,39 @@ async function renderDashboard(host) {
           };
         }
       })();
-      // R254：音色定制——写入 specialModels.ttsVoice（本地 VITS sid / 云端 voice 名），拟态与朗读共用；试听复用 ttsLangDu。
+      // R254/R263：音色定制——写入 specialModels.ttsVoice；选项来自真实清单（本地装好才显／云端拉模型），不造假选项。
       (function bindYinSe() {
         const sel = $('yinSeXuanZe'); const custom = $('yinSeZiDingYi'); const btn = $('anNiuYinSeShiTing'); const xx = $('yinSeShiTingXiaoXi');
         if (!sel) return;
-        const YUN_DUAN = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
-        const shiFouZiDingYi = (v) => !/^[0-4]$/.test(v) && !YUN_DUAN.includes(v);
-        const duDangQian = async () => { try { const s = await window.warmy.settingsGet(); return String((((s && s.settings) || {}).specialModels || {}).ttsVoice || 'alloy'); } catch { return 'alloy'; } };
+        let YUN_DUAN = [];
+        const duDangQian = async () => { try { const s = await window.warmy.settingsGet(); return String((((s && s.settings) || {}).specialModels || {}).ttsVoice || ''); } catch { return ''; } };
         const cun = async (v) => { try { const s = await window.warmy.settingsGet(); const sm = { ...((((s && s.settings) || {}).specialModels) || {}), ttsVoice: v }; await window.warmy.settingsSave({ specialModels: sm }); } catch { /* noop */ } };
-        void duDangQian().then((v) => {
-          if (shiFouZiDingYi(v)) { sel.value = '__custom__'; if (custom) { custom.style.display = ''; custom.value = v; } }
-          else { sel.value = v; if (custom) custom.style.display = 'none'; }
-        });
+        const huaXuanXiang = async () => {
+          const r = await window.warmy.yinSeLieBiao?.().catch(() => null);
+          const local = (r && r.local) || { available: false, speakers: 0 };
+          const cloud = (r && r.cloud) || { model: '', voices: [] };
+          YUN_DUAN = Array.isArray(cloud.voices) ? cloud.voices : [];
+          let html = '';
+          if (local.available) {
+            html += '<optgroup label="' + escapeHtml(tOr('audio.timbreLocal', '本地音色（sherpa-onnx 已安装）')) + '">'
+              + Array.from({ length: Number(local.speakers) || 5 }, (_, i) => '<option value="' + i + '">' + escapeHtml(tOr('audio.timbreN', '音色')) + ' ' + (i + 1) + '</option>').join('')
+              + '</optgroup>';
+          }
+          if (YUN_DUAN.length) {
+            html += '<optgroup label="' + escapeHtml(tOr('audio.timbreCloud', '云端音色')) + (cloud.model ? '（' + escapeHtml(cloud.model) + '）' : '') + '">'
+              + YUN_DUAN.map((v) => '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>').join('') + '</optgroup>';
+          }
+          if (!local.available && !YUN_DUAN.length) html += '<option value="" disabled>' + escapeHtml(tOr('audio.timbreNone', '暂无可用音色：安装本地语音，或在统一链配置说话模型')) + '</option>';
+          html += '<option value="__custom__">' + escapeHtml(tOr('audio.timbreCustom', '自定义…')) + '</option>';
+          sel.innerHTML = html;
+          const v = await duDangQian();
+          const youXiao = [...sel.options].some((o) => o.value === v && !o.disabled);
+          if (v && !youXiao) { sel.value = '__custom__'; if (custom) { custom.style.display = ''; custom.value = v; } }
+          else { sel.value = v || (local.available ? '0' : (YUN_DUAN[0] || '__custom__')); if (custom) custom.style.display = sel.value === '__custom__' ? '' : 'none'; }
+        };
+        void huaXuanXiang();
+        /* 打开下拉前刷新清单（装好本地/配好模型后不用重进设置） */
+        sel.addEventListener('pointerdown', () => { void huaXuanXiang(); });
         sel.onchange = () => {
           if (sel.value === '__custom__') { if (custom) { custom.style.display = ''; custom.focus(); } return; }
           if (custom) custom.style.display = 'none';
@@ -22257,29 +22586,31 @@ async function renderDashboard(host) {
   const NET_HOST_DETECT_MIN_MS = 1300;
   const NET_HOST_DETECT_TIMEOUT_MS = 8000;
   const NET_PROVIDER_CRED_PREFIX = 'net-provider:';
-  /* R224 项1：内置默认中继（预设服务商）。该凭证是 FWArmy 中继 token（43 位 b64url 不透明 token，
-     地址/端口存在服务端凭证记录里，本地解析不出）⇒ 以「地址待解析」登记，如实显示。 */
-  const YUSHE_PROVIDER_ID = 'np-yushe-fuwushang';
-  const YUSHE_PROVIDER_TOKEN = 'hNN0IYEchH-_CB10hYG-H1jFqpW_SP4FBqXiW-ml6So';
+  /* R224/R263：内置默认中继＝两个 numumu 主机服务商（地址/端口/凭证由产品给定）。
+     凭证进 SecureKeyStore，界面不回显明文。 */
+  const YUSHE_PROVIDER_ID = 'np-yushe-fuwushang'; // 旧预设 id（升级时移除）
+  const NEI_ZHI_PROVIDERS = [
+    { id: 'np-numumu-zhuji2', name: 'numumu主机2', address: 'dht2.numumu.com:59599', token: 'KuEfbuByYXqyXARdlPyiFL1K_GXPy7PvAeJtUYdOLdM' },
+    { id: 'np-numumu-zhuji', name: 'numumu主机', address: 'dht.numumu.com:59599', token: 'wdSmhiYs_d89z3l5HU1kj5q2qqsQsKTCrJAngl5Bafc' },
+  ];
   function queBaoYuSheProvider() {
     const arr = netState.providers || (netState.providers = []);
-    let rec = arr.find((p) => p && String(p.id) === YUSHE_PROVIDER_ID);
-    if (!rec) {
-      rec = {
-        id: YUSHE_PROVIDER_ID, name: tOr('net.provider.presetName', '预设服务商'), address: 'www.numumu.com:59599',
-        hasCredential: true, credentialState: 'stored', invalidAddress: false, addressPending: false, builtin: true,
-      };
-      arr.unshift(rec);
+    /* R263：旧单一预设移除，换两个内置主机服务商 */
+    for (let i = arr.length - 1; i >= 0; i--) { if (arr[i] && String(arr[i].id) === YUSHE_PROVIDER_ID) arr.splice(i, 1); }
+    for (const nz of NEI_ZHI_PROVIDERS) {
+      let rec = arr.find((p) => p && String(p.id) === nz.id);
+      if (!rec) {
+        rec = { id: nz.id, name: nz.name, address: nz.address, hasCredential: true, credentialState: 'stored', invalidAddress: false, addressPending: false, builtin: true };
+        arr.unshift(rec);
+      }
+      rec.builtin = true;
+      if (!rec.name) rec.name = nz.name;
+      if (!rec.address) { rec.address = nz.address; rec.addressPending = false; rec.invalidAddress = false; }
+      try {
+        const sv = window.warmy && window.warmy.secureKeySave;
+        if (typeof sv === 'function') Promise.resolve(sv({ providerId: NET_PROVIDER_CRED_PREFIX + nz.id, apiKey: nz.token })).catch(() => {});
+      } catch { /* noop */ }
     }
-    rec.builtin = true;
-    if (!rec.name) rec.name = tOr('net.provider.presetName', '预设服务商');
-    /* R227 项3：预设服务商地址 = www.numumu.com:59599（旧版空地址记录升级补齐） */
-    if (!rec.address) { rec.address = 'www.numumu.com:59599'; rec.addressPending = false; rec.invalidAddress = false; }
-    /* 凭证进 SecureKeyStore（幂等覆盖；界面绝不读回明文） */
-    try {
-      const sv = window.warmy && window.warmy.secureKeySave;
-      if (typeof sv === 'function') Promise.resolve(sv({ providerId: NET_PROVIDER_CRED_PREFIX + YUSHE_PROVIDER_ID, apiKey: YUSHE_PROVIDER_TOKEN })).catch(() => {});
-    } catch { /* noop */ }
   }
 
   function netHostPure() {
@@ -22404,6 +22735,8 @@ async function renderDashboard(host) {
             .slice(0, NET_PROVIDER_MAX)
             .map((p) => netProviderRecord(p));
         }
+        /* R263：服务商使用频率（排序用） */
+        if (saved.providerUse && typeof saved.providerUse === 'object') netState.providerUse = saved.providerUse;
         netState.discovery.enabled = saved.publicDiscoverable !== false;
         netState.discovery.bootstrap = Array.isArray(saved.discoveryBootstrap)
           ? saved.discoveryBootstrap.map(String).join('\n')
@@ -22445,7 +22778,7 @@ async function renderDashboard(host) {
     try {
       const r = await netIpc('netLocalAddress');
       if (r && r.ok !== false && (r.localIp || r.ip)) {
-        netState.local = { ip: String(r.localIp || r.ip), publicIp: String(r.publicIp || ''), behindNat: !!r.behindNat, port: parsePort(r.port) || null };
+        netState.local = { ip: String(r.localIp || r.ip), publicIp: String(r.publicIp || ''), behindNat: !!r.behindNat, port: parsePort(r.port) || null, ipv4: Array.isArray(r.interfaces) ? r.interfaces.slice() : [] };
       }
       // 附八.9：本机 IPv6 事实（有全局单播 = 天然可拨入候选，阶梯第一档就是 IPv6 直连）
       const v6 = r ? netIpv6Facts(r.ipv6) : null;
@@ -22507,6 +22840,7 @@ async function renderDashboard(host) {
           hostNoConfirm: !!netState.hostMode.noConfirm,
           hosts,
           providers,
+          providerUse: netState.providerUse || {},
           publicDiscoverable: !!netState.discovery.enabled,
           discoveryBootstrap: String(netState.discovery.bootstrap || '')
             .split(/[\s,;，；]+/).map((x) => x.trim()).filter(Boolean).slice(0, 10),
@@ -22841,6 +23175,13 @@ async function renderDashboard(host) {
         auto = r.code || 'failed';
       }
     }
+    /* R264：IPv4/IPv6 同时探测、优先 IPv4 —— 无可用 IPv4 公网时才把 IPv6 全局单播候选加入 */
+    const v6 = netState.ipv6;
+    const v6c = v6 && v6.hasGlobalUnicast ? String(v6.publicCandidate || '') : '';
+    if (auto !== 'added' && v6c) {
+      const r6 = netHostAdd('[' + v6c + ']');
+      if (r6.ok) { netState.hostMode.hosts = r6.hosts.slice(0, NET_HOST_MAX); auto = 'added'; }
+    }
 
     netState.hostMode.detecting = false;
     netState.hostMode.detect = {
@@ -22850,6 +23191,9 @@ async function renderDashboard(host) {
       elapsedMs: Date.now() - started,
       localIp: String((local && local.ip) || ''),
       publicIp: pub,
+      ipv4: (local && local.ipv4) || [],
+      ipv6: netState.ipv6 || null,
+      preferred: (local && local.ip && local.ip !== '127.0.0.1') ? 'ipv4' : (netState.ipv6 && netState.ipv6.hasGlobalUnicast ? 'ipv6' : ''),
       behindNat: !!(local && local.behindNat),
       probe: probe && typeof probe === 'object' ? probe : null,
       isPublic: facts.isPublic,
@@ -22965,6 +23309,7 @@ async function renderDashboard(host) {
     netState.providerForm.msgKind = '';
     const form = $('wangLuoProviderForm');
     if (form) form.classList.add('yinCang');
+    guanProviderEditCeng();
     renderNetProviderForm();
   }
 
@@ -24063,6 +24408,8 @@ async function renderDashboard(host) {
       '<div class="wangLuoHostDetectGrid">' +
       hostRow('local', t('net.localIp'), d.localIp || '—') +
       hostRow('public', t('net.publicIp'), d.publicIp || '—') +
+      hostRow('ipv4', tOr('net.ipv4Label', 'IPv4'), ((d.ipv4 && d.ipv4.length) ? d.ipv4.join(', ') : (d.localIp || '—')) + (d.preferred === 'ipv4' ? ' · ' + tOr('net.host.preferBadge', '优先') : '')) +
+      hostRow('ipv6', tOr('net.ipv6Label', 'IPv6'), (d.ipv6 ? (d.ipv6.publicCandidate || (d.ipv6.ula && d.ipv6.ula[0]) || (d.ipv6.hasGlobalUnicast ? '—' : tOr('net.ipv6None', '无全局单播'))) : '—') + (d.preferred === 'ipv6' ? ' · ' + tOr('net.host.preferBadge', '优先') : '')) +
       hostRow('isPublic', t('net.host.isPublic'), t(isPublicKey)) +
       hostRow('reach', t('net.host.reach'), t(reachKey)) +
       '</div>' +
@@ -24312,7 +24659,7 @@ async function renderDashboard(host) {
     try { r = await window.warmy.zhongJiTlsTanZhen({ host: addr.host, port: addr.port, relayId: String(pid) }); } catch { r = { zhuangTai: 'net-error' }; }
     netState.tlsProbe = netState.tlsProbe || {};
     netState.tlsProbe[pid] = r && r.zhuangTai;
-    if (r && r.zhuangTai === 'match') { netState.tlsPins = netState.tlsPins || {}; netState.tlsPins[pid] = r.fingerprint; }
+    if (r && r.zhuangTai === 'match') { netState.tlsPins = netState.tlsPins || {}; netState.tlsPins[pid] = r.fingerprint; providerUseJia(pid); }
     zhongJiTlsXuanRanKuang(String(pid), addr, r || { zhuangTai: 'net-error' });
     renderNetProviders();
   }
@@ -24322,6 +24669,7 @@ async function renderDashboard(host) {
       if (r && r.ok) {
         netState.tlsPins = netState.tlsPins || {}; netState.tlsPins[pid] = r.fingerprint;
         netState.tlsProbe = netState.tlsProbe || {}; netState.tlsProbe[pid] = 'match';
+        providerUseJia(pid);
         showToast(t('relayTls.trusted')); zhongJiTlsGuanKuang(); renderNetProviders();
       } else { showToast(t('relayTls.mismatch')); void zhongJiTlsHeDui(pid); }
     } catch { showToast(t('relayTls.netError')); }
@@ -24340,33 +24688,60 @@ async function renderDashboard(host) {
     if (!$('wangLuoProviderMode')) return;
     const list = $('wangLuoProviderList');
     if (!list) return;
-    const providers = (netState.providers || []).slice(0, NET_PROVIDER_MAX);
+    /* R263：按使用频率排序；默认只显 10 条，底部小字按钮 更多/全部/收起；不用滚轮 */
+    const use = netState.providerUse || {};
+    const providers = (netState.providers || []).slice(0, NET_PROVIDER_MAX)
+      .sort((a, b) => (Number(use[b.id]) || 0) - (Number(use[a.id]) || 0));
+    const show = netState.providerShow == null ? 10 : netState.providerShow;
+    const visible = show === 'all' ? providers : providers.slice(0, Number(show) || 10);
     const summary = $('wangLuoProviderSummary');
     if (summary) summary.textContent = fmtKey('net.provider.summary', { n: String(providers.length), max: String(NET_PROVIDER_MAX) });
     list.dataset.count = String(providers.length);
-    list.innerHTML = providers.length
-      ? providers.map((p) => {
-          const credState = p.credentialState === 'pending' ? 'pending' : (p.hasCredential ? 'stored' : 'none');
-          const credKey = credState === 'stored'
-            ? 'net.provider.credentialStored'
-            : (credState === 'pending' ? 'net.provider.credentialPending' : 'net.provider.credentialNone');
+    list.innerHTML = visible.length
+      ? visible.map((p) => {
+          const tls = zhongJiTlsBadge(String(p.id || ''));
+          /* R263：指纹核对成功＝启用，否则待核对 */
+          const heDuiOk = tls.state === 'match';
           return '<div class="wangLuoProviderHang" data-pid="' + escapeHtml(String(p.id || '')) + '"' +
             ' data-valid="' + (p.invalidAddress ? '0' : '1') + '" data-builtin="' + (p.builtin ? '1' : '0') + '" role="listitem">' +
             '<div class="wangLuoProviderMain">' +
             '<div class="wangLuoProviderName" title="' + escapeHtml(p.name || '') + '">' + escapeHtml(p.name || t('net.provider.unnamed')) + '</div>' +
             '<div class="wangLuoProviderAddr" title="' + escapeHtml(p.address || '') + '"' + (p.addressPending ? ' data-pending="1"' : '') + '>' + escapeHtml(p.address || (p.addressPending ? tOr('net.provider.addressPending', '地址待解析') : '—')) + '</div>' +
             '</div>' +
-            '<span class="wangLuoCredBadge" data-state="' + credState + '">' + escapeHtml(t(credKey)) + '</span>' +
-            '<span class="wangLuoTlsBadge" data-tls="' + zhongJiTlsBadge(String(p.id || '')).state + '">' + escapeHtml(t(zhongJiTlsBadge(String(p.id || '')).key)) + '</span>' +
+            '<span class="wangLuoTlsBadge" data-tls="' + tls.state + '">' + escapeHtml(heDuiOk ? tOr('net.provider.enabled', '启用') : tOr('net.provider.pendingVerify', '待核对')) + '</span>' +
+            '<span class="jingYin wangLuoCredWei" data-credwei="' + escapeHtml(String(p.id || '')) + '" title="' + escapeHtml(tOr('net.provider.credWeiTip', '凭证仅显示最后 5 位')) + '"></span>' +
             '<div class="wangLuoProviderActions">' +
-            '<button type="button" class="anNiuXiao" data-ptls="' + escapeHtml(String(p.id || '')) + '">' + escapeHtml(t('relayTls.verifyBtn')) + '</button>' +
+            '<button type="button" class="anNiuXiao" data-ptls="' + escapeHtml(String(p.id || '')) + '">' + escapeHtml(tOr('net.provider.verify', '核对')) + '</button>' +
             '<button type="button" class="anNiuXiao" data-pedit="' + escapeHtml(String(p.id || '')) + '">' + escapeHtml(t('common.edit')) + '</button>' +
             (p.builtin ? '' : '<button type="button" class="anNiuXiao" data-pdel="' + escapeHtml(String(p.id || '')) + '">' + escapeHtml(t('common.delete')) + '</button>') +
             '</div></div>';
         }).join('')
       : '<div class="jingYin">' + escapeHtml(t('net.provider.empty')) + '</div>';
+    /* R263：底部小字按钮 */
+    const more = $('wangLuoProviderMore');
+    if (more) {
+      const sheng = providers.length - visible.length;
+      more.innerHTML =
+        (show !== 'all' && sheng > 0 ? '<button type="button" class="anNiuXiao wangLuoMoreBtn" data-pmore="1">' + escapeHtml(tOr('net.provider.showMore', '显示更多')) + '</button>' : '') +
+        (show !== 'all' && providers.length > 10 ? '<button type="button" class="anNiuXiao wangLuoMoreBtn" data-pall="1">' + escapeHtml(tOr('net.provider.showAll', '显示全部')) + '</button>' : '') +
+        (show === 'all' || Number(show) > 10 ? '<button type="button" class="anNiuXiao wangLuoMoreBtn" data-pfold="1">' + escapeHtml(tOr('net.provider.fold', '收起')) + '</button>' : '');
+      more.querySelectorAll('[data-pmore]').forEach((b) => { b.onclick = () => { netState.providerShow = Math.min(providers.length, (Number(show) || 10) + 10); renderNetProviders(); }; });
+      more.querySelectorAll('[data-pall]').forEach((b) => { b.onclick = () => { netState.providerShow = 'all'; renderNetProviders(); }; });
+      more.querySelectorAll('[data-pfold]').forEach((b) => { b.onclick = () => { netState.providerShow = 10; renderNetProviders(); }; });
+    }
+    /* R263：点击「添加主机服务商」名称＝折叠/展开表单；折叠同时列表只留 10 条 */
+    const headTitle = $('wangLuoProviderHeadTitle');
+    if (headTitle && !headTitle.dataset.bound) {
+      headTitle.dataset.bound = '1';
+      headTitle.onclick = () => {
+        const form = $('wangLuoProviderForm');
+        const kai = form && !form.classList.contains('yinCang');
+        if (kai) { netProviderCloseForm(); netState.providerShow = 10; renderNetProviders(); }
+        else netProviderOpenForm('add');
+      };
+    }
     list.querySelectorAll('[data-pedit]').forEach((b) => {
-      b.onclick = () => netProviderOpenForm('edit', b.dataset.pedit);
+      b.onclick = () => netProviderEditDialog(b.dataset.pedit);
     });
     list.querySelectorAll('[data-pdel]').forEach((b) => {
       b.onclick = () => void netProviderDelete(b.dataset.pdel);
@@ -24379,12 +24754,52 @@ async function renderDashboard(host) {
       };
     });
     if (!netState.tlsPinsLoaded) { netState.tlsPinsLoaded = true; zhongJiTlsShuaXinPins(); }
+    /* R264：凭证只显最后 5 位（异步填，不回显全文） */
+    list.querySelectorAll('[data-credwei]').forEach((el) => {
+      const pid = el.getAttribute('data-credwei') || '';
+      void (async () => { try { const r = await window.warmy.providerPingZhengWei?.({ id: pid }); el.textContent = r && r.tail ? '•••••' + escapeHtml(r.tail) : ''; } catch { el.textContent = ''; } })();
+    });
     const msg = $('wangLuoProviderMsg');
     if (msg) {
       msg.textContent = netState.providerForm.msg || '';
       msg.dataset.kind = netState.providerForm.msgKind || '';
     }
     renderNetProviderForm();
+  }
+
+  /* R263：编辑服务商＝弹窗（复用内联表单节点，搬进遮罩层；关闭搬回） */
+  let providerFormYuanFu = null;
+  function netProviderEditDialog(pid) {
+    netProviderOpenForm('edit', pid);
+    const form = $('wangLuoProviderForm');
+    if (!form) return;
+    let ceng = document.getElementById('wangLuoProviderEditCeng');
+    if (!ceng) {
+      ceng = document.createElement('div');
+      ceng.id = 'wangLuoProviderEditCeng';
+      ceng.className = 'zjEditCeng yinCang';
+      document.body.appendChild(ceng);
+    }
+    if (!providerFormYuanFu) providerFormYuanFu = form.parentNode;
+    ceng.innerHTML = '';
+    const kuang = document.createElement('div');
+    kuang.className = 'zjEditKuang';
+    kuang.appendChild(form);
+    ceng.appendChild(kuang);
+    ceng.classList.remove('yinCang');
+    form.classList.remove('yinCang');
+  }
+  function guanProviderEditCeng() {
+    const ceng = document.getElementById('wangLuoProviderEditCeng');
+    const form = $('wangLuoProviderForm');
+    if (form && providerFormYuanFu && ceng && ceng.contains(form)) providerFormYuanFu.appendChild(form);
+    if (ceng) ceng.classList.add('yinCang');
+  }
+  /* R263：使用频率计数（核对成功/信任时累加，持久化进 net.providerUse） */
+  function providerUseJia(pid) {
+    netState.providerUse = netState.providerUse || {};
+    netState.providerUse[String(pid)] = (Number(netState.providerUse[String(pid)]) || 0) + 1;
+    try { void netPersist(); } catch { /* noop */ }
   }
 
   function renderNetCard() {
@@ -26337,6 +26752,9 @@ async function renderDashboard(host) {
   $('shuRu').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      /* R261 项6：分栏中左框回车只发 A 支线（右框自己的回车发 B） */
+      const jc = window.__ziJinHuaCur && window.__ziJinHuaCur();
+      if (jc && state.selectedChat && jc.sessionId === String(state.selectedChat.id) && (jc.status === 'split' || jc.status === 'running')) { void jinHuaFaSongZhiXian('A'); return; }
       faSong();
     }
   });
@@ -27328,11 +27746,13 @@ async function renderDashboard(host) {
       huaKuai.disabled = genSui;          // 勾上（跟随）⇒ 灰色不可拖
       huaKuai.value = String(dangWei(dang));
       if (dangBiao) dangBiao.textContent = thinkLabelOf(dang);
-      // 触发器上的小字：**只有手动档才显示**（跟随牛马时不必重复牛马的名字）
-      if (biaoQian) {
-        biaoQian.textContent = genSui ? '' : thinkLabelOf(dang);
-        biaoQian.classList.toggle('yinCang', genSui);
-      }
+      // R264：右侧不显示级别文字；灯泡随级别主题色发光（自上而下覆盖；自然仅中线）
+      if (biaoQian) { biaoQian.textContent = ''; biaoQian.classList.add('yinCang'); }
+      const idx = dangWei(dang);
+      const isAuto = String(dang) === 'auto';
+      trigger.classList.toggle('siKaoZiRan', isAuto);
+      const pct = isAuto ? 0 : Math.round((idx / Math.max(1, stops().length - 2)) * 100);
+      trigger.style.setProperty('--siKaoGlow', pct + '%');
     }
     window.__refreshThink = refresh;
     refresh();
@@ -27376,7 +27796,8 @@ async function renderDashboard(host) {
       juBuShouDong = dang;
       if (id) cunThinkOverride();
       if (dangBiao) dangBiao.textContent = thinkLabelOf(dang);
-      if (biaoQian) { biaoQian.textContent = thinkLabelOf(dang); biaoQian.classList.remove('yinCang'); }
+      /* R264 项2：右侧不再显文字；发光随档刷新 */
+      refresh();
       huaKuai.disabled = false;
     });
     huaKuai.addEventListener('change', () => {
@@ -27982,6 +28403,7 @@ async function renderDashboard(host) {
       : (pool[Math.floor(Math.random() * pool.length)] || (isProject ? t('list.createProject') : t('list.createGroupChat'))) + '-' + suffix;
     const nameInput0 = $('erHeYiMing');
     if (nameInput0) nameInput0.value = defaultName;
+    if (isProject) bangRongQiQueSheng(body.querySelector('[data-erheyi-panel="create"]'), () => root.classList.add('yinCang'));
     acts.innerHTML = '';
     const close = document.createElement('button');
     close.className = 'anNiuXiao';
@@ -28180,6 +28602,29 @@ async function renderDashboard(host) {
     }
     return html;
   }
+  /** R264 项1：无可用容器 ⇒ 创建弹窗里给可点击指引「去 设置→功能→容器」，点击关弹窗并跳到容器卡 */
+  function bangRongQiQueSheng(rong, onClose) {
+    try {
+      const usable = ((containerUi.report && containerUi.report.usableIds) || []);
+      if (usable.length || !rong) return;
+      const hang = document.createElement('div');
+      hang.style.cssText = 'margin-top:6px';
+      const a = document.createElement('button');
+      a.type = 'button'; a.className = 'anNiuXiao';
+      a.textContent = tOr('container.devEnv.goSettings', '无可用容器：去 设置→功能→容器 安装并启动');
+      a.onclick = () => {
+        try { onClose && onClose(); } catch { /* noop */ }
+        try {
+          setNav('settings');
+          setTimeout(() => {
+            document.querySelector('#peiZhiDaoHang button[data-sec="func"]')?.click();
+            setTimeout(() => { try { document.getElementById('rongQiKa')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch { /* noop */ } }, 80);
+          }, 60);
+        } catch { /* noop */ }
+      };
+      hang.appendChild(a); rong.appendChild(hang);
+    } catch { /* noop */ }
+  }
   /**
    * 创建牛马：名称 + 运行环境（R226 项6：单下拉，默认本机，列出所有可用容器）。
    * 返回 { ming, devEnv, runtimeId } 或 null（取消）。
@@ -28249,6 +28694,7 @@ async function renderDashboard(host) {
       });
       dongZuoJi.append(cancel, ok);
       sync();
+      bangRongQiQueSheng(wrap, () => finish(null));
       root.classList.remove('yinCang');
       inp.focus();
       inp.select();
@@ -30142,20 +30588,7 @@ async function renderDashboard(host) {
         biaoQian: tOr('ctx.settings', '设置'),
         onClick: () => void kanQunKuang(g),
       },
-      /* R222 项11：项目/群聊保留「停止」——停当前运行轮（区别于「停用」整个会话）；无任务时灰掉 */
-      {
-        biaoQian: t('ctx.stop'),
-        disabled: !blocked,
-        onClick: async () => {
-          try { window.warmy.stopChat?.(g.id); } catch { /* noop */ }
-          try { shouLiuShiKuai(); } catch { /* noop */ }
-          if (state.streamBuf) delete state.streamBuf[g.id];
-          queueRounds[g.id] = false;
-          try { yunXingZhuangTaiGuan(false, g.id); } catch { /* noop */ }
-          showToast(tOr('ctx.stopped', '已停止'));
-          renderList();
-        },
-      },
+      /* R263：群/项目右键去掉「停止」（停一轮用聊天区停止键） */
       /** 群聊停用/启用（项目停用已在 projectMenuItems，避免重复）；停用后灰头像 + 圆形灰色停用图标 */
       (g.type === 'internal' ? null : {
         biaoQian: g.stoppedAt ? tOr('ctx.groupEnable', '启用') : tOr('ctx.groupDisable', '停用'),
@@ -30191,21 +30624,7 @@ async function renderDashboard(host) {
         },
       } : null,
     ].concat(projectItems).concat([
-      /* R218：项目「对接」勾选（默认不勾）；R225 项4：群聊「对接」默认勾选 */
-      g.type === 'internal'
-        ? {
-            biaoQian: tOr('ctx.duijie', '对接') + (shiDuiJieGou('internalGroup', g.id) ? ' ✓' : ''),
-            onClick: () => void qieDuiJie('internalGroup', g.id, xianShiMing(g)),
-          }
-        : {
-            biaoQian: tOr('ctx.duijie', '对接') + (shiDuiJieGou('externalGroup', g.id) ? ' ✓' : ''),
-            onClick: () => void qieDuiJie('externalGroup', g.id, xianShiMing(g)),
-          },
-      /* R218 的「同步」保留（群聊内容定时同步到在线我的设备） */
-      g.type === 'internal' ? null : {
-        biaoQian: tOr('ctx.sync', '同步') + (shiTongBuGou(g.id) ? ' ✓' : ''),
-        onClick: () => void qieTongBu(g.id, xianShiMing(g)),
-      },
+      /* R263：去掉「对接」「同步」菜单项——默认自动和所有在线我的设备同步 */
       g.type === 'internal'
         ? {
             /* 与「我的牛马」里那项同一套语义：✓ 后缀（不是强调色），默认勾选 */
@@ -30359,6 +30778,15 @@ async function renderDashboard(host) {
       window.warmy.syncStateGet?.().then((r) => {
         window.__syncSess = (r && r.state && r.state.sessions) || window.__syncSess || {};
       }).catch(() => { /* noop */ });
+      /* R263：同步状态变化（含对端建群/反删）⇒ 刷新群列表与列表行（1s 节流） */
+      let t0 = 0;
+      window.warmy.onSyncState?.(() => {
+        const now = Date.now();
+        if (now - t0 < 1000) return;
+        t0 = now;
+        try { window.__syncGroups?.(); } catch { /* noop */ }
+        try { renderList(); } catch { /* noop */ }
+      });
     } catch { /* noop */ }
   })();
 
@@ -30369,16 +30797,7 @@ async function renderDashboard(host) {
         checked: shiZhiDing(c.id),
         onClick: () => sheZhiDing(c.id, !shiZhiDing(c.id)),
       },
-      /* R225 项4：联系人「对接」默认勾选（与群聊同口径） */
-      {
-        biaoQian: tOr('ctx.duijie', '对接') + (shiDuiJieGou('externalChat', c.id) ? ' ✓' : ''),
-        onClick: () => void qieDuiJie('externalChat', c.id, xianShiMing(c)),
-      },
-      /* R218：同步勾选（联系人；默认不勾；勾选后定时同步该会话内容到所有在线我的设备） */
-      {
-        biaoQian: tOr('ctx.sync', '同步') + (shiTongBuGou(c.id) ? ' ✓' : ''),
-        onClick: () => void qieTongBu(c.id, xianShiMing(c)),
-      },
+      /* R263：联系人去掉「对接」「同步」——默认自动同步 */
       /* R218：联系人远程控制（只有对方在线才可用） */
       {
         biaoQian: tOr('ctx.remoteControl', '远程控制'),
@@ -34104,9 +34523,19 @@ try {
           ? '<div class="ctgDim cp-env-changed" data-env-changed="1">' +
             escapeHtml(fmtKey('checkpoints.env.changed', { was: String(envRec.revision || ''), now: String(cur.revision || '') })) + '</div>'
           : '<div class="ctgDim" data-env-changed="0">' + escapeHtml(t('checkpoints.env.same')) + '</div>';
+        /* R264 项4：回退点第一行＝时间·末句截断＋行末幼苗图标；悬停/展开看完整末句（3行）＋下3行文件 */
+        const quanWen = String(c.summary || c.phase || '');
+        const juArr = quanWen.split(/[。！？!?；;\n]/).map((s) => s.trim()).filter(Boolean);
+        const moJu = juArr[juArr.length - 1] || quanWen;
+        const moJuDuan = moJu.length > 24 ? moJu.slice(0, 24) + '…' : moJu;
+        const youMiao = '<span class="cpEvolveIco" title="' + escapeHtml(tOr('checkpoints.evolveTip', '选择支线前的回退点（回滚可恢复选支前状态）')) + '"><svg viewBox="0 0 1024 1024" width="13" height="13" aria-hidden="true" fill="currentColor"><path d="M643.584 967.168c-35.84-14.336-74.24-23.552-111.616-35.84-8.704-3.072-19.456-7.68-24.064-14.848-15.872-24.064-31.744-48.64-43.008-74.752-54.784-123.904-37.376-245.248 19.968-363.008 33.28-68.608 70.144-135.68 85.504-210.432 12.288-57.856 14.336-115.712-10.24-171.52C540.672 52.224 507.392 20.48 462.336 0c0.512 2.56 2.048 4.096 4.096 5.632 54.784 40.448 79.872 94.208 79.872 159.232 0.512 70.656-25.6 134.656-58.88 196.096-8.192 15.872-17.408 30.72-26.624 46.08-3.072-4.096-3.584-6.656-3.072-9.216 11.776-66.048-3.584-125.44-45.568-178.688C368.64 164.864 310.272 128 245.76 100.864c-39.424-16.896-81.408-29.696-126.464-45.568 1.536 28.672 2.048 51.712 4.096 74.24 6.656 77.824 20.48 153.6 59.392 223.744 35.328 64 86.528 109.056 162.816 123.392 20.48 3.584 41.472 4.096 64 5.632-91.136 143.872-121.344 291.84-36.864 447.488-65.536 16.384-133.632 25.6-168.96 94.208h493.056c-7.68-29.184-28.16-47.104-53.248-56.832z"/><path d="M938.496 420.864c-6.656-1.536-10.24-2.56-13.824-3.072-79.872-10.24-159.232-9.216-237.568 10.752-122.88 32.256-195.584 120.32-202.24 243.2-0.512 14.848 4.608 22.528 17.408 28.672 84.48 43.52 165.376 34.816 241.664-18.432 93.184-65.024 146.432-159.744 194.56-261.12z"/></svg></span>';
+        const wenJian3 = [...(c.filesChanged || []), ...(c.filesCreated || [])].map((f) => f.path).filter(Boolean).slice(0, 3);
+        const cp3Hang = (label, arr) => '<div class="ctgDim cpWenJianHang" title="' + escapeHtml((arr || []).join(', ')) + '">' + escapeHtml(label) + '：' + escapeHtml((arr || []).slice(0, 3).join(', ') || '—') + '</div>';
         return `<details class="cpTiaoMu" data-id="${escapeHtml(String(c.id))}" data-env-revision="${escapeHtml(String((envRec && envRec.revision) || ''))}">
-          <summary>${escapeHtml(String(faShengShiJian))} · ${escapeHtml(String(c.summary || c.phase || '').slice(0, 40))}${c.evolve ? ' <span class="cpEvolveIco" title="' + escapeHtml(tOr('checkpoints.evolveTip', '进化合并前的回退点')) + '"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 2.5v4a3 3 0 0 0 3 3h4M12 2.5v4a3 3 0 0 1-3 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="4" cy="2.5" r="1.4" fill="currentColor"/><circle cx="12" cy="2.5" r="1.4" fill="currentColor"/><circle cx="8" cy="12.5" r="1.6" fill="currentColor"/></svg></span>' : ''}</summary>
+          <summary><span class="cpShiJian">${escapeHtml(String(faShengShiJian))}</span> · <span class="cpMoJuDuan" title="${escapeHtml(quanWen)}">${escapeHtml(moJuDuan)}</span>${c.evolve ? youMiao : ''}</summary>
           <div class="cpTi">
+            <div class="cpMoJu" title="${escapeHtml(quanWen)}">${escapeHtml(moJu)}</div>
+            <div class="cpWenJian">${cp3Hang(tOr('checkpoints.changed', '修改的文件'), (c.filesChanged || []).map((f) => f.path))}${cp3Hang(tOr('checkpoints.created', '创建文件'), (c.filesCreated || []).map((f) => f.path))}${cp3Hang(tOr('checkpoints.irreversible', '不可恢复操作'), c.irreversible || [])}</div>
             <div>${escapeHtml(t('checkpoints.tasks'))}: ${escapeHtml(c.phase || '')}</div>
             <div class="ctgDim">${escapeHtml(t('checkpoints.env.biaoTi'))}</div>
             <div class="ctgDim" data-env-line="1">${escapeHtml(envLine)}</div>
@@ -35339,86 +35768,116 @@ try {
       ttsSel.innerHTML = opts.map((o) => '<option value="' + o.v + '"' + (o.v === ttsEngine ? ' selected' : '') + '>' + escapeHtml(o.t) + '</option>').join('');
       if (!ttsSel.dataset.bound) { ttsSel.dataset.bound = '1'; ttsSel.onchange = async () => { try { await window.warmy.settingsSave?.({ localTtsEngine: ttsSel.value }); } catch { /* noop */ } void renderBenDiYuYin(); }; }
     }
-    /* 安装/删除/刷新针对的本地引擎：ASR=whisper→whisper；ASR/TTS 任一选 sherpa→sherpa；都跟随→无本地引擎。 */
-    const activeEngine = asrEngine === 'whisper' ? 'whisper' : (asrEngine === 'sherpa-onnx' || ttsEngine === 'sherpa-onnx') ? 'sherpa-onnx' : 'none';
-    const isWhisper = activeEngine === 'whisper';
+    /* R262 项4：按上下两个下拉所选分别显示安装状态；安装/删除/自检按所选本地引擎并集操作（不再「始终两个一起」）。 */
+    const xuanWhisper = asrEngine === 'whisper';
+    const xuanSherpa = asrEngine === 'sherpa-onnx' || ttsEngine === 'sherpa-onnx';
     const note = $('localSpeechEngineNote');
-    if (note) note.textContent = activeEngine === 'none'
+    if (note) note.textContent = (!xuanWhisper && !xuanSherpa)
       ? tOr('localSpeech.followNote', '当前跟随听话/说话模型；选 Whisper/sherpa-onnx 可本地离线完成。')
-      : isWhisper ? tOr('localSpeech.whisperNote', 'Whisper 只做语音转文字（MIT）；文字转语音仍走 sherpa-onnx 或说话模型。')
+      : xuanWhisper ? tOr('localSpeech.whisperNote', 'Whisper 只做语音转文字（MIT）；文字转语音仍走 sherpa-onnx 或说话模型。')
         : tOr('localSpeech.sherpaNote', 'sherpa-onnx（Apache-2.0）语音转文字与文字转语音都支持。');
     const shan0 = $('anNiuBenDiYuYinShanChu');
-    if (activeEngine === 'none') {
-      he.textContent = tOr('localSpeech.followState', '跟随模型（无需本地安装）');
-      he.style.color = '';
+    const zj0 = $('anNiuBenDiYuYinZiJian');
+    const followWen = tOr('localSpeech.followState', '跟随模型（无需本地安装）');
+    const duan = (label, r) => label + '：' + ((!r || r.ok === false) ? tOr('localSpeech.stateNone', '未安装') : benDiZhuangTaiWen(r));
+    const hangAsr = asrEngine === 'whisper' ? duan(tOr('localSpeech.asrLabel', '语音转文字'), wR)
+      : asrEngine === 'sherpa-onnx' ? duan(tOr('localSpeech.asrLabel', '语音转文字'), sR)
+        : tOr('localSpeech.asrLabel', '语音转文字') + '：' + followWen;
+    const hangTts = ttsEngine === 'sherpa-onnx' ? duan(tOr('localSpeech.ttsLabel', '文字转语音'), sR)
+      : tOr('localSpeech.ttsLabel', '文字转语音') + '：' + followWen;
+    he.innerHTML = '<div>' + escapeHtml(hangAsr) + '</div><div>' + escapeHtml(hangTts) + '</div>';
+    /* R262：空闲全量检查发现的运行时更新徽标（只显状态，更新仍由用户点按钮） */
+    const gxRuntime = (((window.__gengXinZhuangTai || {}).items) || []).filter((x) => x && x.kind === 'runtime' && x.hasUpdate);
+    if (gxRuntime.length) he.innerHTML += '<div>' + escapeHtml(tOr('upd.runtimeAvailable', '运行时有新版') + '：' + gxRuntime.map((x) => String(x.name || '') + ' → ' + String(x.latest || '')).join('；')) + '</div>';
+    const weiAn = (r) => !r || r.ok === false || String(r.zhuangTai || '') === 'wei_an_zhuang';
+    he.style.color = ((xuanWhisper && weiAn(wR)) || (xuanSherpa && weiAn(sR))) ? 'var(--accent)' : '';
+    if (!xuanWhisper && !xuanSherpa) {
       if (an) an.style.display = 'none';
       if (shan0) shan0.style.display = 'none';
+      if (zj0) zj0.style.display = 'none';
       return;
     }
     if (an) an.style.display = '';
     if (shan0) shan0.style.display = '';
-    const zhuangTaiFn = isWhisper ? window.warmy.whisperZhuangTai : window.warmy.benDiYuYinZhuangTai;
-    const r = await (zhuangTaiFn ? zhuangTaiFn() : Promise.resolve(null)).catch(() => null);
-    if (!r || r.ok === false) {
-      he.textContent = tOr('localSpeech.stateNone', '未安装') + '：' + String((r && r.error) || 'ipc-unavailable');
-      he.style.color = 'var(--accent)';
-      return;
-    }
-    he.textContent = benDiZhuangTaiWen(r);
-    he.style.color = (String(r.zhuangTai || '') === 'wei_an_zhuang') ? 'var(--accent)' : '';
-    const zhuang = String(r.zhuangTai || '');
+    if (zj0) zj0.style.display = '';
+    /* 点击时读下拉当前值（绑定后选择会变，闭包会过期）。 */
+    const dangQian = () => {
+      const a = String(($('asrXuanZe') || {}).value || asrEngine);
+      const t2 = String(($('ttsXuanZe') || {}).value || ttsEngine);
+      return { w: a === 'whisper', s: a === 'sherpa-onnx' || t2 === 'sherpa-onnx', asr: a, tts: t2 };
+    };
     const gui = $('benDiYuYinJinDuGui');
     const tiao = $('benDiYuYinJinDuTiao');
-    if (gui) gui.hidden = zhuang !== 'an_zhuang_zhong';
-    if (tiao && r.jinDu) {
-      const pct = Math.max(0, Math.min(100, Number(r.jinDu.baiFenBi) || 0));
-      tiao.style.width = pct + '%';
-      tiao.setAttribute('aria-valuenow', String(pct));
+    const zhuangHe = (r) => String((r && r.zhuangTai) || '');
+    if (gui) gui.hidden = !(zhuangHe(wR) === 'an_zhuang_zhong' || zhuangHe(sR) === 'an_zhuang_zhong');
+    if (tiao) {
+      const jd = (xuanWhisper && wR && wR.jinDu) ? wR.jinDu : (sR && sR.jinDu) ? sR.jinDu : null;
+      if (jd) { const pct = Math.max(0, Math.min(100, Number(jd.baiFenBi) || 0)); tiao.style.width = pct + '%'; tiao.setAttribute('aria-valuenow', String(pct)); }
     }
     if (an) {
-      const yiAn = zhuang === 'yi_an_zhuang' || zhuang === 'bu_ke_yong';
+      const quanAn = (!xuanWhisper || !weiAn(wR)) && (!xuanSherpa || !weiAn(sR));
+      const mb = (xuanWhisper && weiAn(wR) ? Number((wR && wR.daYueMB) || 0) : 0) + (xuanSherpa && weiAn(sR) ? Number((sR && sR.daYueMB) || 0) : 0);
       /**
        * 第 32 轮 项 5：装好后主按钮变「检查更新」（重跑安装 = 幂等更新检查），
        * 删除挪到独立按钮，避免"装完之后主按钮变成删除"这种反直觉。
        */
-      an.textContent = yiAn
+      an.textContent = quanAn
         ? tOr('localSpeech.checkUpdate', '检查更新')
-        : tOr('localSpeech.install', '安装（约 {mb} MB）').replace('{mb}', String(r.daYueMB || 0));
-      an.disabled = zhuang === 'an_zhuang_zhong';
+        : tOr('localSpeech.install', '安装（约 {mb} MB）').replace('{mb}', String(mb));
+      an.disabled = zhuangHe(wR) === 'an_zhuang_zhong' || zhuangHe(sR) === 'an_zhuang_zhong';
       if (!an.dataset.bound) {
         an.dataset.bound = '1';
         an.onclick = async () => {
           const xiao = $('benDiYuYinJinDu');
+          const dq = dangQian();
           an.disabled = true;
           if (gui) gui.hidden = false;
           if (tiao) { tiao.style.width = '0%'; tiao.setAttribute('aria-valuenow', '0'); }
           if (xiao) xiao.textContent = tOr('localSpeech.installing', '正在安装（第一次要下载模型，进度见下）');
-          const anFn = isWhisper ? window.warmy.whisperAnZhuang : window.warmy.benDiYuYinAnZhuang;
-          const rr = await (anFn || (() => Promise.resolve(null)))().catch(() => null);
+          const muBiao = [];
+          if (dq.w) muBiao.push({ ming: 'Whisper', fn: window.warmy.whisperAnZhuang });
+          if (dq.s) muBiao.push({ ming: 'sherpa-onnx', fn: window.warmy.benDiYuYinAnZhuang });
+          const cuo = [];
+          for (const m of muBiao) {
+            const rr = await (m.fn || (() => Promise.resolve(null)))().catch(() => null);
+            if (!rr || !rr.ok) cuo.push(m.ming + '：' + String((rr && rr.error) || '').slice(0, 120));
+          }
           an.disabled = false;
-          if (xiao) xiao.textContent = (rr && rr.ok) ? tOr('localSpeech.installed', '安装完成，可勾选启用') : tOr('localSpeech.installFail', '安装失败') + '：' + String((rr && rr.error) || '').slice(0, 160);
+          if (xiao) xiao.textContent = cuo.length ? tOr('localSpeech.installFail', '安装失败') + '：' + cuo.join('；') : tOr('localSpeech.installed', '安装完成，可勾选启用');
           await renderBenDiYuYin();
         };
       }
     }
-    // 独立「删除」按钮
+    // 独立「删除」按钮：只删所选的本地引擎
     const shan = $('anNiuBenDiYuYinShanChu');
     if (shan && !shan.dataset.bound) {
       shan.dataset.bound = '1';
       shan.onclick = async () => {
-        const zt2 = String(((await (zhuangTaiFn || (() => Promise.resolve(null)))().catch(() => null)) || {}).zhuangTai || '');
-        if (!(zt2 === 'yi_an_zhuang' || zt2 === 'bu_ke_yong')) {
+        const dq = dangQian();
+        const muBiao = [];
+        if (dq.w) muBiao.push({ ming: 'Whisper', zt: window.warmy.whisperZhuangTai, fn: window.warmy.whisperShanChu });
+        if (dq.s) muBiao.push({ ming: 'sherpa-onnx', zt: window.warmy.benDiYuYinZhuangTai, fn: window.warmy.benDiYuYinShanChu });
+        const youZhuang = [];
+        for (const m of muBiao) {
+          const r2 = await (m.zt || (() => Promise.resolve(null)))().catch(() => null);
+          const z2 = String((r2 && r2.zhuangTai) || '');
+          if (z2 === 'yi_an_zhuang' || z2 === 'bu_ke_yong') youZhuang.push(m);
+        }
+        if (!youZhuang.length) {
           showToast(tOr('localSpeech.nothingToDelete', '还没装，没什么可删的'));
           return;
         }
         const okShan = await uiConfirm(tOr('localSpeech.confirmDelete', '删除后本机语音识别/合成不可用，并标记「下次更新不再自动安装」；要重装请点「安装」。'));
         if (!okShan) return;
         shan.disabled = true;
-        const shanFn = isWhisper ? window.warmy.whisperShanChu : window.warmy.benDiYuYinShanChu;
-        const rr = await (shanFn || (() => Promise.resolve(null)))({ buZaiAnZhuang: true }).catch(() => null);
+        const cuo = [];
+        for (const m of youZhuang) {
+          const rr = await (m.fn || (() => Promise.resolve(null)))({ buZaiAnZhuang: true }).catch(() => null);
+          if (!rr || !rr.ok) cuo.push(m.ming + '：' + String((rr && rr.error) || ''));
+        }
         shan.disabled = false;
         const xiao = $('benDiYuYinJinDu');
-        if (xiao) xiao.textContent = (rr && rr.ok) ? tOr('localSpeech.deleted', '已删除') : tOr('localSpeech.deleteFail', '删除失败') + '：' + String((rr && rr.error) || '');
+        if (xiao) xiao.textContent = cuo.length ? tOr('localSpeech.deleteFail', '删除失败') + '：' + cuo.join('；') : tOr('localSpeech.deleted', '已删除');
         void renderBenDiYuYin();
       };
     }
@@ -35447,14 +35906,27 @@ try {
       zjAn.onclick = async () => {
         const zj = $('benDiYuYinZiJian');
         if (!zj) return;
+        const dq = dangQian();
+        /* R262 项4：自检也跟随所选——合成只有 TTS=sherpa-onnx 且已装才能做；识别用所选 ASR（跟随⇒只测合成）。 */
+        if (dq.tts !== 'sherpa-onnx') { zj.textContent = tOr('localSpeech.testNeedTts', '自检需要本机合成一句话：请先把「文字转语音」选 sherpa-onnx 并安装（当前跟随说话模型，本机产不出测试音频）。'); return; }
+        const sR2 = await (window.warmy.benDiYuYinZhuangTai || (() => Promise.resolve(null)))().catch(() => null);
+        const sAn2 = !!(sR2 && sR2.ok !== false && (sR2.zhuangTai === 'yi_an_zhuang' || sR2.zhuangTai === 'bu_ke_yong'));
+        if (!sAn2) { zj.textContent = tOr('localSpeech.testNeedInstall', 'sherpa-onnx 未安装，合成不了测试音频，请先点「安装」。'); return; }
+        if (dq.asr === 'whisper') {
+          const wR2 = await (window.warmy.whisperZhuangTai || (() => Promise.resolve(null)))().catch(() => null);
+          const wAn2 = !!(wR2 && wR2.ok !== false && (wR2.zhuangTai === 'yi_an_zhuang' || wR2.zhuangTai === 'bu_ke_yong'));
+          if (!wAn2) { zj.textContent = tOr('localSpeech.testNeedWhisper', 'Whisper 未安装，识别自检跑不了，请先点「安装」（或把语音转文字改选 sherpa-onnx/跟随）。'); return; }
+        }
         zjAn.disabled = true;
         zj.textContent = tOr('localSpeech.testRun', '自检中：本机合成一句中文，再交给本机识别转回文字…');
-        const rr = await (window.warmy.benDiYuYinZiJian || (() => Promise.resolve(null)))().catch(() => null);
+        const rr = await (window.warmy.benDiYuYinZiJian || (() => Promise.resolve(null)))({ asr: dq.asr === 'whisper' ? 'whisper' : dq.asr === 'sherpa-onnx' ? 'sherpa-onnx' : 'none' }).catch(() => null);
         zjAn.disabled = false;
         if (rr && rr.ok) {
-          zj.textContent = tOr('localSpeech.testOk', '自检通过') + '：' + String(rr.yuan || '') + ' → ' + String(rr.huiZhuan || '') +
-            (rr.yiZhi ? '（' + tOr('localSpeech.same', '一字不差') + '）' : '（' + tOr('localSpeech.near', '接近但不完全一致') + '）') +
-            ' · ' + (rr.heChengMs || 0) + 'ms · ' + (rr.yangBenMB || 0) + 'MB wav';
+          zj.textContent = rr.onlyTts
+            ? tOr('localSpeech.testOkTts', '自检通过（仅合成）') + '：' + String(rr.yuan || '') + ' · ' + (rr.heChengMs || 0) + 'ms · ' + (rr.yangBenMB || 0) + 'MB wav · ' + tOr('localSpeech.testTtsFollow', '语音转文字跟随听话模型，不在本地自检内（可用话筒自检检验）。')
+            : tOr('localSpeech.testOk', '自检通过') + '：' + String(rr.yuan || '') + ' → ' + String(rr.huiZhuan || '') +
+              (rr.yiZhi ? '（' + tOr('localSpeech.same', '一字不差') + '）' : '（' + tOr('localSpeech.near', '接近但不完全一致') + '）') +
+              ' · ' + (rr.heChengMs || 0) + 'ms · ' + (rr.yangBenMB || 0) + 'MB wav' + (rr.shiBieMoXing ? ' · ' + tOr('localSpeech.asr', '识别') + '：' + String(rr.shiBieMoXing) : '');
         } else {
           zj.textContent = tOr('localSpeech.testFail', '自检没通过') + '：' + String((rr && rr.error) || '').slice(0, 160);
         }
@@ -35505,6 +35977,9 @@ try {
 
     window.__skillsState = { items: items.slice(), scanDirs };
 
+    /* R262 项2/3：skill 行内「检查更新/安装更新」＋空闲全量检查徽标 */
+    const gxZt = window.__gengXinZhuangTai || { items: [] };
+    const gxCache = window.__skillGxCache || (window.__skillGxCache = {});
     const touBu = '<div class="pfHead">' + escapeHtml(t('settings.skillsDiscoveredTitle')) +
       ' <span class="jingYin">(' + items.length + ')</span></div>';
 
@@ -35533,6 +36008,11 @@ try {
           const enabled = s && s.enabled !== false;
           const removable = s && s.removable !== false && !discovered;
           const id = escapeHtml(s.id || '');
+          const dirName = String(s.id || '').split(':').pop() || String(s.id || '');
+          const gx0 = gxCache[dirName] || ((gxZt.items || []).find((x) => x && x.kind === 'skill' && x.id === dirName) || null);
+          const gxWen0 = !gx0 ? '' : gx0.hasUpdate ? tOr('upd.available', '可更新') + ' → ' + String(gx0.latest || '')
+            : gx0.error ? tOr('upd.notInMarket', '市场无同名技能（无独立更新）')
+              : gx0.latest ? tOr('upd.current', '已是最新') : tOr('upd.noMarketVer', '市场未标版本');
           return (
             '<div class="ctgHang' + (discovered ? ' isDiscovered' : '') + '" data-skill-id="' + id + '" data-skill-source="' + escapeHtml((s && s.source) || '') + '">' +
             '<div class="ctgHangHead">' +
@@ -35543,10 +36023,14 @@ try {
             (removable
               ? '<button class="anNiuXiao" data-skill-del="' + id + '">' + escapeHtml(t('settings.skillRemove')) + '</button>'
               : '<button class="anNiuXiao" disabled title="' + escapeHtml(t('settings.skillDeleteLocked')) + '">' + escapeHtml(t('settings.skillRemove')) + '</button>') +
+            '<button class="anNiuXiao" data-skill-gxjc="' + id + '">' + escapeHtml(tOr('upd.check', '检查更新')) + '</button>' +
+            '<button class="anNiuXiao" data-skill-gxaz="' + id + '"' + (gx0 && gx0.hasUpdate ? '' : ' style="display:none"') + '>' + escapeHtml(tOr('upd.install', '安装更新')) + '</button>' +
             '</div>' +
             '<div class="ctgDim">' + escapeHtml(s.description || '—') + '</div>' +
             '<div class="jingYin">' + escapeHtml(t('settings.skillFrom')) + ': ' + escapeHtml(skillSourceLabel(s)) +
-            (discovered ? ' · ' + escapeHtml(t('settings.skillSourceDiscovered')) : '') + '</div>' +
+            (discovered ? ' · ' + escapeHtml(t('settings.skillSourceDiscovered')) : '') +
+            (s.banBen ? ' · v' + escapeHtml(String(s.banBen)) : '') +
+            ' <span data-skill-gxzt="' + id + '">' + escapeHtml(gxWen0) + '</span></div>' +
             '</div>'
           );
         })
@@ -35570,7 +36054,70 @@ try {
         renderSkillList();
       };
     });
+    /* R262：skill 检查更新＝市场同名最新版 vs 已装 semver；安装更新＝写回原技能目录 */
+    heZi.querySelectorAll('[data-skill-gxjc]').forEach((b) => {
+      b.onclick = async () => {
+        const id = b.getAttribute('data-skill-gxjc') || '';
+        const dirName = id.split(':').pop() || id;
+        const hang = b.closest('.ctgHang');
+        const ztEl = hang && hang.querySelector('[data-skill-gxzt]');
+        const azEl = hang && hang.querySelector('[data-skill-gxaz]');
+        const cache = window.__skillGxCache || (window.__skillGxCache = {});
+        const s = ((window.__skillsState && window.__skillsState.items) || []).find((x) => String(x.id || '') === id);
+        const idle = (((window.__gengXinZhuangTai || {}).items) || []).find((x) => x && x.kind === 'skill' && x.id === dirName);
+        const installed = (s && s.banBen) || (idle && idle.current) || null;
+        b.disabled = true;
+        if (ztEl) ztEl.textContent = '…';
+        const mr = await window.warmy.skillMarketList?.({ query: dirName, limit: 100 }).catch(() => null);
+        const hit = ((mr && mr.items) || []).find((x) => String(x.name || '') === dirName);
+        b.disabled = false;
+        if (!hit) {
+          cache[dirName] = { hasUpdate: false, latest: null, error: 'not-in-market' };
+          if (ztEl) ztEl.textContent = tOr('upd.notInMarket', '市场无同名技能（无独立更新）');
+          if (azEl) azEl.style.display = 'none';
+          return;
+        }
+        const latest = String(hit.banBen || '') || null;
+        cache[dirName] = { hasUpdate: false, latest, error: null, repo: hit.repo || '', owner: hit.owner || '' };
+        if (!installed) {
+          if (ztEl) ztEl.textContent = tOr('upd.noVersion', '未声明版本号，无法比较');
+          if (azEl) azEl.style.display = 'none';
+          return;
+        }
+        const jc = await window.warmy.jinengBanBenJianCe?.({ installed, latest }).catch(() => null);
+        const you = !!(jc && jc.hasUpdate);
+        cache[dirName].hasUpdate = you;
+        if (ztEl) ztEl.textContent = you ? tOr('upd.available', '可更新') + ' → ' + String(latest || '') : (latest ? tOr('upd.current', '已是最新') : tOr('upd.noMarketVer', '市场未标版本'));
+        if (azEl) azEl.style.display = you ? '' : 'none';
+      };
+    });
+    heZi.querySelectorAll('[data-skill-gxaz]').forEach((b) => {
+      b.onclick = async () => {
+        const id = b.getAttribute('data-skill-gxaz') || '';
+        const dirName = id.split(':').pop() || id;
+        const cache = window.__skillGxCache || (window.__skillGxCache = {});
+        let g = cache[dirName];
+        if (!g || !g.repo) {
+          const mr = await window.warmy.skillMarketList?.({ query: dirName, limit: 100 }).catch(() => null);
+          const hit = ((mr && mr.items) || []).find((x) => String(x.name || '') === dirName);
+          if (!hit) { showToast(tOr('upd.notInMarket', '市场无同名技能（无独立更新）')); return; }
+          g = cache[dirName] = { hasUpdate: true, latest: String(hit.banBen || ''), repo: hit.repo || '', owner: hit.owner || '' };
+        }
+        const s = ((window.__skillsState && window.__skillsState.items) || []).find((x) => String(x.id || '') === id);
+        b.disabled = true;
+        const rr = await window.warmy.skillMarketInstall?.({ id: dirName, name: dirName, owner: g.owner || '', repo: g.repo || '', targetDir: (s && (s.dir || s.root)) || '' }).catch(() => null);
+        b.disabled = false;
+        if (rr && rr.ok) {
+          showToast(tOr('upd.updated', '已更新到') + ' ' + String(g.latest || ''));
+          cache[dirName] = { hasUpdate: false, latest: g.latest, error: null, repo: g.repo, owner: g.owner };
+        } else {
+          showToast(tOr('upd.updateFail', '更新失败') + '：' + String((rr && rr.error) || '').slice(0, 120));
+        }
+        renderSkillList();
+      };
+    });
   }
+  window.__renderSkillList = renderSkillList;
 
   async function refreshMembers() {
     const heZi = $('chengYuanJiHe');
@@ -35609,8 +36156,12 @@ try {
       }
     }
     if (!heZi) return;
-    // R11 三态：在线正常 / 异地离线（灰 + 离线角标）/ 组网关闭（异地成员灰 + 异常角标）
-    // R12：停用实例灰 + 名字删除线（灰色仍满足对比度 ≥ 3.0，见 --ink-dim）
+    /* R263：成员标题右侧 X/X（在线/总数） */
+    const zaiXianJiShu = $('chengYuanZaiXianJiShu');
+    if (zaiXianJiShu) {
+      const zaiXian = ms.filter((x) => { const v = memberVisual(sid, x); return v.kind !== 'offline' && v.kind !== 'disabled' && v.kind !== 'meshOff'; }).length;
+      zaiXianJiShu.textContent = zaiXian + '/' + ms.length;
+    }
     heZi.innerHTML = ms.length
       ? ms
           .map((x) => {
@@ -38390,6 +38941,17 @@ try {
     }
     refreshMetrics();
     shuaxinZhixingqiji();
+    /* R262：空闲全量更新检查状态桥——启动读上次结果；主进程推送时刷新插件/skill 徽标 */
+    try {
+      const gx0 = await window.warmy.gengXinZhuangTaiQu?.().catch(() => null);
+      if (gx0 && gx0.ok) window.__gengXinZhuangTai = { checkedAt: gx0.checkedAt || 0, items: gx0.items || [] };
+      window.warmy.onGengXinZhuangTai?.((d) => {
+        window.__gengXinZhuangTai = { checkedAt: (d && d.checkedAt) || Date.now(), items: (d && d.items) || [] };
+        try { if (typeof window.__renderPluginList === 'function') window.__renderPluginList(); } catch { /* noop */ }
+        try { if (typeof window.__renderSkillList === 'function') window.__renderSkillList(); } catch { /* noop */ }
+        try { if (typeof window.__renderBenDiYuYin === 'function') window.__renderBenDiYuYin(); } catch { /* noop */ }
+      });
+    } catch { /* noop */ }
     /**
      * 第 81 轮 #4 门禁用：renderer 启动尾部的 `setNav('singleAi')` / 自动打开会话
      * 跑完之后才置位。真机门禁先等这个标记，避免"刚点开设置又被启动流程抢回去"。

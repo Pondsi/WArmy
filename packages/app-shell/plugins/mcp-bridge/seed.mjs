@@ -134,6 +134,18 @@ function copyPlugin(target, { dryRun, force }) {
   if (fs.existsSync(example) && !fs.existsSync(config)) {
     if (!dryRun) fs.copyFileSync(example, config);
     copied.push('mcp-servers.json (from .example)');
+  } else if (fs.existsSync(example) && fs.existsSync(config)) {
+    /* R264 方案A：已存在的配置合并 agent-desktop 可选 MCP（默认开），不覆盖用户已有条目/开关 */
+    try {
+      const ex = JSON.parse(fs.readFileSync(example, 'utf8').replace(/^\uFEFF/, ''));
+      const cur = JSON.parse(fs.readFileSync(config, 'utf8').replace(/^\uFEFF/, ''));
+      cur.servers = cur.servers || {};
+      let merged = false;
+      for (const [k, v] of Object.entries(ex.servers || {})) {
+        if (k === 'agent-desktop' && !(k in cur.servers)) { cur.servers[k] = v; merged = true; }
+      }
+      if (merged && !dryRun) { fs.writeFileSync(config, JSON.stringify(cur, null, 2)); copied.push('mcp-servers.json (+agent-desktop default-on)'); }
+    } catch { /* 合并失败不挡安装 */ }
   }
   return { dest, copied, existed: false };
 }

@@ -43,7 +43,7 @@ WArmy keeps the team in one workspace. The plan, the board, the files, and the m
 | --- | --- |
 | **A private assistant** | One workhorse with your files, your tools, your model. It reads, searches, writes, and runs commands after you approve. |
 | **A private expert team** | A product manager, a builder, a reviewer, a writer. The duty agent routes the brief; the board records decisions; memory carries context forward. |
-| **A shared project room** | People and agents in one project. Roles, approvals, artifacts, and a paper trail — with optional LAN / DHT / relay networking when you choose. |
+| **A shared project room** | People and agents in one project. Roles, approvals, artifacts, and a paper trail — DHT discovery is joined by default (switchable in Settings); LAN / relay networking stays optional. |
 
 One person can use all three. A small studio can start with the assistant and grow into the project room without moving work to a hosted platform.
 
@@ -104,7 +104,7 @@ You send a brief → the duty agent routes it → a workhorse plans and calls to
 ## Small details and technical notes
 
 - **Memory you can inspect.** The append-only jsonl log is the source of truth; `recall` finds anchors and `retrieve` dereferences them to the original record. Nothing is silently compressed away.
-- The local memory/service port is **59599** (loopback only); project networking (LAN/DHT/relay) is opt-in.
+- The local memory/service port is **59599** (loopback only). DHT discovery joins by default and can be switched off in Settings → Network & Host; it publishes only address/port/fingerprint/online-time metadata — chat content never enters the discovery layer. LAN/relay networking remains opt-in.
 - 27 UI languages; pinyin-named IPC channels; per-session authorization levels; container isolation reported honestly when unavailable.
 
 ## Install

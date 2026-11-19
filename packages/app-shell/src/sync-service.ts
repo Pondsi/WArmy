@@ -349,8 +349,8 @@ export class SyncService {
 
   // ── 同步执行 ──────────────────────────────────────────────────────────
 
-  /** 手动触发同步（用户拍板：不同步中才能触发） */
-  async syncNow(): Promise<SyncState> {
+  /** 手动触发同步（用户拍板：不同步中才能触发）；R263：onlySid＝只同步该会话（切会话即查） */
+  async syncNow(onlySid?: string): Promise<SyncState> {
     if (this.syncing) return this.state(); // 同步进行中不能再开同步
     if (!this.enabled) {
       this.lastSyncResult = 'not-enabled';
@@ -367,7 +367,7 @@ export class SyncService {
     this.lockedDomains = SYNC_DOMAINS.filter((d) => this.domains[d]);
     this.notify();
     try {
-      const payload = this.buildPushPayload();
+      const payload = this.buildPushPayload(onlySid);
       let ok = 0;
       let failed = 0;
       for (const t of targets) {
@@ -390,16 +390,21 @@ export class SyncService {
     return this.state();
   }
 
-  /** 组装触发设备视角的同步包：勾选域当前导出 + 触发设备 2 年 tombstone del 记录 */
-  private buildPushPayload(): SyncPushPayload {
+  /** 组装触发设备视角的同步包：勾选域当前导出 + 触发设备 2 年 tombstone del 记录；R263：onlySid 只导出该会话 */
+  private buildPushPayload(onlySid?: string): SyncPushPayload {
     const entries: SyncEntry[] = [];
     const dels = this.tombstones
       .filter((t) => Date.now() - t.ts <= TOMBSTONE_MS && this.domains[t.domain])
+      .filter((t) => !onlySid || t.domain !== 'chat' || t.id === onlySid)
       .map((t) => ({ domain: t.domain, id: t.id, ts: t.ts }));
     for (const domain of SYNC_DOMAINS) {
       if (!this.domains[domain]) continue;
+      if (onlySid && domain !== 'chat') continue;
       const items = this.exportDomain(domain);
-      for (const it of items) entries.push(it);
+      for (const it of items) {
+        if (onlySid && domain === 'chat' && it.id !== onlySid) continue;
+        entries.push(it);
+      }
     }
     return { from: this.options.selfDeviceId, fromMing: this.options.selfMing, ts: Date.now(), entries, dels };
   }
@@ -421,7 +426,9 @@ export class SyncService {
       if (!SYNC_DOMAINS.includes(e.domain) || !this.domains[e.domain]) continue;
       const key = `${e.domain}:${e.id}`;
       if (peerDels.has(key) && this.tombstones.some((t) => t.domain === e.domain && t.id === e.id)) {
-        refilled += 1; // 我删过、对方还有 → 回填（对方为准）
+        /* R263：双方都删过⇒不复活（删除台账口径取代旧「回填」） */
+        refilled += 1;
+        continue;
       }
       const applied = this.applyEntryWithHost(e);
       if (applied) accepted += 1;

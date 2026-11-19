@@ -1,34 +1,77 @@
-/* R232 自进化：开关 / 双栏 / 撤销 toast / 历史回退。沿用主窗口主题令牌。 */
-#anNiuZiJinHua .ziJinHuaIco { width: 16px; height: 16px; color: var(--ink-dim, #8a8a94); }
+/* R232 自进化 UI：开关 / 撤销 toast。沿用主窗口主题令牌。
+ * R261：支线并入聊天记录并排块（.zjhPair）＋输入框原位分栏；历史回退悬浮窗已删（回退在第四列卡片）。 */
+#anNiuZiJinHua { position: relative; overflow: visible; }
+#anNiuZiJinHua .ziJinHuaIco { display: inline-flex; width: 16px; height: 16px; color: var(--ink-dim, #8a8a94); }
+#anNiuZiJinHua .ziJinHuaIco svg { display: block; }
+/* R261 项4：开启态＝图标主题色，不要主题色外框 */
 #anNiuZiJinHua.qiYong .ziJinHuaIco { color: var(--accent, #a87654); }
-#anNiuZiJinHua.qiYong { border-color: var(--accent, #a87654); }
-#anNiuZiJinHua:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(1); }
+#anNiuZiJinHua.qiYong, #anNiuZiJinHua.qiYong:hover, #anNiuZiJinHua.qiYong:focus-visible { border-color: transparent; background: transparent; }
+/* R261 项5：进化中不可点但保持开启样式（不灰化、不降透明） */
+#anNiuZiJinHua:disabled { cursor: not-allowed; }
+#anNiuZiJinHua.qiYong:disabled { opacity: 1; filter: none; }
 
-.ziJinHuaFenLan { border-top: 1px solid var(--line, #ddd); background: var(--card, #fff); padding: 10px 12px; max-height: 46vh; overflow: auto; }
-.ziJinHuaFenLan.yinCang { display: none; }
-.zjhHead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.zjhHead .jingYin { flex: 1; }
-.zjhRow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.zjhCol { border: 1px solid var(--line, #ddd); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.zjhColHead { display: flex; justify-content: space-between; align-items: center; }
-.zjhMsgs { max-height: 140px; overflow: auto; font-size: 12px; }
-.zjhMsg { white-space: pre-wrap; word-break: break-word; background: var(--hover, #f5f5f5); border-radius: 6px; padding: 6px; }
-.zjhInput { display: flex; gap: 6px; }
-.zjhInput textarea { flex: 1; min-width: 0; resize: vertical; }
-.zjhChoose:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(1); }
-/* 分栏时隐藏普通输入行（输入已分栏），避免不知道发给哪条支线 */
-body.zjh-split #liaoTianLan footer .shuRuQu, body.zjh-split #liaoTianLan footer .shuRuQuFaSongHang { display: none; }
+/* R261 项4：根部（底部中间）向顶部整条平线发散的光子——淡、缓、仅主题色明暗之分 */
+#anNiuZiJinHua .gjPhoton {
+  display: none; position: absolute; left: 50%; bottom: 3px; width: 3px; height: 3px;
+  margin-left: -1.5px; border-radius: 50%; pointer-events: none;
+  background: var(--accent, #a87654); filter: brightness(var(--lum, 1));
+}
+#anNiuZiJinHua.qiYong .gjPhoton { display: block; animation: gjPao var(--dur, 4s) linear var(--delay, 0s) infinite; }
+@keyframes gjPao {
+  0%   { transform: translate(0, 0) scale(.7); opacity: 0; }
+  18%  { opacity: .42; }
+  60%  { opacity: .30; }
+  100% { transform: translate(var(--dx, 0px), -26px) scale(1.05); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { #anNiuZiJinHua.qiYong .gjPhoton { animation: none; opacity: .25; transform: translate(var(--dx, 0px), -14px); } }
+
+/* R261/R263：聊天记录内的支线并排块（live 与 persisted 共用），随聊天滚动；
+ * R263：左留牛马头像；选支按钮在回复下方；思考/工具/中间回复块。 */
+.zjhPair { padding: 4px 0 8px; display: flex; gap: 8px; align-items: flex-start; }
+.zjhPairRow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: 1; min-width: 0; }
+.zjhCol { border: 1px solid var(--line, #ddd); border-radius: 10px; padding: 8px; display: flex; flex-direction: row; gap: 8px; min-width: 0; background: var(--card, #fff); align-self: start; }
+.zjhPair > .zjhAv { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; margin-top: 2px; }
+.zjhCol .zjhAv { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
+.zjhColNei { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+/* R264 项4：支线无独立滚动条，随聊天整体滚动如常；宽度稳定（grid 1fr）；短边留空（align-self:start） */
+.zjhMsgs { overflow: visible; max-height: none; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+.zjhMsg { white-space: normal; word-break: break-word; background: var(--them-bubble, #f5f5f5); border-radius: 6px; padding: 6px; }
+/* R264：支线里用户发出的消息也要显示（右对齐、主题色淡底） */
+.zjhMsg.zjhWo { align-self: flex-end; background: color-mix(in srgb, var(--accent, #a87654) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent, #a87654) 35%, transparent); }
+.zjhSiKao { font-size: 11px; color: var(--muted); }
+.zjhSiKao summary { cursor: pointer; }
+.zjhSiKao pre { white-space: pre-wrap; word-break: break-word; margin: 4px 0 0; font-size: 11px; max-height: none; overflow: visible; }
+.zjhTool { font-size: 11px; color: var(--muted); border-left: 2px solid var(--accent, #a87654); padding-left: 6px; }
+.zjhZhongJian { font-size: 12px; background: var(--hover, #f5f5f5); border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.zjhChoose { align-self: stretch; }
+.zjhChoose:disabled { opacity: .6; cursor: default; filter: none; }
+/* R264 项4：选后按钮消失改纯标签；弃用＝淡＋删除线 */
+.zjhBiaoQian { align-self: stretch; text-align: center; font-size: 12px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line, #ddd); color: var(--muted); }
+.zjhWinBiao { color: var(--accent, #a87654); border-color: var(--accent, #a87654); }
+.zjhDrop { opacity: .55; }
+.zjhDrop .zjhMsgs { text-decoration: line-through; text-decoration-color: var(--muted, #999); }
+.zjhPairZhuangTai { font-size: 11px; }
+@media (max-width: 700px) { .zjhPairRow { grid-template-columns: 1fr; } }
+
+/* R263：输入框原位分栏＝两 textarea 并排独占第一行；图标行/发送行跨两列独占整行（不再挤左栏） */
+body.zjh-split #liaoTianLan .shuRuQu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: stretch; }
+body.zjh-split #liaoTianLan .shuRuQuZhu { display: contents; }
+body.zjh-split #liaoTianLan #attachLieBiao { grid-column: 1 / -1; }
+body.zjh-split #liaoTianLan #shuRu { grid-column: 1; min-width: 0; }
+body.zjh-split #liaoTianLan #shuRuB { grid-column: 2; min-width: 0; }
+body.zjh-split #liaoTianLan .shuRuCounter { grid-column: 1 / -1; }
+body.zjh-split #liaoTianLan .shuRuQuTiao { grid-column: 1 / -1; }
+#shuRuB { border: 1px solid var(--line, #ddd); border-radius: 8px; background: var(--card, #fff); color: var(--ink, #222); font: inherit; padding: 8px 10px; resize: vertical; }
 
 #zjhToast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 999; display: flex; gap: 10px; align-items: center; background: var(--card, #fff); color: var(--ink, #222); border: 1px solid var(--accent, #a87654); border-radius: 10px; padding: 8px 14px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
-.zjhHistory { position: fixed; right: 16px; bottom: 16px; z-index: 998; width: 320px; max-height: 50vh; overflow: auto; background: var(--card, #fff); color: var(--ink, #222); border: 1px solid var(--line, #ddd); border-radius: 10px; padding: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
-.zjhHistRow { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line, #eee); font-size: 12px; }
-@media (max-width: 700px) { .zjhRow { grid-template-columns: 1fr; } }
 
-/* R246：自进化图标（牛马回复右侧 / 回退点右侧） */
-.xiaoXiEvolveIco, .cpEvolveIco { display: inline-flex; align-items: center; color: var(--accent, #a87654); vertical-align: middle; margin-left: 4px; }
-.xiaoXiEvolveIco svg, .cpEvolveIco svg { display: block; }
-/* R246：支线对话历史（用户/牛马）+ 内联双栏加高（接近聊天区而非小悬浮窗） */
-.zjhMsg.zjhUser { background: var(--me-bubble, #e8f0e8); }
-.zjhMsg.zjhThem { background: var(--them-bubble, #f5f5f5); }
-.zjhMsgs { max-height: 46vh; }
-.ziJinHuaFenLan { max-height: 72vh; }
+/* 回退点上的进化图标（第四列回退卡片用） */
+.cpEvolveIco { display: inline-flex; align-items: center; color: var(--accent, #a87654); vertical-align: middle; margin-left: 4px; }
+.cpEvolveIco svg { display: block; }
+/* R264 项4：回退点第一行＝时间·末句截断＋行末幼苗；展开末句3行（悬停完整）＋下3行文件 */
+.cpTiaoMu summary { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.cpShiJian { flex-shrink: 0; color: var(--muted); }
+.cpMoJuDuan { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cpMoJu { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; color: var(--ink); margin-bottom: 4px; }
+.cpWenJian { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+.cpWenJian .ctgDim, .cpWenJianHang { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }

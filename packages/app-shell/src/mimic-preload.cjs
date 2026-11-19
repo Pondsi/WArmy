@@ -26,6 +26,12 @@ contextBridge.exposeInMainWorld('warmyMimic', {
   onZhuoMianDongHua: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:zhuoMianDongHua', h); return () => ipcRenderer.removeListener('warmy:zhuoMianDongHua', h); },
   /** R259：本体走路/互动阶段（walk/arrive/back/idle） */
   onZouLu: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicZouLu', h); return () => ipcRenderer.removeListener('warmy:mimicZouLu', h); },
+  mimicTuBiaoHuDong: (p) => ipcRenderer.invoke('warmy:mimicTuBiaoHuDong', p),
+  /** R264：拟态显隐状态（隐藏时不应与桌面图标互动） */
+  mimicZhuangTai: () => ipcRenderer.invoke('warmy:mimicZhuangTai'),
+  mimicGuDing: (p) => ipcRenderer.invoke('warmy:mimicGuDing', p),
+  /** R264 项19：显隐/固定即时广播（隐身瞬间覆盖窗立即停播，不等 5s 轮询） */
+  onMimicState: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicState', h); return () => ipcRenderer.removeListener('warmy:mimicState', h); },
   /** R221：精灵图 JSON 读取（帧动画）/ 动作模型列表（外部动作注册） */
   sheetJson: (p) => ipcRenderer.invoke('warmy:mimicSheetJson', p),
   dongZuoLieBiao: () => ipcRenderer.invoke('warmy:mimicDongZuoLieBiao'),

@@ -39,6 +39,19 @@
       b.dataset.mode = mode; b.classList.toggle('on', r.moShi === mode);
     }
     gen.appendChild(zi);
+    /* R264 项6：固定: 是/否（是=不走动只原地动；否=可走到图标边/闲逛） */
+    const gd = xiang((w.guDing || '固定') + ' ▸', () => {
+      gdZi.hidden = !gdZi.hidden; gd.setAttribute('aria-expanded', String(!gdZi.hidden));
+      if (!gdZi.hidden) gdZi.scrollIntoView({ block: 'nearest' });
+    });
+    gd.setAttribute('aria-expanded', 'false');
+    const gdZi = document.createElement('div'); gdZi.className = 'zi'; gdZi.hidden = true;
+    for (const v of ['shi', 'fou']) {
+      const on = !!r.guDing === (v === 'shi');
+      const b = xiang((on ? '✓ ' : '') + (v === 'shi' ? (w.guDingShi || '是') : (w.guDingFou || '否')), () => dong('guDing', v), gdZi);
+      b.classList.toggle('on', on);
+    }
+    gen.appendChild(gdZi);
     /* R260：静音＝关「阅读回复」（与拟态聊天窗三点菜单同功能同开关，默认开）；已静音时显示“取消静音” */
     xiang(r.autoReadOn === false ? (w.quXiaoJingYin || '取消静音') : (w.jingYin || '静音'), () => dong('jingYin'));
     xiang(w.sheZhi, () => dong('sheZhi'));
