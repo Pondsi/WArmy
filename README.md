@@ -6,7 +6,7 @@
 
 **A workhorse army that is yours alone — local-first, private by default, and it gets more efficient the more you use it, never more flattering.**
 
-![WArmy workspace](docs/screenshots/readme-hero.png)
+![First run: choose your interface language (27 locales) — ink-wash theme, Arabic selected](docs/screenshots/readme-hero.png)
 
 WArmy is a desktop workspace where AI is a **team**, not a chat box. You give each workhorse a role, a persona, and a model; a duty agent assigns the work; a shared board keeps the plan and the artifacts; a local memory service remembers what happened and recalls it **inside the thinking chain** — there is no "context compression" that quietly throws your history away.
 
@@ -35,7 +35,7 @@ It is 11 p.m. One chat wrote the plan. Another wrote the code. A third has no id
 
 WArmy keeps the team in one workspace. The plan, the board, the files, and the memory survive the window. The duty agent routes the brief; the builder writes; the reviewer checks the claims against the actual files; the board records the decision. Because the workspace is yours, the default path never goes through someone else's server.
 
-![Chat and the workhorse team](docs/screenshots/readme-chat.png)
+![First-run language picker — flower-meadow theme, Simplified Chinese selected](docs/screenshots/readme-chat.png)
 
 ## Three ways to use it
 
@@ -58,7 +58,7 @@ One person can use all three. A small studio can start with the assistant and gr
 - **Extensible by design.** Compatible with the **dsh plugin system**, installable **skills**, and **MCP** servers. Plugins can offer their own settings, update themselves, and provide deterministic (non-model-discretion) extension points.
 - **A workbench for the output.** The built-in **nm viewer** opens Markdown with source/preview, extracts Office and PDF, edits binaries byte-by-byte, browses archives, and doubles as a tabbed browser with split views and autonomous browsing.
 
-![Desktop companion](docs/screenshots/readme-mimic.png)
+![First-run language picker — desert-army theme, English selected](docs/screenshots/readme-mimic.png)
 
 ## Scenes worth trying
 
@@ -68,7 +68,7 @@ One person can use all three. A small studio can start with the assistant and gr
 - **A second opinion that is actually second.** A reviewer with a different persona and a different model gives you a real second opinion, not a rerun of the same answer.
 - **Local and private.** Point WArmy at a model server on `127.0.0.1` and the model never leaves your machine.
 
-![Multi-agent collaboration](docs/screenshots/readme-multiagent.png)
+![First-run language picker — planet theme, Persian selected](docs/screenshots/readme-multiagent.png)
 
 ## Control and safety
 
@@ -77,7 +77,7 @@ One person can use all three. A small studio can start with the assistant and gr
 - **Optional isolation.** Workhorses run on the host or in a container; an unavailable container is reported honestly, never silently replaced.
 - **Honest about limits.** Unfinished paths say so. Unavailable services fail loudly instead of inventing results.
 
-![Settings and control](docs/screenshots/readme-settings.png)
+![First-run language picker — savanna theme, French selected](docs/screenshots/readme-settings.png)
 
 ## What you get
 
