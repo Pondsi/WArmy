@@ -129,18 +129,22 @@ Core workflows are verified with local model servers through consecutive offline
 
 WArmy stands on open-source work. The complete transitive dependency tree with licenses is in `pnpm-lock.yaml` and package manifests; every item links upstream.
 
-**Bundled runtime & UI**
+**Bundled runtime & UI** (ordered by share of use)
 
-- **Electron** — MIT — <https://github.com/electron/electron>; **Chromium** — BSD-3-Clause — <https://github.com/chromium/chromium>; **Node.js** — MIT — <https://github.com/nodejs/node> (a bundled `node.exe` runs the memory service in its own process).
-- **three.js** — MIT — <https://github.com/mrdoob/three.js>; **@pixiv/three-vrm** — MIT — <https://github.com/pixiv/three-vrm> (license text bundled beside the vendor bundle).
-- **hash-wasm** — MIT — <https://github.com/Daninet/hash-wasm> — argon2id/hashing in pure WASM.
-- **DeepSeek Harness (dsh)** — MIT — <https://github.com/deepseek-ai/deepseek-harness> — bundled runtime + plugin compatibility. Companions: **@nanmicoder/dsh-agent-teams** — <https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams>; **node-pty** — MIT — <https://github.com/microsoft/node-pty>; **koffi** — MIT — <https://github.com/Koromix/koffi>; **protobufjs** — BSD-3-Clause — <https://github.com/protobufjs/protobuf.js>; **@google/genai** — Apache-2.0 — <https://github.com/googleapis/js-genai>.
+- **DeepSeek Harness (dsh)** — MIT — <https://github.com/deepseek-ai/deepseek-harness> — the agent harness WArmy builds on: bundled runtime + plugin-first compatibility. Companions: **@nanmicoder/dsh-agent-teams** — <https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams>; **node-pty** — MIT — <https://github.com/microsoft/node-pty>; **koffi** — MIT — <https://github.com/Koromix/koffi>; **protobufjs** — BSD-3-Clause — <https://github.com/protobufjs/protobuf.js>; **@google/genai** — Apache-2.0 — <https://github.com/googleapis/js-genai>.
+- **Electron** — MIT — <https://github.com/electron/electron>; **Chromium** — BSD-3-Clause — <https://github.com/chromium/chromium>; **Node.js** — MIT — <https://github.com/nodejs/node> — the desktop shell and runtime (a bundled `node.exe` runs the memory service in its own process).
+- **SQLite** — Public Domain — <https://www.sqlite.org/>; **better-sqlite3** — MIT — <https://github.com/WiseLibs/better-sqlite3>; **better-sqlite3-multiple-ciphers** — MIT — <https://github.com/m4heshd/better-sqlite3-multiple-ciphers>; **SQLCipher** — BSD-style — <https://github.com/sqlcipher/sqlcipher>; **bindings** — MIT — <https://github.com/TooTallNate/node-bindings>; **file-uri-to-path** — MIT — <https://github.com/TooTallNate/file-uri-to-path> — the memory store (FTS5 + optional encryption, subprocess only).
 - **Diwen** — own license — <https://github.com/Pondsi/dsh-diwen> — separate open-source structured fact layer (also on npm as `diwen`).
-- **SQLite** — Public Domain — <https://www.sqlite.org/>; **better-sqlite3** — MIT — <https://github.com/WiseLibs/better-sqlite3>; **better-sqlite3-multiple-ciphers** — MIT — <https://github.com/m4heshd/better-sqlite3-multiple-ciphers>; **SQLCipher** — BSD-style — <https://github.com/sqlcipher/sqlcipher>; **bindings** — MIT — <https://github.com/TooTallNate/node-bindings>; **file-uri-to-path** — MIT — <https://github.com/TooTallNate/file-uri-to-path> (subprocess only).
-- **DuckDB** — MIT — <https://github.com/duckdb/duckdb> + **@duckdb/node-api** — MIT — <https://github.com/duckdb/duckdb-node-neo> (subprocess only).
+- **hash-wasm** — MIT — <https://github.com/Daninet/hash-wasm> — argon2id/hashing in pure WASM (identity & keys).
+- **three.js** — MIT — <https://github.com/mrdoob/three.js>; **@pixiv/three-vrm** — MIT — <https://github.com/pixiv/three-vrm> — 3D/VRM rendering for the mimic (license text bundled beside the vendor bundle).
 - **ONNX Runtime Web** — MIT — <https://github.com/microsoft/onnxruntime> — local embeddings via WASM SIMD/WebGPU.
-- **sherpa-onnx / sherpa-onnx-node** — Apache-2.0 — <https://github.com/k2-fsa/sherpa-onnx> (subprocess only).
-- **qrcode-generator** — MIT — © Kazuhiko Arase — <https://github.com/kazuhikoarase/qrcode-generator>; **jsQR** — Apache-2.0 — <https://github.com/cozmo/jsQR>.
+- **sherpa-onnx / sherpa-onnx-node** — Apache-2.0 — <https://github.com/k2-fsa/sherpa-onnx> — local speech (subprocess only).
+- **DuckDB** — MIT — <https://github.com/duckdb/duckdb> + **@duckdb/node-api** — MIT — <https://github.com/duckdb/duckdb-node-neo> — local analytics (subprocess only).
+- **qrcode-generator** — MIT — © Kazuhiko Arase — <https://github.com/kazuhikoarase/qrcode-generator>; **jsQR** — Apache-2.0 — <https://github.com/cozmo/jsQR> — QR encode/decode.
+
+**Companion projects**
+
+- **FWArmy** — <https://github.com/Pondsi/FWArmy> — the companion **relay service station** for WArmy: deploy a voluntary public relay site for the community, or run a private one for your own team. It pairs with WArmy's optional relay networking when direct connections aren't possible.
 
 **Build & installer**
 
