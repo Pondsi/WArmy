@@ -1012,9 +1012,12 @@ details.ctgShouQi > .ctgShouQiTi {
 .xiaoXiJi::-webkit-scrollbar-thumb,
 #mianBanLan::-webkit-scrollbar-thumb,
 .duiLieTiao::-webkit-scrollbar-thumb {
-  background: var(--scroll); border-radius: 8px;
-  border: 2px solid transparent; background-clip: content-box;
+  background: var(--scroll); border-radius: 8px;  border: 2px solid transparent; background-clip: content-box;
 }
+/* R267 项7：鼠标不在聊天记录内时滚动条看不见但占位不变（gutter stable），悬停才显示 */
+#xiaoXiJi::-webkit-scrollbar-thumb, .xiaoXiJi::-webkit-scrollbar-thumb { background: transparent; border-color: transparent; }
+#xiaoXiJi:hover::-webkit-scrollbar-thumb, .xiaoXiJi:hover::-webkit-scrollbar-thumb { background: var(--scroll); }
+#xiaoXiJi::-webkit-scrollbar-track, .xiaoXiJi::-webkit-scrollbar-track { background: transparent; }
 
 /* 外部聚合看板（ADR：只读、会话进展、点击跳转） */
 .kanbanHuiHua {
@@ -2850,12 +2853,12 @@ html { font-weight: var(--fw-ui, 400); }
 .zjEditKuang { width: min(480px, 92vw); max-height: 86vh; overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
 .wangLuoProviderHang {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
+  /* R265 项4：名称/徽标/凭证尾/操作 四列同排，核对·编辑·删除 不再另起一行 */
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 8px;
   align-items: center;
-  height: var(--net-provider-row);
   min-height: var(--net-provider-row);
-  padding: 0 8px;
+  padding: 4px 8px;
   border-bottom: 1px solid var(--line);
   box-sizing: border-box;
 }
@@ -2893,7 +2896,7 @@ html { font-weight: var(--fw-ui, 400); }
   color: var(--accent);
   border-style: dashed;
 }
-.wangLuoProviderActions { display: flex; gap: 4px; }
+.wangLuoProviderActions { display: flex; gap: 4px; flex-wrap: nowrap; align-items: center; }
 .wangLuoProviderForm {
   margin: 10px 0;
   padding: 10px;

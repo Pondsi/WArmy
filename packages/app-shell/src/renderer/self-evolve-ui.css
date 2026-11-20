@@ -27,29 +27,53 @@
 
 /* R261/R263：聊天记录内的支线并排块（live 与 persisted 共用），随聊天滚动；
  * R263：左留牛马头像；选支按钮在回复下方；思考/工具/中间回复块。 */
-.zjhPair { padding: 4px 0 8px; display: flex; gap: 8px; align-items: flex-start; }
-.zjhPairRow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: 1; min-width: 0; }
-.zjhCol { border: 1px solid var(--line, #ddd); border-radius: 10px; padding: 8px; display: flex; flex-direction: row; gap: 8px; min-width: 0; background: var(--card, #fff); align-self: start; }
-.zjhPair > .zjhAv { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; margin-top: 2px; }
-.zjhCol .zjhAv { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
-.zjhColNei { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
-/* R264 项4：支线无独立滚动条，随聊天整体滚动如常；宽度稳定（grid 1fr）；短边留空（align-self:start） */
-.zjhMsgs { overflow: visible; max-height: none; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+/* R265 项11：进化并排＝直接在聊天记录中两列各占半宽（右列左缘=中线），无包裹区域；
+ * 单头像+右下角幼苗；选支按钮在各自最新最终回复下；选后主线全宽、弃用隐藏（点头像恢复双列）。 */
+.zjhPair { padding: 4px 0 8px; display: flex; gap: 8px; align-items: flex-start; width: 100%; box-sizing: border-box; position: relative; }
+.zjhPairRow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; min-width: 0; }
+/* R269 项7/8：马头只在最终回复左侧；左栏与头像重叠时移到头像下一行（pair 级） */
+.zjhMaTouZuo { position: absolute; left: 8px; top: 34px; width: 16px; height: 16px; }
+.zjhCol.zjhColYou { position: relative; padding-left: 24px; }
+.zjhMaTouYou { position: absolute; left: -24px; top: 4px; width: 18px; height: 18px; }
+.zjhMaTouZuoHang { position: absolute; left: -26px; top: 4px; width: 16px; height: 16px; }
+/* R269 项11：后续用户消息＝主题色气泡、无头像（同平时用户对话背景色） */
+.zjhUserRow { display: flex; justify-content: flex-end; }
+.zjhUserRow .bubble { background: var(--me-bubble); color: var(--me-bubble-ink, #111); max-width: 100%; }
+.zjhStoppedTip { flex: 1; align-self: center; }
+/* R272 项6：单栏态用户回复＝有头像、同未分栏用户气泡样式 */
+.zjhUserFull { display: flex; flex-direction: row-reverse; align-items: flex-start; gap: 8px; margin: 4px 0; }
+.zjhUserFull .touXiangTuPian { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
+.zjhUserFull .bubble { background: var(--me-bubble); color: var(--me-bubble-ink, #111); max-width: 80%; }
+.zjhAvWrap { position: relative; width: 32px; height: 32px; flex-shrink: 0; margin-top: 2px; }
+.zjhAvWrap[data-decided="1"] { cursor: pointer; }
+.zjhAvWrap .zjhAv { width: 32px; height: 32px; border-radius: 6px; display: block; }
+.zjhYouMiao { position: absolute; right: -5px; bottom: -5px; width: 15px; height: 15px; color: var(--accent, #a87654); pointer-events: none; }
+.zjhYouMiao svg { width: 100%; height: 100%; display: block; }
+/* R268①：幼苗图标细背景色描边（与头像/气泡区分）；未选支时发散光子，选支后不发光 */
+.zjhYouMiao svg path { stroke: var(--card, #fff); stroke-width: 48; paint-order: stroke; stroke-linejoin: round; }
+.zjhYouMiao .gjPhoton { display: none; position: absolute; left: 50%; bottom: 2px; width: 2px; height: 2px; margin-left: -1px; border-radius: 50%; pointer-events: none; background: var(--accent, #a87654); filter: brightness(var(--lum, 1)); }
+.zjhYouMiaoLiang .gjPhoton { display: block; animation: gjPaoXiao var(--dur, 4s) linear var(--delay, 0s) infinite; }
+@keyframes gjPaoXiao {
+  0%   { transform: translate(0, 0) scale(.7); opacity: 0; }
+  18%  { opacity: .42; }
+  60%  { opacity: .30; }
+  100% { transform: translate(var(--dx, 0px), -14px) scale(1.05); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .zjhYouMiaoLiang .gjPhoton { animation: none; opacity: .25; transform: translate(var(--dx, 0px), -8px); } }
+/* 无包裹区域：列透明、无边框 */
+.zjhCol { display: flex; flex-direction: column; gap: 6px; min-width: 0; align-self: start; background: transparent; border: 0; padding: 0; }
+.zjhSingleCol { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
 .zjhMsg { white-space: normal; word-break: break-word; background: var(--them-bubble, #f5f5f5); border-radius: 6px; padding: 6px; }
-/* R264：支线里用户发出的消息也要显示（右对齐、主题色淡底） */
 .zjhMsg.zjhWo { align-self: flex-end; background: color-mix(in srgb, var(--accent, #a87654) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent, #a87654) 35%, transparent); }
-.zjhSiKao { font-size: 11px; color: var(--muted); }
-.zjhSiKao summary { cursor: pointer; }
-.zjhSiKao pre { white-space: pre-wrap; word-break: break-word; margin: 4px 0 0; font-size: 11px; max-height: none; overflow: visible; }
-.zjhTool { font-size: 11px; color: var(--muted); border-left: 2px solid var(--accent, #a87654); padding-left: 6px; }
-.zjhZhongJian { font-size: 12px; background: var(--hover, #f5f5f5); border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
-.zjhChoose { align-self: stretch; }
+.zjhFinal { display: flex; gap: 6px; align-items: flex-start; min-width: 0; }
+.zjhMaTou { flex-shrink: 0; font-size: 14px; line-height: 1.4; }
+.zjhFinal .bubble { flex: 1; min-width: 0; }
+.zjhChoose { align-self: stretch; margin-top: 2px; }
 .zjhChoose:disabled { opacity: .6; cursor: default; filter: none; }
-/* R264 项4：选后按钮消失改纯标签；弃用＝淡＋删除线 */
 .zjhBiaoQian { align-self: stretch; text-align: center; font-size: 12px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line, #ddd); color: var(--muted); }
 .zjhWinBiao { color: var(--accent, #a87654); border-color: var(--accent, #a87654); }
-.zjhDrop { opacity: .55; }
-.zjhDrop .zjhMsgs { text-decoration: line-through; text-decoration-color: var(--muted, #999); }
+/* R265：弃用不再删除线（保留可读），仅底部弃用标签 */
+.zjhDrop { opacity: 1; }
 .zjhPairZhuangTai { font-size: 11px; }
 @media (max-width: 700px) { .zjhPairRow { grid-template-columns: 1fr; } }
 
@@ -57,11 +81,16 @@
 body.zjh-split #liaoTianLan .shuRuQu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: stretch; }
 body.zjh-split #liaoTianLan .shuRuQuZhu { display: contents; }
 body.zjh-split #liaoTianLan #attachLieBiao { grid-column: 1 / -1; }
-body.zjh-split #liaoTianLan #shuRu { grid-column: 1; min-width: 0; }
-body.zjh-split #liaoTianLan #shuRuB { grid-column: 2; min-width: 0; }
+body.zjh-split #liaoTianLan #shuRu { grid-column: 1; grid-row: 1; min-width: 0; }
+body.zjh-split #liaoTianLan #shuRuB { grid-column: 2; grid-row: 1; min-width: 0; }
 body.zjh-split #liaoTianLan .shuRuCounter { grid-column: 1 / -1; }
 body.zjh-split #liaoTianLan .shuRuQuTiao { grid-column: 1 / -1; }
-#shuRuB { border: 1px solid var(--line, #ddd); border-radius: 8px; background: var(--card, #fff); color: var(--ink, #222); font: inherit; padding: 8px 10px; resize: vertical; }
+#shuRuB { border: none; outline: none; border-radius: 0; background: transparent; color: var(--ink); font: inherit; padding: 8px 10px; resize: none; scrollbar-gutter: stable; caret-color: var(--ink); }
+/* R267 项8／R269 项9／R270 项8：两栏输入透明；分割竖条只覆盖输入框行（B 框左边框），不贯穿按钮行 */
+body.zjh-split #liaoTianLan .shuRuQu { background: var(--card); column-gap: 0; position: relative; }
+body.zjh-split #liaoTianLan #shuRu, body.zjh-split #liaoTianLan #shuRuB { background: transparent; }
+body.zjh-split #liaoTianLan #shuRuB { border-left: 8px solid var(--chat-bg); box-sizing: border-box; }
+body.zjh-split #liaoTianLan #shuRu:focus, body.zjh-split #liaoTianLan #shuRuB:focus { outline: none; box-shadow: none; }
 
 #zjhToast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 999; display: flex; gap: 10px; align-items: center; background: var(--card, #fff); color: var(--ink, #222); border: 1px solid var(--accent, #a87654); border-radius: 10px; padding: 8px 14px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
 

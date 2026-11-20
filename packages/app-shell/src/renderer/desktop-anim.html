@@ -35,11 +35,8 @@
     d.style.left = (x / dpr) + 'px'; d.style.top = (y / dpr) + 'px'; if (dx !== undefined){ d.style.setProperty('--dx', (dx / dpr) + 'px'); d.style.setProperty('--dy', (dy / dpr) + 'px'); }
     fx.appendChild(d); setTimeout(() => d.remove(), 1400); }
   function centerOf(ic){ return { x: ic.rect.x + ic.rect.width / 2, y: ic.rect.y + ic.rect.height / 2 }; }
-  // 平时纯视觉互动：R263/R264 仅当拟态可见且未固定才走到图标边＋手脚动作；隐藏/固定不互动
-  setInterval(() => { if (!icons.length || !mimicOn || mimicFixed) return; const ic = icons[Math.floor(Math.random() * icons.length)]; const c = centerOf(ic);
-    const kinds = ['push', 'shake', 'kick', 'squash']; const kind = kinds[Math.floor(Math.random() * 4)];
-    try { window.warmyMimic?.mimicTuBiaoHuDong?.({ x: c.x, y: c.y, kind }); } catch { /* noop */ }
-    spr(c.x, c.y, kind, ''); }, 12000);
+  // R265 项8：不再定时强制走到图标互动——走动/互动由主进程随机闲逛驱动（走到图标可选互动、不走回）。
+  // 覆盖层只负责真实操作结果动画（onZhuoMianDongHua）。
   // 真实操作结果驱动动画（仅拟态可见时）
   window.warmyMimic.onZhuoMianDongHua((d) => { if (!d || !mimicOn) return;
     const ic = icons.find((i) => i.filePath === d.path); const c = ic ? centerOf(ic) : { x: innerWidth * dpr / 2, y: innerHeight * dpr / 2 };

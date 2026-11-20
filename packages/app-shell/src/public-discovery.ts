@@ -117,12 +117,30 @@ export class GongKaiFaXian {
   private lastPublishSeq = 0;
   private lastStoredOn: DhtDiZhi[] = [];
   private lastError = '';
+  /** R269 项14：start 串行锁——防「自动启动＋用户重勾」并发 bind 同一 UDP 端口导致 discovery-start-failed */
+  private startLock: Promise<unknown> = Promise.resolve();
 
   get enabled(): boolean {
     return !!this.node;
   }
 
   async start(opts: GongKaiFaXianQiDong): Promise<{ ok: boolean; error?: string; status: GongKaiFaXianZhuangTai }> {
+    const run = this.startLock.then(() => this.doStart(opts));
+    this.startLock = run.catch(() => { /* 锁不因失败而断 */ });
+    return run;
+  }
+
+  private async doStart(opts: GongKaiFaXianQiDong): Promise<{ ok: boolean; error?: string; status: GongKaiFaXianZhuangTai }> {
+    const r = await this.doStartOnce(opts);
+    /* R269 项14：端口未释放/瞬时失败⇒延时单次重试（自愈，减少「重勾就报错」） */
+    if (!r.ok && r.error === 'discovery-start-failed') {
+      await new Promise((res) => setTimeout(res, 1200));
+      return this.doStartOnce(opts);
+    }
+    return r;
+  }
+
+  private async doStartOnce(opts: GongKaiFaXianQiDong): Promise<{ ok: boolean; error?: string; status: GongKaiFaXianZhuangTai }> {
     if (this.node) await this.stop();
     if (!opts.bootstrap.length) {
       return { ok: false, error: 'bootstrap-required', status: this.status() };

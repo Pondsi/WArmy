@@ -19,7 +19,7 @@ export interface YanShouGuiZe {
   primary?: boolean;
 }
 export interface ChaYiJian { checkId: string; arm: ZhiXian; outcome: 'pass' | 'fail' | 'unknown'; ts: number }
-export interface ZhiXianZhuangTai { turns: number; files: string[]; reply: string; overlay?: string; history?: Array<{ role: 'user' | 'them' | 'tool' | 'system'; kind?: string; content: string; ts?: number }> }
+export interface ZhiXianZhuangTai { turns: number; files: string[]; reply: string; overlay?: string; history?: Array<{ role: 'user' | 'them' | 'tool' | 'system'; kind?: string; content: string; ts?: number; live?: boolean }>; /** R268④：用户停止时该臂还没有任何正文 ⇒ 整次进化算「未开始」 */ emptyStopped?: boolean }
 export interface ZiJinHuaShiYan {
   id: string; sessionId: string; projectId?: string; createdAt: number; forkSeq: number;
   status: 'running' | 'split' | 'staged' | 'merged' | 'cancelled';
@@ -28,6 +28,8 @@ export interface ZiJinHuaShiYan {
   arms: Record<ZhiXian, ZhiXianZhuangTai>;
   checks: ChaYiJian[];
   winner?: ZhiXian; auto?: boolean; reason?: string;
+  /** R268④：两臂均被停止且无正文 ⇒ 未开始态（开关可关闭、并排块显提示） */
+  stoppedEmpty?: boolean;
   stagedAt?: number; stagedBy?: string; mergedAt?: number; snapshotId?: string;
   conflicts?: string[];
 }

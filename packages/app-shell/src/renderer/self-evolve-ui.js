@@ -38,9 +38,9 @@
     const isProject = nav === 'internalGroup';
     const visible = nav === 'singleAi' || (isProject && await isAdmin(sid));
     b.closest('#ziJinHuaDd').style.display = visible ? '' : 'none';
-    const active = cur && cur.sessionId === sid && (cur.status === 'running' || cur.status === 'split' || cur.status === 'staged');
+    const active = cur && cur.sessionId === sid && (cur.status === 'running' || cur.status === 'split' || cur.status === 'staged') && !cur.stoppedEmpty;
     const enabled = !!Q().get(sid);
-    /* R261 项5：进化中不可点但保持开启样式（主题色图标+光子），不灰化 */
+    /* R261 项5：进化中不可点但保持开启样式（主题色图标+光子），不灰化；R268④：停止且无正文＝未开始⇒可关闭 */
     b.disabled = !!active;
     b.classList.toggle('qiYong', enabled || !!active);
     b.setAttribute('aria-pressed', String(enabled));
@@ -60,6 +60,15 @@
     await W().ziJinHuaXuanZe({ sessionId: sid, arm: b.dataset.arm === 'B' ? 'B' : 'A' });
   });
 
+  /* R269 项12：刷新/切会话后主动拉取当前实验（广播不会重发）⇒恢复分栏与 live 内容 */
+  let lastSid = '';
+  async function loadCur() {
+    const sid = Q().sid();
+    if (!sid) { cur = null; return; }
+    try { const r = await W().ziJinHuaZhuangTai(sid); cur = (r && r.exp) || null; } catch { cur = null; }
+    refreshToggle();
+    try { window.__ziJinHuaChongHua && window.__ziJinHuaChongHua(); } catch { /* noop */ }
+  }
   async function init() {
     if (!Q() || !W()) { setTimeout(init, 300); return; }
     try { const s = await W().settingsGet(); Q().load((s && s.settings && s.settings.selfEvolveSessions) || {}); } catch { /* noop */ }
@@ -68,6 +77,8 @@
       if (b.disabled) return;
       const sid = Q().sid();
       if (Q().nav() === 'internalGroup' && !(await isAdmin(sid))) return;
+      /* R268④：关闭进化＝解散活跃实验（在途支线强制终止） */
+      if (Q().get(sid)) { try { await W().ziJinHuaGuanBi(sid); } catch { /* noop */ } }
       Q().set(sid, !Q().get(sid)); refreshToggle();
     };
     W().onZiJinHua((d) => {
@@ -78,10 +89,11 @@
       try { window.__ziJinHuaChongHua && window.__ziJinHuaChongHua(gun); } catch { /* noop */ }
       if (cur && cur.status === 'merged') { Q().refresh(); }
     });
-    /* 会话切换时刷新开关可见性 */
-    setInterval(() => { refreshToggle(); }, 1500);
+    /* 会话切换时刷新开关可见性＋拉取当前实验（R269 项12） */
+    setInterval(() => { refreshToggle(); const sid = Q().sid(); if (sid !== lastSid) { lastSid = sid; void loadCur(); } }, 1500);
     refreshToggle();
-    try { window.__ziJinHuaChongHua && window.__ziJinHuaChongHua(); } catch { /* noop */ }
+    lastSid = Q().sid();
+    void loadCur();
   }
   /* R261：cur 暴露给 app.js（聊天记录内并排块 + 输入分栏） */
   window.__ziJinHuaCur = () => cur;

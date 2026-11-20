@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('warmy', {
   ziJinHuaFaSong: (p) => ipcRenderer.invoke('warmy:ziJinHuaFaSong', p),
   ziJinHuaXuanZe: (p) => ipcRenderer.invoke('warmy:ziJinHuaXuanZe', p),
   ziJinHuaQuXiao: (sid) => ipcRenderer.invoke('warmy:ziJinHuaQuXiao', sid),
+      ziJinHuaGuanBi: (sid) => ipcRenderer.invoke('warmy:ziJinHuaGuanBi', sid),
   ziJinHuaHuiTui: (p) => ipcRenderer.invoke('warmy:ziJinHuaHuiTui', p),
   zhuoMianCaoZuo: (p) => ipcRenderer.invoke('warmy:zhuoMianCaoZuo', p),
   benDiShengChengChaXun: () => ipcRenderer.invoke('warmy:benDiShengChengChaXun'),

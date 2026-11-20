@@ -4,13 +4,9 @@
 
 ### You don't command the workhorses. You command the commanders.
 
-**A workhorse army that is yours alone — local-first, private by default, and it gets more efficient the more you use it, never more flattering.**
+A local-first desktop workspace where AI is a **team**, not a chat box: give each workhorse a role, a persona and a model; a duty agent routes the work; a shared board keeps the plan and the artifacts; a local memory service recalls evidence **inside the thinking chain**. It gets more efficient the more you use it — never more flattering.
 
-![First run: choose your interface language (27 locales) — ink-wash theme, Arabic selected](docs/screenshots/readme-hero.png)
-
-WArmy is a desktop workspace where AI is a **team**, not a chat box. You give each workhorse a role, a persona, and a model; a duty agent assigns the work; a shared board keeps the plan and the artifacts; a local memory service remembers what happened and recalls it **inside the thinking chain** — there is no "context compression" that quietly throws your history away.
-
-You are not the general shouting at oxen. You are the one who commands the commanders (**commander of commanders**). Set the direction, approve the dangerous moves, and let the army organize itself.
+![First run: choose your interface language (27 locales)](docs/screenshots/readme-hero.png)
 
 [Download for Windows](https://github.com/Pondsi/WArmy/releases) · [Chinese manual](./说明.md) · [Acknowledgments](#acknowledgments) · [License](#documentation-and-license)
 
@@ -23,149 +19,147 @@ You are not the general shouting at oxen. You are the one who commands the comma
 
 ## Why it feels different
 
-- **Local-first, no server account.** Your chats, files, memory, and settings live on your disk. There is no WArmy cloud and no WArmy login. Bring your own models — local, self-hosted, or cloud — and pay your provider directly.
-- **Privacy is the default, not a toggle.** No analytics, no ad SDK, no silent upload. Secrets use your OS secure storage. Networking, web search, and IM adapters stay **off until you turn them on**.
-- **Memory recalled in the thinking chain.** An append-only log is the source of truth; a local service finds the right evidence and returns the original record by pointer. The team remembers without replaying the whole conversation.
-- **It speaks only when it should.** No nagging, no endless one-question-one-answer ping-pong. The desktop companion stays quiet and proactive — it talks when there is something worth saying.
-- **It gets sharper, not sycophantic.** Self-summary, self-improvement, and self-evolution aim at **efficient and correct**, not at agreeing with you. If you want it to change itself, a built-in modification manual lets your agents remodel themselves — toward usefulness, not flattery.
+- **Your machine, your army.** Chats, files, memory and settings live on your disk. Bring your own models — local, self-hosted or cloud — and pay your provider directly. There is no WArmy cloud.
+- **Private by default.** No analytics, no ad SDK, no silent upload. Secrets use OS secure storage; networking, web search and IM adapters stay off until you enable them.
+- **Memory that survives the window.** An append-only log is the source of truth; `recall` finds anchors and `retrieve` returns the original record by pointer — no quiet "context compression" that throws history away.
+- **Sharp, not sycophantic.** Self-summary and self-evolution aim at *efficient and correct*, verified against evidence, with rollback points for every merge.
 
-## A day with the army
+## Memory & Diwen — measured, not claimed
 
-It is 11 p.m. One chat wrote the plan. Another wrote the code. A third has no idea why any of it exists. You paste the same background into every window and hope the next one remembers.
+What this means for you: the team **remembers across weeks without replaying the whole conversation**, your prompt stays small (cheaper, faster, less "context rot"), and nothing is silently thrown away — any omitted record can be pulled back **byte-exact**. Facts are kept as a verifiable structured layer (**Diwen**) while everything you read stays natural language, so the agent can be checked against real records instead of trusting its own prose.
 
-WArmy keeps the team in one workspace. The plan, the board, the files, and the memory survive the window. The duty agent routes the brief; the builder writes; the reviewer checks the claims against the actual files; the board records the decision. Because the workspace is yours, the default path never goes through someone else's server.
+These are not marketing numbers; they come from a 2,000-round real-conversation stress test (2,040 live model calls, ~10.7M characters / 25.7MB of append-only log, cloud + local models). Full method and raw data: [docs/MEMORY-STRESS-REPORT.md](./docs/MEMORY-STRESS-REPORT.md).
 
-![First-run language picker — flower-meadow theme, Simplified Chinese selected](docs/screenshots/readme-chat.png)
+| What you get | Measured result |
+| --- | --- |
+| **Never blows the context window** | 0 budget overruns across 2,000 rounds, even as the log grew 1,000×. |
+| **Fast regardless of history size** | view render ≈ **0.21 ms/round** (peak 2 ms) on a 5.2M-char log — cost scales with the view, not the log. |
+| **Small prompts, lower cost** | the injected view is ~**0.74%** of the log (≈1:135 compression); 16.2% prompt-cache hit. |
+| **Nothing lost** | `retrieve` returned the exact original record **40/40 (100%)** by pointer. |
+| **No invented memories** | when a fact wasn't in context, the model said "not in context" **20/20 — zero fabrication**; every fact that was visible was answered correctly. |
 
-## Three ways to use it
+Honest limit: very old mid-history facts are not auto-replayed; they are fetched on demand via `recall`/`retrieve` (100% byte-exact), and the agent tells you when it is doing so rather than guessing.
+
+## Your account, your keys
+
+WArmy has **no cloud account server** — but it does have a real account system that protects *your* local identity. You create a self-custodied identity (a 24-word mnemonic you keep); there is nothing to register on someone else's server. Day-to-day you stay signed in seamlessly via a local PIN / OS-backed unlock, and login verification is only demanded when a risk is predicted (new device, sensitive operation, anomalous access). Data at rest and the peer-to-peer protocol are encrypted; keys never leave your machine. Losing the mnemonic means losing the identity — that is the point of self-custody.
+
+## One workspace, three scales
 
 | You want | WArmy gives you |
 | --- | --- |
-| **A private assistant** | One workhorse with your files, your tools, your model. It reads, searches, writes, and runs commands after you approve. |
-| **A private expert team** | A product manager, a builder, a reviewer, a writer. The duty agent routes the brief; the board records decisions; memory carries context forward. |
-| **A shared project room** | People and agents in one project. Roles, approvals, artifacts, and a paper trail — DHT discovery is joined by default (switchable in Settings); LAN / relay networking stays optional. |
+| **A private assistant** | One workhorse with your files, tools and model; reads, searches, writes and runs commands after you approve. |
+| **A private expert team** | PM / builder / reviewer / writer peers; the duty agent routes the brief, the board records decisions, memory carries context forward. |
+| **A shared project room** | People and agents in one project with roles, approvals, artifacts and a paper trail. |
 
-One person can use all three. A small studio can start with the assistant and grow into the project room without moving work to a hosted platform.
+One person can use all three; a studio can grow from assistant to project room without moving work to a hosted platform.
+
+![The workspace: plan board, agents and artifacts](docs/screenshots/readme-chat.png)
 
 ## What's inside
 
-- **Multi-agent interaction & collaboration.** Workhorses talk to each other, hand work off, and share a blackboard. Agents are peers (**agent equality**) — no single agent silently owns the truth.
-- **A desktop companion that lives on your screen.** A customizable mascot (**desktop pet**, appearance customization in development) that interacts with your desktop icons, walks over to them, and reacts. It can use camera, microphone, speaker, and network — each individually switchable.
-- **Harness self-evolution.** A/B branch experiments, prompt self-update, prediction self-convergence, rollback points. The harness improves itself against evidence, and you can roll back any merge.
-- **Knowledge base, plan board, rollback points.** Decisions and artifacts stay with the project; every claimed file is verified on disk before it counts as done.
-- **Diwen system.** A structured machine-layer representation for facts (Chinese portion available today). User-visible content always stays in natural language. Diwen is its own open-source project — see [Acknowledgments](#acknowledgments).
-- **Work like a colleague, not a tool.** Naturally use social software alongside your colleagues and your subordinates — except this time the subordinates are agents. Email notifications, prompt sounds, scheduled tasks.
-- **Extensible by design.** Compatible with the **dsh plugin system**, installable **skills**, and **MCP** servers. Plugins can offer their own settings, update themselves, and provide deterministic (non-model-discretion) extension points.
-- **A workbench for the output.** The built-in **nm viewer** opens Markdown with source/preview, extracts Office and PDF, edits binaries byte-by-byte, browses archives, and doubles as a tabbed browser with split views and autonomous browsing.
+- **Multi-agent collaboration.** Workhorses hand work off and share a blackboard; agents are peers — no single agent silently owns the truth.
+- **Contacts & instant messaging.** Add other people as contacts and chat in real time; a workhorse can join as a colleague. Social-software adapters let you work alongside your existing IM tools.
+- **Remote operation & multi-device sync.** Operate a reachable machine remotely and keep sessions in sync across your devices over optional encrypted project networking (DHT discovery joined by default, switchable; LAN/relay opt-in). Only address/port/fingerprint/online-time metadata enters discovery — never chat content.
+- **A desktop companion.** A customizable mascot that lives on your screen, walks to your icons and reacts; camera/mic/speaker/network each individually switchable. It speaks only when there is something worth saying.
+- **Harness self-evolution.** A/B branch experiments, prompt self-update, prediction self-convergence, rollback points — improvement against evidence, not flattery.
+- **Knowledge base, plan board, rollback points.** Every claimed file is verified on disk before it counts as done.
+- **Diwen system.** A structured, verifiable machine-layer for facts (Chinese portion today); user-visible content stays natural language. Diwen is its own open-source project — see [Acknowledgments](#acknowledgments).
+- **Extensible by design.** dsh-compatible plugins, installable skills, and MCP servers with deterministic (non-model-discretion) extension points.
+- **A workbench for output.** The built-in nm viewer: Markdown source/preview, Office/PDF extraction, byte-level hex editing, archives, and a tabbed split browser with autonomous browsing.
 
-![First-run language picker — desert-army theme, English selected](docs/screenshots/readme-mimic.png)
+![Desktop companion and workbench](docs/screenshots/readme-mimic.png)
 
 ## Scenes worth trying
 
-- **Launch-note factory.** "Draft the launch note from these three files, then have the reviewer check every claim." The builder writes, the reviewer reads the actual files, the board records what passed.
-- **Research that remembers.** Search the web, extract pages, read PDFs, archive the result. Next week, recall the sources by pointer instead of re-pasting the whole thread.
-- **A quiet night shift.** Schedule a recurring export or a long-running watch. The army keeps an audit trail and stops with a stated reason if something needs you — it does not invent progress.
-- **A second opinion that is actually second.** A reviewer with a different persona and a different model gives you a real second opinion, not a rerun of the same answer.
-- **Local and private.** Point WArmy at a model server on `127.0.0.1` and the model never leaves your machine.
-
-![First-run language picker — planet theme, Persian selected](docs/screenshots/readme-multiagent.png)
+- **Launch-note factory.** "Draft from these three files, then have the reviewer check every claim." The reviewer reads the actual files; the board records what passed.
+- **Research that remembers.** Search, extract, archive; next week recall sources by pointer instead of re-pasting the thread.
+- **A quiet night shift.** Scheduled exports / long watches with an audit trail and honest stop reasons — it never invents progress.
+- **A real second opinion.** A reviewer with a different persona and model, not a rerun of the same answer.
 
 ## Control and safety
 
-- **Explicit before dangerous.** Shell commands, out-of-workspace writes, protected directories, and other-session data stop at an approval card. Every tool call is audited.
-- **Permissions are per session.** A group-chat workhorse cannot browse a project or a private session just because it can chat. Authorization levels are chosen per session, not globally.
-- **Optional isolation.** Workhorses run on the host or in a container; an unavailable container is reported honestly, never silently replaced.
-- **Honest about limits.** Unfinished paths say so. Unavailable services fail loudly instead of inventing results.
+- **Explicit before dangerous.** Shell, out-of-workspace writes, protected dirs and other-session data stop at an approval card; every tool call is audited.
+- **Per-session permissions.** A group workhorse cannot browse a project or private session just because it can chat.
+- **Optional isolation.** Host or container; an unavailable container is reported honestly, never silently replaced.
+- **Honest about limits.** Unfinished paths say so; unavailable services fail loudly instead of inventing results.
 
-![First-run language picker — savanna theme, French selected](docs/screenshots/readme-settings.png)
+![Settings and safety controls](docs/screenshots/readme-settings.png)
 
-## What you get
+## The system, briefly
 
-- A desktop workspace with a team of agents, a duty dispatcher, a shared plan board, and a local memory service — installed on your machine, owned by you.
-- A desktop companion (mimic) that lives on your screen, reacts to touch and voice, and speaks only when it should.
-- The built-in nm viewer: Markdown source/preview, Office/PDF extraction, hex editing, archives, and a tabbed browser.
-- An audit trail for every tool call, approval cards for dangerous moves, and rollback points for self-evolution.
-
-## What you can do
-
-- Run a private assistant, a private expert team, or a shared project room — one person can use all three.
-- Draft → build → review pipelines where the reviewer checks claims against the actual files.
-- Research that remembers: archive sources and recall them by pointer next week.
-- Scheduled night shifts with honest stop reasons; local-only model setups that never leave your machine.
-
-## The system
-
-Electron main process + renderer workspace + isolated subprocesses for native work (SQLite/FTS5, segmentation, analytics, local speech). The main and renderer load **zero native modules**; Python/torch/whisper.cpp live only in child processes. Plugins (dsh-compatible), skills, and MCP servers extend the harness without giving models discretion over the host.
+Electron main + renderer workspace + isolated subprocesses for native work (SQLite/FTS5, segmentation, analytics, local speech). Main and renderer load **zero native modules**; Python/torch/whisper.cpp live only in child processes. The local service port is **59599** (loopback only).
 
 ## How it works
 
 You send a brief → the duty agent routes it → a workhorse plans and calls tools → dangerous calls stop at an approval card → artifacts are verified on disk → the round is appended to the local memory log and recalled inside the next thinking chain. Self-evolution runs A/B branches against evidence and merges only what proves better.
 
+## What you can do
+
+- Run a private assistant, an expert team, or a shared project room — and grow between them without migrating.
+- Draft → build → review pipelines where the reviewer checks claims against the actual files.
+- Chat with contacts in real time, operate a reachable machine remotely, and keep sessions synced across devices.
+- Schedule night shifts with honest stop reasons; point at a `127.0.0.1` model server so nothing leaves your machine.
+
 ## Small details and technical notes
 
-- **Memory you can inspect.** The append-only jsonl log is the source of truth; `recall` finds anchors and `retrieve` dereferences them to the original record. Nothing is silently compressed away.
-- The local memory/service port is **59599** (loopback only). DHT discovery joins by default and can be switched off in Settings → Network & Host; it publishes only address/port/fingerprint/online-time metadata — chat content never enters the discovery layer. LAN/relay networking remains opt-in.
+- **Memory you can inspect.** The append-only jsonl log is the source of truth; `recall` finds anchors and `retrieve` dereferences them to the original record — nothing is silently compressed away.
+- DHT discovery joins by default (switchable in Settings → Network & Host); it publishes only address/port/fingerprint/online-time metadata, never chat content. LAN/relay networking stays opt-in.
 - 27 UI languages; pinyin-named IPC channels; per-session authorization levels; container isolation reported honestly when unavailable.
 
 ## Install
 
-**Download, install, use.** No account, no server setup.
+**Download, install, use.** No server setup.
 
-1. Open the [latest release](https://github.com/Pondsi/WArmy/releases) and download `WArmy-Setup-0.4.44.exe` (the current release; newer assets appear on the release page).
+1. Download `WArmy-Setup-0.4.45.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
 2. Run the installer, choose a folder, launch **WArmy / 无限牛马**.
-3. First run: choose a language, create an identity, save the 24-word mnemonic. Add a model provider and create your first workhorse.
+3. First run: choose a language, create your self-custodied identity, save the 24-word mnemonic, set a PIN; add a model provider and create your first workhorse.
 
-Your data lives in `WArmyData` inside the install folder and survives upgrades and uninstall. The installer is unsigned (Windows SmartScreen may warn); the release page lists SHA-256 for verification.
+Data lives in `WArmyData` inside the install folder and survives upgrades/uninstall. The installer is unsigned (SmartScreen may warn); the release page lists SHA-256 for verification.
 
-**Environment:** Windows 10 / 11 x64. A model endpoint (local server, OpenAI-compatible, or Anthropic). For local models, start your server and enter its base URL — the key field stays empty when the server does not need one. Web search, cloud models, and IM need network; everything else works offline.
+**Environment:** Windows 10/11 x64; a model endpoint (local server, OpenAI-compatible, or Anthropic). For local models enter the base URL; the key field stays empty when unneeded. Web search/cloud/IM need network; everything else works offline.
 
 **Languages / 语言 — 27 UI languages:** 简体中文 · 繁體中文 · English · 日本語 · 한국어 · Русский · Español · Français · Português · Esperanto · Deutsch · Italiano · Nederlands · Polski · Svenska · Čeština · Magyar · Dansk · Norsk bokmål · Türkçe · Українська · Bahasa Indonesia · Tiếng Việt · ไทย · हिन्दी · العربية · فارسی.
 
 ## Status and honesty
 
-Core workflows are verified with local model servers through consecutive offline gate rounds plus first-run, search, index, and lazy-loading checks. macOS, physical 4K, real IM accounts, and cloud providers are still being verified. Account-level multi-device record sync is the next milestone (optional project networking between reachable machines is available now). Most workspace files are plaintext while the app is unlocked; a cloud provider receives whatever you send it. Model output can be wrong — review artifacts before shipping.
-
-WArmy does not claim to be "unhackable" or to hold a security certification. The goal is narrower and testable: **local by default, explicit before dangerous, honest when a boundary is hit.**
+Core workflows are verified with local model servers through consecutive offline gate rounds plus first-run/search/index/lazy-load checks. macOS, physical 4K, real IM accounts and cloud providers are still being verified. Most workspace files are plaintext while unlocked; a cloud provider receives whatever you send it. Model output can be wrong — review artifacts before shipping. WArmy does not claim to be "unhackable"; the goal is narrower and testable: **local by default, explicit before dangerous, honest when a boundary is hit.**
 
 ## Acknowledgments
 
-WArmy stands on open-source work. The complete transitive dependency tree, with each package's license, is in `pnpm-lock.yaml` and the package manifests. Every item below links to its upstream project.
+WArmy stands on open-source work. The complete transitive dependency tree with licenses is in `pnpm-lock.yaml` and package manifests; every item links upstream.
 
 **Bundled runtime & UI**
 
-- **Electron** — MIT — <https://github.com/electron/electron> — the desktop shell. **Chromium** — BSD-3-Clause — <https://github.com/chromium/chromium> — the rendering engine. **Node.js** — MIT — <https://github.com/nodejs/node> — the runtime; a bundled `node.exe` runs the memory service in its own process.
-- **three.js** — MIT — <https://github.com/mrdoob/three.js> — 3D rendering for the mimic. **@pixiv/three-vrm** — MIT — <https://github.com/pixiv/three-vrm> — VRM avatar loading (license text bundled beside the vendor bundle).
-- **hash-wasm** — MIT — <https://github.com/Daninet/hash-wasm> — argon2id / hashing in pure WASM.
-- **DeepSeek Harness (dsh)** — MIT — <https://github.com/deepseek-ai/deepseek-harness> — WArmy bundles the dsh runtime for the optional dsh execution path and is compatible with its plugin system. Its plugin-first design shaped how we keep the host in control while agents stay extensible. Bundled dsh companions: **@nanmicoder/dsh-agent-teams** — <https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams>; **node-pty** — MIT — <https://github.com/microsoft/node-pty>; **koffi** — MIT — <https://github.com/Koromix/koffi>; **protobufjs** — BSD-3-Clause — <https://github.com/protobufjs/protobuf.js>; **@google/genai** — Apache-2.0 — <https://github.com/googleapis/js-genai>.
-- **Diwen** — see its own license — <https://github.com/Pondsi/dsh-diwen> — a separate open-source project: a structured, verifiable machine-layer representation for facts. WArmy integrates Diwen (Chinese portion available today); user-visible content always stays natural language. Also published on npm as `diwen`. Thank you to its author and contributors.
-- **SQLite** — Public Domain — <https://www.sqlite.org/> — the local database (FTS5). **better-sqlite3** — MIT — <https://github.com/WiseLibs/better-sqlite3>; **better-sqlite3-multiple-ciphers** — MIT — <https://github.com/m4heshd/better-sqlite3-multiple-ciphers>; **SQLCipher** — BSD-style — <https://github.com/sqlcipher/sqlcipher> — optional memory encryption; **bindings** — MIT — <https://github.com/TooTallNate/node-bindings> and **file-uri-to-path** — MIT — <https://github.com/TooTallNate/file-uri-to-path> — the native loading chain (subprocess only).
-- **DuckDB** — MIT — <https://github.com/duckdb/duckdb> with **@duckdb/node-api** — MIT — <https://github.com/duckdb/duckdb-node-neo> — optional local analytics (subprocess only).
-- **ONNX Runtime Web** — MIT — <https://github.com/microsoft/onnxruntime> — optional local embeddings via WASM SIMD/WebGPU.
-- **sherpa-onnx / sherpa-onnx-node** — Apache-2.0 — <https://github.com/k2-fsa/sherpa-onnx> — optional local speech (subprocess only).
+- **Electron** — MIT — <https://github.com/electron/electron>; **Chromium** — BSD-3-Clause — <https://github.com/chromium/chromium>; **Node.js** — MIT — <https://github.com/nodejs/node> (a bundled `node.exe` runs the memory service in its own process).
+- **three.js** — MIT — <https://github.com/mrdoob/three.js>; **@pixiv/three-vrm** — MIT — <https://github.com/pixiv/three-vrm> (license text bundled beside the vendor bundle).
+- **hash-wasm** — MIT — <https://github.com/Daninet/hash-wasm> — argon2id/hashing in pure WASM.
+- **DeepSeek Harness (dsh)** — MIT — <https://github.com/deepseek-ai/deepseek-harness> — bundled runtime + plugin compatibility. Companions: **@nanmicoder/dsh-agent-teams** — <https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams>; **node-pty** — MIT — <https://github.com/microsoft/node-pty>; **koffi** — MIT — <https://github.com/Koromix/koffi>; **protobufjs** — BSD-3-Clause — <https://github.com/protobufjs/protobuf.js>; **@google/genai** — Apache-2.0 — <https://github.com/googleapis/js-genai>.
+- **Diwen** — own license — <https://github.com/Pondsi/dsh-diwen> — separate open-source structured fact layer (also on npm as `diwen`).
+- **SQLite** — Public Domain — <https://www.sqlite.org/>; **better-sqlite3** — MIT — <https://github.com/WiseLibs/better-sqlite3>; **better-sqlite3-multiple-ciphers** — MIT — <https://github.com/m4heshd/better-sqlite3-multiple-ciphers>; **SQLCipher** — BSD-style — <https://github.com/sqlcipher/sqlcipher>; **bindings** — MIT — <https://github.com/TooTallNate/node-bindings>; **file-uri-to-path** — MIT — <https://github.com/TooTallNate/file-uri-to-path> (subprocess only).
+- **DuckDB** — MIT — <https://github.com/duckdb/duckdb> + **@duckdb/node-api** — MIT — <https://github.com/duckdb/duckdb-node-neo> (subprocess only).
+- **ONNX Runtime Web** — MIT — <https://github.com/microsoft/onnxruntime> — local embeddings via WASM SIMD/WebGPU.
+- **sherpa-onnx / sherpa-onnx-node** — Apache-2.0 — <https://github.com/k2-fsa/sherpa-onnx> (subprocess only).
 - **qrcode-generator** — MIT — © Kazuhiko Arase — <https://github.com/kazuhikoarase/qrcode-generator>; **jsQR** — Apache-2.0 — <https://github.com/cozmo/jsQR>.
 
 **Build & installer**
 
-- **TypeScript** — Apache-2.0 — <https://github.com/microsoft/TypeScript>; **pnpm** — MIT — <https://github.com/pnpm/pnpm>; **electron-builder** — MIT — <https://github.com/electron-userland/electron-builder>; **esbuild** — MIT — <https://github.com/evanw/esbuild>; **NSIS** — zlib/libpng-style — <https://nsis.sourceforge.io/> — the Windows installer engine.
+- **TypeScript** — Apache-2.0 — <https://github.com/microsoft/TypeScript>; **pnpm** — MIT — <https://github.com/pnpm/pnpm>; **electron-builder** — MIT — <https://github.com/electron-userland/electron-builder>; **esbuild** — MIT — <https://github.com/evanw/esbuild>; **NSIS** — zlib/libpng-style — <https://nsis.sourceforge.io/>.
 
-**On-demand subprocess tools** (not bundled; downloaded or installed only with your consent, hash-pinned)
+**On-demand subprocess tools** (downloaded/installed only with consent, hash-pinned)
 
-- **whisper.cpp** — MIT — <https://github.com/ggml-org/whisper.cpp> — optional local speech-to-text.
-- **TripoSR** — MIT — <https://github.com/VAST-AI-Research/TripoSR> — single-image → mesh for 3D mimic sculpting; runs on **PyTorch** — BSD-3-Clause — <https://github.com/pytorch/pytorch> under **Python** — PSF License — <https://www.python.org/>; model weights fetched from **Hugging Face** — <https://huggingface.co/> — per-model licenses apply.
-- **Docling** — MIT — <https://github.com/docling-project/docling> — layout-faithful document parsing.
-- **Tree-sitter / web-tree-sitter** — MIT — <https://github.com/tree-sitter/tree-sitter> — incremental AST parsing in a WASM subprocess.
+- **whisper.cpp** — MIT — <https://github.com/ggml-org/whisper.cpp>; **TripoSR** — MIT — <https://github.com/VAST-AI-Research/TripoSR> on **PyTorch** — BSD-3-Clause — <https://github.com/pytorch/pytorch> under **Python** — PSF — <https://www.python.org/>, weights from **Hugging Face** — <https://huggingface.co/>; **Docling** — MIT — <https://github.com/docling-project/docling>; **Tree-sitter / web-tree-sitter** — MIT — <https://github.com/tree-sitter/tree-sitter>.
 
-**Protocols & optional external services** (not bundled code; their own licenses and terms apply)
+**Protocols & optional external services** (own licenses/terms)
 
-- **Model Context Protocol** — <https://modelcontextprotocol.io/> — our bundled mcp-bridge plugin implements the MCP stdio JSON-RPC contract so external MCP servers become ordinary agent tools.
-- **Ollama** — MIT — <https://github.com/ollama/ollama>; **ComfyUI** — GPL-3.0 — <https://github.com/comfyanonymous/ComfyUI>; **LibreOffice** — MPL-2.0 — <https://www.libreoffice.org/>; **WPS / Office** — proprietary — <https://www.wps.com/> — optional model servers or creative/office tools.
-- Every other dependency retains its own copyright and license. If you redistribute WArmy, keep the upstream notices and license texts.
+- **Model Context Protocol** — <https://modelcontextprotocol.io/> (bundled mcp-bridge implements the stdio JSON-RPC contract); **Ollama** — MIT — <https://github.com/ollama/ollama>; **ComfyUI** — GPL-3.0 — <https://github.com/comfyanonymous/ComfyUI>; **LibreOffice** — MPL-2.0 — <https://www.libreoffice.org/>; **WPS / Office** — proprietary — <https://www.wps.com/>.
+- Every other dependency retains its own copyright/license; keep upstream notices when redistributing.
 
 **无限牛马** is the Chinese name. The pixel ox is the mascot. The work is the point.
 
 ## Documentation and license
 
 - [说明.md](./说明.md): full Chinese manual.
-- [LICENSE](./LICENSE): MIT with mandatory attribution to **Pondsi** and a link to the original repository <https://github.com/Pondsi/WArmy> — required for the original code, modified versions, and code snippets, for both personal use and distribution.
+- [LICENSE](./LICENSE): MIT with mandatory attribution to **Pondsi** and a link to <https://github.com/Pondsi/WArmy> — required for original code, modified versions and snippets, personal or distributed.
 - [SPONSORS.md](./SPONSORS.md): support the project.
 - [Issues](https://github.com/Pondsi/WArmy/issues): bug reports and feature requests.

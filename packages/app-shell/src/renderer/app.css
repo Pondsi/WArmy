@@ -495,17 +495,16 @@ body.liaoTianChuangKou .liaoTianBuJu {
   position: absolute; inset: -3px;
   border-radius: 9px;
   padding: 2.5px;
-  background: conic-gradient(from var(--yunXingJiao, 0deg),
-    transparent 0deg,
-    var(--yunXing-shen, #8a5a38) 40deg,
-    var(--accent, #A87654) 90deg,
-    var(--yunXing-liang, #f0c896) 140deg,
-    #ffffff 168deg,
-    #ffffff 176deg,
-    var(--yunXing-liang, #f0c896) 200deg,
-    var(--accent, #A87654) 260deg,
-    transparent 320deg,
-    transparent 360deg);
+  background: linear-gradient(45deg,
+    transparent 0%,
+    var(--yunXing-shen, #8a5a38) 22%,
+    var(--accent, #A87654) 40%,
+    var(--yunXing-liang, #f0c896) 50%,
+    #ffffff 55%,
+    var(--yunXing-liang, #f0c896) 60%,
+    var(--accent, #A87654) 78%,
+    transparent 100%);
+  background-size: 250% 250%;
   /* 只留环、挖掉中间：content-box 与 border-box 两层掩码相减 */
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
@@ -517,21 +516,21 @@ body.liaoTianChuangKou .liaoTianBuJu {
   pointer-events: none;
   z-index: 1;   /* 角标是 2/3，不能被环盖住 */
 }
-@keyframes yunXingHuanZhuan { to { --yunXingJiao: 360deg; } }
+@keyframes yunXingHuanZhuan { 0% { background-position: 0% 100%; } 100% { background-position: 100% 0%; } }
 /* B. 反向流光晕：宽而柔的 conic 光晕，blur 后反向匀速慢转，与锐环叠出流光深度 */
 .lieBiaoTiaoMu .avKuang.yunXingZhong::after {
   content: '';
   position: absolute; inset: -7px;
   border-radius: 13px;
-  background: conic-gradient(from calc(var(--yunXingJiao2, 0deg) * -1 + 180deg),
-    transparent 0deg,
-    var(--yunXing-liu-ruo, rgba(255,248,236,.14)) 50deg,
-    var(--yunXing-liu-qiang, rgba(255,248,236,.3)) 110deg,
-    var(--yunXing-liang, #f7dcae) 150deg,
-    var(--yunXing-liu-qiang, rgba(255,248,236,.3)) 190deg,
-    var(--yunXing-liu-ruo, rgba(255,248,236,.14)) 250deg,
-    transparent 310deg,
-    transparent 360deg);
+  background: linear-gradient(45deg,
+    transparent 0%,
+    var(--yunXing-liu-ruo, rgba(255,248,236,.14)) 25%,
+    var(--yunXing-liu-qiang, rgba(255,248,236,.3)) 45%,
+    var(--yunXing-liang, #f7dcae) 55%,
+    var(--yunXing-liu-qiang, rgba(255,248,236,.3)) 65%,
+    var(--yunXing-liu-ruo, rgba(255,248,236,.14)) 85%,
+    transparent 100%);
+  background-size: 250% 250%;
   filter: blur(4px);
   opacity: .85;
   animation: yunXingLiuDong 3.6s linear infinite;
@@ -539,7 +538,7 @@ body.liaoTianChuangKou .liaoTianBuJu {
   pointer-events: none;
   z-index: 0;
 }
-@keyframes yunXingLiuDong { to { --yunXingJiao2: 360deg; } }
+@keyframes yunXingLiuDong { 0% { background-position: 0% 100%; } 100% { background-position: 100% 0%; } }
 /* C. 呼吸扩散：光晕呼吸 + 向外扩散的涟漪，环与晕之外仍有活水般的余韵 */
 .lieBiaoTiaoMu .avKuang.yunXingZhong {
   animation: yunXingGuangYun 3.6s ease-in-out infinite;
@@ -1600,6 +1599,10 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 .duiHuaKuangBiaoTi { font-size: var(--fs-lg); font-weight: 600; margin-bottom: 8px; }
 .duiHuaKuangTi { font-size: var(--fs-base); line-height: 1.5; color: var(--ink); margin-bottom: 16px; white-space: pre-wrap; }
 .duiHuaKuangDongZuoJi { display: flex; justify-content: flex-end; gap: 8px; }
+/* R267 项1：牛马设置右上关闭按钮 */
+.niuMaSheZhiClose { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; z-index: 2; }
+.niuMaSheZhiClose:hover { background: var(--hover); color: var(--ink); }
+.niuMaSheZhiClose svg { width: 14px; height: 14px; }
 .duiHuaKuangDongZuoJi button { min-width: 72px; }
 /* ── 导出/导入数据范围：大类 + 默认折叠的子分类 ── */
 .daoChuShu { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
@@ -1925,12 +1928,12 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 #kongZhiTaiMianBan { margin-bottom: 0; }
 
 /* ── 右侧「模型管理」 ── */
-.mgrKa { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; overflow: hidden; max-width: 100%; box-sizing: border-box; }
+.mgrKa { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; overflow: visible; max-width: 100%; box-sizing: border-box; }
 .mgrKa[open] { background: var(--hover); }
 .mgrKa.zhiDuMianBan { opacity: 0.5; }
-.mgrTi { padding: 0 9px 9px; max-width: 100%; overflow: hidden; box-sizing: border-box; }
+.mgrTi { padding: 0 9px 9px; max-width: 100%; overflow: visible; box-sizing: border-box; }
 .mgrMoXingJi { display: flex; flex-wrap: wrap; gap: 4px; max-width: 100%; overflow: hidden; align-items: center; }
-.mgrChain { list-style: none; margin: 0; padding: 0; max-width: 100%; overflow: hidden; }
+.mgrChain { list-style: none; margin: 0; padding: 0; max-width: 100%; overflow: visible; }
 .mgrChain li {
   display: flex; align-items: center; gap: 6px; margin: 3px 0;
   font-size: var(--fs-sm); padding: 3px 6px; border-radius: 6px;
@@ -2088,6 +2091,16 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 .mgrChain li.dragging { opacity: 0.45; }
 .mgrChain li.dropTarget { box-shadow: inset 0 2px 0 var(--accent); }
 .mgrChain .mgrChainYuanShuju { font-size: 10px; color: var(--muted); white-space: nowrap; }
+/* R272 项3：调用链模型名稳定悬停气泡（纯 CSS，含能力标签），不依赖原生 title */
+.mgrChain li { position: relative; }
+.mgrChainMing { position: relative; }
+.mgrChainMing:hover::after {
+  content: attr(data-tip); position: absolute; left: 0; top: calc(100% + 4px); z-index: 60;
+  background: var(--card, #fff); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; font-size: 11px; line-height: 1.5;
+  white-space: normal; width: max-content; max-width: 260px; box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  pointer-events: none;
+}
 .mgrChain .mgrChainMing { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mgrTianJiaHang { display: flex; gap: 6px; margin-top: 6px; }
 .moXingXuanZeLieBiao {
@@ -2760,6 +2773,9 @@ body.liaoTianChuangKou #pageBuJu, body.liaoTianChuangKou #kongTai, body.liaoTian
   margin-left: 4px;
   font-weight: 700;
 }
+/* R272 项1：「正在被占用」是正常状态，用中性主题色高亮（不红/不!），红色仅留给重名/需重拉 */
+.moXingChip.zaiShiYong { border-color: var(--accent) !important; color: var(--accent) !important; background: transparent !important; }
+.moXingChip.zaiShiYong::after { content: '·'; margin-left: 4px; font-weight: 700; }
 
 /* 隐私政策：分节渲染 */
 .yinSiShiTu { max-height: 220px; overflow: auto; }
@@ -3596,6 +3612,13 @@ body.liaoTianChuangKou #appTi {
 .modelZiXiang { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .modelZiXiang:first-of-type { border-top: none; padding-top: 0; margin-top: 8px; }
 .modelZiXiang h4 { margin: 0 0 6px; font-size: var(--fs-base); font-weight: 600; }
+/* R269 项5：可折叠标题三角（同 details 联动效果） */
+.keZheDieBiaoTi { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+.keZheDieBiaoTi::before { content: '▸'; color: var(--muted); transition: transform .15s ease; }
+.keZheDieBiaoTi[data-open="1"]::before { transform: rotate(90deg); }
+.keZheDieBiaoTi:hover { color: var(--accent); }
+/* R272 项11：全部可用上方不要横线/空行 */
+#iKeYongMoXingKa { border-top: none; margin-top: 0; padding-top: 0; }
 /* 可用模型双列：可左右上下拉伸；中间分隔条拖动改两列宽度（flex，稳） */
 .modelLiangLie {
   display: flex;
@@ -3665,7 +3688,11 @@ html { font-weight: var(--fw-ui, 400); }
 .siKaoIco .dkGlow { stroke: var(--accent); filter: drop-shadow(0 0 2.5px var(--accent)); }
 .siKaoIco .dkClipRect { height: var(--siKaoGlow, 0%); }
 .siKaoZiRan .siKaoIco .dkGlow { display: none; }
-.siKaoZiRan .siKaoIco .dkMid { opacity: 1; stroke: var(--accent); filter: drop-shadow(0 0 2.5px var(--accent)); }
+/* R265 项9：自然档＝把原有横折线变主题色发光（不是加竖线） */
+.siKaoZiRan .siKaoIco .dkMid { display: none; }
+.siKaoZiRan .siKaoIco .dkZhe { stroke: var(--accent); filter: drop-shadow(0 0 2.5px var(--accent)); }
+/* R267 项2：慎思＝明辨范围但中间横线不主题色 */
+.siKaoZheBuGlow .siKaoIco .dkGlow .dkZhe { display: none; }
 
 /* 聊天气泡里的 Markdown 排版（模型回复基本都是 Markdown） */
 .bubble.md .mdP { margin: 0 0 6px; }
@@ -4907,7 +4934,7 @@ html { font-weight: var(--fw-ui, 400); }
 .banMaTouJing { position: static; flex: 0 0 18px; margin: 4px 6px 0 0; }
 .xiaoXiEvolveIcoZuo { display: inline-flex; align-items: center; color: var(--accent, #a87654); margin: 5px 4px 0 0; flex: 0 0 auto; }
 .xiaoXiZuoLan { position: relative; width: 32px; flex: 0 0 32px; }
-.zuoXiaRow { position: absolute; top: calc(100% + 1px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; height: 16px; pointer-events: none; }
+.zuoXiaRow { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; height: 16px; pointer-events: none; }
 .zuoXiaRow .banMaTou { position: static; width: 16px; height: 16px; }
 .zuoXiaRow .xiaoXiEvolveIco { margin-left: 0; pointer-events: auto; }
 .zuoXiaRow .xiaoXiEvolveIco svg { width: 14px; height: 14px; }
