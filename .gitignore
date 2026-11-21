@@ -56,6 +56,8 @@ secure/keys.enc.json
 # 第 37 轮：一次性验收输出 / 本机状态 / 轮次专用小脚本，不入库
 acceptance-*.json
 .memory-stress-state/
+.memory-stress-10x/
+.memory-stress-10x-pilot/
 r3*-firstrun.mjs
 r3*-restart.mjs
 wipe-and-first-run.mjs

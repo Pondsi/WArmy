@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Tizenhárom Piros sapkás 11. sz.",
   "pool.nm.24": "Tizenhárom Piros sapkás 12. sz.",
   "pool.nm.25": "Tizenhárom Piros sapkás 13. sz.",
-  "evolve.stoppedEmpty": "(Leállítva: ez a kör még nem hozott létre válaszüzenetet.)"
+  "evolve.stoppedEmpty": "(Leállítva: ez a kör még nem hozott létre válaszüzenetet.)",
+  "device.mic": "Mikrofon",
+  "device.camera": "Kamera",
+  "device.speaker": "Hangszóró",
+  "device.ownerMimic": "az asztali társ",
+  "device.ownerSession": "a munkamenet",
+  "device.waiting": "{device} használatban: {owner}; várakozás a visszaadásig…",
+  "device.yielded": "{device} átengedve: {owner} (aktív ablak elsőbbsége)",
+  "instances.createAction": "Létrehozás",
+  "instances.createHint": "Enter létrehozza; × (jobb felső) megszakítja.",
+  "eta.clampApproval": "ETA-ablak bővítési kérelem",
+  "eta.clampApprovalHint": "A modell az once-szorító bővítését kéri (kemény korlátokon túl). Adja meg a jóváhagyott intervallumot (perc; üres = változatlan):"
 }

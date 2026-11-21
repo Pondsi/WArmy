@@ -20,6 +20,11 @@ contextBridge.exposeInMainWorld('warmyMimic', {
   /** R218：语音互动 —— 录音分片上交 / 查询当前模式 / 播放合成语音 */
   yuYinFenPian: (p) => ipcRenderer.invoke('warmy:mimicYuYinFenPian', p),
   yuYinMoShiQu: () => ipcRenderer.invoke('warmy:mimicYuYinMoShi'),
+  /** R275 设备仲裁：拟态申请/释放设备；被会话抢走收 revoke，归还收 grant(resume) */
+  sheBeiShenQing: (p) => ipcRenderer.invoke('warmy:sheBeiShenQing', p),
+  sheBeiShiFang: (p) => ipcRenderer.invoke('warmy:sheBeiShiFang', p),
+  sheBeiZhuangTai: (p) => ipcRenderer.invoke('warmy:sheBeiZhuangTai', p),
+  onSheBeiShiJian: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:sheBeiShiJian', h); return () => ipcRenderer.removeListener('warmy:sheBeiShiJian', h); },
   onPlay: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicPlay', h); return () => ipcRenderer.removeListener('warmy:mimicPlay', h); },
   onKaPian: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:mimicKaPian', h); return () => ipcRenderer.removeListener('warmy:mimicKaPian', h); },
   zhuoMianTuBiao: () => ipcRenderer.invoke('warmy:zhuoMianTuBiao'),

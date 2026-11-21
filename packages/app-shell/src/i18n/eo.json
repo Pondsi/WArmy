@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Dek tri Ruĝaj ĉapoj n-ro 11",
   "pool.nm.24": "Dek tri Ruĝaj ĉapoj n-ro 12",
   "pool.nm.25": "Dek tri Ruĝaj ĉapoj n-ro 13",
-  "evolve.stoppedEmpty": "(Haltigita: ĉi tiu rondo ankoraŭ ne produktis respondtekston.)"
+  "evolve.stoppedEmpty": "(Haltigita: ĉi tiu rondo ankoraŭ ne produktis respondtekston.)",
+  "device.mic": "Mikrofono",
+  "device.camera": "Fotilo",
+  "device.speaker": "Laŭtparolilo",
+  "device.ownerMimic": "la labortabla kunulo",
+  "device.ownerSession": "la seanco",
+  "device.waiting": "{device} estas uzata de {owner}; atendante redonon…",
+  "device.yielded": "{device} cedita al {owner} (aktiva fenestro unue)",
+  "instances.createAction": "Krei",
+  "instances.createHint": "Enter por krei; × (supre dekstre) por nuligi.",
+  "eta.clampApproval": "Peto pri plivastigo de ETA-fenestro",
+  "eta.clampApprovalHint": "La modelo petas plivastigi la once-krampo (ekster malmolaj limoj). Enigu la aprobitan intervalon (min; malplena = senŝanĝa):"
 }

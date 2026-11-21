@@ -4054,5 +4054,16 @@
   "pool.nm.23": "สิบสามหมวกแดง หมายเลข 11",
   "pool.nm.24": "สิบสามหมวกแดง หมายเลข 12",
   "pool.nm.25": "สิบสามหมวกแดง หมายเลข 13",
-  "evolve.stoppedEmpty": "(หยุดแล้ว: รอบนี้ยังไม่ได้สร้างข้อความตอบกลับ)"
+  "evolve.stoppedEmpty": "(หยุดแล้ว: รอบนี้ยังไม่ได้สร้างข้อความตอบกลับ)",
+  "device.mic": "ไมโครโฟน",
+  "device.camera": "กล้อง",
+  "device.speaker": "ลำโพง",
+  "device.ownerMimic": "เพื่อนคู่หูเดสก์ท็อป",
+  "device.ownerSession": "เซสชัน",
+  "device.waiting": "{device} ถูกใช้งานโดย {owner} รอจนกว่าจะคืน…",
+  "device.yielded": "{device} ยกให้ {owner} (หน้าต่างที่ใช้งานอยู่มีสิทธิ์ก่อน)",
+  "instances.createAction": "สร้าง",
+  "instances.createHint": "Enter เพื่อสร้าง; × (ขวาบน) เพื่อยกเลิก",
+  "eta.clampApproval": "คำขอขยายหน้าต่าง ETA",
+  "eta.clampApprovalHint": "โมเดลขอขยายแคลมป์ once (เกินขอบเขตแข็ง) ใส่ช่วงที่อนุมัติ (นาที; เว้นว่าง = ไม่เปลี่ยน):"
 }

@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Treze Chapeuzinhos vermelhos n.º 11",
   "pool.nm.24": "Treze Chapeuzinhos vermelhos n.º 12",
   "pool.nm.25": "Treze Chapeuzinhos vermelhos n.º 13",
-  "evolve.stoppedEmpty": "(Parado: esta rodada ainda não produziu texto de resposta.)"
+  "evolve.stoppedEmpty": "(Parado: esta rodada ainda não produziu texto de resposta.)",
+  "device.mic": "Microfone",
+  "device.camera": "Câmera",
+  "device.speaker": "Alto-falante",
+  "device.ownerMimic": "o companheiro de desktop",
+  "device.ownerSession": "a sessão",
+  "device.waiting": "{device} está em uso por {owner}; na fila até devolução…",
+  "device.yielded": "{device} cedido a {owner} (janela ativa prioritária)",
+  "instances.createAction": "Criar",
+  "instances.createHint": "Enter para criar; × (canto sup. direito) para cancelar.",
+  "eta.clampApproval": "Pedido de expansão de janela ETA",
+  "eta.clampApprovalHint": "O modelo pede ampliar o clamp once (fora dos limites rígidos). Insira o intervalo aprovado (min; vazio = inalterado):"
 }

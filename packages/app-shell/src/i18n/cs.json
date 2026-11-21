@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Třináct Červených karkulek č. 11",
   "pool.nm.24": "Třináct Červených karkulek č. 12",
   "pool.nm.25": "Třináct Červených karkulek č. 13",
-  "evolve.stoppedEmpty": "(Zastaveno: toto kolo ještě nevytvořilo text odpovědi.)"
+  "evolve.stoppedEmpty": "(Zastaveno: toto kolo ještě nevytvořilo text odpovědi.)",
+  "device.mic": "Mikrofon",
+  "device.camera": "Kamera",
+  "device.speaker": "Reproduktor",
+  "device.ownerMimic": "společník plochy",
+  "device.ownerSession": "relace",
+  "device.waiting": "{device} používá {owner}; ve frontě do vrácení…",
+  "device.yielded": "{device} přenechán: {owner} (aktivní okno má přednost)",
+  "instances.createAction": "Vytvořit",
+  "instances.createHint": "Enter vytvoří; × (vpravo nahoře) zruší.",
+  "eta.clampApproval": "Žádost o rozšíření okna ETA",
+  "eta.clampApprovalHint": "Model žádá o rozšíření once-svorky (mimo tvrdé meze). Zadejte schválený interval (min; prázdné = beze změny):"
 }

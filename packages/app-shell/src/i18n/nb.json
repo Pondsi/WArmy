@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Tretten Rødhetter nr. 11",
   "pool.nm.24": "Tretten Rødhetter nr. 12",
   "pool.nm.25": "Tretten Rødhetter nr. 13",
-  "evolve.stoppedEmpty": "(Stoppet: denne runden har ennå ikke produsert svartekst.)"
+  "evolve.stoppedEmpty": "(Stoppet: denne runden har ennå ikke produsert svartekst.)",
+  "device.mic": "Mikrofon",
+  "device.camera": "Kamera",
+  "device.speaker": "Høyttaler",
+  "device.ownerMimic": "skrivebordsfølgesvenden",
+  "device.ownerSession": "økten",
+  "device.waiting": "{device} brukes av {owner}; i kø til retur…",
+  "device.yielded": "{device} overlatt til {owner} (aktivt vindue først)",
+  "instances.createAction": "Opprett",
+  "instances.createHint": "Enter oppretter; × (øverst til høyre) avbryter.",
+  "eta.clampApproval": "ETA-vindu utvidelsesforespørsel",
+  "eta.clampApprovalHint": "Modellen ber om å utvide once-klemmen (utenfor harde grenser). Skriv inn godkjent intervall (min; tom = uendret):"
 }

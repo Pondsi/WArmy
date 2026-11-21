@@ -4054,5 +4054,16 @@
   "pool.nm.23": "On Üç Kırmızı Başlık No. 11",
   "pool.nm.24": "On Üç Kırmızı Başlık No. 12",
   "pool.nm.25": "On Üç Kırmızı Başlık No. 13",
-  "evolve.stoppedEmpty": "(Durduruldu: bu tur henüz yanıt metni üretmedi.)"
+  "evolve.stoppedEmpty": "(Durduruldu: bu tur henüz yanıt metni üretmedi.)",
+  "device.mic": "Mikrofon",
+  "device.camera": "Kamera",
+  "device.speaker": "Hoparlör",
+  "device.ownerMimic": "masaüstü yoldaşı",
+  "device.ownerSession": "oturum",
+  "device.waiting": "{device}, {owner} tarafından kullanılıyor; iade edilene kadar sırada…",
+  "device.yielded": "{device}, {owner} öğesine bırakıldı (etkin pencere öncelikli)",
+  "instances.createAction": "Oluştur",
+  "instances.createHint": "Enter oluşturur; × (sağ üst) iptal eder.",
+  "eta.clampApproval": "ETA pencere genişletme isteği",
+  "eta.clampApprovalHint": "Model once kelepçesinin genişletilmesini istiyor (sert sınırlar dışı). Onaylanan aralığı girin (dk; boş = değişmez):"
 }

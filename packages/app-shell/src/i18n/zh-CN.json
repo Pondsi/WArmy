@@ -4054,5 +4054,16 @@
   "pool.nm.23": "十三赤帽之十一",
   "pool.nm.24": "十三赤帽之十二",
   "pool.nm.25": "十三赤帽之十三",
-  "evolve.stoppedEmpty": "（已停止：这一轮还没有产生正文。）"
+  "evolve.stoppedEmpty": "（已停止：这一轮还没有产生正文。）",
+  "device.mic": "麦克风",
+  "device.camera": "摄像头",
+  "device.speaker": "扬声器",
+  "device.ownerMimic": "拟态",
+  "device.ownerSession": "会话",
+  "device.waiting": "{device}正被{owner}使用，排队等待归还…",
+  "device.yielded": "{device}已让给{owner}（激活窗口优先）",
+  "instances.createAction": "创建",
+  "instances.createHint": "按回车创建；点右上 × 取消。",
+  "eta.clampApproval": "ETA 放行窗口扩展申请",
+  "eta.clampApprovalHint": "模型申请扩大 once 放行夹区间（超硬区间）。填写批准的区间（分钟，留空＝不变）："
 }

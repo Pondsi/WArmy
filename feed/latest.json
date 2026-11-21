@@ -1,13 +1,13 @@
 {
-  "version": "0.4.45",
-  "notes": "WArmy 0.4.44 — release round.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.45/WArmy-Setup-0.4.45.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.45/WArmy-Setup-0.4.45.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.45/WArmy-Setup-0.4.45.exe.warmyblocks",
-  "sha256": "a01008cca34c2ad4e15cb91b0490dbd1367ad0427e442b62346206a2a9998b9d",
-  "size": 323898151,
+  "version": "0.4.46",
+  "notes": "WArmy 0.4.46 — R278/R279: call-chain autosave + hot-swap hard-abort, once-window self-optimizing clamp with split judgement and merged approval system-message, evolution effect fix + reversed flow, evolve-branch files into workspace/artifact cards with rollback, identity injection fallback, nm browser-mode repairs (bookmark hover/create, startup-page save broadcast, website credentials + Chrome/Edge/Firefox CSV import, native download panel without sync save-dialog freeze, draggable splitters, themed popup options), read-aloud effect ownership + breathing glow + running-state marks, 10-session memory stress harness.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.46/WArmy-Setup-0.4.46.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.46/WArmy-Setup-0.4.46.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.46/WArmy-Setup-0.4.46.exe.warmyblocks",
+  "sha256": "e75b68a96d83d92136df0b31cf2ad66f5d668c9a1768eb33122fbc0ed1e2f122",
+  "size": 323919296,
   "mandatory": false,
-  "publishedAt": "2026-11-20T20:20:59.710Z",
+  "publishedAt": "2026-11-21T14:34:23.400Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.45"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.46"
 }

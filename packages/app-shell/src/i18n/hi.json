@@ -4054,5 +4054,16 @@
   "pool.nm.23": "तेरह लाल टोपी क्रमांक 11",
   "pool.nm.24": "तेरह लाल टोपी क्रमांक 12",
   "pool.nm.25": "तेरह लाल टोपी क्रमांक 13",
-  "evolve.stoppedEmpty": "(रोका गया: इस दौर में अभी तक उत्तर पाठ नहीं बना है।)"
+  "evolve.stoppedEmpty": "(रोका गया: इस दौर में अभी तक उत्तर पाठ नहीं बना है।)",
+  "device.mic": "माइक्रोफ़ोन",
+  "device.camera": "कैमरा",
+  "device.speaker": "स्पीकर",
+  "device.ownerMimic": "डेस्कटॉप साथी",
+  "device.ownerSession": "सत्र",
+  "device.waiting": "{device} का उपयोग {owner} कर रहा है; लौटाने तक प्रतीक्षा…",
+  "device.yielded": "{device} {owner} को दिया गया (सक्रिय विंडो प्राथमिक)",
+  "instances.createAction": "बनाएँ",
+  "instances.createHint": "Enter से बनाएँ; × (ऊपर दाएँ) से रद्द करें।",
+  "eta.clampApproval": "ETA विंडो विस्तार अनुरोध",
+  "eta.clampApprovalHint": "मॉडल once क्लैंप बढ़ाने का अनुरोध करता है (कठोर सीमा से बाहर)। स्वीकृत अंतराल दर्ज करें (मिनट; खाली = अपरिवर्तित):"
 }

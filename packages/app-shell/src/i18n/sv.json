@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Tretton Rödhättor nr 11",
   "pool.nm.24": "Tretton Rödhättor nr 12",
   "pool.nm.25": "Tretton Rödhättor nr 13",
-  "evolve.stoppedEmpty": "(Stoppad: denna omgång har ännu inte producerat någon svarstext.)"
+  "evolve.stoppedEmpty": "(Stoppad: denna omgång har ännu inte producerat någon svarstext.)",
+  "device.mic": "Mikrofon",
+  "device.camera": "Kamera",
+  "device.speaker": "Högtalare",
+  "device.ownerMimic": "skrivbordskompanjonen",
+  "device.ownerSession": "sessionen",
+  "device.waiting": "{device} används av {owner}; köar tills den lämnas tillbaka…",
+  "device.yielded": "{device} avstådd till {owner} (aktivt fönster först)",
+  "instances.createAction": "Skapa",
+  "instances.createHint": "Enter skapar; × (övre höger) avbryter.",
+  "eta.clampApproval": "ETA-fönster utökningsbegäran",
+  "eta.clampApprovalHint": "Modellen begär att bredda once-klämman (utanför hårda gränser). Ange godkänt intervall (min; tomt = oförändrat):"
 }

@@ -253,7 +253,7 @@ import {
   nmShiTuLieBiao, nmShiTuQiYong, nmShiTuQuanBuGuanBi, nmSheZhiZhuChuangKuang,
   nmJieRuZhuChuang, nmZhuChuangXiFu, nmShiTuQuZiJie, nmSheZhiMianBanKuan, nmSheZhiXuNiWenJian,
   nmZhuZuiDaHuaKai, nmZhuZuiDaHuaGuan, nmZhuZuiDaHuaZhuangTai, nmZhuZuiDaXiFuCe,
-  nmWangYeKai, nmWangYeKuang, nmWangYeSuoFang, nmMoTaiKai, nmMoTaiGuan, nmChuangKouCha, nmTanChuangKai, nmTanChuangGuan, nmWangYeGuan, nmWangYeDaoHang, nmWangYeXinKai, nmWangYeYuan, nmWangYeChaZhao, nmWangYeDaYin,
+  nmWangYeKai, nmWangYeKuang, nmWangYeSuoFang, nmMoTaiKai, nmMoTaiGuan, nmChuangKouCha, nmTanChuangKai, nmTanChuangGuan, nmXiaZaiChuangKai, nmXiaZaiChuangGuan, nmShiFuZhuChuang, sheNmZhangHaoHuiDiao, nmWangYeGuan, nmWangYeDaoHang, nmWangYeXinKai, nmWangYeYuan, nmWangYeChaZhao, nmWangYeDaYin,
   nmWangYeGuanTing, nmWangYeDaYinXuanZhong, nmWangYeJieTu, nmWangYeXuanZhongGaoLiang, nmWangYeXuanZeQu, nmWangYeCaiDanList,
   nmWangYeYinSiShe, nmWangYeShuJuGaiLan, nmWangYeShuJuQing,
   nmXiaZaiLieBiao, nmXiaZaiQingKong, nmXiaZaiDaKai, nmXiaZaiXianShi, nmSheZhiXiaZaiShenJi, nmSheZhiXiaZaiLuJing,
@@ -981,6 +981,15 @@ let dataVault: DataVault | null = null;
 /** 第 114 轮：运行期静态加密的数据密钥（hex），登录后才有；记忆子进程也要用同一把。 */
 let dataEncKeyHex: string | null = null;
 try { encFs.setWriteGuard(() => !!dataVault?.hasVault() && !dataEncKeyHex); } catch { /* noop */ }
+/* R274 真事故修复：上面的守卫依赖懒加载的 dataVault 对象——启动早期它还是 null，
+ * 渲染层初始保存（providers 种子/instances 全量）会趁sealed态明文盖掉用户加密设置（每次重启复发）。
+ * 改按磁盘 vault 文件存在性判：有 vault 且未解锁 ⇒ 一律拒写加密区，渲染层 catch 静默跳过。 */
+try {
+  encFs.setWriteGuard(() => {
+    if (dataEncKeyHex) return false;
+    try { return fs.existsSync(path.join(app.getPath('userData'), 'auth', 'vault.json')); } catch { return !!dataVault?.hasVault(); }
+  });
+} catch { /* noop */ }
 /** 第 104 轮：登录成功 → 解包 → 重启后，一次性会话令牌解出的主密钥；只活到 AuthService 恢复会话。 */
 let bootVaultMasterKey: Buffer | null = null;
 function keyEnvelopePath(): string { return path.join(app.getPath('userData'), 'auth', 'key-envelope.json'); }
@@ -1353,7 +1362,25 @@ function memSeqOf(res: unknown): number | undefined {
 
 /** 会话日志 → 模型消息数组（chatHistories 只是它的派生镜像，见下） */
 function quHuiHuaXiaoXiJi(key: string): LiaoTianXiaoXi[] {
-  return (chatLogs.get(key) || []).map((e) => ({ role: e.role, content: e.content }));
+  const out: LiaoTianXiaoXi[] = [];
+  for (const e of (chatLogs.get(key) || [])) {
+    /* R274 项3：进化并排块展开为胜出支线的完整对话（用户续发＋各条最终/中间回复），
+     * 与合并时写入的 hidden 镜像同形 ⇒ 重启后上下文与进程内一致，支线内的续发轮不丢。 */
+    const pair = (e as { evolvePair?: { winner?: string; arms?: Record<string, { history?: Array<{ role?: string; kind?: string; content?: string; live?: boolean }> }> } }).evolvePair;
+    if (pair && pair.arms) {
+      const wh = ((pair.arms[String(pair.winner || 'A')] || {}).history) || [];
+      const finals = wh.filter((h) => String(h.kind || '') === 'final');
+      const zuiHouFinal = finals[finals.length - 1];
+      for (const h of wh) {
+        if (h.live) continue;
+        const kd = String(h.kind || '');
+        if (h.role === 'user') out.push({ role: 'user', content: String(h.content || '') });
+        else if ((kd === 'final' && h !== zuiHouFinal) || kd === 'zhongjian') out.push({ role: 'assistant', content: String(h.content || '') });
+      }
+    }
+    out.push({ role: e.role, content: e.content });
+  }
+  return out;
 }
 
 /**
@@ -1557,7 +1584,7 @@ function qingChongXieJiLu(sid?: string): void {
  * 有上限（每会话 400 条消息 / 200 条操作、最多 40 个会话），超了丢最旧 —— 这是缓存不是档案，
  * 正文永远以 JSONL 为准，所以这份文件删了也只是丢掉重启前的思考/台账显示，不会丢对话。
  */
-type ChatMetaXiaoXi = { ts: number; role: string; reasoning?: string; reasoningDuan?: Array<{ ts: number; text: string; moXing?: string }>; zhongJian?: Array<{ ts: number; text: string; moXing?: string }>; moXing?: string; moXingJiangJi?: string; promptTokens?: number; completionTokens?: number; turnCount?: number; artifacts?: unknown[]; zhengWen?: number; stopped?: boolean };
+type ChatMetaXiaoXi = { ts: number; role: string; reasoning?: string; reasoningDuan?: Array<{ ts: number; text: string; moXing?: string }>; zhongJian?: Array<{ ts: number; text: string; moXing?: string }>; moXing?: string; moXingJiangJi?: string; promptTokens?: number; completionTokens?: number; turnCount?: number; artifacts?: unknown[]; zhengWen?: number; stopped?: boolean; evolvePair?: { expId?: string; winner?: string; mode?: string; arms?: Record<string, { history?: unknown[] }> } };
 type ChatMetaXingDong = { hao: string; tool: string; detail?: string; phase: string; ok?: boolean; ms?: number; chars?: number; ts: number; stopped?: boolean; reason?: string };
 
 /**
@@ -1656,6 +1683,8 @@ function jiLuMeta(sid: string, e: LogEntry | undefined | null): void {
     completionTokens: Number((e as { completionTokens?: number }).completionTokens || 0),
     turnCount: Number((e as { turnCount?: number }).turnCount || 0),
     artifacts: Array.isArray((e as { artifacts?: unknown[] }).artifacts) ? (e as { artifacts?: unknown[] }).artifacts : [],
+    /* R274：进化并排块 payload 走旁路台账持久化（JSONL 只存正文），重启后合回 ⇒ 双栏与续发上下文不丢 */
+    evolvePair: (e as { evolvePair?: ChatMetaXiaoXi['evolvePair'] }).evolvePair || undefined,
     zhengWen: String(e.content || '').length,
     ...(e.stopped === true ? { stopped: true } : {}),
   };
@@ -1734,6 +1763,8 @@ function yingYongMeta(sid: string): number {
   const xiaYin: Record<string, number> = {};
   /** 旁路里有中间回复的会话才需要补它（没有的会话行为与以前逐字相同） */
   const metaYouZJ = h.msgs.some((x) => Array.isArray(x.zhongJian) && x.zhongJian.length > 0);
+  /* R274：旁路里有进化并排块才需要补它 */
+  const metaYouPair = h.msgs.some((x) => !!x.evolvePair);
   for (const m of zhi) {
     /**
      * 「已经合过了就跳过」以前只看 `reasoning || moXing || 词元` —— **任一个有就整条跳过**。
@@ -1746,6 +1777,10 @@ function yingYongMeta(sid: string): number {
     const queDuan = !(Array.isArray(anyM.reasoningDuan) && (anyM.reasoningDuan as unknown[]).length);
     const queSiKao = !String(anyM.reasoning || '');
     const queZJ = metaYouZJ && String(m.role || '') === 'assistant' && !(Array.isArray(anyM.zhongJian) && (anyM.zhongJian as unknown[]).length);
+    const quePair = metaYouPair && String(m.role || '') === 'assistant' && !anyM.evolvePair
+      /* R274 回归真 bug：evolvePair 只许合回“同时间戳±4s”的那条并排块本人；
+       * 按“同角色就近”会把后续普通回复误挂成并排块（界面把正常回复画成双栏）。 */
+      && h.msgs.some((x) => x.evolvePair && Math.abs(Number(x.ts || 0) - mTs) <= 4000);
     /**
      * 停止标记也必须从旁路补回：JSONL 只存正文，重启后没有它，停止气泡会被当成正常回复。
      * ⚠️ 只认**时间相邻**（±5 秒）的那条停止记录，不能“会话里只要有一条停止，就把所有回复都标停止”。
@@ -1754,7 +1789,7 @@ function yingYongMeta(sid: string): number {
     const queTing = String(m.role || '') === 'assistant' && anyM.stopped !== true
       && (h.msgs.some((x) => x.stopped === true && Math.abs(Number(x.ts || 0) - mTs) <= 5000)
         || shiTingZhiZhanWei(m.content));
-    if (!queMoXing && !queCi && !queDuan && !queSiKao && !queZJ && !queTing) continue;
+    if (!queMoXing && !queCi && !queDuan && !queSiKao && !queZJ && !queTing && !quePair) continue;
     const jse = String(m.role || '');
     const duiLie = (chuan[jse] || []).slice();
     const idx = xiaYin[jse] ?? 0;
@@ -1768,6 +1803,7 @@ function yingYongMeta(sid: string): number {
       || (queMoXing ? !!String(x.moXing || '') : false)
       || (queDuan ? (Array.isArray(x.reasoningDuan) && x.reasoningDuan.length > 0) : false)
       || (queZJ ? (Array.isArray(x.zhongJian) && x.zhongJian.length > 0) : false)
+      || (quePair ? !!x.evolvePair : false)
       || (queTing ? (x.stopped === true && Math.abs(Number(x.ts || 0) - mTs) <= 5000) : false);
     const cha = (x: ChatMetaXiaoXi) => Math.abs(Number(x.ts || 0) - mTs);
     const youBenLing = duiLie.filter((x) => xinYao(x)).sort((a, b) => cha(a) - cha(b));
@@ -1786,6 +1822,7 @@ function yingYongMeta(sid: string): number {
     if (queSiKao && zhao.reasoning) anyM.reasoning = zhao.reasoning;
     if (queDuan && Array.isArray(zhao.reasoningDuan) && zhao.reasoningDuan.length) anyM.reasoningDuan = zhao.reasoningDuan;
     if (queZJ && Array.isArray(zhao.zhongJian) && zhao.zhongJian.length) anyM.zhongJian = zhao.zhongJian;
+    if (quePair && zhao.evolvePair && Math.abs(Number(zhao.ts || 0) - mTs) <= 4000) anyM.evolvePair = zhao.evolvePair;
     if (queMoXing) anyM.moXing = zhao.moXing || '';
     if (!anyM.moXingJiangJi) anyM.moXingJiangJi = zhao.moXingJiangJi || null;
     if (queCi) {
@@ -2464,6 +2501,13 @@ function sessionMingOf(sessionId: string): string {
   try {
     const g = groupStore?.getGroup?.(sessionId) as { ming?: string; name?: string } | undefined;
     if (g) return String(g.ming || g.name || sessionId);
+  } catch { /* noop */ }
+  /* R278 项6：单牛马会话无群记录，回退实例名（否则进化支线身份句被跳过→牛马不知自己名字） */
+  try {
+    const s = settingsStore?.load() as { instances?: Array<{ id?: string; ming?: string; name?: string }> } | undefined;
+    const inst = (s?.instances || []).find((x) => String(x?.id || '') === String(sessionId || ''));
+    const m = String(inst?.ming || inst?.name || '').trim();
+    if (m && m !== sessionId) return m;
   } catch { /* noop */ }
   return String(sessionId || 'agent');
 }
@@ -3198,9 +3242,19 @@ async function qingQiuKaPian(
 
 /** 当前用户的名字（我的页 profile.json 里那个） */
 function dangQianYongHuMing(): string {
+  const heFa = (v: unknown): string => {
+    const s = String(v || '').trim();
+    return s && s !== 'user' && s !== 'nav.touXiang' ? s : '';
+  };
   try {
     const p = accountStore?.loadProfile() as { username?: string } | undefined;
-    return String(p?.username || '').trim();
+    const u = heFa(p?.username);
+    if (u) return u;
+  } catch { /* noop */ }
+  /* R278 项6：profile 称呼为占位/空时回退设置里的称呼（语言迁移写过 settings.username） */
+  try {
+    const s = settingsStore?.load() as { username?: string } | undefined;
+    return heFa(s?.username);
   } catch { return ''; }
 }
 
@@ -11808,6 +11862,14 @@ const IPC_LOGIN_REQUIRED = new Set([
   'warmy:dingShiDaoChuSet', 'warmy:dingShiDaoChuRunNow',
   'warmy:authViewMnemonic', 'warmy:authChangePin',
 ]);
+/** R278 项8：nm 辅助窗（模态/收藏夹弹窗/下载弹窗，data: URL）允许调用的受限通道 */
+const NM_FU_ZHU_IPC = new Set([
+  'warmy:nmWangYePeiZhiShe', 'warmy:nmWangYePeiZhiDu',
+  'warmy:nmShouCangTianJia', 'warmy:nmShouCangDaKai', 'warmy:nmShouCangXinJian',
+  'warmy:nmWangYeShuJuGaiLan', 'warmy:nmWangYeShuJuQing',
+  'warmy:nmWangYeZhangHaoLieBiao', 'warmy:nmWangYeZhangHaoBaoCun', 'warmy:nmWangYeZhangHaoDaoRu',
+  'warmy:nmXiaZaiLieBiao', 'warmy:nmXiaZaiQingKong', 'warmy:nmXiaZaiDaKai', 'warmy:nmXiaZaiXianShi',
+]);
 function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeEvent, ...args: any[]) => any, extraRenderers: string[] = []): void {
   IPC_CHANNELS.add(channel);
   /**
@@ -11826,6 +11888,9 @@ function chuliIpc(channel: string, fn: (event: import('electron').IpcMainInvokeE
       if (frame !== wc.mainFrame) return false;
       const u = String(frame.url || '');
       if (!u) return false;
+      /* R278 项8：nm 模态/弹出辅助窗是 data: URL——旧白名单只认 file: 页面，
+       * 辅助窗里所有 IPC 被拒⇒保存/新建按钮“点了没反应”。这里仅放行受限通道且必须是本进程登记的辅助窗。 */
+      if (u.startsWith('data:')) return NM_FU_ZHU_IPC.has(channel) && nmShiFuZhuChuang(wc);
       if (u.startsWith('devtools://') && process.env.WARMY_ALLOW_DEVTOOLS_IPC === '1') return true;
       const bw = BrowserWindow.fromWebContents(wc);
       if (!bw || bw.isDestroyed()) return false;
@@ -12212,12 +12277,37 @@ if (dedaoDangeSuo) {
         const zhuYeMedia = (wc: Electron.WebContents | null): boolean => {
           try { return wc != null && String(wc.getURL() || '').includes('/renderer/index.html'); } catch { return false; }
         };
-        session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => {
-          if ((permission === 'media' || permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') && zhuYeMedia(wc)) cb(true);
-          else cb(false);
+        session.defaultSession.setPermissionRequestHandler((wc, permission, cb, details) => {
+          if ((permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') && zhuYeMedia(wc)) { cb(true); return; }
+          /* R275：media 采集权限改由设备仲裁裁决——主窗口/拟态窗只在持有对应设备时放行；
+           * 拟态被会话抢走麦克风后 getUserMedia 直接被拒（双保险，协作让出之外还有硬闸）。 */
+          if (permission === 'media' && wc) {
+            const url = String(wc.getURL() || '');
+            const isZhu = url.includes('/renderer/index.html');
+            const isMimic = url.includes('mimic.html');
+            if (!isZhu && !isMimic) { cb(false); return; }
+            const mt = (details as { mediaTypes?: string[] } | undefined)?.mediaTypes;
+            const kinds = Array.isArray(mt) ? mt : [];
+            const devs: SheBeiLei[] = kinds.includes('video') ? ['camera'] : kinds.includes('audio') ? ['mic'] : ['mic', 'camera'];
+            const winId = BrowserWindow.fromWebContents(wc)?.id ?? 0;
+            cb(devs.every((d) => sheBeiZhongCai.yunXuCaiJi(winId, isMimic ? 'mimic' : 'session', d)));
+            return;
+          }
+          cb(false);
         });
-        session.defaultSession.setPermissionCheckHandler((wc, permission) => {
-          if ((permission === 'media' || permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') && zhuYeMedia(wc)) return true;
+        session.defaultSession.setPermissionCheckHandler((wc, permission, _origin, details) => {
+          if ((permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') && zhuYeMedia(wc)) return true;
+          if (permission === 'media' && wc) {
+            const url = String(wc.getURL() || '');
+            const isZhu = url.includes('/renderer/index.html');
+            const isMimic = url.includes('mimic.html');
+            if (!isZhu && !isMimic) return false;
+            const mt = (details as { mediaTypes?: string[] } | undefined)?.mediaTypes;
+            const kinds = Array.isArray(mt) ? mt : [];
+            const devs: SheBeiLei[] = kinds.includes('video') ? ['camera'] : kinds.includes('audio') ? ['mic'] : ['mic', 'camera'];
+            const winId = BrowserWindow.fromWebContents(wc)?.id ?? 0;
+            return devs.every((d) => sheBeiZhongCai.yunXuCaiJi(winId, isMimic ? 'mimic' : 'session', d));
+          }
           return false;
         });
       } catch { /* 权限策略失败不影响启动 */ }
@@ -15590,6 +15680,8 @@ chuliIpc('warmy:quGongYingShang', () => ({
  * 用户手动发消息不受影响（渲染层本来就有 P2 队列）。
  */
 const zaiTuLiao = new Map<string, number>();
+/** R278 项2：在途请求当前真正使用的模型（供热更换判断“新链首选==在途模型”跳过 abort） */
+const zaiTuMoXing = new Map<string, string>();
 async function zhenZhengFaSong(
   _e: unknown,
   xiaoXi: { sessionId: string; internal?: boolean; [k: string]: unknown },
@@ -15624,6 +15716,7 @@ async function zhenZhengFaSong(
     return jieGuo;
   } finally {
     if (sid) zaiTuLiao.delete(sid);
+    if (sid) zaiTuMoXing.delete(sid);
     /**
      * **每一轮都要有收尾广播**（第 65 轮 项 12 真机：微信来消息 → 本机跑一轮 → 回复已发回，
      * 界面上的"干活中"小字一直亮着）。`kai:true` 由这里统一发，但 `kai:false` 以前只有
@@ -16229,6 +16322,8 @@ async function zhenZhengFaSongBen(
       jueCe = { model: providerCfg.model || 'deepseek-chat', why: 'fallback', chainIndex: -1 };
       modelId = jueCe.model;
     }
+    /* R278 项2：登记在途模型（每轮重选都更新），供热更换跳过 abort 判断 */
+    try { zaiTuMoXing.set(String(sessionId || ''), String(modelId || '')); } catch { /* noop */ }
     /**
      * R147 项10：非智能模式下用户明明设了默认模型，却被换成别的 —— 必须留下可取证的原因。
      * 以前只有 chat.model-blocked（白名单）一条，其余三种（被禁用 / 不在可跑清单 / 本轮已失败）
@@ -19043,17 +19138,36 @@ function fenLeiRenWuKadian(error: string, jieDuan: string, why: string): RenWuKa
 }
 
 /** 每类卡点：把已知事实写进卡面 + 给出**互斥且可执行**的方向（永远有「停止」） */
-function kadianKaMoxing(lei: RenWuKadian, x: { why: string; jieDuan: string; error: string }): {
+function kadianKaMoxing(lei: RenWuKadian, x: { why: string; jieDuan: string; error: string }, sessionId = ''): {
   biaoTi: string; ti: string; options: Array<{ id: string; biaoQian: string; description?: string; tuiJian?: boolean; keXinDu?: number }>;
 } {
   const anQuan = (s: string) => String(s || '').slice(0, 240);
-  /* R269 项2：超限类卡点统一四选项（重置/再放行一次/停下汇报/其他），且必有推荐项 */
-  const xianZhiXuan = (tui: 'reset' | 'once'): Array<{ id: string; biaoQian: string; description?: string; tuiJian?: boolean; keXinDu?: number }> => [
-    { id: 'reset', biaoQian: '重置限制，重新尝试', description: '清零本轮的次数/时间计数，再完整试一次', tuiJian: tui === 'reset', keXinDu: 60 },
-    { id: 'once', biaoQian: '按最新预测再放行这一次', description: '以模型最近一次预估为准额外允许这一轮；若仍未完成就停下并汇报', tuiJian: tui === 'once', keXinDu: 66 },
-    { id: 'report', biaoQian: '现在停下并汇报情况', description: '立即停止，并给你一份已完成/未完成的说明' },
-    { id: 'edit', biaoQian: '其他（我来填写）', description: '手动输入你的指示' },
-  ];
+  /* R269 项2／R278 项3：超限类卡点统一选项；>30min 且模型判拆分更好⇒给拆分选项而非 once；
+   * once 推荐时夹 [1,600]∩自优化区间，非推荐如实写时间 */
+  const xianZhiXuan = (tui: 'reset' | 'once'): Array<{ id: string; biaoQian: string; description?: string; tuiJian?: boolean; keXinDu?: number }> => {
+    const cf = pendingChaiFen.get(sessionId);
+    const chaiGengHao = !!(cf && cf.split);
+    pendingOnceTui.set(sessionId, tui === 'once' && !chaiGengHao);
+    const raw = zuiJinYuCeRawMs(sessionId);
+    const fen = Math.round((tui === 'once' && !chaiGengHao ? zuiJinYuCeMs(sessionId, true) : raw) / 60000);
+    const onceDesc = `以模型最近一次预估为准额外允许这一轮（约 ${fen} 分钟）；若仍未完成就停下并汇报`;
+    const base = [
+      { id: 'reset', biaoQian: '重置限制，重新尝试', description: '清零本轮的次数/时间计数，再完整试一次', tuiJian: tui === 'reset' && !chaiGengHao, keXinDu: 60 },
+      { id: 'report', biaoQian: '现在停下并汇报情况', description: '立即停止，并给你一份已完成/未完成的说明' },
+      { id: 'edit', biaoQian: '其他（我来填写）', description: '手动输入你的指示' },
+    ];
+    if (chaiGengHao) {
+      return [
+        { id: 'split', biaoQian: '拆分任务后再做', description: (cf && cf.plan) || '把剩余工作拆成更小的子任务逐个完成', tuiJian: true, keXinDu: 70 },
+        ...base,
+      ];
+    }
+    return [
+      base[0]!,
+      { id: 'once', biaoQian: '按最新预测再放行这一次', description: onceDesc, tuiJian: tui === 'once', keXinDu: 66 },
+      base[1]!, base[2]!,
+    ];
+  };
   /* R149 项14：说明模板 —— 正在做什么 / 做了什么但没结果 / 预期 vs 实际 */
   const mo = (dongZuo: string, yuQi: string, shiJi: string) =>
     `【正在做什么】${dongZuo}\n【做了什么】${anQuan(x.why)}\n【预期结果】${yuQi}\n【实际结果】${shiJi}`;
@@ -19201,7 +19315,7 @@ function lvXingKadianJueCe(sessionId: string, lei: RenWuKadian, xuan: string): K
     try { etaHuo().jieShuLun(sessionId); } catch { /* noop */ }
   }
   if (jiXuLei === 'once') {
-    const chuang = zuiJinYuCeMs(sessionId);
+    const chuang = zuiJinYuCeMs(sessionId, pendingOnceTui.get(sessionId) !== false);
     toolXunHuanYanZhang.set(String(sessionId || ''), Date.now() + chuang);
     yiCiFangXing.set(String(sessionId || ''), Date.now());
   }
@@ -19236,8 +19350,8 @@ function zhuiJiaoLiaoTianRiZhiPlaceholder(sessionId: string): void {
     ts: Date.now(),
   });
 }
-/** R269 项2：读模型最近一次预测的剩余毫秒（给「再放行这一次」用）；没有就兜 10 分钟 */
-function zuiJinYuCeMs(sessionId: string): number {
+/** R269 项2／R278 项3：模型最近一次预测的剩余毫秒（_raw_，不夹）；没有就兜 10 分钟 */
+function zuiJinYuCeRawMs(sessionId: string): number {
   let zui = 0;
   try {
     for (const x of ['dengDaiHuiFu', 'gongJu', 'ziDongXuPai'] as XingWei[]) {
@@ -19246,9 +19360,111 @@ function zuiJinYuCeMs(sessionId: string): number {
       if (y > zui) zui = y;
     }
   } catch { /* noop */ }
-  return Math.min(30 * 60 * 1000, Math.max(10 * 60 * 1000, zui || 10 * 60 * 1000));
+  return zui || 10 * 60 * 1000;
 }
-/** R269 项2：停下并汇报——立即停止＋给一份已完成/未完成说明 */
+/** R278 项3：once 窗口＝推荐时夹 [1,600]∩自优化夹区间；非推荐＝如实不夹 */
+function zuiJinYuCeMs(sessionId: string, recommended = false): number {
+  const raw = zuiJinYuCeRawMs(sessionId);
+  if (!recommended) return raw;
+  const c = etaCang().duClamp();
+  const mn = Math.max(1 * 60 * 1000, c.minMs);
+  const mx = Math.min(600 * 60 * 1000, c.maxMs);
+  return Math.min(mx, Math.max(mn, raw));
+}
+/** R278 项3：卡面生成前的拆分判断缓存（sessionId→{split,plan}）与 once 是否推荐 */
+const pendingChaiFen = new Map<string, { split: boolean; plan: string }>();
+const pendingOnceTui = new Map<string, boolean>();
+/** R278 项3：>30min 时请模型判断是否拆分更好（卡面展示前调用） */
+async function panDuanChaiFen(sessionId: string, rawMs: number): Promise<{ split: boolean; plan: string }> {
+  try {
+    const mo = huiHuaMoXingLianOf(sessionId)[0] || (await lieKeYongMoXing())[0] || '';
+    const an = mo ? await jieMoXingGongYingShang(mo) : null;
+    if (!an) return { split: false, plan: '' };
+    const prov = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL }, an.protocol);
+    const insight = etaCang().duSplitInsight();
+    const r = await prov.chat({
+      model: jieMoXingMing(mo),
+      xiaoXiJi: [
+        { role: 'system', content: '你是任务规划裁判。只输出 JSON：{"split":true/false,"plan":"拆分方案简述"}。' + (insight ? '\n历史经验：' + insight : '') },
+        { role: 'user', content: `任务预计还需 ${Math.round(rawMs / 60000)} 分钟（超过 30 分钟）。当前任务：${String(jiHuaRenWuJi.get(sessionId)?.map((b) => b.title || b.note || '').join('；') || '').slice(0, 800)}。判断：拆分成更小的子任务是否更好？若更好给出拆分方案。` },
+      ],
+      maxTokens: 600,
+    }, undefined as never);
+    const txt = String(r?.choices?.[0]?.message?.content || '');
+    const m = txt.match(/\{[\s\S]*\}/);
+    const j = m ? JSON.parse(m[0]) as { split?: boolean; plan?: string } : {};
+    return { split: !!j.split, plan: String(j.plan || '').slice(0, 600) };
+  } catch { return { split: false, plan: '' }; }
+}
+/** R278 项3：夹区间扩展审批（合并为单条；用户填具体区间而非同意/拒绝） */
+let pendingClampShenPi: { reqMin: number; reqMax: number; curMin: number; curMax: number } | null = null;
+function qingQiuClampKuoZhang(reqMin: number, reqMax: number): void {
+  const cur = etaCang().duClamp();
+  /* 多条合并为一个：取并集的最大请求 */
+  pendingClampShenPi = pendingClampShenPi
+    ? { reqMin: Math.min(pendingClampShenPi.reqMin, reqMin), reqMax: Math.max(pendingClampShenPi.reqMax, reqMax), curMin: cur.minMs, curMax: cur.maxMs }
+    : { reqMin, reqMax, curMin: cur.minMs, curMax: cur.maxMs };
+  try {
+    jiXiTongXiaoXi('system', 'ETA 放行窗口扩展申请',
+      `模型想把 once 放行夹区间扩到 [${(reqMin / 60000).toFixed(3)}, ${(reqMax / 60000).toFixed(3)}] 分钟（超出硬区间 [0.1,600]）。当前 [${(cur.minMs / 60000).toFixed(3)}, ${(cur.maxMs / 60000).toFixed(3)}]。请在系统消息里填写批准的区间（留空＝不变）。`);
+  } catch { /* noop */ }
+}
+/** R278 项3：总结时自优化夹区间＋提取拆分经验；超硬区间先再判一次，仍必要才申请审批 */
+async function youHuaEtaClampYuChaiFen(sessionId: string): Promise<void> {
+  try {
+    const moXing = huiHuaMoXingLianOf(sessionId)[0] || (await lieKeYongMoXing())[0] || '';
+    const an = moXing ? await jieMoXingGongYingShang(moXing) : null;
+    if (!an) return;
+    const prov = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL }, an.protocol);
+    const cur = etaCang().duClamp();
+    const r = await prov.chat({
+      model: jieMoXingMing(moXing),
+      xiaoXiJi: [
+        { role: 'system', content: '你是预测校准器。只输出 JSON：{"minMin":数,"maxMin":数,"splitInsight":"何时该预先拆分任务的经验"}。minMin/maxMin 为 once 放行夹区间（分钟）。' },
+        { role: 'user', content: `当前夹区间 [${(cur.minMs / 60000).toFixed(3)}, ${(cur.maxMs / 60000).toFixed(3)}] 分钟。根据最近任务的实际耗时与预测偏差，优化该区间（可缩小也可扩大），并总结“什么情况下应在开局或到顶前预先拆分任务”。` },
+      ],
+      maxTokens: 500,
+    }, undefined as never);
+    const txt = String(r?.choices?.[0]?.message?.content || '');
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return;
+    const j = JSON.parse(m[0]) as { minMin?: number; maxMin?: number; splitInsight?: string };
+    if (j.splitInsight) etaCang().jiSplitInsight(String(j.splitInsight));
+    const res = etaCang().tiClampGengXin(Number(j.minMin) * 60000, Number(j.maxMin) * 60000);
+    if (res.needApproval) {
+      /* 超硬区间：再判一次是否必要；不必要⇒只扩到硬区间内 */
+      const r2 = await prov.chat({
+        model: jieMoXingMing(moXing),
+        xiaoXiJi: [
+          { role: 'system', content: '只输出 JSON：{"necessary":true/false}。判断把 once 夹区间扩到硬区间 [0.1,600] 分钟之外是否确有必要。' },
+          { role: 'user', content: `申请扩到 [${(res.reqMinMs / 60000).toFixed(3)}, ${(res.reqMaxMs / 60000).toFixed(3)}] 分钟。是否必要？` },
+        ],
+        maxTokens: 100,
+      }, undefined as never);
+      const t2 = String(r2?.choices?.[0]?.message?.content || '');
+      const m2 = t2.match(/\{[\s\S]*\}/);
+      const necessary = m2 ? !!(JSON.parse(m2[0]) as { necessary?: boolean }).necessary : false;
+      if (!necessary) {
+        etaCang().tiClampGengXin(Math.max(0.1 * 60000, res.reqMinMs), Math.min(600 * 60000, res.reqMaxMs));
+      } else {
+        qingQiuClampKuoZhang(res.reqMinMs, res.reqMaxMs);
+      }
+    }
+    try { audit?.log('eta.clamp-refined', { sessionId, clamp: etaCang().duClamp() }); } catch { /* noop */ }
+  } catch { /* 总结优化失败不挡总结 */ }
+}
+chuliIpc('warmy:etaClampShenPiQu', () => ({ ok: true, pending: pendingClampShenPi }));
+chuliIpc('warmy:etaClampShenPiQue', (_e, p0?: { minMin?: number | string; maxMin?: number | string }) => {
+  if (!pendingClampShenPi) return { ok: false, error: 'no-pending' };
+  const cur = etaCang().duClamp();
+  const mn = String(p0?.minMin ?? '').trim() === '' ? cur.minMs : Number(p0?.minMin) * 60000;
+  const mx = String(p0?.maxMin ?? '').trim() === '' ? cur.maxMs : Number(p0?.maxMin) * 60000;
+  etaCang().yingYongClamp(mn, mx);
+  pendingClampShenPi = null;
+  try { audit?.log('eta.clamp-approved', { clamp: etaCang().duClamp() }); } catch { /* noop */ }
+  return { ok: true, clamp: etaCang().duClamp() };
+});
+/** R278 项3：停下并汇报——立即停止＋给一份已完成/未完成说明 */
 function tingZhiBingHuiBao(sessionId: string, why: string): void {
   stoppedSessions.add(sessionId);
   zhongZhiXinHao(sessionId);
@@ -19281,7 +19497,13 @@ function chongZhiBeiTiaoGuoDeBuZhou(sessionId: string): void {
 
 async function faQiKadianJueCeKa(sessionId: string, lei: RenWuKadian, x: { why: string; jieDuan: string; error: string }): Promise<void> {
   if (!sessionId) return;
-  const ka = kadianKaMoxing(lei, x);
+  /* R278 项3：once 卡面展示前，>30min 先请模型判拆分；否则清缓存 */
+  if (lei === 'eta-anomaly' || lei === 'tool-hard-cap') {
+    const raw = zuiJinYuCeRawMs(sessionId);
+    if (raw > 30 * 60 * 1000) pendingChaiFen.set(sessionId, await panDuanChaiFen(sessionId, raw));
+    else pendingChaiFen.delete(sessionId);
+  }
+  const ka = kadianKaMoxing(lei, x, sessionId);
   const xuan = await qingQiuKaPian(sessionId, ka.biaoTi, ka.ti, ka.options);
   try { audit?.log('plan.decision.answered', { sessionId, lei, xuan: String(xuan || '').slice(0, 60), empty: !xuan }); } catch { /* noop */ }
   const jieGuo = lvXingKadianJueCe(sessionId, lei, xuan);
@@ -19599,8 +19821,20 @@ function reHuanDiaoYongLian(jiu: unknown[], xin: unknown[]): void {
       const id = String(((x || {}) as { id?: string }).id || '');
       if (!id || !jiuB.has(id) || jiuB.get(id) === keyOf(x)) continue;
       if (!zaiTuLiao.has(id)) continue;
-      try { audit?.log('chat.chain-hotswap-abort', { sessionId: id }); } catch { /* noop */ }
+      /* R278 项2 小优化：新链首选 == 在途模型 ⇒ 跳过 abort 直接沿用，省一次重跑 */
+      const o = (x || {}) as { chain?: unknown[]; chainDisabled?: unknown[]; defaultModel?: unknown; smartMode?: unknown };
+      const dis = new Set((o.chainDisabled || []).map(String));
+      const lian = (o.chain || []).map(String).filter((m) => m && !dis.has(m));
+      const newFirst = o.smartMode ? '' : (String(o.defaultModel || '').trim() || lian[0] || '');
+      const cur = zaiTuMoXing.get(id) || '';
+      if (newFirst && cur && newFirst === cur) {
+        try { audit?.log('chat.chain-hotswap-skip', { sessionId: id, model: cur }); } catch { /* noop */ }
+        continue;
+      }
+      try { audit?.log('chat.chain-hotswap-abort', { sessionId: id, from: cur, to: newFirst }); } catch { /* noop */ }
+      /* R278 项2：中断要彻底——请求与工具循环一起掐断，迟到回传/操作一律丢弃 */
       try { quXiaoZhong.get(id)?.abort(new Error('chain-changed')); } catch { /* noop */ }
+      try { gongJuXunHuanQuXiao.get(id)?.abort(); } catch { /* noop */ }
     }
   } catch { /* noop */ }
 }
@@ -22128,7 +22362,7 @@ chuliIpc('warmy:huiFuJinXing', (_e, payload?: { sessionId?: string; reasoningDua
  * 去重：与**最后一条**的 role+content 相同时跳过，这样单聊路径（chat-send 已记账）
  * 不会因为渲染层也补写而重复。
  */
-chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string; role?: string; content?: string; system?: boolean; moXing?: string; reasoningDuan?: Array<{ ts: number; text: string }> }) => {
+chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string; role?: string; content?: string; system?: boolean; moXing?: string; evolvePair?: unknown; reasoningDuan?: Array<{ ts: number; text: string }> }) => {
   try {
     const sid = String(payload?.sessionId || '');
     // 角色归一：wo|user → user，them|assistant → assistant（旧实现只认 'wo'，
@@ -22207,6 +22441,8 @@ chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string
       seq: xiaYiLiaoTianXuLie(memSeq),
       role,
       content,
+      /* R274：进化并排块 payload 补写通道（恢复/渲染层用），随旁路台账持久化 */
+      evolvePair: (payload as { evolvePair?: unknown }).evolvePair || undefined,
       recordId: memSeq !== undefined ? recordId : undefined,
       ts: Date.now(),
       system: payload?.system || undefined,
@@ -22473,6 +22709,48 @@ function sheQuanXian(perm: string, on: boolean): { mic: boolean; camera: boolean
 }
 chuliIpc('warmy:quanXianDu', () => ({ ok: true, perms: duQuanXian() }));
 chuliIpc('warmy:quanXianShe', (_e, p0?: { perm?: string; on?: boolean }) => ({ ok: true, perms: sheQuanXian(String(p0?.perm || ''), p0?.on !== false) }));
+/* ── R275 设备仲裁：会话优先于拟态；多会话之间激活窗口优先；用完归还 ── */
+import { SheBeiZhongCai, SHE_BEI_JI, type SheBeiLei, type SheBeiShiJian } from './she-bei-zhong-cai.js';
+const sheBeiZhongCai = new SheBeiZhongCai((ev: SheBeiShiJian) => {
+  try {
+    const w = BrowserWindow.fromId(ev.winId);
+    if (w && !w.isDestroyed()) w.webContents.send('warmy:sheBeiShiJian', ev);
+  } catch { /* 窗口已毁：事件丢弃不影响仲裁态 */ }
+});
+function sheBeiKindOf(wc: Electron.WebContents): 'session' | 'mimic' {
+  try { return String(wc.getURL() || '').includes('mimic.html') ? 'mimic' : 'session'; } catch { return 'session'; }
+}
+chuliIpc('warmy:sheBeiShenQing', (e, p0?: { device?: string; sid?: string }) => {
+  const device = String(p0?.device || '') as SheBeiLei;
+  if (!SHE_BEI_JI.includes(device)) return { ok: false, error: 'bad-device' };
+  const winId = BrowserWindow.fromWebContents(e.sender)?.id ?? 0;
+  const kind = sheBeiKindOf(e.sender);
+  const zt = sheBeiZhongCai.claim(device, { kind, sid: String(p0?.sid || ''), winId, ts: Date.now() });
+  const granted = !!(zt.holder && zt.holder.winId === winId && zt.holder.kind === kind);
+  try { audit?.log('device.claim', { device, kind, sid: String(p0?.sid || ''), winId, granted }); } catch { /* noop */ }
+  return { ok: true, granted, holder: zt.holder, deng: zt.deng };
+}, ['mimic.html']);
+chuliIpc('warmy:sheBeiShiFang', (e, p0?: { device?: string }) => {
+  const device = String(p0?.device || '') as SheBeiLei;
+  if (!SHE_BEI_JI.includes(device)) return { ok: false, error: 'bad-device' };
+  const winId = BrowserWindow.fromWebContents(e.sender)?.id ?? 0;
+  const zt = sheBeiZhongCai.release(device, winId, sheBeiKindOf(e.sender));
+  try { audit?.log('device.release', { device, winId }); } catch { /* noop */ }
+  return { ok: true, holder: zt.holder, deng: zt.deng };
+}, ['mimic.html']);
+chuliIpc('warmy:sheBeiZhuangTai', (_e, p0?: { device?: string }) => {
+  const device = String(p0?.device || '') as SheBeiLei;
+  if (!SHE_BEI_JI.includes(device)) return { ok: false, error: 'bad-device' };
+  return { ok: true, ...sheBeiZhongCai.zhuangTai(device) };
+}, ['mimic.html']);
+/* 焦点/关窗喂给仲裁器：激活会话优先级升高可抢非激活持有者；关窗自动释放 */
+app.on('browser-window-created', (_e, w) => {
+  try {
+    w.on('focus', () => { try { sheBeiZhongCai.focus(w.id, true); } catch { /* noop */ } });
+    w.on('blur', () => { try { sheBeiZhongCai.focus(w.id, false); } catch { /* noop */ } });
+    w.on('closed', () => { try { sheBeiZhongCai.closed(w.id); } catch { /* noop */ } });
+  } catch { /* noop */ }
+});
 /** R260 神经符号预测约束闸：ETA/难度/分身数/迪文词根坐标候选经符号验证器裁决（违例保守修正/拒绝）。 */
 chuliIpc('warmy:yuCeYueShuJiaoYan', (_e, p0?: { lei?: string; value?: unknown; maxMiao?: number; fenShenShangXian?: number }) => {
   try { return jiaoYanYuCe(String(p0?.lei || ''), p0?.value, { maxMiao: p0?.maxMiao, fenShenShangXian: p0?.fenShenShangXian }); }
@@ -34386,6 +34664,13 @@ chuliIpc('warmy:nmTanChuangKai', (_e, p0?: { id?: number; html?: string; rectLef
 chuliIpc('warmy:nmTanChuangGuan', (_e, p0?: { id?: number }) => {
   try { return nmTanChuangGuan(Number(p0?.id) || 0); } catch { return { ok: false }; }
 });
+/* R278 项8：下载管理原生弹出窗（独立槽）——网页保持可见不再变空白 */
+chuliIpc('warmy:nmXiaZaiChuangKai', (_e, p0?: { id?: number; html?: string; rectLeft?: number; rectBottom?: number; width?: number; height?: number }) => {
+  try { return nmXiaZaiChuangKai(Number(p0?.id) || 0, String(p0?.html || ''), { rectLeft: p0?.rectLeft, rectBottom: p0?.rectBottom, width: p0?.width, height: p0?.height }); } catch (e) { return { ok: false, cuo: xiJingCuoWu(e) }; }
+});
+chuliIpc('warmy:nmXiaZaiChuangGuan', (_e, p0?: { id?: number }) => {
+  try { return nmXiaZaiChuangGuan(Number(p0?.id) || 0); } catch { return { ok: false }; }
+});
 /* R244 报障11c：收藏夹模态窗不能读 nm 查看器的 localStorage，添加收藏经此通道转发回 nm 窗保存 */
 chuliIpc('warmy:nmShouCangTianJia', (e, p0?: { id?: number; xiang?: { ming?: string; url?: string; tian?: number }; jia?: number }) => {
   try {
@@ -34475,6 +34760,13 @@ chuliIpc('warmy:nmWangYePeiZhiShe', (_e, p0?: { xinKai?: boolean; qiDongMoShi?: 
       ...(typeof p0?.privacy === 'boolean' ? { privacy: !!p0.privacy } : {}),
     };
     settingsStore?.save({ nmWangYePeiZhi: xin } as never);
+    /* R278 项8：启动页/新标签配置保存后广播回所有 nm 窗（修复“保存不生效、重开恢复”） */
+    try {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w.isDestroyed()) continue;
+        if (String(w.webContents.getURL() || '').includes('nm-viewer.html')) w.webContents.send('warmy:nmWangYePeiZhiGengXin', { config: xin });
+      }
+    } catch { /* noop */ }
     /** R128 N6：隐私模式变化 → 网页视图全部销毁，按新分区重建 */
     if (typeof p0?.privacy === 'boolean') {
       try { nmWangYeYinSiShe(!!p0.privacy); } catch { /* noop */ }
@@ -34484,11 +34776,78 @@ chuliIpc('warmy:nmWangYePeiZhiShe', (_e, p0?: { xinKai?: boolean; qiDongMoShi?: 
 });
 /** R128 N6：浏览器数据清单 / 清理（按内容/网站/时间；设置清理在本层执行） */
 chuliIpc('warmy:nmWangYeShuJuGaiLan', (_e, p0?: { liuLan?: string[] }) => nmWangYeShuJuGaiLan(Array.isArray(p0?.liuLan) ? p0.liuLan : []));
+/* ── R278 项8：nm 浏览器模式记录的网站账号密码（本机加密保管）＋导入 Chrome/Edge/Firefox CSV ── */
+function nmWangYeZhangHaoWenJian(): string { return path.join(app.getPath('userData'), 'nm-website-creds.json'); }
+function duNmWangYeZhangHao(): Array<{ url: string; username: string; password: string; ts: number }> {
+  try {
+    const j = JSON.parse(fs.readFileSync(nmWangYeZhangHaoWenJian(), 'utf8')) as { items?: Array<{ url?: string; username?: string; password?: string; ts?: number }> };
+    return (Array.isArray(j.items) ? j.items : []).map((x) => ({ url: String(x.url || ''), username: String(x.username || ''), password: String(x.password || ''), ts: Number(x.ts) || 0 }));
+  } catch { return []; }
+}
+function cunNmWangYeZhangHao(items: Array<{ url: string; username: string; password: string; ts: number }>): void {
+  try { fs.writeFileSync(nmWangYeZhangHaoWenJian(), JSON.stringify({ items: items.slice(-2000) }, null, 2), 'utf8'); } catch { /* noop */ }
+}
+chuliIpc('warmy:nmWangYeZhangHaoLieBiao', () => ({ ok: true, items: duNmWangYeZhangHao().map((x) => ({ url: x.url, username: x.username, hasPassword: !!x.password, ts: x.ts })) }));
+/* R278 项8：网页表单 POST 捕获⇒入库（同 url+username 覆盖更新） */
+sheNmZhangHaoHuiDiao((url, username, password) => {
+  try {
+    const items = duNmWangYeZhangHao().filter((x) => !(x.url === url && x.username === username));
+    items.push({ url, username, password, ts: Date.now() });
+    cunNmWangYeZhangHao(items);
+  } catch { /* noop */ }
+});
+chuliIpc('warmy:nmWangYeZhangHaoBaoCun', (_e, p0?: { url?: string; username?: string; password?: string }) => {
+  const url = String(p0?.url || '').trim(); const username = String(p0?.username || ''); const password = String(p0?.password || '');
+  if (!url) return { ok: false, error: 'bad-url' };
+  const items = duNmWangYeZhangHao().filter((x) => !(x.url === url && x.username === username));
+  items.push({ url, username, password, ts: Date.now() });
+  cunNmWangYeZhangHao(items);
+  return { ok: true };
+});
+/** 导入 Chrome/Edge（name,url,username,password）与 Firefox（url,username,password）CSV */
+chuliIpc('warmy:nmWangYeZhangHaoDaoRu', (_e, p0?: { csv?: string }) => {
+  try {
+    const txt = String(p0?.csv || '');
+    const lines = txt.split(/\r?\n/).filter((l) => l.trim());
+    if (!lines.length) return { ok: false, error: 'empty' };
+    const parseLine = (l: string): string[] => {
+      const out: string[] = []; let cur = ''; let inQ = false;
+      for (let i = 0; i < l.length; i++) {
+        const c = l[i];
+        if (inQ) { if (c === '"') { if (l[i + 1] === '"') { cur += '"'; i++; } else inQ = false; } else cur += c; }
+        else if (c === '"') inQ = true;
+        else if (c === ',') { out.push(cur); cur = ''; }
+        else cur += c;
+      }
+      out.push(cur); return out;
+    };
+    const head = parseLine(lines[0] || '').map((s) => s.trim().toLowerCase());
+    const iUrl = head.indexOf('url'); const iUser = head.indexOf('username'); const iPass = head.indexOf('password');
+    if (iUrl < 0 || iPass < 0) return { ok: false, error: 'bad-header' };
+    const items = duNmWangYeZhangHao();
+    let n = 0;
+    for (const l of lines.slice(1)) {
+      const c = parseLine(l);
+      const url = String(c[iUrl] || '').trim(); const username = iUser >= 0 ? String(c[iUser] || '') : ''; const password = String(c[iPass] || '');
+      if (!url) continue;
+      const j = items.findIndex((x) => x.url === url && x.username === username);
+      if (j >= 0) items[j] = { url, username, password, ts: Date.now() }; else items.push({ url, username, password, ts: Date.now() });
+      n++;
+    }
+    cunNmWangYeZhangHao(items);
+    try { audit?.log('nm.creds-import', { n }); } catch { /* noop */ }
+    return { ok: true, n };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 chuliIpc('warmy:nmWangYeShuJuQing', (_e, p0?: { mo?: string; id?: string; liuLan?: string[] }) => {
   return nmWangYeShuJuQing(String(p0?.mo || ''), String(p0?.id || ''), Array.isArray(p0?.liuLan) ? p0.liuLan : []).then((r) => {
     /** 'sheZhi' 清理：本层才有 settingsStore（nm-viewer-win 纪律上不读设置） */
     if (r && (r as { qingSheZhi?: boolean }).qingSheZhi) {
       try { settingsStore?.save({ nmWangYePeiZhi: { xinKai: false, qiDongMoShi: 'ziDingYi', qiDongYe: '', privacy: false } } as never); } catch { /* noop */ }
+    }
+    /* R278 项8：清理「保存的网站账号」⇒ 网站账密库也清 */
+    if (String(p0?.mo || '') === 'neiRong' && String(p0?.id || '') === 'zhangHao') {
+      try { cunNmWangYeZhangHao([]); } catch { /* noop */ }
     }
     return r;
   });
@@ -38247,6 +38606,8 @@ async function shengChengHuiHuaZhaiYao(
       const hou = gaiJinYuCeWenJian(duYuCeWenJian(), 0, Date.now());
       fs.writeFileSync(yuCeWenJianLu(), JSON.stringify(hou, null, 2), 'utf8');
     } catch (e) { try { audit?.log('mimic.prediction-refine-fail', { error: xiJingCuoWu(e).slice(0, 120) }); } catch { /* noop */ } }
+    /* R278 项3：总结时自优化 once 夹区间＋提取拆分经验（超硬区间走审批） */
+    try { void youHuaEtaClampYuChaiFen(qunId); } catch { /* noop */ }
     /**
      * **总结时顺手重算 token 算法**（用户第 9 条补充口径）：把累积的供应商回读（`token-observations.jsonl`）
      * 离线重算成 供应商/模型/桶 的比值 + 该桶的平均法条目，覆盖在线 EMA 的结果。
@@ -39123,6 +39484,18 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
   /* R267 项8：流式 tee——思考/正文边出边进历史并广播，像正常对话一样实时显示 */
   zt.history = zt.history || [];
   const hist = zt.history;
+  /* R274 项3：续发必须带上本臂自己的历史轮（用户续发＋过往最终/中间回复）。
+   * 真事故：臂里刚说过“你说得对”，用户问“为什么还说我的对”时模型看不到自己上一轮回复，
+   * 以旁观者口吻点评“消息少了”并把思考链当回复。臂历史在 push 当前用户消息之前取。 */
+  const armPrior = hist
+    .filter((h) => !h.live)
+    .map((h) => {
+      const kd = String(h.kind || '');
+      if (h.role === 'user') return { role: 'user' as const, content: String(h.content || '').slice(0, 4000) };
+      if (kd === 'final' || kd === 'zhongjian') return { role: 'assistant' as const, content: String(h.content || '').slice(0, 4000) };
+      return null;
+    })
+    .filter((x): x is { role: 'user' | 'assistant'; content: string } => !!x && !!x.content.trim());
   /* R269 项6/11：首条用户消息已在分栏上方显示，不入支线；仅续发（faSong）记入支线历史 */
   if (jiLuYongHu) hist.push({ role: 'user', content: String(content).slice(0, 4000) });
   let siKaoTxt = ''; let finalTxt = ''; let liveBo = 0;
@@ -39153,7 +39526,7 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
       .map((m) => ({ role: m.role === 'user' ? 'user' as const : 'assistant' as const, content: String(m.content || '').slice(0, 1200) }))
       .filter((m) => m.content.trim());
   } catch { return []; } })();
-  const xiTong = shenFen + '你正在自进化实验的支线 ' + arm + ' 中独立完成用户任务，身份与要求与主线完全一致；需要写文件就写（工作区相对路径），最后给出可交付结论。' + (overlay ? '\n【改进要求】' + overlay : '') + jiYi
+  const xiTong = shenFen + '你正在自进化实验的支线 ' + arm + ' 中独立完成用户任务，身份与要求与主线完全一致。请以对话参与者身份直接回复用户（与正常聊天一样）：闲聊/角色扮演就直接进入角色回答；不要提及实验/支线/A-B，不要点评对话本身，不要输出旁观者说明或思考过程。任务需要写文件就写（工作区相对路径），最后给出可交付结论。' + (overlay ? '\n【改进要求】' + overlay : '') + jiYi
     + '\n【反谄媚约束】以高效与正确为目的，不得为迎合用户而降低标准/隐瞒错误/夸大成果；任何自我改进须有可验证证据（A/B 胜率/正确率/回合），无实证的讨好性改动不采纳。必要时才迎合（用户明确偏好且无害）。';
   const kong = new AbortController();
   /* R268④：登记支线控制器——顶部停止/关闭进化强制终止；6 分钟硬帽防干等 */
@@ -39162,11 +39535,13 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
   const maoDing = setTimeout(() => { kongRec.yuanYin = 'timeout'; try { kong.abort(); } catch { /* noop */ } }, 6 * 60_000);
   /* R263：支线工具调用记录（onEvent 收集），并排块要显示思考/工具/中间回复 */
   const gongJuJiLu: Array<{ tool: string; ok: boolean }> = [];
+  /* R274 项3：主线历史＋本臂历史轮＋当前消息，工具循环与收尾调用共用同一前缀 */
+  const qianZhui: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [{ role: 'system', content: xiTong }, ...liShiJi, ...armPrior];
   try {
     const loop = await liaoTianDaiGongJu(provider, {
       model: jieMoXingMing(moXing),
-      xiaoXiJi: [{ role: 'system', content: xiTong }, ...liShiJi, { role: 'user', content: String(content).slice(0, 4000) }],
-      maxTokens: 2048, tools: workToolSpecs() as never,
+      xiaoXiJi: [...qianZhui, { role: 'user', content: String(content).slice(0, 4000) }],
+      maxTokens: 4096, tools: workToolSpecs() as never,
     }, async (call) => {
       const tn = String(call?.function?.name || '');
       if (!nengLiGeXieYunXu(tn)) return '[能力格] 只读沙箱：' + tn + ' 属写操作，默认拒绝。';
@@ -39175,16 +39550,17 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
       return String(out.content).slice(0, 2000);
     }, { zuiDaLunShu: 4, zuiDaJieGuoZiShu: 4000, signal: kong.signal, onEvent: (ev: { kind?: string; tool?: string; ok?: boolean }) => { if (ev && ev.kind === 'tool') { gongJuJiLu.push({ tool: String(ev.tool || ''), ok: ev.ok !== false }); hist.push({ role: 'tool', kind: 'tool', content: String(ev.tool || '') + (ev.ok !== false ? '' : '（失败）'), ts: Date.now() } as never); pushLive(); } } });
     zt.reply = String(loop.xiangYingTi?.choices?.[0]?.message?.content || '').slice(0, 4000);
-    /* R271 项2：工具循环耗尽仍无正文⇒补一次不带工具的收尾调用，保证支线必有最终回复 */
+    /* R271 项2／R274 项3：工具循环耗尽仍无正文⇒补一次不带工具的收尾调用（同一上下文前缀，额度放宽给思考型模型） */
     if (!zt.reply.trim()) {
       try {
-        const shou = await provider.chat({ model: jieMoXingMing(moXing), xiaoXiJi: [{ role: 'system', content: xiTong }, ...liShiJi, { role: 'user', content: String(content).slice(0, 4000) + '\n（请直接给出最终交付结论与说明，不要再调用工具。）' }], maxTokens: 4096 }, kong.signal);
+        const shou = await provider.chat({ model: jieMoXingMing(moXing), xiaoXiJi: [...qianZhui, { role: 'user', content: String(content).slice(0, 4000) + '\n（请以牛马本身直接回答用户最后一条消息，不要再调用工具，不要输出思考过程或旁观者说明。）' }], maxTokens: 8192 }, kong.signal);
         zt.reply = String(shou?.choices?.[0]?.message?.content || '').slice(0, 4000);
       } catch { /* 收尾失败走下面兜底 */ }
     }
-    /* R271 项2：思考型模型可能把 token 全用在思考上仍无正文⇒宿主兜底总结，保证支线必有最终回复 */
+    /* R274 项3：兜底绝不泄露思考链/第三者点评（主人明确口径）。上下文修复＋直接回答约束后
+     * 这里只是“思考占满输出额度”的最后兜底：如实短报，不装成回复、不转述思考。 */
     if (!zt.reply.trim()) {
-      zt.reply = '（支线 ' + arm + ' 已完成执行' + (zt.files.length ? '，产出文件：' + zt.files.join('、') : '，未产出文件') + '。' + (siKaoTxt.trim() ? '思考摘要：' + siKaoTxt.trim().slice(0, 200) : '') + '）';
+      zt.reply = '（这一轮没有生成正文回复：思考占满了输出额度。请再发一次，我会直接回答。）';
     }
     zt.emptyStopped = false;
     /* R267 项8：清掉 live 临时条目再落整合历史；不写用户回声（并排块不显示用户消息） */
@@ -39251,12 +39627,16 @@ async function ziJinHuaHeBing(e: ZiJinHuaShiYan, winner: ZhiXian, by: string, au
   // pre-merge 快照（只覆盖胜出臂触及的主线文件），供历史显式回退
   const snapId = 'zjh-' + e.id;
   const snapDir = path.join(app.getPath('userData'), 'self-evolution-snapshots', snapId);
+  /* R278 项5：记录“合并新增”的文件（主线原本没有的），回退时须删除它们 */
+  const addedFiles: string[] = [];
   try {
     fs.mkdirSync(snapDir, { recursive: true });
     for (const rel of e.arms[winner].files) {
       const mainP = path.join(mainBase, rel);
       if (fs.existsSync(mainP)) { const d = path.join(snapDir, rel); fs.mkdirSync(path.dirname(d), { recursive: true }); fs.copyFileSync(mainP, d); }
+      else addedFiles.push(rel);
     }
+    fs.writeFileSync(path.join(snapDir, '_added.json'), JSON.stringify(addedFiles), 'utf8');
   } catch { /* 快照失败不阻断合并但记录 */ }
   /* R246/R263：把选支/合并前状态打进回退点（phase=evolve_select 可见于第四列卡片；携带实验快照供回滚恢复） */
   try {
@@ -39268,19 +39648,53 @@ async function ziJinHuaHeBing(e: ZiJinHuaShiYan, winner: ZhiXian, by: string, au
   for (const rel of e.arms[winner].files) {
     const src = path.join(winBase, rel); const d = path.join(mainBase, rel);
     try { fs.mkdirSync(path.dirname(d), { recursive: true }); fs.copyFileSync(src, d); } catch { /* 单文件失败继续 */ }
+    /* R278 项5：合并后产物进第四列「项目文件与产物」卡（广播文件产生） */
+    try {
+      const st = fs.statSync(d);
+      broadcastToWindows('warmy:wenJianChanSheng', { sessionId: e.sessionId, path: rel, abs: d, bytes: st.size, ts: Date.now(), root: mainBase });
+    } catch { /* noop */ }
   }
+  /* R278 项5：选支合并完成后删除支线临时目录（分析/总结读的是实验记录而非临时文件） */
+  try { fs.rmSync(path.join(workspaceDirOf(app.getPath('userData'), e.sessionId), 'evolve', e.id), { recursive: true, force: true }); } catch { /* noop */ }
   e.status = 'merged'; e.winner = winner; e.auto = auto; e.mergedAt = Date.now(); e.snapshotId = snapId;
   if (auto && winner === 'B' && e.arms.B.overlay) {
     ziJinHuaXueXi.push({ family: e.sessionId, text: e.arms.B.overlay, basis: 'objective-win', expId: e.id, ts: Date.now() });
     cunZiJinHuaXueXi();
   }
+  /* R274 项3：胜出臂在支线内的续发轮（用户续发＋非末条最终/中间回复）进模型上下文镜像
+   * （hidden：不进 UI 日志，避免与并排块重复显示），与 quHuiHuaXiaoXiJi 的 evolvePair 展开同形
+   * ⇒ 合并后下一轮主线/新支线上下文连贯，不再“失忆”支线里刚说过的话。 */
+  try {
+    const winHist = e.arms[winner].history || [];
+    const winFinals = winHist.filter((h) => String(h.kind || '') === 'final');
+    const winZuiHou = winFinals[winFinals.length - 1];
+    for (const h of winHist) {
+      if (h.live) continue;
+      const kd = String(h.kind || '');
+      if (h.role === 'user') zhuiJiaLiaoTianRiZhi(e.sessionId, { role: 'user', content: String(h.content || '').slice(0, 4000), ts: Date.now(), hidden: true } as never);
+      else if ((kd === 'final' && h !== winZuiHou) || kd === 'zhongjian') zhuiJiaLiaoTianRiZhi(e.sessionId, { role: 'them', content: String(h.content || '').slice(0, 4000), ts: Date.now(), hidden: true } as never);
+    }
+  } catch { /* noop */ }
   /* R261 项6：合并后把「双支线并排块」写入聊天记录（聊天记录的一部分、永显、随滚动）；
    * 并入主线者左、弃用者右（渲染层按 winner 排序）；不再单独追加胜出支线、不挂进化图标。 */
   try {
     /* R271 项5：合并块带上胜出支线的最终回复作为正文⇒主线模型上下文连贯（用户首条+胜出回复），
-     * 避免关闭进化后下一轮只重发进化期用户消息而无对应回复、造成“收到多条”的错觉。 */
+     * 避免关闭进化后下一轮只重发进化期用户消息而无对应回复、造成“收到多条”的错觉。
+     * R274：主进程写路径不经 chatLogAppend，必须自己补 memory.append 落 JSONL，
+     * 否则合并块只活在内存里、重启即丢（真事故：重启后胜出回复消失）。 */
+    const pairWen = String(e.arms[winner].reply || '').slice(0, 4000);
+    let pairSeq: number | undefined;
+    const pairRid = xinLiaoTianJiLuId('a');
+    try {
+      pairSeq = memSeqOf(await memory?.append({ id: pairRid, sessionId: e.sessionId, kind: 'message', role: 'assistant', ti: pairWen, groupId: e.sessionId, entityType: 'chat' }, 'duty'));
+    } catch {
+      /* 服务在但 append 失败⇒兜底直写 JSONL，绝不只留内存 */
+      try { daBaoXieRuJsonl(e.sessionId, 'assistant', pairWen); } catch { /* noop */ }
+    }
     zhuiJiaLiaoTianRiZhi(e.sessionId, {
-      role: 'them', content: String(e.arms[winner].reply || '').slice(0, 4000), ts: Date.now(),
+      seq: xiaYiLiaoTianXuLie(pairSeq),
+      recordId: pairSeq !== undefined ? pairRid : undefined,
+      role: 'them', content: pairWen, ts: Date.now(),
       evolvePair: {
         expId: e.id, winner, mode: e.mode,
         arms: { A: { history: e.arms.A.history || [] }, B: { history: e.arms.B.history || [] } },
@@ -39624,12 +40038,20 @@ chuliIpc('warmy:ziJinHuaHuiTui', (_e, p0?: { sessionId?: string; snapshotId?: st
   const mainBase = workspaceDirOf(app.getPath('userData'), sid);
   const huiTui = (dir: string, rel: string): void => {
     for (const n of fs.readdirSync(dir)) {
+      if (n === '_added.json') continue; /* R278 项5：清单不是产物，不回拷 */
       const p = path.join(dir, n); const r = rel ? rel + '/' + n : n;
       if (fs.statSync(p).isDirectory()) huiTui(p, r);
       else { const d = path.join(mainBase, r); fs.mkdirSync(path.dirname(d), { recursive: true }); fs.copyFileSync(p, d); }
     }
   };
   try { huiTui(snapDir, ''); } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+  /* R278 项5：回退须删除合并时新增的文件（快照只存了原有文件的旧版） */
+  try {
+    const added = JSON.parse(fs.readFileSync(path.join(snapDir, '_added.json'), 'utf8')) as string[];
+    for (const rel of (Array.isArray(added) ? added : [])) {
+      try { fs.rmSync(path.join(mainBase, rel), { force: true }); } catch { /* noop */ }
+    }
+  } catch { /* 无清单＝旧快照，仅恢复原有文件 */ }
   /* R246：回退不插入系统提示消息（仅恢复文件）。 */
   return { ok: true };
 });

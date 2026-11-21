@@ -4054,5 +4054,16 @@
   "pool.nm.23": "十三赤帽・其十一",
   "pool.nm.24": "十三赤帽・其十二",
   "pool.nm.25": "十三赤帽・其十三",
-  "evolve.stoppedEmpty": "（停止済み：このラウンドはまだ本文を生成していません。）"
+  "evolve.stoppedEmpty": "（停止済み：このラウンドはまだ本文を生成していません。）",
+  "device.mic": "マイク",
+  "device.camera": "カメラ",
+  "device.speaker": "スピーカー",
+  "device.ownerMimic": "デスクトップコンパニオン",
+  "device.ownerSession": "セッション",
+  "device.waiting": "{device}は{owner}が使用中。返却まで待機…",
+  "device.yielded": "{device}を{owner}に譲りました（アクティブウィンドウ優先）",
+  "instances.createAction": "作成",
+  "instances.createHint": "Enter で作成；右上の × でキャンセル。",
+  "eta.clampApproval": "ETA 解放ウィンドウ拡張申請",
+  "eta.clampApprovalHint": "モデルが once 解放クランプの拡大を申請（硬上限超過）。承認する区間を入力（分、空欄＝変更なし）："
 }

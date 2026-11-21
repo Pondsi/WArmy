@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Trzynaście Czerwonych Kapturków nr 11",
   "pool.nm.24": "Trzynaście Czerwonych Kapturków nr 12",
   "pool.nm.25": "Trzynaście Czerwonych Kapturków nr 13",
-  "evolve.stoppedEmpty": "(Zatrzymano: ta runda nie wygenerowała jeszcze tekstu odpowiedzi.)"
+  "evolve.stoppedEmpty": "(Zatrzymano: ta runda nie wygenerowała jeszcze tekstu odpowiedzi.)",
+  "device.mic": "Mikrofon",
+  "device.camera": "Kamera",
+  "device.speaker": "Głośnik",
+  "device.ownerMimic": "towarzysz pulpitu",
+  "device.ownerSession": "sesja",
+  "device.waiting": "{device} jest używany przez {owner}; w kolejce do zwrotu…",
+  "device.yielded": "{device} ustąpiony: {owner} (aktywne okno priorytetem)",
+  "instances.createAction": "Utwórz",
+  "instances.createHint": "Enter tworzy; × (prawy górny) anuluje.",
+  "eta.clampApproval": "Wniosek o rozszerzenie okna ETA",
+  "eta.clampApprovalHint": "Model prosi o poszerzenie klamry once (poza twarde granice). Wpisz zatwierdzony przedział (min; puste = bez zmian):"
 }

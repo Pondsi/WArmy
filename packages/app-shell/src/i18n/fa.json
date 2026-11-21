@@ -4054,5 +4054,16 @@
   "pool.nm.23": "سیزده کلاه قرمز شماره 11",
   "pool.nm.24": "سیزده کلاه قرمز شماره 12",
   "pool.nm.25": "سیزده کلاه قرمز شماره 13",
-  "evolve.stoppedEmpty": "(متوقف شد: این دور هنوز متن پاسخی تولید نکرده است.)"
+  "evolve.stoppedEmpty": "(متوقف شد: این دور هنوز متن پاسخی تولید نکرده است.)",
+  "device.mic": "میکروفون",
+  "device.camera": "دوربین",
+  "device.speaker": "بلندگو",
+  "device.ownerMimic": "همراه رومیزی",
+  "device.ownerSession": "نشست",
+  "device.waiting": "{device} در حال استفاده توسط {owner}؛ در صف تا بازگردانده شود…",
+  "device.yielded": "{device} به {owner} واگذار شد (پنجره فعال اولویت دارد)",
+  "instances.createAction": "ایجاد",
+  "instances.createHint": "Enter برای ایجاد؛ × (بالا راست) برای لغو.",
+  "eta.clampApproval": "درخواست گسترش پنجره ETA",
+  "eta.clampApprovalHint": "مدل درخواست گسترش کلمپ once را دارد (فراتر از مرزهای سخت). بازه تأییدشده را وارد کنید (دقیقه؛ خالی = بدون تغییر):"
 }

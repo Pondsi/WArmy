@@ -56,6 +56,9 @@ export interface LogEntry {
    * 形如 `{ shiBai: ['A','B'], shiYong: 'C', yuanYin: 'HTTP 500' }`。
    */
   moXingJiangJi?: { shiBai?: string[]; shiYong?: string; yuanYin?: string; fuZhu?: string };
+  /** R274：进化双支线并排块（聊天记录的一部分）：expId/胜出臂/双臂历史。
+   *  界面画并排块；模型上下文由 quHuiHuaXiaoXiJi 展开为胜出臂完整对话。持久化走旁路台账。 */
+  evolvePair?: { expId?: string; winner?: string; mode?: string; arms?: Record<string, { history?: unknown[] }> };
   /**
    * 这条消息带的**文件/截图**（用户拖入的附件、本轮产出/读过的文件）：
    * 只给界面画成图标行（悬停全路径、左键打开、右键定位），不进模型上下文。

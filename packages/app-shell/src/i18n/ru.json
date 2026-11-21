@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Тринадцать Красных Шапок № 11",
   "pool.nm.24": "Тринадцать Красных Шапок № 12",
   "pool.nm.25": "Тринадцать Красных Шапок № 13",
-  "evolve.stoppedEmpty": "(Остановлено: в этом раунде ещё не создан текст ответа.)"
+  "evolve.stoppedEmpty": "(Остановлено: в этом раунде ещё не создан текст ответа.)",
+  "device.mic": "Микрофон",
+  "device.camera": "Камера",
+  "device.speaker": "Динамик",
+  "device.ownerMimic": "настольный компаньон",
+  "device.ownerSession": "сессия",
+  "device.waiting": "{device} используется: {owner}. Ожидание возврата…",
+  "device.yielded": "{device} уступлен: {owner} (активное окно приоритетно)",
+  "instances.createAction": "Создать",
+  "instances.createHint": "Enter — создать; × (справа сверху) — отмена.",
+  "eta.clampApproval": "Запрос расширения окна ETA",
+  "eta.clampApprovalHint": "Модель просит расширить зажим once (вне жёстких границ). Введите одобренный интервал (мин; пусто = без изменений):"
 }

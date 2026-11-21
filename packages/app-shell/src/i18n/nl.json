@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Dertien Roodkapjes nr. 11",
   "pool.nm.24": "Dertien Roodkapjes nr. 12",
   "pool.nm.25": "Dertien Roodkapjes nr. 13",
-  "evolve.stoppedEmpty": "(Gestopt: deze ronde heeft nog geen antwoordtekst opgeleverd.)"
+  "evolve.stoppedEmpty": "(Gestopt: deze ronde heeft nog geen antwoordtekst opgeleverd.)",
+  "device.mic": "Microfoon",
+  "device.camera": "Camera",
+  "device.speaker": "Luidspreker",
+  "device.ownerMimic": "de desktopmetgezel",
+  "device.ownerSession": "de sessie",
+  "device.waiting": "{device} is in gebruik door {owner}; in wachtrij tot teruggave…",
+  "device.yielded": "{device} afgestaan aan {owner} (actief venster eerst)",
+  "instances.createAction": "Aanmaken",
+  "instances.createHint": "Enter om aan te maken; × (rechtsboven) om te annuleren.",
+  "eta.clampApproval": "ETA-venster uitbreidingsverzoek",
+  "eta.clampApprovalHint": "Het model vraagt de once-clamp te verbreden (buiten harde grenzen). Voer het goedgekeurde interval in (min; leeg = ongewijzigd):"
 }

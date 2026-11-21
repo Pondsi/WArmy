@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Trece Caperucitas rojas n.º 11",
   "pool.nm.24": "Trece Caperucitas rojas n.º 12",
   "pool.nm.25": "Trece Caperucitas rojas n.º 13",
-  "evolve.stoppedEmpty": "(Detenido: esta ronda aún no ha producido texto de respuesta.)"
+  "evolve.stoppedEmpty": "(Detenido: esta ronda aún no ha producido texto de respuesta.)",
+  "device.mic": "Micrófono",
+  "device.camera": "Cámara",
+  "device.speaker": "Altavoz",
+  "device.ownerMimic": "el compañero de escritorio",
+  "device.ownerSession": "la sesión",
+  "device.waiting": "{device} está en uso por {owner}; en cola hasta su devolución…",
+  "device.yielded": "{device} cedido a {owner} (ventana activa prioritaria)",
+  "instances.createAction": "Crear",
+  "instances.createHint": "Enter para crear; × (arriba derecha) para cancelar.",
+  "eta.clampApproval": "Solicitud de ampliación de ventana ETA",
+  "eta.clampApprovalHint": "El modelo pide ampliar el clamp once (fuera de límites duros). Introduzca el intervalo aprobado (min; vacío = sin cambio):"
 }

@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Tiga Belas Topi Merah No. 11",
   "pool.nm.24": "Tiga Belas Topi Merah No. 12",
   "pool.nm.25": "Tiga Belas Topi Merah No. 13",
-  "evolve.stoppedEmpty": "(Dihentikan: putaran ini belum menghasilkan teks balasan.)"
+  "evolve.stoppedEmpty": "(Dihentikan: putaran ini belum menghasilkan teks balasan.)",
+  "device.mic": "Mikrofon",
+  "device.camera": "Kamera",
+  "device.speaker": "Pengeras suara",
+  "device.ownerMimic": "pendamping desktop",
+  "device.ownerSession": "sesi",
+  "device.waiting": "{device} sedang dipakai {owner}; mengantre hingga dikembalikan…",
+  "device.yielded": "{device} diserahkan ke {owner} (jendela aktif prioritas)",
+  "instances.createAction": "Buat",
+  "instances.createHint": "Enter untuk membuat; × (kanan atas) untuk batal.",
+  "eta.clampApproval": "Permintaan perluasan jendela ETA",
+  "eta.clampApprovalHint": "Model meminta memperlebar clamp once (di luar batas keras). Masukkan interval yang disetujui (menit; kosong = tetap):"
 }

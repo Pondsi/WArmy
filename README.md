@@ -83,6 +83,7 @@ One person can use all three; a studio can grow from assistant to project room w
 - **Per-session permissions.** A group workhorse cannot browse a project or private session just because it can chat.
 - **Optional isolation.** Host or container; an unavailable container is reported honestly, never silently replaced.
 - **Honest about limits.** Unfinished paths say so; unavailable services fail loudly instead of inventing results.
+- **Device arbitration.** A session's microphone/speaker/camera use outranks the desktop companion: the companion yields while a session is using a device and resumes once it is released; when several sessions contend, the focused window wins.
 
 ![Settings and safety controls](docs/screenshots/readme-settings.png)
 
@@ -111,7 +112,7 @@ You send a brief → the duty agent routes it → a workhorse plans and calls to
 
 **Download, install, use.** No server setup.
 
-1. Download `WArmy-Setup-0.4.45.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
+1. Download `WArmy-Setup-0.4.46.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
 2. Run the installer, choose a folder, launch **WArmy / 无限牛马**.
 3. First run: choose a language, create your self-custodied identity, save the 24-word mnemonic, set a PIN; add a model provider and create your first workhorse.
 

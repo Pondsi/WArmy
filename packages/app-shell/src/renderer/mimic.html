@@ -221,16 +221,63 @@
       try { await window.warmyMimic?.caiDanXian?.(); } catch { /* 宿主拒绝时不打开残缺菜单 */ }
     }
 
+    /* ── R275 设备仲裁：拟态优先级低于会话；被抢让出、会话用完归还后恢复 ── */
+    let mimDaiBo = null;    // 排队/被抢中断的卡片播报（归还后补播）
+    let mimDaiPlay = null;  // 排队/被抢中断的合成语音
+    window.__mimSheBeiDeng = {};
+    function mimSheBeiQing(device) {
+      return new Promise((resolve) => {
+        let yiJie = false;
+        const jie = (v) => { if (!yiJie) { yiJie = true; resolve(v); } };
+        window.__mimSheBeiDeng[device] = jie;
+        window.warmyMimic?.sheBeiShenQing?.({ device, sid: '' }).then((r) => {
+          if (r && r.granted) { delete window.__mimSheBeiDeng[device]; jie(false); }
+        }).catch(() => { delete window.__mimSheBeiDeng[device]; jie(false); /* 仲裁不可用不挡拟态 */ });
+      });
+    }
+    function mimSheBeiFang(device) {
+      try { delete window.__mimSheBeiDeng[device]; void window.warmyMimic?.sheBeiShiFang?.({ device }); } catch { /* noop */ }
+    }
+    window.warmyMimic?.onSheBeiShiJian?.((ev) => {
+      const d = String((ev && ev.device) || '');
+      if (!ev || !d) return;
+      if (ev.type === 'grant') {
+        const r = window.__mimSheBeiDeng[d];
+        if (r) { delete window.__mimSheBeiDeng[d]; r(!!ev.resume); }
+        if (d === 'mic') { try { tongBuYuYinMoShi(); } catch { /* noop */ } }
+        if (d === 'speaker') {
+          if (mimDaiBo) { const dd = mimDaiBo; mimDaiBo = null; void boKa(dd); }
+          else if (mimDaiPlay) {
+            const dd = mimDaiPlay; mimDaiPlay = null;
+            try { const a = document.getElementById('yinPin'); if (a) { a.src = String(dd.dataUrl); a.play().catch(() => { /* noop */ }); } } catch { /* noop */ }
+          }
+        }
+      } else if (ev.type === 'revoke') {
+        if (d === 'mic') { try { guanLuYin(); } catch { /* noop */ } }
+        if (d === 'speaker') {
+          try { if (kaBoBaoZhong && kaDangQian) mimDaiBo = kaDangQian; } catch { /* noop */ }
+          kaBoBaoZhong = false;
+          window.speechSynthesis?.cancel();
+          try { document.getElementById('yinPin').pause(); } catch { /* noop */ }
+        }
+      }
+    });
+
     /* R232：系统语音播报卡片；播报期间停录且丢弃跨界分片，防自身声音变成授权。 */
-    let kaYuYinToken = '', kaBoBaoZhong = false, kaBoBaoDai = 0;
-    window.warmyMimic?.onKaPian?.((d) => {
+    let kaYuYinToken = '', kaBoBaoZhong = false, kaBoBaoDai = 0, kaDangQian = null;
+    async function boKa(d) {
       const dai = ++kaBoBaoDai;
       kaYuYinToken = ''; kaBoBaoZhong = !!d?.text;
       guanLuYin();
       window.speechSynthesis?.cancel();
       if (!d?.text) { kaBoBaoZhong = false; tongBuYuYinMoShi(); return; }
+      kaDangQian = d;
+      /* R275：扬声器仲裁——会话在用则让出/排队，归还后补播 */
+      const huo = await mimSheBeiQing('speaker');
+      if (!huo) { mimDaiBo = d; kaBoBaoZhong = false; return; }
+      if (dai !== kaBoBaoDai) return;
       window.__shuo(d.text, 15000);
-      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { kaBoBaoZhong = false; return; }
+      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { kaBoBaoZhong = false; mimSheBeiFang('speaker'); return; }
       const ju = new SpeechSynthesisUtterance(String(d.text));
       ju.lang = d.locale || 'zh-CN';
       const voices = speechSynthesis.getVoices();
@@ -238,11 +285,12 @@
       if (voice) ju.voice = voice;
       ju.onend = () => {
         if (dai !== kaBoBaoDai) return;
-        kaYuYinToken = String(d.token || ''); kaBoBaoZhong = false; tongBuYuYinMoShi();
+        kaYuYinToken = String(d.token || ''); kaBoBaoZhong = false; kaDangQian = null; mimSheBeiFang('speaker'); tongBuYuYinMoShi();
       };
-      ju.onerror = () => { if (dai === kaBoBaoDai) { kaBoBaoZhong = false; kaYuYinToken = ''; } };
+      ju.onerror = () => { if (dai === kaBoBaoDai) { kaBoBaoZhong = false; kaYuYinToken = ''; mimSheBeiFang('speaker'); } };
       speechSynthesis.speak(ju);
-    });
+    }
+    window.warmyMimic?.onKaPian?.((d) => { void boKa(d); });
 
     // 主进程推来的说话/状态
     window.warmyMimic?.onSay?.((d) => window.__shuo(d && d.text, d && d.ms));
@@ -252,6 +300,7 @@
         kaBoBaoZhong = false; kaYuYinToken = '';
         window.speechSynthesis?.cancel();
         try { document.getElementById('yinPin').pause(); } catch { /* noop */ }
+        mimSheBeiFang('speaker');
         tongBuYuYinMoShi();
       }
     });
@@ -284,14 +333,22 @@
         const a = document.getElementById('yinPin');
         if (!a || !d || !d.dataUrl) return;
         a.src = String(d.dataUrl);
-        a.play().catch(() => { /* 播放失败不影响字幕 */ });
+        /* R275：扬声器仲裁——会话在用则排队，归还后播 */
+        void mimSheBeiQing('speaker').then((huo) => {
+          if (!huo) { mimDaiPlay = d; return; }
+          a.play().catch(() => { /* 播放失败不影响字幕 */ });
+        });
       } catch { /* noop */ }
     });
 
     // ── R218 语音互动：非 off 模式持续录音，每 2.5s 分片交给主进程 ASR/判断 ──
     let luYin = null;
-    function kaiShiLuYin() {
+    async function kaiShiLuYin() {
       if (luYin || kaBoBaoZhong || !document.getElementById('yinPin').paused) return;
+      /* R275：麦克风仲裁——会话要用则让出；排队时等归还事件再进 */
+      const huo = await mimSheBeiQing('mic');
+      if (!huo) return;
+      if (luYin || kaBoBaoZhong || !document.getElementById('yinPin').paused) { mimSheBeiFang('mic'); return; }
       const luYinDai = kaBoBaoDai;
       navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
         .then((stream) => {
@@ -318,7 +375,7 @@
           rec.start();
           luYin = { stream, rec, timer: setInterval(() => { try { if (rec.state === 'recording') rec.stop(); } catch { /* noop */ } }, 2500) };
         })
-        .catch(() => { /* 无麦克风授权：静默（不打扰拟态） */ });
+        .catch(() => { /* 无麦克风授权：静默（不打扰拟态） */ mimSheBeiFang('mic'); });
     }
     function guanLuYin() {
       if (!luYin) return;
@@ -332,12 +389,12 @@
         window.warmyMimic?.yuYinMoShiQu?.().then((r) => {
           const moShi = String((r && r.moShi) || 'off');
           if (moShi !== 'off') { kaiShiLuYin(); window.__dian(true); }
-          else { guanLuYin(); window.__dian(false); }
+          else { guanLuYin(); mimSheBeiFang('mic'); window.__dian(false); }
         }).catch(() => { /* 查不到按 off */ });
       } catch { /* noop */ }
     }
     document.getElementById('yinPin').addEventListener('play', guanLuYin);
-    document.getElementById('yinPin').addEventListener('ended', tongBuYuYinMoShi);
+    document.getElementById('yinPin').addEventListener('ended', () => { mimSheBeiFang('speaker'); tongBuYuYinMoShi(); });
     document.getElementById('yinPin').addEventListener('error', tongBuYuYinMoShi);
     tongBuYuYinMoShi();
     setInterval(tongBuYuYinMoShi, 10000); // 设置页改模式后 10s 内生效

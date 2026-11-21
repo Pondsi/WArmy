@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Treize Chaperons rouges n° 11",
   "pool.nm.24": "Treize Chaperons rouges n° 12",
   "pool.nm.25": "Treize Chaperons rouges n° 13",
-  "evolve.stoppedEmpty": "(Arrêté : ce tour n'a encore produit aucun texte de réponse.)"
+  "evolve.stoppedEmpty": "(Arrêté : ce tour n'a encore produit aucun texte de réponse.)",
+  "device.mic": "Micro",
+  "device.camera": "Caméra",
+  "device.speaker": "Haut-parleur",
+  "device.ownerMimic": "le compagnon de bureau",
+  "device.ownerSession": "la session",
+  "device.waiting": "{device} est utilisé par {owner} ; en attente de restitution…",
+  "device.yielded": "{device} cédé à {owner} (fenêtre active prioritaire)",
+  "instances.createAction": "Créer",
+  "instances.createHint": "Entrée pour créer ; × (en haut à droite) pour annuler.",
+  "eta.clampApproval": "Demande d’extension de fenêtre ETA",
+  "eta.clampApprovalHint": "Le modèle demande à élargir le clamp once (hors bornes dures). Saisissez l’intervalle approuvé (min ; vide = inchangé) :"
 }

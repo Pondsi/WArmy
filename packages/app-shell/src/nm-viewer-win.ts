@@ -76,18 +76,10 @@ function nmXiaZaiGuaGou(sess: any): void {
         const def = sid && nmXiaZaiLuJing ? String(nmXiaZaiLuJing.defaultDir(sid) || '') : app.getPath('downloads');
         const dir = def || app.getPath('downloads');
         try { fs.mkdirSync(dir, { recursive: true }); } catch { /* noop */ }
-        const opts = {
-          title: '保存下载文件',
-          defaultPath: path.join(dir, name),
-        };
-        const chosen = Z && !Z.win.isDestroyed()
-          ? dialog.showSaveDialogSync(Z.win, opts)
-          : dialog.showSaveDialogSync(opts);
-        if (!chosen) { try { item.cancel(); } catch { /* noop */ } return; }
-        target = chosen;
-        if (sid && nmXiaZaiLuJing) {
-          try { nmXiaZaiLuJing.save(sid, path.dirname(chosen)); } catch { /* noop */ }
-        }
+        /* R278 项8：旧版在这里 showSaveDialogSync——同步对话框堵死主进程（全应用冻住直到人点掉，
+         * 无人值守/首下即卡死）。改为自动落会话下载目录（defaultDir 同口径），同名自动 (1)(2)；
+         * 面板里可「定位/打开」，不再弹同步框。 */
+        target = nmWeiYiLuJing(dir, name);
       }
       item.setSavePath(target);
       const xiang: NmXiaZaiXiang = {
@@ -1225,6 +1217,8 @@ interface NmZhuangTai {
   moTaiWin?: BrowserWindow;
   /** R244 报障11c：收藏夹悬停面板的原生弹出窗（非模态，定位在按钮下方）——网页保持可见不再空白 */
   tanChuangWin?: BrowserWindow;
+  /** R278 项8：下载管理原生弹出窗（独立槽，与收藏夹弹窗互不顶替）——网页保持可见不再空白 */
+  xiaZaiWin?: BrowserWindow;
 }
 
 /** 主窗口在窗口池里的固定 id（nm 窗口 id 都是正数，不会撞） */
@@ -1759,6 +1753,8 @@ function jianWangYeView(Z: NmZhuangTai, tabKey: string, yinSi = false): WebConte
   const wc = v.webContents;
   /** 第 120 轮（W10）：网页下载落到系统下载目录，并在查看器里显示状态 */
   try { nmXiaZaiGuaGou(wc.session); } catch { /* 下载钩子失败不影响浏览 */ }
+  /* R278 项8：网站账号密码捕获（表单 POST）——本机保管，列表仅显掩码 */
+  try { guaZhangHaoBuHuo(wc); } catch { /* 捕获失败不影响浏览 */ }
   /**
    * 第 122 轮：target=_blank / window.open 不再无声丢掉——
    * 一律拒绝新开原生窗口，把 URL 交回渲染层，在同一个 nm 窗口里新建标签页。
@@ -2027,9 +2023,16 @@ export function nmMoTaiGuan(id: number): { ok: boolean } {
 
 /** R244 报障11c：收藏夹悬停面板改原生弹出窗——非模态、定位在按钮下方，网页视图保持可见不再被隐藏变空白 */
 export function nmTanChuangKai(id: number, html: string, opts?: { rectLeft?: number; rectBottom?: number; width?: number; height?: number; center?: boolean }): { ok: boolean; cuo?: string } {
+  return nmFuChuangKai(id, html, opts, 'tanChuangWin');
+}
+/** R278 项8：下载管理面板改原生弹出窗（独立槽）——旧 DOM 面板要藏原生视图⇒页面变空白；原生窗盖在视图之上，网页保持可见 */
+export function nmXiaZaiChuangKai(id: number, html: string, opts?: { rectLeft?: number; rectBottom?: number; width?: number; height?: number }): { ok: boolean; cuo?: string } {
+  return nmFuChuangKai(id, html, opts, 'xiaZaiWin');
+}
+function nmFuChuangKai(id: number, html: string, opts: { rectLeft?: number; rectBottom?: number; width?: number; height?: number; center?: boolean } | undefined, slot: 'tanChuangWin' | 'xiaZaiWin'): { ok: boolean; cuo?: string } {
   const Z = CHUANG_KOU.get(Number(id) || 0);
   if (!Z || Z.win.isDestroyed()) return { ok: false, cuo: '窗口不存在' };
-  try { if (Z.tanChuangWin && !Z.tanChuangWin.isDestroyed()) Z.tanChuangWin.destroy(); } catch { /* noop */ }
+  try { const jiu = Z[slot]; if (jiu && !jiu.isDestroyed()) jiu.destroy(); } catch { /* noop */ }
   try {
     const cb = Z.win.getContentBounds();
     const w = Math.max(200, Number(opts?.width) || 260);
@@ -2048,8 +2051,8 @@ export function nmTanChuangKai(id: number, html: string, opts?: { rectLeft?: num
       backgroundColor: '#20232b',
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
-    Z.tanChuangWin = win;
-    win.on('closed', () => { Z.tanChuangWin = undefined; });
+    Z[slot] = win;
+    win.on('closed', () => { Z[slot] = undefined; });
     win.once('ready-to-show', () => { try { win.showInactive(); } catch { /* noop */ } });
     void win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(String(html || '')));
     return { ok: true };
@@ -2060,6 +2063,55 @@ export function nmTanChuangGuan(id: number): { ok: boolean } {
   try { if (Z?.tanChuangWin && !Z.tanChuangWin.isDestroyed()) Z.tanChuangWin.destroy(); } catch { /* noop */ }
   if (Z) Z.tanChuangWin = undefined;
   return { ok: true };
+}
+export function nmXiaZaiChuangGuan(id: number): { ok: boolean } {
+  const Z = CHUANG_KOU.get(Number(id) || 0);
+  try { if (Z?.xiaZaiWin && !Z.xiaZaiWin.isDestroyed()) Z.xiaZaiWin.destroy(); } catch { /* noop */ }
+  if (Z) Z.xiaZaiWin = undefined;
+  return { ok: true };
+}
+/** R278 项8：判定某 WebContents 是否 nm 模态/弹出辅助窗（data: URL）——供 IPC 来源白名单放行其受限通道 */
+export function nmShiFuZhuChuang(wc: import('electron').WebContents): boolean {
+  try {
+    for (const Z of CHUANG_KOU.values()) {
+      if (Z.moTaiWin && !Z.moTaiWin.isDestroyed() && Z.moTaiWin.webContents === wc) return true;
+      if (Z.tanChuangWin && !Z.tanChuangWin.isDestroyed() && Z.tanChuangWin.webContents === wc) return true;
+      if (Z.xiaZaiWin && !Z.xiaZaiWin.isDestroyed() && Z.xiaZaiWin.webContents === wc) return true;
+    }
+  } catch { /* noop */ }
+  return false;
+}
+/** R278 项8：网站账密捕获回调（存储层在 electron-main，本层只负责抓表单 POST） */
+let nmZhangHaoHuiDiao: ((url: string, username: string, password: string) => void) | null = null;
+export function sheNmZhangHaoHuiDiao(fn: (url: string, username: string, password: string) => void): void { nmZhangHaoHuiDiao = fn; }
+/** 表单 POST（urlencoded 且含 password 字段）⇒ 记网站账密；debugger 不可用（如 DevTools 占用）就静默跳过 */
+function guaZhangHaoBuHuo(wc: import('electron').WebContents): void {
+  const wcAny = wc as unknown as { __nmZhangHaoGua?: boolean };
+  if (wcAny.__nmZhangHaoGua) return;
+  wcAny.__nmZhangHaoGua = true;
+  try {
+    wc.debugger.attach('1.3');
+  } catch { return; /* 已被 DevTools 等占用⇒不捕获，不影响浏览 */ }
+  try { void wc.debugger.sendCommand('Network.enable'); } catch { /* noop */ }
+  wc.debugger.on('message', (_e, method, params) => {
+    if (method !== 'Network.requestWillBeSent') return;
+    try {
+      const req = (params as { request?: { method?: string; url?: string; postData?: string; headers?: Record<string, string> } })?.request || {};
+      if (String(req.method || '').toUpperCase() !== 'POST') return;
+      const pd = String(req.postData || '');
+      if (!pd || !/(^|&)password=/i.test(pd)) return;
+      const headers = req.headers || {};
+      const ct = String(headers['Content-Type'] || headers['content-type'] || '');
+      if (!/urlencoded/i.test(ct)) return;
+      const sp = new URLSearchParams(pd);
+      const password = sp.get('password') || '';
+      if (!password) return;
+      const username = sp.get('username') || sp.get('email') || sp.get('user') || sp.get('login') || '';
+      let origin = '';
+      try { origin = new URL(String(req.url || '')).origin; } catch { return; }
+      if (origin && nmZhangHaoHuiDiao) nmZhangHaoHuiDiao(origin, username, password);
+    } catch { /* noop */ }
+  });
 }
 
 export function nmWangYeGuan(id: number, tabKey?: string): { ok: boolean } {
@@ -2809,8 +2861,9 @@ export function nmShiTuSheZhi(
 }
 
 function huanHangHuanYuan(wenBen: string, huanHang?: 'crlf' | 'lf'): string {
-  if (huanHang === 'crlf') return wenBen.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
-  return wenBen.replace(/\r\n/g, '\n');
+  const lf = wenBen.split('\r\n').join('\n');
+  if (huanHang === 'crlf') return lf.split('\n').join('\r\n');
+  return lf;
 }
 
 function gongYongXieRu(

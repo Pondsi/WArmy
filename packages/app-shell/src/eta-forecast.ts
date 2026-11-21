@@ -198,6 +198,10 @@ export interface EtaKu {
   fangFa: Partial<Record<XingWei, Record<string, EtaFangFa>>>;
   /** 自学习进度账：按时间记录整体误差水平（证明"越来越准"的可查轨迹） */
   jingDuGuiJi: Array<{ ts: number; yangBen: number; wuChaEma: number; piaoYiXiShu: number; mingZhongLv: number }>;
+  /** R278 项3：once 放行窗口夹区间（总结自优化；扩大硬区间[0.1,600]min，缩小免批最小[0.001,1]min） */
+  clamp?: { minMs: number; maxMs: number };
+  /** R278 项3：总结提取的"何时该预先拆分任务"经验（供以后开局/到顶前预拆） */
+  splitInsight?: string;
 }
 
 /** 临时文件里，某个行为在本轮的实时状态 */
@@ -628,6 +632,48 @@ export class EtaZhangBen {
 
   kuaiZhao(): EtaKu { return JSON.parse(JSON.stringify(this.ku)) as EtaKu; }
   wenJian(): string { return this.jieDian || ''; }
+
+  /** R278 项3：读 once 夹区间（默认 [10,30]min） */
+  duClamp(): { minMs: number; maxMs: number } {
+    const c = this.ku.clamp;
+    return { minMs: Number(c?.minMs) || 10 * 60000, maxMs: Number(c?.maxMs) || 30 * 60000 };
+  }
+  /**
+   * R278 项3：提交夹区间优化。缩小（变窄）免批直接改（下限最小区间[0.001,1]min 不可再小）；
+   * 扩大在硬区间[0.1,600]min 内直接改；超出硬区间⇒不应用、返回 needApproval 交用户审批。
+   */
+  tiClampGengXin(minMs: number, maxMs: number, now = Date.now()): { applied: boolean; needApproval: boolean; reqMinMs: number; reqMaxMs: number } {
+    const HARD_MIN = 0.1 * 60000, HARD_MAX = 600 * 60000;
+    const FLOOR_MIN = 0.001 * 60000, FLOOR_MAX = 1 * 60000;
+    const cur = this.duClamp();
+    let mn = Math.max(FLOOR_MIN, Number(minMs) || cur.minMs);
+    let mx = Math.max(FLOOR_MAX, Number(maxMs) || cur.maxMs);
+    if (mx < mn) mx = mn;
+    const narrower = mn >= cur.minMs && mx <= cur.maxMs;
+    /* R278 项3：缩小免批——max 不扩大即视为缩小（min 可一路降到 FLOOR_MIN=0.001min，
+     * 用户口径：最小区间 [0.001,1] 不可更改、缩小无需申请）；旧版 narrower 只认子集，
+     * 把 [0.001,1] 这种合法缩小误判成需审批。 */
+    const shrink = mx <= cur.maxMs;
+    const withinHard = mn >= HARD_MIN && mx <= HARD_MAX;
+    if (narrower || shrink || withinHard) {
+      this.ku.clamp = { minMs: mn, maxMs: mx };
+      this.paiXie(now, true);
+      return { applied: true, needApproval: false, reqMinMs: mn, reqMaxMs: mx };
+    }
+    return { applied: false, needApproval: true, reqMinMs: mn, reqMaxMs: mx };
+  }
+  /** R278 项3：直接应用已批准的夹区间（用户审批后） */
+  yingYongClamp(minMs: number, maxMs: number, now = Date.now()): void {
+    this.ku.clamp = { minMs: Math.max(0.001 * 60000, Number(minMs) || 10 * 60000), maxMs: Math.max(1 * 60000, Number(maxMs) || 30 * 60000) };
+    this.paiXie(now, true);
+  }
+  duSplitInsight(): string { return String(this.ku.splitInsight || ''); }
+  jiSplitInsight(text: string, now = Date.now()): void {
+    const t = String(text || '').trim();
+    if (!t) return;
+    this.ku.splitInsight = t.slice(0, 2000);
+    this.paiXie(now, true);
+  }
 
   /** 查"这类行为/这类任务"的预测方法（没有就 null —— **绝不编一个出来**） */
   chaFangFa(xingWei: XingWei, qianMing?: string): EtaFangFa | null {

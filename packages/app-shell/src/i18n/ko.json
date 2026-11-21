@@ -4054,5 +4054,16 @@
   "pool.nm.23": "13 붉은모자 제11호",
   "pool.nm.24": "13 붉은모자 제12호",
   "pool.nm.25": "13 붉은모자 제13호",
-  "evolve.stoppedEmpty": "(중지됨: 이번 라운드에는 아직 본문이 생성되지 않았습니다.)"
+  "evolve.stoppedEmpty": "(중지됨: 이번 라운드에는 아직 본문이 생성되지 않았습니다.)",
+  "device.mic": "마이크",
+  "device.camera": "카메라",
+  "device.speaker": "스피커",
+  "device.ownerMimic": "데스크톱 컴패니언",
+  "device.ownerSession": "세션",
+  "device.waiting": "{device}은(는) {owner}이(가) 사용 중. 반환까지 대기…",
+  "device.yielded": "{device}을(를) {owner}에게 양보했습니다(활성 창 우선)",
+  "instances.createAction": "만들기",
+  "instances.createHint": "Enter로 만들기; 오른쪽 위 ×로 취소.",
+  "eta.clampApproval": "ETA 해제 창 확장 신청",
+  "eta.clampApprovalHint": "모델이 once 해제 클램프 확대를 신청(한계 초과). 승인할 구간 입력(분, 빈칸=변경 없음):"
 }

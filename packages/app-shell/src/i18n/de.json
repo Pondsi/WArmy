@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Dreizehn Rotkappen Nr. 11",
   "pool.nm.24": "Dreizehn Rotkappen Nr. 12",
   "pool.nm.25": "Dreizehn Rotkappen Nr. 13",
-  "evolve.stoppedEmpty": "(Gestoppt: In dieser Runde wurde noch kein Antworttext erzeugt.)"
+  "evolve.stoppedEmpty": "(Gestoppt: In dieser Runde wurde noch kein Antworttext erzeugt.)",
+  "device.mic": "Mikrofon",
+  "device.camera": "Kamera",
+  "device.speaker": "Lautsprecher",
+  "device.ownerMimic": "der Desktop-Begleiter",
+  "device.ownerSession": "die Sitzung",
+  "device.waiting": "{device} wird von {owner} benutzt; wartet auf Rückgabe…",
+  "device.yielded": "{device} an {owner} abgetreten (aktives Fenster hat Vorrang)",
+  "instances.createAction": "Erstellen",
+  "instances.createHint": "Enter zum Erstellen; × (oben rechts) zum Abbrechen.",
+  "eta.clampApproval": "ETA-Fenster-Erweiterungsantrag",
+  "eta.clampApprovalHint": "Das Modell beantragt eine Erweiterung des once-Clamps (außerhalb harter Grenzen). Genehmigtes Intervall eingeben (Min.; leer = unverändert):"
 }

@@ -4054,5 +4054,16 @@
   "pool.nm.23": "ثلاثة عشر قبعات حمراء رقم 11",
   "pool.nm.24": "ثلاثة عشر قبعات حمراء رقم 12",
   "pool.nm.25": "ثلاثة عشر قبعات حمراء رقم 13",
-  "evolve.stoppedEmpty": "(متوقف: لم ينتج هذا الدور نص رد بعد.)"
+  "evolve.stoppedEmpty": "(متوقف: لم ينتج هذا الدور نص رد بعد.)",
+  "device.mic": "الميكروفون",
+  "device.camera": "الكاميرا",
+  "device.speaker": "مكبر الصوت",
+  "device.ownerMimic": "رفيق سطح المكتب",
+  "device.ownerSession": "الجلسة",
+  "device.waiting": "{device} قيد الاستخدام بواسطة {owner}؛ في الانتظار حتى الإرجاع…",
+  "device.yielded": "{device} تم التنازل عنه لـ {owner} (النافذة النشطة أولاً)",
+  "instances.createAction": "إنشاء",
+  "instances.createHint": "Enter للإنشاء؛ × (أعلى اليمين) للإلغاء.",
+  "eta.clampApproval": "طلب توسيع نافذة ETA",
+  "eta.clampApprovalHint": "يطلب النموذج توسيع clamp once (خارج الحدود الصلبة). أدخل الفترة المعتمدة (دقائق؛ فارغ = دون تغيير):"
 }

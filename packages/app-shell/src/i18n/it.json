@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Tredici Cappucci rossi n. 11",
   "pool.nm.24": "Tredici Cappucci rossi n. 12",
   "pool.nm.25": "Tredici Cappucci rossi n. 13",
-  "evolve.stoppedEmpty": "(Fermato: questo turno non ha ancora prodotto testo di risposta.)"
+  "evolve.stoppedEmpty": "(Fermato: questo turno non ha ancora prodotto testo di risposta.)",
+  "device.mic": "Microfono",
+  "device.camera": "Fotocamera",
+  "device.speaker": "Altoparlante",
+  "device.ownerMimic": "il companion desktop",
+  "device.ownerSession": "la sessione",
+  "device.waiting": "{device} è in uso da {owner}; in coda fino alla restituzione…",
+  "device.yielded": "{device} ceduto a {owner} (finestra attiva prioritaria)",
+  "instances.createAction": "Crea",
+  "instances.createHint": "Invio per creare; × (in alto a destra) per annullare.",
+  "eta.clampApproval": "Richiesta di ampliamento finestra ETA",
+  "eta.clampApprovalHint": "Il modello chiede di ampliare il clamp once (oltre i limiti rigidi). Inserisci l’intervallo approvato (min; vuoto = invariato):"
 }

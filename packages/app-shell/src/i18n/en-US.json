@@ -4054,5 +4054,16 @@
   "pool.nm.23": "Thirteen Redcaps, No. 11",
   "pool.nm.24": "Thirteen Redcaps, No. 12",
   "pool.nm.25": "Thirteen Redcaps, No. 13",
-  "evolve.stoppedEmpty": "(Stopped: this round hasn't produced any reply text yet.)"
+  "evolve.stoppedEmpty": "(Stopped: this round hasn't produced any reply text yet.)",
+  "device.mic": "Microphone",
+  "device.camera": "Camera",
+  "device.speaker": "Speaker",
+  "device.ownerMimic": "the desktop companion",
+  "device.ownerSession": "the session",
+  "device.waiting": "{device} is in use by {owner}; queued until returned…",
+  "device.yielded": "{device} yielded to {owner} (active window first)",
+  "instances.createAction": "Create",
+  "instances.createHint": "Press Enter to create; click × (top-right) to cancel.",
+  "eta.clampApproval": "ETA release-window expansion request",
+  "eta.clampApprovalHint": "The model asks to widen the once release clamp (beyond hard bounds). Enter the approved interval (minutes; blank = unchanged):"
 }

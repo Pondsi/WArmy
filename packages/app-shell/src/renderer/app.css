@@ -516,7 +516,7 @@ body.liaoTianChuangKou .liaoTianBuJu {
   pointer-events: none;
   z-index: 1;   /* 角标是 2/3，不能被环盖住 */
 }
-@keyframes yunXingHuanZhuan { 0% { background-position: 0% 100%; } 100% { background-position: 100% 0%; } }
+@keyframes yunXingHuanZhuan { 0% { background-position: 100% 0%; } 100% { background-position: 0% 100%; } }
 /* B. 反向流光晕：宽而柔的 conic 光晕，blur 后反向匀速慢转，与锐环叠出流光深度 */
 .lieBiaoTiaoMu .avKuang.yunXingZhong::after {
   content: '';
@@ -538,7 +538,7 @@ body.liaoTianChuangKou .liaoTianBuJu {
   pointer-events: none;
   z-index: 0;
 }
-@keyframes yunXingLiuDong { 0% { background-position: 0% 100%; } 100% { background-position: 100% 0%; } }
+@keyframes yunXingLiuDong { 0% { background-position: 100% 0%; } 100% { background-position: 0% 100%; } }
 /* C. 呼吸扩散：光晕呼吸 + 向外扩散的涟漪，环与晕之外仍有活水般的余韵 */
 .lieBiaoTiaoMu .avKuang.yunXingZhong {
   animation: yunXingGuangYun 3.6s ease-in-out infinite;
@@ -4415,19 +4415,25 @@ html { font-weight: var(--fw-ui, 400); }
   box-shadow: 0 0 0 1px var(--card);
   animation: langDuPulse 1s ease-in-out infinite;
 }
-.bubble.langDuGaoLiang {
-  outline: 2px solid var(--accent);
+.bubble.langDuGaoLiang, .siKaoKuai.langDuGaoLiang, .zhongJianKa.langDuGaoLiang {
+  /* R279 项2：呼吸发光——慢周期（4.2s）ease-in-out，外框描边＋柔光晕同步起伏，平稳安逸；绝不动内容 opacity */
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
   outline-offset: 2px;
-  /* 内容不闪（用户要求）：呼吸只动外框描边颜色，绝不动气泡整体 opacity */
-  animation: langDuWaiKuangHuXi 1.6s ease-in-out infinite;
   border-radius: var(--radius-sm);
+  animation: langDuWaiKuangHuXi 4.2s ease-in-out infinite;
 }
 @keyframes langDuWaiKuangHuXi {
-  0%, 100% { outline-color: color-mix(in srgb, var(--accent) 45%, transparent); }
-  50%      { outline-color: var(--accent); }
+  0%, 100% {
+    outline-color: color-mix(in srgb, var(--accent) 28%, transparent);
+    box-shadow: 0 0 4px 0 color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  50% {
+    outline-color: color-mix(in srgb, var(--accent) 72%, transparent);
+    box-shadow: 0 0 16px 3px color-mix(in srgb, var(--accent) 26%, transparent);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bubble.langDuGaoLiang { animation: none; }
+  .bubble.langDuGaoLiang, .siKaoKuai.langDuGaoLiang, .zhongJianKa.langDuGaoLiang { animation: none; }
 }
 .xiaoXi.wo .bubble.langDuGaoLiang {
   outline-color: var(--me-bubble-ink, var(--ink));
