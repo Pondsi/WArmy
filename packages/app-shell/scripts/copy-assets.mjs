@@ -1,6 +1,7 @@
 import {copyFileSync, mkdirSync, readdirSync, statSync, existsSync as fsExists} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {gouJianXuanRan} from './gou-jian-xuan-ran.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const src = path.join(root, '..', 'src');
@@ -48,4 +49,6 @@ if (fsExists(path.join(tplFrom, 'tpl.pptx'))) {
   copyFileSync(path.join(tplFrom, 'tpl.pptx'), path.join(dist, 'assets', 'tpl.pptx'));
 }
 
-console.log('app-shell assets copied (renderer + i18n, recursive)');
+// 资源复制之后统一打包；单独运行 copy-assets 也不会把未打包模块留在 dist。
+const xuanRan = await gouJianXuanRan();
+console.log('app-shell assets copied (renderer + i18n, recursive); renderer IIFE checked: ' + xuanRan.ruKou.join(', '));

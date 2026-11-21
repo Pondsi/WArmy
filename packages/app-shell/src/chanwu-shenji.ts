@@ -18,8 +18,8 @@
 const WAN_CHENG = /(已(经)?(写入|保存|存|创建|生成|导出|落盘|做完|完成)|写完|写好|保存到|生成(好|完|了)|创建(了|好)|路径(是|如下)|saved?|created|written|generated|exported)/i;
 /**
  * 带扩展名的文件名（扩展名白名单，避免把 "3.5"、"v1.2" 之类当文件名）。
- * ⚠️ 字符类里必须带 `:` 与 `\\`：Windows 绝对路径 `C:\\Users\\p\\Desktop\\r16.txt` 少了 `:` 就只截到
- * "16.txt" —— 那会让"文件其实存在"被判成"编造"（误伤比漏报更糟：用户会看到一句冤枉模型的道歉）。
+ * ⚠️ 字符类里必须带 `:` 与 `\\`：Windows 绝对路径 `C:\\Users\\<user>\\Desktop\\example.txt` 少了 `:` 就只截到
+ * 文件名尾部 —— 那会让"文件其实存在"被判成"编造"（误伤比漏报更糟：用户会看到一句冤枉模型的道歉）。
  * 前面的边界组保证我们从**路径开头**截，不从中间咬一半。
  */
 const WEN_JIAN = /(?:^|[^A-Za-z0-9_.:\\/-])([\w\-. :/\\]+\.(?:html?|txt|md|json|csv|js|cjs|mjs|ts|py|css|xml|ya?ml|docx|pptx|xlsx|pdf|png|jpe?g|gif|webp|svg|zip))/gi;

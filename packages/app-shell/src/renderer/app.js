@@ -2480,11 +2480,14 @@ async function langDuWenBen(text, btnEl) {
                 if (btn) btn.classList.add('boFangZhong');
                 /** 高亮只挂一次（用户要求：内容不闪）——逐段 remove/add 会让描边动画重启闪烁；
                  *  播放期间类不摘，停止（biaoJiBoFang(false)/langDuTing）时统一清理。 */
-                /* R279 项1：特效归属被读块——思考与执行的喇叭点亮该块，而不是下面的回复气泡 */
-                const zu = btn && btn.closest && btn.closest('.guoChengDuanZu');
-                const kuai = zu && zu.querySelector('.siKaoKuai, .zhongJianKa');
+                /* R279 项1 / R284：特效归属被读块——读键含 :seg:/:mid: ⇒ 思考与执行/中间回复卡；
+                 * 否则⇒最终回复气泡。正式渲染外层是 .guoChengLie（旧只认 .guoChengDuanZu 落空⇒误挂气泡）。 */
+                const shiGuoCheng = /:(seg|mid):/.test(btnKey);
+                const zu = btn && btn.closest && btn.closest('.guoChengDuanZu, .guoChengLie');
                 const msg = btn && btn.closest && btn.closest('.xiaoXi');
-                const bub = kuai || (msg && msg.querySelector('.bubble'));
+                const bub = shiGuoCheng
+                  ? ((zu && zu.querySelector('.siKaoKuai, .zhongJianKa')) || (msg && msg.querySelector('.siKaoKuai, .zhongJianKa')))
+                  : (msg && msg.querySelector('.bubble'));
                 if (bub && !bub.classList.contains('langDuGaoLiang')) bub.classList.add('langDuGaoLiang');
               } catch { /* noop */ }
             };
@@ -2675,6 +2678,7 @@ async function langDuWenBen(text, btnEl) {
    * 副本存在期间一直开放；这里常驻列出正在编辑的文件，由用户点击“结束并封存”才回写。
    * 不再根据文件 2 秒不变来猜测“已经改完”。
    */
+  let wbbjShouQi = false; /* R288 项4：封存条收起状态（会话内保持） */
   function renderWaiBuBianJiTiao(items) {
     const kai = (Array.isArray(items) ? items : []).filter((x) => x && x.state === 'open');
     let he = document.getElementById('waiBuBianJiTiao');
@@ -2688,15 +2692,19 @@ async function langDuWenBen(text, btnEl) {
       he.className = 'waiBuBianJiTiao';
       document.body.appendChild(he);
     }
-    he.innerHTML = '<div class="wbbjTou">' + escapeHtml(tOr('externalEdit.openTitle', '外部编辑进行中')) + '</div>' +
-      kai.map((x) => {
-        const ming = String(x.original || '').split(/[\\/]/).pop() || String(x.original || '');
-        return '<div class="wbbjHang" data-wbbj-id="' + escapeHtml(String(x.id || '')) + '">' +
-          '<span class="wbbjMing" title="' + escapeHtml(String(x.original || '')) + '">' + escapeHtml(ming) + '</span>' +
-          '<button class="anNiuXiao wbbjDuan" type="button" data-wbbj-finish="1">' + escapeHtml(tOr('externalEdit.finish', '结束并封存')) + '</button>' +
-          '<button class="anNiuXiao wbbjQi" type="button" data-wbbj-discard="1">' + escapeHtml(tOr('externalEdit.discard', '放弃更改')) + '</button>' +
-          '</div>';
-      }).join('');
+    const rows = kai.map((x) => {
+      const ming = String(x.original || '').split(/[\\/]/).pop() || String(x.original || '');
+      return '<div class="wbbjHang" data-wbbj-id="' + escapeHtml(String(x.id || '')) + '">' +
+        '<span class="wbbjMing" title="' + escapeHtml(String(x.original || '')) + '">' + escapeHtml(ming) + '</span>' +
+        '<button class="anNiuXiao wbbjDuan" type="button" data-wbbj-finish="1">' + escapeHtml(tOr('externalEdit.finish', '结束封存')) + '</button>' +
+        '<button class="anNiuXiao wbbjQi" type="button" data-wbbj-discard="1">' + escapeHtml(tOr('externalEdit.discard', '放弃更改')) + '</button>' +
+        '</div>';
+    }).join('');
+    /* R288 项4：右上角横线收起/展开 */
+    he.innerHTML = '<div class="wbbjTou"><span>' + escapeHtml(tOr('externalEdit.openTitle', '外部编辑进行中')) + '（' + kai.length + '）</span>' +
+      '<button class="wbbjZheDie" type="button" style="margin-left:auto;border:none;background:transparent;color:inherit;cursor:pointer;font:inherit;line-height:1;padding:2px 6px;" title="' + escapeHtml(wbbjShouQi ? tOr('idchg.expand', '展开') : tOr('net.provider.fold', '收起')) + '">' + (wbbjShouQi ? '▢' : '—') + '</button></div>' +
+      '<div class="wbbjBody"' + (wbbjShouQi ? ' style="display:none"' : '') + '>' + rows + '</div>';
+    he.querySelector('.wbbjZheDie')?.addEventListener('click', () => { wbbjShouQi = !wbbjShouQi; renderWaiBuBianJiTiao(kai); });
     he.querySelectorAll('[data-wbbj-finish]').forEach((b) => {
       b.addEventListener('click', async () => {
         const id = b.closest('[data-wbbj-id]')?.getAttribute('data-wbbj-id') || '';
@@ -5186,12 +5194,18 @@ async function langDuWenBen(text, btnEl) {
       for (const a of as) {
         if (a.getAttribute('data-real')) continue;
         const full = a.getAttribute('data-open') || '';
+        /* R288：绝对盘符/UNC 路径是真实文件系统路径（如进化写入回执），即使随后被移动/清理
+         * 也保留超链接样式与右键菜单；只有相对/占位路径才在不存在时退回纯文字。 */
+        const jueDui = /^(?:[A-Za-z]:[\\/]|\\\\)/.test(full);
         const zhen = luJingHouXuan(full).find((c) => LU_JING_CUN_ZAI_CACHE.get(c) === true);
         if (zhen) {
           a.setAttribute('data-open', zhen);
           a.setAttribute('data-real', '1');
           a.setAttribute('title', zhen);
           if (a.textContent !== zhen) a.textContent = zhen;
+        } else if (jueDui) {
+          a.setAttribute('data-real', '1');
+          a.setAttribute('title', full);
         } else if (LU_JING_CUN_ZAI_CACHE.has(full) || luJingHouXuan(full).some((c) => LU_JING_CUN_ZAI_CACHE.has(c))) {
           a.setAttribute('data-real', '0');
           if (a.parentNode) { try { a.replaceWith(document.createTextNode(a.textContent || full)); } catch { /* noop */ } }
@@ -7000,13 +7014,8 @@ async function langDuWenBen(text, btnEl) {
       catch { uiAlert(t('common.error')); }
     });
     if (/[\\/]workspace[\\/]/i.test(String(p))) {
-      mkItem(tOr('common.externalEdit', '外部编辑（解密副本）'), async () => {
-        const yi = await uiConfirm(tOr('externalEdit.confirm', '会用系统默认程序打开一份明文副本。确认后这份副本会一直保持开放，直到你点击「结束外部编辑」或退出应用；应用不会再猜测你是否改完。拒绝则不会生成副本。外部程序在副本存在期间当然能读它。是否继续？'));
-        if (!yi) return;
-        const r = await window.warmy.waiBuBianJi?.({ path: p }).catch(() => null);
-        if (r?.ok) { showToast(String(r.warning || tOr('externalEdit.started', '已打开明文副本；改完后请点击「结束并封存」'))); void shuaXinWaiBuBianJi(); }
-        else uiAlert(String(r?.error || t('common.error')));
-      });
+      /* R288 项3：改名「系统默认打开方式」；项4：新确认文案；统一走副本会话 helper */
+      mkItem(tOr('common.externalEdit', '系统默认打开方式'), async () => { await kaiWaiBuBianJi(p); });
     }
     mkItem(tOr('common.openDir', '打开目录'), async () => {
       const r = await window.warmy.xianShiWenJianJia?.({ path: p });
@@ -8150,10 +8159,13 @@ async function langDuWenBen(text, btnEl) {
     if (!k) return;
     const b = document.querySelector('.xiaoXiLangDu[data-read-key="' + CSS.escape(k) + '"]');
     if (!b) return;
-    const zu = b.closest('.guoChengDuanZu');
-    const kuai = zu && zu.querySelector('.siKaoKuai, .zhongJianKa');
+    /* R284：与 onplaying 同口径——读键类型定归属，外层兼容 .guoChengLie/.guoChengDuanZu */
+    const shiGuoCheng = /:(seg|mid):/.test(k);
+    const zu = b.closest('.guoChengDuanZu, .guoChengLie');
     const msg = b.closest('.xiaoXi');
-    const mu = kuai || (msg && msg.querySelector('.bubble'));
+    const mu = shiGuoCheng
+      ? ((zu && zu.querySelector('.siKaoKuai, .zhongJianKa')) || (msg && msg.querySelector('.siKaoKuai, .zhongJianKa')))
+      : (msg && msg.querySelector('.bubble'));
     if (mu && !mu.classList.contains('langDuGaoLiang')) mu.classList.add('langDuGaoLiang');
   }
 
@@ -9179,7 +9191,7 @@ async function langDuWenBen(text, btnEl) {
     x.innerHTML = '<div class="bz-jiaZai">…</div>';
     var r = await window.warmy.systemMessages().catch(function () { return null; });
     var items = (r && r.items) || [];
-    var lei = { update: tOr('help.kindUpdate', '更新'), remote: tOr('help.kindRemote', '远程控制'), ssh: 'SSH', system: tOr('help.kindSystem', '系统') };
+    var lei = { update: tOr('help.kindUpdate', '更新'), remote: tOr('help.kindRemote', '远程控制'), ssh: 'SSH', system: tOr('help.kindSystem', '系统'), briefing: tOr('help.kindBriefing', '简报') };
     var head = '<div class="bz-gongJuTiao"><button class="anNiuXiao" data-bz-readall>' + escapeHtml(tOr('help.readAll', '全部已读')) + '</button></div>';
     /* R278 项3：ETA 夹区间扩展审批（合并单条；双输入＋确定，留空＝不变） */
     var sp = await window.warmy.etaClampShenPiQu().catch(function () { return null; });
@@ -9198,9 +9210,20 @@ async function langDuWenBen(text, btnEl) {
     }
     if (!items.length) { x.innerHTML = head + spBlock + '<div class="bz-kong">' + escapeHtml(tOr('help.sysEmpty', '（暂无系统消息）')) + '</div>'; return; }
     x.innerHTML = head + spBlock + items.map(function (m) {
+      /* R286：未知模型标签询问⇒勾选种类＋确定＋授权联网 */
+      var labelBlock = '';
+      if (String(m.title || '').indexOf('未知模型标签：') === 0) {
+        var mo = String(m.title).slice('未知模型标签：'.length);
+        var kinds = ['chat', 'embedding', 'rerank', 'asr', 'tts', 'image', 'imageUnd', 'videoUnd', 'videoGen', 'translate', 'safety', 'decision', 'ocr', 'reasoning', 'code'];
+        labelBlock = '<div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap" data-bz-label-wrap="' + escapeHtml(mo) + '">'
+          + '<select data-bz-label-sel style="padding:4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)">' + kinds.map(function (k) { return '<option value="' + k + '">' + k + '</option>'; }).join('') + '</select>'
+          + '<button class="anNiuZhuYao" data-bz-label-ok="' + escapeHtml(mo) + '">' + escapeHtml(tOr('common.ok', '确定')) + '</button>'
+          + '<button class="anNiuXiao" data-bz-label-web="' + escapeHtml(mo) + '">' + escapeHtml(tOr('mimic.authorizeWeb', '授权联网标注')) + '</button>'
+          + '</div>';
+      }
       return '<div class="bz-xiaoXi' + (m.read ? '' : ' weiDu') + '" data-bz-read="' + escapeHtml(m.id) + '">'
         + '<div class="bz-xiaoXiTou"><span class="bz-leiBie">' + escapeHtml(lei[m.kind] || m.kind) + '</span><span class="bz-xiaoXiBiao">' + escapeHtml(m.title) + '</span><span class="bz-xiaoXiShi">' + escapeHtml(bzShiJian(m.ts)) + '</span></div>'
-        + '<div class="bz-xiaoXiShen">' + escapeHtml(m.body) + '</div></div>';
+        + '<div class="bz-xiaoXiShen">' + escapeHtml(m.body) + '</div>' + labelBlock + '</div>';
     }).join('');
   }
   function bzDaKaiZhenDuan() {
@@ -9227,6 +9250,19 @@ async function langDuWenBen(text, btnEl) {
       var mn = (document.getElementById('bzClampMin') || {}).value || '';
       var mx = (document.getElementById('bzClampMax') || {}).value || '';
       try { await window.warmy.etaClampShenPiQue({ minMin: mn, maxMin: mx }); } catch (e) { /* noop */ }
+      bzXuanRanSystem(); bzShuaXinHuiZhang(); return;
+    }
+    if (mb.closest('[data-bz-label-ok]')) {
+      var moK = mb.closest('[data-bz-label-ok]').getAttribute('data-bz-label-ok');
+      var wrapK = mb.closest('[data-bz-label-wrap]');
+      var selK = wrapK && wrapK.querySelector('[data-bz-label-sel]');
+      try { await window.warmy.moXingBiaoQianShe({ model: moK, kind: selK ? selK.value : 'chat' }); } catch (e) { /* noop */ }
+      bzXuanRanSystem(); bzShuaXinHuiZhang(); return;
+    }
+    if (mb.closest('[data-bz-label-web]')) {
+      var moW = mb.closest('[data-bz-label-web]').getAttribute('data-bz-label-web');
+      var rW = await window.warmy.moXingBiaoQianLianWang({ model: moW }).catch(function () { return null; });
+      showToast(rW && rW.ok ? ('已联网标注：' + rW.kind) : ('联网标注失败：' + String((rW && rW.error) || '') + '；可勾选种类或保持未知'));
       bzXuanRanSystem(); bzShuaXinHuiZhang(); return;
     }
     if (mb.closest('[data-bz-readall]')) { try { await window.warmy.systemMessagesReadAll(); } catch (e) { /* noop */ } bzXuanRanSystem(); bzShuaXinHuiZhang(); return; }
@@ -11254,12 +11290,13 @@ window.__keYiLiaoTian = keYiLiaoTian;
   (function bindMimicChuangJian() {
     const xingTai = () => { try { return String(document.querySelector('input[name="mimicXingTai"]:checked')?.value || '2d'); } catch { return '2d'; } };
     const kai = async () => {
-      const sanD = xingTai() === '3d';
+      let sanD = xingTai() === '3d';
       if (sanD) {
         const hj = await window.warmy.sanDHuiTuHuanJing?.().catch(() => null);
         if (!hj || !hj.ready) {
           const r = await window.warmy.benDiShengChengAnZhuang?.().catch(() => null);
-          if (!r || !r.ok) { showToast(String((r && (r.error === 'source-unverified' ? tOr('mimic.localGenUnverified', '暂无已验证的免费商用后端，来源核验后开放下载。') : r.error)) || tOr('common.error', '出错了'))); return; }
+          /* R288 项9：3D 后端不可用不堵死——回落 2D 面板，保证任何形态下按钮都能打开使用。 */
+          if (!r || !r.ok) { showToast(String((r && (r.error === 'source-unverified' ? tOr('mimic.localGenUnverified', '暂无已验证的免费商用后端，来源核验后开放下载。') : r.error)) || tOr('common.error', '出错了')) + '；已改用2D生成'); sanD = false; }
         }
       }
       void window.__kaiMimicHuiTu?.({
@@ -13232,8 +13269,12 @@ window.__keYiLiaoTian = keYiLiaoTian;
       let zuiHouNeiRong = -1;
       const flush = () => {
         if (!proc.length) return;
-        const inner = proc.map((h) => (kindOf(h) === 'tool')
-          ? '<div class="xingDongHang">' + escapeHtml(String(h.content || '')) + '</div>'
+        /* R288：过程组内按真实 ts 排序（思考→工具同毫秒思考先），与主聊天时间线同口径；
+         * 工具行复用 xingDongHangNode（.xingDongZu 委托展开），修复“点击无法展开”。 */
+        const RANK = { sikao: 0, tool: 1 };
+        const sorted = proc.map((h, i) => ({ h, i, ts: Number(h.ts) || 0 })).sort((a, b) => (a.ts - b.ts) || ((RANK[kindOf(a.h)] || 0) - (RANK[kindOf(b.h)] || 0)) || (a.i - b.i));
+        const inner = sorted.map(({ h }) => (kindOf(h) === 'tool')
+          ? xingDongHangNode({ ts: Number(h.ts) || 0, op: String(h.content || '').replace(/（失败）$/, ''), status: /（失败）$/.test(String(h.content || '')) ? 'fail' : 'ok', hao: 'zjh-' + expId + '-' + (Number(h.ts) || 0) }).outerHTML
           : '<pre class="siKaoDuanKuai">' + escapeHtml(String(h.content || '')) + '</pre>').join('');
         groups.push(out.length);
         out.push('<div class="guoChengLie"><details class="siKaoKuai guoChengDuan"><summary>' + escapeHtml(tOr('chat.actionLog', '思考与执行')) + '</summary>' + inner + '</details></div>');
@@ -26104,12 +26145,9 @@ async function renderDashboard(host) {
     wen.className = 'zhengLiTeXiaoWen';
     const hua = document.createElement('canvas');
     hua.className = 'zhengLiTeXiaoHua';
-    const tiShi = document.createElement('span');
-    tiShi.className = 'zhengLiTiShi';
-    tiShi.textContent = tOr('chat.voiceOrganizingLabel', '整理中…');
+    /* R283：不再显示“整理中…”文字提示（主人定稿）；特效（逐字发光/星芒/光点/重排）保留不变 */
     layer.appendChild(wen);
     layer.appendChild(hua);
-    layer.appendChild(tiShi);
     zhu.insertBefore(layer, ru);
     ru.classList.add('zhengLiZhong');
     zhu.classList.add('zhengLiZhong');
@@ -26129,7 +26167,7 @@ async function renderDashboard(host) {
     ru.readOnly = true;
     ru.setAttribute('aria-readonly', 'true');
     ru.title = tOr('chat.voiceOrganizingStopTip', '正在整理…再点一下话筒停止');
-    const zt = { ru, zhu, layer, wen, hua, tiShi, ruWasReadOnly, raf: 0, ro: null, onInput: null, onScroll: null, onResize: null,
+    const zt = { ru, zhu, layer, wen, hua, tiShi: null, ruWasReadOnly, raf: 0, ro: null, onInput: null, onScroll: null, onResize: null,
       liangTimer: 0, liangSuiJi: null, paiLieSuiJi: null, paiTimers: [], jianDong: null,
       shouWei: false, shouWeiP: null, shouTimers: [] };
     let ziList = [];
@@ -26809,6 +26847,8 @@ async function renderDashboard(host) {
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia) { uiAlert(t('chat.voiceUnsupported')); return; }
+    /* R285-2：点话筒即预载重组本地模型（主进程按勾选/本地/不冲突三重条件决定是否真预载）。 */
+    try { void window.warmy.yuYinYuJiaZai?.(); } catch { /* noop */ }
     /* R275：麦克风仲裁——拟态在听则让出给会话；别的会话在用则排队等归还 */
     await sheBeiQing('mic', sessionId);
     let openedStream = null;
@@ -27223,14 +27263,66 @@ async function renderDashboard(host) {
        · 宿主侧编辑被**拒绝**（主进程会再拒一次 —— 渲染层不是授权层）。
      ══════════════════════════════════════════════════════════════════════════ */
 
+  /* R289：控制台 ANSI SGR → HTML（16 色＋粗体＋重置），先 escape 再着色，终端同款观感。 */
+  function ansiHtml(text) {
+    const esc = escapeHtml(String(text == null ? '' : text));
+    const SE = { 30: '#6a737d', 31: '#f47067', 32: '#57ab5a', 33: '#c69026', 34: '#539bf5', 35: '#b083f0', 36: '#39c5cf', 37: '#d4d4d4', 90: '#8b949e', 91: '#ff938a', 92: '#6bc46d', 93: '#daaa3f', 94: '#6cb6ff', 95: '#c297ff', 96: '#56d4dd', 97: '#ffffff' };
+    let open = false; let out = '';
+    const re = /\u001b\[([0-9;]*)m/g; let last = 0; let m;
+    const push = (s) => { out += open ? s : s; };
+    while ((m = re.exec(esc))) {
+      out += esc.slice(last, m.index); last = re.lastIndex;
+      const codes = (m[1] || '0').split(';').map(Number);
+      for (const c of codes) {
+        if (c === 0) { if (open) { out += '</span>'; open = false; } }
+        else if (c === 1) { out += '<span style="font-weight:600">'; open = true; }
+        else if (SE[c]) { if (open) out += '</span>'; out += '<span style="color:' + SE[c] + '">'; open = true; }
+        else if (c === 39) { if (open) { out += '</span>'; open = false; } }
+      }
+    }
+    out += esc.slice(last);
+    if (open) out += '</span>';
+    return out;
+  }
+  /** R289：终端输出追加（HTML＋智能滚动） */
+  function kztWrite(html) {
+    const out = $('ctgKongZhiTaiShuChu'); if (!out) return;
+    const zaiDi = out.scrollHeight - out.scrollTop - out.clientHeight <= 6;
+    out.insertAdjacentHTML('beforeend', html);
+    if (zaiDi) out.scrollTop = out.scrollHeight;
+  }
+  /** R289：持久历史（localStorage，按会话） */
+  function kztLiShiDu(sid) { try { return JSON.parse(localStorage.getItem('warmy.kzt.lishi.' + sid) || '[]'); } catch { return []; } }
+  function kztLiShiCun(sid, li) { try { localStorage.setItem('warmy.kzt.lishi.' + sid, JSON.stringify(li.slice(-100))); } catch { /* noop */ } }
   // 本机的人敲回车 / 点「执行」→ 走 submitShellLine（主进程未就绪则**不执行任何东西**）
   $('ctgKongZhiTaiFaSong')?.addEventListener('click', () => { void submitShellLine(); });
   $('ctgKongZhiTaiShuRu')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); void submitShellLine(); return; }
-    /* R224 项11：本机档上下箭头翻命令历史 */
     const st = state.neiZhiKzt;
-    if (!st || st.mode !== 'local' || !Array.isArray(st.liShi) || !st.liShi.length) return;
     const shuRu = $('ctgKongZhiTaiShuRu');
+    /* R289：Ctrl 快捷键＝原始控制台同款 */
+    if (e.ctrlKey && !e.altKey) {
+      if (e.key === 'l' || e.key === 'L') { e.preventDefault(); const out = $('ctgKongZhiTaiShuChu'); if (out) out.innerHTML = ''; return; }
+      if (e.key === 'c' || e.key === 'C') { if (st && st.mang) { e.preventDefault(); void window.warmy.benJiKongZhiTai?.({ action: 'quXiao', sessionId: st.sid }); kztWrite('<span style="color:#f47067">^C</span>\n'); return; } }
+      if (e.key === 'u' || e.key === 'U') { e.preventDefault(); if (shuRu) shuRu.value = ''; return; }
+      if (e.key === 'k' || e.key === 'K') { e.preventDefault(); if (shuRu) shuRu.value = shuRu.value.slice(0, shuRu.selectionStart || 0); return; }
+      if (e.key === 'a' || e.key === 'A') { e.preventDefault(); shuRu?.setSelectionRange(0, 0); return; }
+      if (e.key === 'e' || e.key === 'E') { e.preventDefault(); const L = shuRu?.value.length || 0; shuRu?.setSelectionRange(L, L); return; }
+    }
+    if (e.key === 'Enter') { e.preventDefault(); void submitShellLine(); return; }
+    /* R289：Tab 补全（命令＋路径） */
+    if (e.key === 'Tab' && st && st.mode === 'local') {
+      e.preventDefault();
+      void (async () => {
+        const r = await window.warmy.benJiKongZhiTai?.({ action: 'wanCheng', sessionId: st.sid, dir: st.dir, data: shuRu?.value || '' }).catch(() => null);
+        const hou = (r && r.completions) || [];
+        if (!hou.length || !shuRu) return;
+        const val = shuRu.value; const parts = val.split(/\s+/); const last = parts[parts.length - 1] || '';
+        if (hou.length === 1) { parts[parts.length - 1] = hou[0]; shuRu.value = parts.join(' '); }
+        else { kztWrite('<span style="color:#8b949e">' + escapeHtml(hou.join('  ')) + '</span>\n'); }
+      })();
+      return;
+    }
+    if (!st || st.mode !== 'local' || !Array.isArray(st.liShi) || !st.liShi.length) return;
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       st.liShiZhi = Math.max(0, (st.liShiZhi < 0 ? st.liShi.length : st.liShiZhi) - 1);
@@ -27638,8 +27730,15 @@ async function renderDashboard(host) {
   async function daKaiBenJiKongZhiTai(sid, dir) {
     const mianBan = $('ctgKongZhiTaiMianBan');
     if (!mianBan) return false;
-    state.neiZhiKzt = { mode: 'local', sid: String(sid || ''), dir: String(dir || ''), liShi: [], liShiZhi: -1, mang: false };
+    state.neiZhiKzt = { mode: 'local', sid: String(sid || ''), dir: String(dir || ''), liShi: kztLiShiDu(String(sid || '')), liShiZhi: -1, mang: false };
     mianBan.classList.remove('yinCang');
+    /* R289：工具条（清屏/复制）＝原始控制台同款 */
+    const head = mianBan.querySelector('.kongZhiTaiHead');
+    if (head && !head.querySelector('[data-kzt-qing]')) {
+      const mk = (attr, label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'kongZhiTaiQingChu'; b.setAttribute(attr, '1'); b.textContent = label; b.addEventListener('click', fn); head.insertBefore(b, head.querySelector('#ctgKongZhiTaiGuanBi')); return b; };
+      mk('data-kzt-qing', tOr('console.clear', '清空'), () => { const o = $('ctgKongZhiTaiShuChu'); if (o) o.innerHTML = ''; });
+      mk('data-kzt-copy', tOr('chat.copy', '复制'), () => { const o = $('ctgKongZhiTaiShuChu'); try { navigator.clipboard.writeText(o ? o.textContent : ''); showToast(tOr('chat.copied', '已复制')); } catch { /* noop */ } });
+    }
     const tiShi = $('ctgKongZhiTaiTiShi');
     if (tiShi) tiShi.textContent = tOr('container.console.localTitle', '本机控制台');
     let r = null;
@@ -27655,10 +27754,7 @@ async function renderDashboard(host) {
     if (shuRu) { shuRu.disabled = false; shuRu.dataset.shellInput = 'enabled'; }
     if (faSong) faSong.disabled = false;
     const out = $('ctgKongZhiTaiShuChu');
-    if (out) {
-      out.textContent = tOr('container.console.localIntro', '本机控制台：输入命令回车执行，命令跑在本会话工作区里。cls 清屏；cd 切换目录（不能离开工作区）。') + '\n';
-      out.scrollTop = out.scrollHeight;
-    }
+    if (out) { out.innerHTML = ''; kztWrite('<span style="color:#8b949e">' + escapeHtml(tOr('container.console.localIntro', '本机控制台：输入命令回车执行，命令跑在本会话工作区里。cls 清屏；cd 切换目录（不能离开工作区）。Tab 补全；Ctrl+L 清屏；Ctrl+C 中断；↑↓ 历史。')) + '</span>\n'); }
     try { shuRu?.focus(); } catch { /* noop */ }
     return true;
   }
@@ -27675,12 +27771,12 @@ async function renderDashboard(host) {
       out.scrollTop = out.scrollHeight;
       return false;
     }
-    if (/^(cls|clear)$/i.test(Hang.trim())) { out.textContent = ''; shuRu.value = ''; return true; }
+    if (/^(cls|clear)$/i.test(Hang.trim())) { out.innerHTML = ''; shuRu.value = ''; return true; }
     st.liShi.push(Hang); if (st.liShi.length > 100) st.liShi.shift();
+    kztLiShiCun(st.sid, st.liShi);
     st.liShiZhi = st.liShi.length;
     shuRu.value = '';
-    out.textContent += (st.dir || '.') + '> ' + Hang + '\n';
-    out.scrollTop = out.scrollHeight;
+    kztWrite('<span style="color:#57ab5a">' + escapeHtml(st.dir || '.') + '&gt;</span> ' + escapeHtml(Hang) + '\n');
     st.mang = true;
     const faSong = $('ctgKongZhiTaiFaSong');
     if (faSong) faSong.disabled = true;
@@ -27695,17 +27791,16 @@ async function renderDashboard(host) {
       if (zt) zt.textContent = tOr('container.console.envLocal', '本机') + ' · ' + st.dir;
     }
     if (r && r.ok) {
-      if (r.shuChu) out.textContent += String(r.shuChu);
-      if (r.timedOut) out.textContent += tOr('container.console.localTimeout', '命令超时（30 秒），已终止') + '\n';
-      else if (typeof r.tuiMa === 'number' && r.tuiMa !== 0) out.textContent += fmtKey('container.console.localExit', { code: String(r.tuiMa) }) + '\n';
+      if (r.shuChu) kztWrite(ansiHtml(String(r.shuChu)));
+      if (r.timedOut) kztWrite('<span style="color:#f47067">' + escapeHtml(tOr('container.console.localTimeout', '命令超时（30 秒），已终止')) + '</span>\n');
+      else if (typeof r.tuiMa === 'number' && r.tuiMa !== 0) kztWrite('<span style="color:#f47067">' + escapeHtml(fmtKey('container.console.localExit', { code: String(r.tuiMa) })) + '</span>\n');
     } else {
       const err = String((r && r.error) || 'unknown');
-      out.textContent += (err === 'dir-outside-userdata' ? tOr('container.console.localOutside', '目录超出会话工作区边界，已拒绝')
+      kztWrite('<span style="color:#f47067">' + escapeHtml(err === 'dir-outside-userdata' ? tOr('container.console.localOutside', '目录超出会话工作区边界，已拒绝')
         : err === 'cd-not-found' ? tOr('container.console.localCdErr', '目录不存在')
         : err === 'busy' ? tOr('container.console.localBusy', '上一条命令还在执行，等它结束再输入…')
-        : err) + '\n';
+        : err) + '</span>\n');
     }
-    out.scrollTop = out.scrollHeight;
     try { shuRu.focus(); } catch { /* noop */ }
     return !!(r && r.ok);
   }
@@ -28400,10 +28495,21 @@ async function renderDashboard(host) {
       .then((r) => { if (!r || r.ok === false) daKaiWenJianXiTong(lu); })
       .catch(() => daKaiWenJianXiTong(lu));
   }
+  /** R288 项3/4/6：系统默认打开＝显式明文副本会话（确认→副本→封存条），工作区文件不直接裸露原件。 */
+  async function kaiWaiBuBianJi(p) {
+    const lu = String(p || '').trim();
+    if (!lu) return { ok: false, error: 'bad-path' };
+    const yi = await uiConfirm(tOr('externalEdit.confirm', '该文件将以明文形式暴露在系统中，直到你「结束封存」或「放弃更改」。如果你不确定当前的系统环境是否安全，请点击取消，然后使用内置的nm查看器打开该文件。'));
+    if (!yi) return { ok: false, error: 'cancelled' };
+    const r = await window.warmy.waiBuBianJi?.({ path: lu }).catch(() => null);
+    if (r?.ok) { showToast(String(r.warning || tOr('externalEdit.started', '已打开明文副本；改完后请点击「结束封存」'))); void shuaXinWaiBuBianJi(); return { ok: true }; }
+    uiAlert(String(r?.error || t('common.error')));
+    return { ok: false, error: String(r?.error || 'open-failed') };
+  }
   /**
    * 左键打开项目内文件（第 63 轮项 27）：
    *  · 插件可用且用户勾了「使用 nm 查看器打开项目内文件」⇒ nm；
-   *  · 其它情况 ⇒ 系统默认程序。
+   *  · 其它情况 ⇒ 系统默认程序（R288 项6：工作区文件改走明文副本＋提示＋封存）。
    * 右键「打开」走相反的那条（见 shouWenJianYouJianCaiDan）。
    */
   function daKaiWenJianAsync(p) {
@@ -28412,7 +28518,11 @@ async function renderDashboard(host) {
     /** 系统默认：主进程的 `warmy:daKaiLuJing` 现在**永远**走系统（不再偷偷改投 nm） */
     const xiTong = () => Promise.resolve(window.warmy.daKaiLuJing?.({ path: lu }))
       .catch(() => ({ ok: false, error: 'open-failed' }));
-    if (!(nmChaJianKai() && state.nmKaiWenJian === true)) return xiTong();
+    if (!(nmChaJianKai() && state.nmKaiWenJian === true)) {
+      /* R288 项6：nm 开关关闭时，工作区文件也走副本＋确认＋封存，不直接打开原件 */
+      if (/[\\/]workspace[\\/]/i.test(lu)) return kaiWaiBuBianJi(lu);
+      return xiTong();
+    }
     return Promise.resolve(window.warmy.nmKai?.({ path: lu, huiHuaId: String(state.selectedChat?.id || '') }))
       .then((r) => (r && r.ok ? { ok: true, viewer: true, path: lu } : xiTong()))
       .catch(xiTong);
@@ -28525,6 +28635,17 @@ async function renderDashboard(host) {
         ru.value = wen;
         ru.dispatchEvent(new Event('input'));
         try { ru.focus(); } catch { /* noop */ }
+      } catch { /* noop */ }
+    });
+    /* R288 项7：编辑器「自动发送」中继——写入输入框并触发发送 */
+    window.warmy.onChatEditorAutoSend?.((d) => {
+      try {
+        const sid = String(state.selectedChat?.id || '');
+        if (!d || !sid || String(d.sessionId || '') !== sid) return;
+        const ru = $('shuRu'); if (!ru) return;
+        ru.value = String(d.text || '');
+        ru.dispatchEvent(new Event('input'));
+        setTimeout(() => { try { faSong(); } catch { /* noop */ } }, 0);
       } catch { /* noop */ }
     });
   } catch { /* 监听失败不影响其它功能 */ }
@@ -29744,7 +29865,7 @@ async function renderDashboard(host) {
     [/^membership/, 'membership'],
     [/^(net|mesh|peers|sync|lan|nodes)/, 'net'],
     [/^(knowledge|kb|memory)/, 'knowledge'],
-    [/^(metrics|cost|audit)/, 'metrics'],
+    [/^(metrics|cost|audit|consoleTail)/, 'metrics'],
     [/^skills?/, 'skill'],
     [/^(smtp|email)/, 'smtp'],
     [/^checkpoint/, 'checkpoint'],
@@ -29837,6 +29958,7 @@ async function renderDashboard(host) {
     setInsertMode: "(sessionId, mode)",
     getInsertMode: '(sessionId)',
     metricsSummary: '()',
+    consoleTail: '(payload?: {n?: number})',
     metricsTurns: '()',
     metricsTools: '()',
     chatLog: '(payload: {sessionId,mode?,limit?})',

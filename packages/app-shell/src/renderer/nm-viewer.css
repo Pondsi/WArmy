@@ -1641,3 +1641,13 @@ body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
 /* R183 项11：菜单内图标统一尺寸（搜索图标不再偏小）；浮层用主题卡色不露白 */
 .gongJuCaiDan button svg, .gongJuCaiDan label svg { width:14px !important; height:14px !important; }
 .gongJuCaiDan { background: var(--card); }
+
+/* R288 项7：聊天编辑模式话筒录音态 + 仅本次输入的重组呼吸特效 */
+#bjYuYin[aria-pressed="true"] { color: var(--accent, #a87654); background: var(--hover, rgba(168,118,84,.15)); border-radius: 6px; }
+#wenBen.bjZhengLiZhong { outline: 2px solid color-mix(in srgb, var(--accent, #a87654) 55%, transparent); outline-offset: 2px; animation: bjZhengLiHuXi 0.9s ease-in-out; }
+@keyframes bjZhengLiHuXi {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #a87654) 35%, transparent); }
+  50% { box-shadow: 0 0 14px 3px color-mix(in srgb, var(--accent, #a87654) 30%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) { #wenBen.bjZhengLiZhong { animation: none; } }

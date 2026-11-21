@@ -1168,6 +1168,17 @@ button.ddWen:hover { background: transparent !important; color: var(--ink); }
   padding: 2px 8px; cursor: pointer;
 }
 .kongZhiTaiMianBan .kongZhiTaiQingChu:hover { color: #d4d4d4; border-color: var(--accent); }
+/* R289：本机控制台＝终端观感（深色等宽、ANSI 着色、输入行） */
+#ctgKongZhiTaiShuChu {
+  background: #1e222a; color: #d4d4d4; font-family: var(--font-mono, Consolas, monospace);
+  font-size: 12px; line-height: 1.55; padding: 8px 10px; margin: 0;
+  overflow: auto; white-space: pre-wrap; word-break: break-all;
+}
+#ctgKongZhiTaiShuRu {
+  background: #1e222a; color: #d4d4d4; border: 1px solid #3a3f4a; border-radius: 6px;
+  font-family: var(--font-mono, Consolas, monospace); font-size: 12px; padding: 6px 8px;
+}
+#ctgKongZhiTaiShuRu:focus { outline: none; border-color: var(--accent, #a87654); }
 .kongZhiTaiShuChu {
   flex: 1; margin: 0; padding: 8px 10px; overflow: auto;
   font-size: var(--fs-sm); line-height: 1.4; white-space: pre-wrap;

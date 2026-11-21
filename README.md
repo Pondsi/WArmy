@@ -17,6 +17,14 @@ A local-first desktop workspace where AI is a **team**, not a chat box: give eac
 
 ---
 
+## Scenes worth trying
+
+- **Launch-note factory.** "Draft from these three files, then have the reviewer check every claim." The reviewer reads the actual files; the board records what passed.
+- **Research that remembers.** Search, extract, archive; next week recall sources by pointer instead of re-pasting the thread.
+- **A quiet night shift.** Scheduled exports / long watches with an audit trail and honest stop reasons — it never invents progress.
+- **A real second opinion.** A reviewer with a different persona and model, not a rerun of the same answer.
+- **A terminal that stays in the app.** The built-in console runs real commands in the session workspace with Tab completion, history, Ctrl+C and ANSI color — no external window, no host escape.
+
 ## Why it feels different
 
 - **Your machine, your army.** Chats, files, memory and settings live on your disk. Bring your own models — local, self-hosted or cloud — and pay your provider directly. There is no WArmy cloud.
@@ -67,15 +75,11 @@ One person can use all three; a studio can grow from assistant to project room w
 - **Diwen system.** A structured, verifiable machine-layer for facts (Chinese portion today); user-visible content stays natural language. Diwen is its own open-source project — see [Acknowledgments](#acknowledgments).
 - **Extensible by design.** dsh-compatible plugins, installable skills, and MCP servers with deterministic (non-model-discretion) extension points.
 - **A workbench for output.** The built-in nm viewer: Markdown source/preview, Office/PDF extraction, byte-level hex editing, archives, and a tabbed split browser with autonomous browsing.
+- **A real console.** A DevTools-style terminal above the chat: run commands in the session workspace, Tab-complete paths, recall history, interrupt with Ctrl+C, ANSI-colored output.
+- **An open, scoped agent API.** Settings → Shortcuts lists every `window.warmy` operation other agents can call (in-app IPC, no network port); sensitive calls still stop at approval cards.
+- **Three-tier recall.** Current recall → a broader head+tail re-recall → agentic `retrieve`; if a fact truly isn't there, the agent says so instead of guessing.
 
 ![Desktop companion and workbench](docs/screenshots/readme-mimic.png)
-
-## Scenes worth trying
-
-- **Launch-note factory.** "Draft from these three files, then have the reviewer check every claim." The reviewer reads the actual files; the board records what passed.
-- **Research that remembers.** Search, extract, archive; next week recall sources by pointer instead of re-pasting the thread.
-- **A quiet night shift.** Scheduled exports / long watches with an audit trail and honest stop reasons — it never invents progress.
-- **A real second opinion.** A reviewer with a different persona and model, not a rerun of the same answer.
 
 ## Control and safety
 
@@ -112,7 +116,7 @@ You send a brief → the duty agent routes it → a workhorse plans and calls to
 
 **Download, install, use.** No server setup.
 
-1. Download `WArmy-Setup-0.4.46.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
+1. Download `WArmy-Setup-0.4.47.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
 2. Run the installer, choose a folder, launch **WArmy / 无限牛马**.
 3. First run: choose a language, create your self-custodied identity, save the 24-word mnemonic, set a PIN; add a model provider and create your first workhorse.
 

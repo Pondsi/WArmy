@@ -1,13 +1,13 @@
 {
-  "version": "0.4.46",
-  "notes": "WArmy 0.4.46 — R278/R279: call-chain autosave + hot-swap hard-abort, once-window self-optimizing clamp with split judgement and merged approval system-message, evolution effect fix + reversed flow, evolve-branch files into workspace/artifact cards with rollback, identity injection fallback, nm browser-mode repairs (bookmark hover/create, startup-page save broadcast, website credentials + Chrome/Edge/Firefox CSV import, native download panel without sync save-dialog freeze, draggable splitters, themed popup options), read-aloud effect ownership + breathing glow + running-state marks, 10-session memory stress harness.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.46/WArmy-Setup-0.4.46.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.46/WArmy-Setup-0.4.46.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.46/WArmy-Setup-0.4.46.exe.warmyblocks",
-  "sha256": "e75b68a96d83d92136df0b31cf2ad66f5d668c9a1768eb33122fbc0ed1e2f122",
-  "size": 323919296,
+  "version": "0.4.47",
+  "notes": "WArmy 0.4.47 — R285/R286/R288/R289/R290: three-tier memory recall (current → head+tail re-recall → agentic retrieve, honest when absent), 67s reorg timeout + local-model preload with 24h conflict judgement, ASR triplet self-improvement feeding the V3 whitelist/confusion map, Diwen plan-C wired into sub-agent dispatch, unknown-model label self-judgement with system-message checkbox + authorized web lookup, evolve timeline chronological + expandable tool rows, bare-path linkification, external-edit rename/copy-on-delete/minimize, editor mic with per-input reorg, mimic default read-aloud without action tags, 2D/3D sculpt unblocked, DevTools-style in-app terminal (Tab/Ctrl+C/history/ANSI), scoped agent API catalog + read-only console tail, SPONSORS in 27 languages.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.47/WArmy-Setup-0.4.47.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.47/WArmy-Setup-0.4.47.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.47/WArmy-Setup-0.4.47.exe.warmyblocks",
+  "sha256": "adfd79d1144ba196092e2766c16b9f8d54060141203cba5af8064a249ddfe450",
+  "size": 323771337,
   "mandatory": false,
-  "publishedAt": "2026-11-21T14:34:23.400Z",
+  "publishedAt": "2026-11-21T23:31:29.696Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.46"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.47"
 }

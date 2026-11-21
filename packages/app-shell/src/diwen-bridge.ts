@@ -179,10 +179,41 @@ export async function diwenZhiShiKu(entries: any[]): Promise<{ query: (q: string
   return { query: async (q: string) => { const r = await dwCall('kbQuery', { entries, query: q }); return r && r.ok ? r.result : null; } };
 }
 
-/** 智能体互通迪文化。 */
-export async function zhiNengTiJiaoHuan(facts: { text?: string; doc?: any }): Promise<{ payload: DiwenHuaJieGuo; yuanWen: string }> {
+/** 智能体互通迪文化。R280：同时给出三通道文本——人看原文／机器看 GCF／LLM 看确定唯一自然语。 */
+export async function zhiNengTiJiaoHuan(facts: { text?: string; doc?: any }): Promise<{ payload: DiwenHuaJieGuo; yuanWen: string; moXingWenBen: string }> {
   const payload = await diwenHua(facts);
-  return { payload, yuanWen: payload.text };
+  /* R280：doc 本身是迪文结构化⇒直接确定渲染（渲染不需再过 NL→迪文 的校验闸） */
+  const youWords = !!(facts?.doc && Array.isArray(facts.doc.words) && facts.doc.words.length);
+  const moXingWenBen = (youWords ? await diwenZhuanZiRanYu(facts.doc) : null)
+    || (payload.mode === 'structured' && payload.diwen ? await diwenZhuanZiRanYu(payload.diwen) : null)
+    || payload.text;
+  return { payload, yuanWen: payload.text, moXingWenBen };
+}
+
+/**
+ * R280：迪文→**确定唯一自然语**（标准流程，供大语言模型作输入）。
+ * 无需优美但必须准确无误：固定模板＋保序＋未映射片段逐字保留；同 doc 必同串。
+ * 不可用/非结构化⇒null（调用方回退原文，绝不编造）。
+ */
+export async function diwenZhuanZiRanYu(doc: any): Promise<string | null> {
+  if (!doc || typeof doc !== 'object') return null;
+  const r = await dwCall('render', { doc });
+  return r && r.ok && r.result ? String(r.result.text || '') || null : null;
+}
+
+/** R280：LLM 输入统一入口——结构化迪文⇒确定自然语；否则原文（三态门控同源）。 */
+export async function diwenGeiMoXingWenBen(input: { text?: string; doc?: any }): Promise<string> {
+  /* R280：doc 已是迪文结构化⇒确定唯一自然语（渲染不走 NL→迪文 校验闸）；否则三态门控回原文 */
+  if (input?.doc && Array.isArray(input.doc.words) && input.doc.words.length) {
+    const r = await diwenZhuanZiRanYu(input.doc);
+    if (r) return r;
+  }
+  const h = await diwenHua(input);
+  if (h.mode === 'structured' && h.diwen) {
+    const r = await diwenZhuanZiRanYu(h.diwen);
+    if (r) return r;
+  }
+  return h.text;
 }
 
 /** NL→迪文基线映射（mapText 三态）。 */

@@ -32,7 +32,15 @@ export function jiaoYanHuiTu(raw: unknown): HuiTuChangJing {
 export function huiTuHash(scene: HuiTuChangJing): string { return createHash('sha256').update(JSON.stringify(jiaoYanHuiTu(scene))).digest('hex'); }
 export function jieXiHuiTu(text: string): HuiTuChangJing {
   if (text.length > 180000) throw new Error('scene-too-large');
-  const clean = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  /* R288 项9：容错提取——模型可能先输出思考/散文再给 JSON，或把 JSON 包在任意位置的 ```json 块里。 */
+  let clean = String(text || '').trim();
+  const m = /```(?:json)?\s*([\s\S]*?)```/i.exec(clean);
+  if (m && m[1] && m[1].trim()) clean = m[1].trim();
+  else {
+    const a = clean.indexOf('{'); const b = clean.lastIndexOf('}');
+    if (a >= 0 && b > a) clean = clean.slice(a, b + 1);
+  }
+  clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   return jiaoYanHuiTu(yanGeJsonParse(clean));
 }
 export function juBuHeBing(base: HuiTuChangJing, next: HuiTuChangJing, selection: string[]): HuiTuChangJing {
