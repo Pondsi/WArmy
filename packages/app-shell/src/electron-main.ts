@@ -15,6 +15,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chuangJianP1YunXingShi } from './runtime.js';
 import { shiTongYiNeiRong, shiZhanWeiChongFu, zhaoHuChiWeiZhi, shiHuChiTiShiCeng } from './prompt-placement.js';
 import { zhongWenYuChuLi, yanZhengBaoHu } from './zheng-li-v3.js';
+import { chuangJianXiTongXiaoXi } from './ying-yong/xi-tong-xiao-xi.js';
 import { ceShiLianTong as sheJiaoCeShiLianTong, type SheJiaoPingTai } from './she-jiao-lian-tong.js';
 import { ChuanShuDuiLie, qunRuXiangJianYan, type ChuanShuZhen } from './hui-hua-chuan-shu.js';
 import { TouDiFuWu, WangLuoFaJianXiang } from './wang-luo-tou-di.js';
@@ -39370,88 +39371,17 @@ chuliIpc('warmy:netBangDingShe', (_e, p0?: { sessionId?: string; ids?: unknown[]
 
 
 // ── R166 系统消息 + 加入记录全量（帮助抽屉数据层）──
-interface XiTongXiaoXi {
-  id: string;
-  ts: number;
-  kind: 'update' | 'remote' | 'ssh' | 'system' | 'anti-sycophancy' | 'briefing';
-  title: string;
-  body: string;
-  read: boolean;
-}
-const xiTongXiaoXiLu = path.join(app.getPath('userData'), 'system-messages.json');
-let xiTongXiaoXiJi: XiTongXiaoXi[] = [];
-function duXiTongXiaoXi(): void {
-  try {
-    const j = JSON.parse(fs.readFileSync(xiTongXiaoXiLu, 'utf8'));
-    xiTongXiaoXiJi = (Array.isArray(j?.items) ? j.items : [])
-      .filter((x: Partial<XiTongXiaoXi>) => x && typeof x.id === 'string' && typeof x.ts === 'number')
-      .map((x: Partial<XiTongXiaoXi>) => ({
-        id: String(x.id), ts: Number(x.ts), kind: (x.kind === 'update' || x.kind === 'remote' || x.kind === 'ssh' || x.kind === 'anti-sycophancy' || x.kind === 'briefing' ? x.kind : 'system'),
-        title: String(x.title || '').slice(0, 120), body: String(x.body || '').slice(0, x.kind === 'briefing' ? 4000 : 400), read: !!x.read,
-      }))
-      .slice(-200);
-    /* R260 项30：反谄媚系统消息时效清理——早于最新 10 条且超 30 天的删除（按模型观点处理）。 */
-    xiTongXiaoXiJi = qingLiGuoQiXiaoXi(xiTongXiaoXiJi, Date.now()).messages;
-  } catch { xiTongXiaoXiJi = []; }
-}
-function cunXiTongXiaoXi(): void {
-  try {
-    fs.mkdirSync(path.dirname(xiTongXiaoXiLu), { recursive: true });
-    const tmp = xiTongXiaoXiLu + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ items: xiTongXiaoXiJi.slice(-200) }, null, 2), 'utf8');
-    fs.renameSync(tmp, xiTongXiaoXiLu);
-  } catch { /* 写盘失败不阻断内存态 */ }
-}
-/** 记一条系统消息（产品文案，非用户内容）；有界 200；广播给界面亮徽标 */
-function jiXiTongXiaoXi(kind: XiTongXiaoXi['kind'], title: string, body: string): void {
-  try {
-    xiTongXiaoXiJi.push({ id: 'sys-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: Date.now(), kind, title: String(title).slice(0, 120), body: String(body).slice(0, kind === 'briefing' ? 4000 : 400), read: false });
-    if (xiTongXiaoXiJi.length > 200) xiTongXiaoXiJi = xiTongXiaoXiJi.slice(-200);
-    cunXiTongXiaoXi();
-    broadcastToWindows('warmy:xiTongXiaoXiXin', { count: xiTongXiaoXiJi.filter((x) => !x.read).length });
-  } catch { /* 系统消息失败绝不影响业务 */ }
-}
-duXiTongXiaoXi();
-/**
- * R280：总结简报系统消息（全面但不详细）。**始终只有一条未读简报**：
- * 已有未读简报⇒合并为一条（旧正文＋新段落）；已读简报保留最近 5 条作历史。
- */
-function jiZongJieJianBao(title: string, body: string): void {
-  try {
-    const weiDu = xiTongXiaoXiJi.filter((x) => x.kind === 'briefing' && !x.read);
-    const yiDu = xiTongXiaoXiJi.filter((x) => x.kind === 'briefing' && x.read);
-    const heBing = [...weiDu.map((x) => x.body), String(body || '')].filter(Boolean).join('\n──\n');
-    xiTongXiaoXiJi = xiTongXiaoXiJi.filter((x) => x.kind !== 'briefing');
-    xiTongXiaoXiJi.push(...yiDu.slice(-5));
-    xiTongXiaoXiJi.push({ id: 'brief-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6), ts: Date.now(), kind: 'briefing', title: String(title || '总结简报').slice(0, 120), body: heBing.slice(0, 4000), read: false });
-    if (xiTongXiaoXiJi.length > 200) xiTongXiaoXiJi = xiTongXiaoXiJi.slice(-200);
-    cunXiTongXiaoXi();
-    broadcastToWindows('warmy:xiTongXiaoXiXin', { count: xiTongXiaoXiJi.filter((x) => !x.read).length });
-  } catch { /* 简报失败绝不影响业务 */ }
-}
-chuliIpc('warmy:zongJieJianBao', (_e, p0?: { title?: string; body?: string }) => {
-  try { jiZongJieJianBao(String(p0?.title || '总结简报'), String(p0?.body || '')); return { ok: true, unread: xiTongXiaoXiJi.filter((x) => !x.read && x.kind === 'briefing').length }; }
-  catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+// R287 P2：状态/读写/简报合并/IPC 实现迁至 ying-yong/xi-tong-xiao-xi.ts（唯一 owner）；
+// 此处仅装配与薄转发：读取/注册时机、chuliIpc 安全闸、广播与错误净化均沿用原口径。
+const xiTongXiaoXiMoKuai = chuangJianXiTongXiaoXi({
+  wenJianLu: path.join(app.getPath('userData'), 'system-messages.json'),
+  guangBo: broadcastToWindows,
+  jingHuaCuoWu: xiJingCuoWu,
 });
-chuliIpc('warmy:xiTongXiaoXiLieBiao', () => ({ ok: true, items: xiTongXiaoXiJi.slice().reverse() }));
-/** R264 项8：拟态异常走系统消息（不弹提示音/不亮未读圆点），渲染层上报 */
-chuliIpc('warmy:xiTongXiaoXiTianJia', (_e, p0?: { kind?: string; title?: string; body?: string }) => {
-  try {
-    const kind = (['update', 'remote', 'ssh', 'system'].includes(String(p0?.kind || '')) ? String(p0?.kind) : 'system') as XiTongXiaoXi['kind'];
-    jiXiTongXiaoXi(kind, String(p0?.title || ''), String(p0?.body || ''));
-    return { ok: true };
-  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
-});
-chuliIpc('warmy:xiTongXiaoXiYiDu', (_e, id?: string) => {
-  const m = xiTongXiaoXiJi.find((x) => x.id === String(id || ''));
-  if (m) { m.read = true; cunXiTongXiaoXi(); }
-  return { ok: true, unread: xiTongXiaoXiJi.filter((x) => !x.read).length };
-});
-chuliIpc('warmy:xiTongXiaoXiQuanBuYiDu', () => {
-  for (const m of xiTongXiaoXiJi) m.read = true;
-  cunXiTongXiaoXi();
-  return { ok: true, unread: 0 };
-});
+const jiXiTongXiaoXi = xiTongXiaoXiMoKuai.jiXiTongXiaoXi;
+const jiZongJieJianBao = xiTongXiaoXiMoKuai.jiZongJieJianBao;
+xiTongXiaoXiMoKuai.duXiTongXiaoXi();
+xiTongXiaoXiMoKuai.zhuCeIpc(chuliIpc);
 /** 加入记录全量：只回展示所需字段，剔除 token/公钥/主机/端口/指纹 */
 chuliIpc('warmy:jiaRuJiLuLieBiao', () => {
   try {

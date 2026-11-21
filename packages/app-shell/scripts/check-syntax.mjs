@@ -17,7 +17,7 @@
 import {execFileSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {existsSync, readFileSync} from 'node:fs';
+import {existsSync, readFileSync, readdirSync} from 'node:fs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appjs = path.join(here, '..', 'src', 'renderer', 'app.js');
@@ -65,3 +65,21 @@ if (offenders.length) {
   process.exit(1);
 }
 console.log('[check-syntax] 顶层 TDZ 检查通过（t() 未在定义前调用）');
+
+// tsc 不覆盖 preload/renderer/纯 JS worker；在构建时检查所有自有 JS 源码。
+const yuanGen = path.join(here, '..', 'src');
+let jianChaShu = 1;
+function jianChaMuLu(muLu) {
+  for (const xiang of readdirSync(muLu, { withFileTypes: true })) {
+    const lu = path.join(muLu, xiang.name);
+    if (xiang.isDirectory()) {
+      if (xiang.name !== 'vendor' && xiang.name !== 'node_modules') jianChaMuLu(lu);
+    } else if (xiang.isFile() && /\.[cm]?js$/.test(xiang.name) && lu !== appjs) {
+      try { execFileSync(process.execPath, ['--check', lu], { stdio: 'pipe' }); }
+      catch (e) { console.error('[check-syntax] ' + path.relative(yuanGen, lu)); console.error(String(e.stderr || e.message)); process.exit(1); }
+      jianChaShu++;
+    }
+  }
+}
+jianChaMuLu(yuanGen);
+console.log('[check-syntax] 自有 JS 源码全部通过：' + jianChaShu);
