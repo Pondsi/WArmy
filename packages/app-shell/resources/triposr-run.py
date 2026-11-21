@@ -1,0 +1,59 @@
+# R260 项10：TripoSR 单图→mesh 推理子进程脚本（MIT，Stability AI + Tripo，arXiv:2403.02151）。
+# 零原生约定：Python/torch 只活在独立子进程，主进程经 IPC 收 glb 路径。
+# 用法: python triposr-run.py <input_image> <output_glb> <model_dir> [device] [resolution]
+# 约定: 成功打印一行 JSON {"ok":true,"glb":...}；失败打印 {"ok":false,"error":...}（绝不伪造成功）。
+import sys, os, json, traceback
+
+
+def fail(msg):
+    print(json.dumps({"ok": False, "error": str(msg)[:500]}))
+    sys.exit(0)
+
+
+def main():
+    if len(sys.argv) < 4:
+        fail("usage: triposr-run.py <input_image> <output_glb> <model_dir> [device] [resolution]")
+    img_path, out_glb, model_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+    device = sys.argv[4] if len(sys.argv) > 4 else ("cuda" if _has_cuda() else "cpu")
+    resolution = int(sys.argv[5]) if len(sys.argv) > 5 else 256
+    if not os.path.isfile(img_path):
+        fail("input-image-not-found")
+    try:
+        import numpy as np
+        import torch
+        from PIL import Image
+        from tsr.system import TSR
+        from tsr.utils import remove_background, resize_foreground
+    except Exception as e:  # 环境缺失如实上报
+        fail("env-missing: " + str(e))
+    try:
+        weight = "model.bin" if os.path.isfile(os.path.join(model_dir, "model.bin")) else "model.ckpt"
+        model = TSR.from_pretrained(model_dir, config_name="config.yaml", weight_name=weight)
+        model.renderer.set_chunk_size(8192)
+        model.to(device)
+        image = Image.open(img_path).convert("RGBA")
+        image = remove_background(image)
+        image = resize_foreground(image, 0.85)
+        arr = np.array(image).astype(np.float32) / 255.0
+        arr = arr[:, :, :3] * arr[:, :, 3:4] + (1.0 - arr[:, :, 3:4])
+        tensor = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device)
+        with torch.no_grad():
+            codes = model(tensor, device=device)
+        mesh = model.extract_mesh(codes, has_vertex_color=True, resolution=resolution)[0]
+        os.makedirs(os.path.dirname(os.path.abspath(out_glb)), exist_ok=True)
+        mesh.export(out_glb)
+        print(json.dumps({"ok": True, "glb": os.path.abspath(out_glb)}))
+    except Exception as e:
+        fail("inference-failed: " + str(e) + " | " + traceback.format_exc(limit=2).replace("\n", " ")[:300])
+
+
+def _has_cuda():
+    try:
+        import torch
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
+
+
+if __name__ == "__main__":
+    main()

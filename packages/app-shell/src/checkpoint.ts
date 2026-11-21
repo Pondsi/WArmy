@@ -116,6 +116,8 @@ export class JianChaDianCang {
     workspace?: string;
     limit?: number;
     maxBytes?: number;
+    /** R280：回退点原则不自动删除；仅显式 autoPrune=true 才按 limit/maxBytes  prune（默认永不自动删） */
+    autoPrune?: boolean;
     summary?: string;
     /** R246：标记为自进化合并前回退点 */
     evolve?: boolean;
@@ -191,19 +193,37 @@ export class JianChaDianCang {
     if (opts.evolve) cp.evolve = true;
     if (opts.evolveSnap) cp.evolveSnap = opts.evolveSnap;
     this.items.push(cp);
-    const limit = opts.limit ?? 50;
-    while (this.items.length > limit) {
-      const old = this.items.shift();
-      if (old) fs.rmSync(path.join(this.root, old.dir), { recursive: true, force: true });
-    }
-    // 容量：超出 maxBytes 删最早
-    const maxBytes = opts.maxBytes ?? 512 * 1024 * 1024;
-    while (this.space(maxBytes).usedBytes > maxBytes && this.items.length > 1) {
-      const old = this.items.shift();
-      if (old) fs.rmSync(path.join(this.root, old.dir), { recursive: true, force: true });
+    /* R280：回退点不自动删除（主人定稿）——旧版默认 limit=50/maxBytes=512M 会静默删最早回退点。
+     * 现在仅显式 autoPrune=true 才 prune；会话删除时的级联删除走 shanChuHuiHua（唯一自动删除路径）。 */
+    if (opts.autoPrune === true) {
+      const limit = opts.limit ?? 50;
+      while (this.items.length > limit) {
+        const old = this.items.shift();
+        if (old) fs.rmSync(path.join(this.root, old.dir), { recursive: true, force: true });
+      }
+      // 容量：超出 maxBytes 删最早
+      const maxBytes = opts.maxBytes ?? 512 * 1024 * 1024;
+      while (this.space(maxBytes).usedBytes > maxBytes && this.items.length > 1) {
+        const old = this.items.shift();
+        if (old) fs.rmSync(path.join(this.root, old.dir), { recursive: true, force: true });
+      }
     }
     this.save();
     return cp;
+  }
+
+  /** R280：会话被删除⇒级联删除该会话的全部回退点（含快照目录）；其余情况不自动删。 */
+  shanChuHuiHua(sessionId: string): number {
+    const k = String(sessionId || '');
+    if (!k) return 0;
+    const shan = this.items.filter((x) => String(x.sessionId || '') === k);
+    if (!shan.length) return 0;
+    this.items = this.items.filter((x) => String(x.sessionId || '') !== k);
+    for (const cp of shan) {
+      try { fs.rmSync(path.join(this.root, cp.dir), { recursive: true, force: true }); } catch { /* 单目录失败不阻断 */ }
+    }
+    this.save();
+    return shan.length;
   }
 
   space(maxBytes = 512 * 1024 * 1024): JianChaDianKongJian {

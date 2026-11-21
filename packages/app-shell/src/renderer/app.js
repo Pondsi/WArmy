@@ -2480,11 +2480,14 @@ async function langDuWenBen(text, btnEl) {
                 if (btn) btn.classList.add('boFangZhong');
                 /** 高亮只挂一次（用户要求：内容不闪）——逐段 remove/add 会让描边动画重启闪烁；
                  *  播放期间类不摘，停止（biaoJiBoFang(false)/langDuTing）时统一清理。 */
-                /* R279 项1：特效归属被读块——思考与执行的喇叭点亮该块，而不是下面的回复气泡 */
-                const zu = btn && btn.closest && btn.closest('.guoChengDuanZu');
-                const kuai = zu && zu.querySelector('.siKaoKuai, .zhongJianKa');
+                /* R279 项1 / R284：特效归属被读块——读键含 :seg:/:mid: ⇒ 思考与执行/中间回复卡；
+                 * 否则⇒最终回复气泡。正式渲染外层是 .guoChengLie（旧只认 .guoChengDuanZu 落空⇒误挂气泡）。 */
+                const shiGuoCheng = /:(seg|mid):/.test(btnKey);
+                const zu = btn && btn.closest && btn.closest('.guoChengDuanZu, .guoChengLie');
                 const msg = btn && btn.closest && btn.closest('.xiaoXi');
-                const bub = kuai || (msg && msg.querySelector('.bubble'));
+                const bub = shiGuoCheng
+                  ? ((zu && zu.querySelector('.siKaoKuai, .zhongJianKa')) || (msg && msg.querySelector('.siKaoKuai, .zhongJianKa')))
+                  : (msg && msg.querySelector('.bubble'));
                 if (bub && !bub.classList.contains('langDuGaoLiang')) bub.classList.add('langDuGaoLiang');
               } catch { /* noop */ }
             };
@@ -8150,10 +8153,13 @@ async function langDuWenBen(text, btnEl) {
     if (!k) return;
     const b = document.querySelector('.xiaoXiLangDu[data-read-key="' + CSS.escape(k) + '"]');
     if (!b) return;
-    const zu = b.closest('.guoChengDuanZu');
-    const kuai = zu && zu.querySelector('.siKaoKuai, .zhongJianKa');
+    /* R284：与 onplaying 同口径——读键类型定归属，外层兼容 .guoChengLie/.guoChengDuanZu */
+    const shiGuoCheng = /:(seg|mid):/.test(k);
+    const zu = b.closest('.guoChengDuanZu, .guoChengLie');
     const msg = b.closest('.xiaoXi');
-    const mu = kuai || (msg && msg.querySelector('.bubble'));
+    const mu = shiGuoCheng
+      ? ((zu && zu.querySelector('.siKaoKuai, .zhongJianKa')) || (msg && msg.querySelector('.siKaoKuai, .zhongJianKa')))
+      : (msg && msg.querySelector('.bubble'));
     if (mu && !mu.classList.contains('langDuGaoLiang')) mu.classList.add('langDuGaoLiang');
   }
 
@@ -9179,7 +9185,7 @@ async function langDuWenBen(text, btnEl) {
     x.innerHTML = '<div class="bz-jiaZai">…</div>';
     var r = await window.warmy.systemMessages().catch(function () { return null; });
     var items = (r && r.items) || [];
-    var lei = { update: tOr('help.kindUpdate', '更新'), remote: tOr('help.kindRemote', '远程控制'), ssh: 'SSH', system: tOr('help.kindSystem', '系统') };
+    var lei = { update: tOr('help.kindUpdate', '更新'), remote: tOr('help.kindRemote', '远程控制'), ssh: 'SSH', system: tOr('help.kindSystem', '系统'), briefing: tOr('help.kindBriefing', '简报') };
     var head = '<div class="bz-gongJuTiao"><button class="anNiuXiao" data-bz-readall>' + escapeHtml(tOr('help.readAll', '全部已读')) + '</button></div>';
     /* R278 项3：ETA 夹区间扩展审批（合并单条；双输入＋确定，留空＝不变） */
     var sp = await window.warmy.etaClampShenPiQu().catch(function () { return null; });
@@ -26104,12 +26110,9 @@ async function renderDashboard(host) {
     wen.className = 'zhengLiTeXiaoWen';
     const hua = document.createElement('canvas');
     hua.className = 'zhengLiTeXiaoHua';
-    const tiShi = document.createElement('span');
-    tiShi.className = 'zhengLiTiShi';
-    tiShi.textContent = tOr('chat.voiceOrganizingLabel', '整理中…');
+    /* R283：不再显示“整理中…”文字提示（主人定稿）；特效（逐字发光/星芒/光点/重排）保留不变 */
     layer.appendChild(wen);
     layer.appendChild(hua);
-    layer.appendChild(tiShi);
     zhu.insertBefore(layer, ru);
     ru.classList.add('zhengLiZhong');
     zhu.classList.add('zhengLiZhong');
@@ -26129,7 +26132,7 @@ async function renderDashboard(host) {
     ru.readOnly = true;
     ru.setAttribute('aria-readonly', 'true');
     ru.title = tOr('chat.voiceOrganizingStopTip', '正在整理…再点一下话筒停止');
-    const zt = { ru, zhu, layer, wen, hua, tiShi, ruWasReadOnly, raf: 0, ro: null, onInput: null, onScroll: null, onResize: null,
+    const zt = { ru, zhu, layer, wen, hua, tiShi: null, ruWasReadOnly, raf: 0, ro: null, onInput: null, onScroll: null, onResize: null,
       liangTimer: 0, liangSuiJi: null, paiLieSuiJi: null, paiTimers: [], jianDong: null,
       shouWei: false, shouWeiP: null, shouTimers: [] };
     let ziList = [];

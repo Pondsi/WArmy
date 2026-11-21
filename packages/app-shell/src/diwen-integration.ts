@@ -8,8 +8,14 @@
  *
  * 所有 A 类落点共用 diwen-bridge 的三态门控（确定→迪文/不确定→原文/没有→不编）。
  * 用户可见落点一律回退原文；迪文只给机器看；S8 非安全/加密层。
+ *
+ * R280 三通道标准（覆盖所有使用迪文的地方）：
+ *  · **给人看** ⇒ 原文（yongHuKeJianLuoDian / diwenYongHuSouSuo，恒回原文）；
+ *  · **机器间传递（无需理解含义）** ⇒ 迪文/GCF 直传（jiaoHuanGeShiBianMa）；
+ *  · **大语言模型作输入** ⇒ 结构化标准流程转**确定唯一自然语**（moXingShuRuWenBen / diwenGeiMoXingWenBen，
+ *    无需优美但必须准确无误；同 doc 必同串；未映射片段逐字保留）。
  */
-import { diwenHua, diwenYongHuSouSuo, gcfBianMa, diwenValidate, type DiwenHuaJieGuo } from './diwen-bridge.js';
+import { diwenHua, diwenYongHuSouSuo, gcfBianMa, diwenValidate, diwenGeiMoXingWenBen, type DiwenHuaJieGuo } from './diwen-bridge.js';
 import { fenLeiI5, i5MingOf } from './diwen-i5.js';
 
 export type LuoDianFenLei = 'A-适合' | 'B-增益有限' | 'C-不该';
@@ -67,6 +73,9 @@ export async function yongHuKeJianLuoDian(input: { text?: string; doc?: any }): 
 
 /** 交换格式落点：GCF1 编码（机器间传输）。 */
 export async function jiaoHuanGeShiBianMa(doc: any): Promise<string | null> { return gcfBianMa(doc); }
+
+/** R280：LLM 输入落点统一入口——结构化迪文⇒确定唯一自然语；否则原文。所有给模型的迪文内容必须走这里。 */
+export async function moXingShuRuWenBen(input: { text?: string; doc?: any }): Promise<string> { return diwenGeiMoXingWenBen(input); }
 
 /** 证据闸/升层落点：结构校验。 */
 export async function zhengJuZhaJiaoYan(doc: any): Promise<{ valid: boolean; errors?: any[]; unavailable?: boolean }> { return diwenValidate(doc); }

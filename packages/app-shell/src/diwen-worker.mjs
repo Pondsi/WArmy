@@ -86,6 +86,35 @@ function duSiYou() {
 }
 function jiChu() { return lex().roots.filter((r) => !r.private); }
 const HAN = (ch) => { const c = ch.codePointAt(0) || 0; return c >= 0x4e00 && c <= 0x9fff; };
+/** R280：BFO 类型→中文标签（确定唯一自然语渲染用，固定映射不随模型变） */
+const BFO_ZH = { Object: '实体', Process: '过程', Quality: '性质', Role: '角色', Function: '功能', Site: '场所', MaterialEntity: '物质实体' };
+/**
+ * R280：迪文→**确定唯一自然语**（供大语言模型作输入）：无需优美但必须准确无误。
+ * 确定性：同 doc 必同串（固定模板＋保序＋不采样）；未映射片段逐字保留（不丢信息）。
+ */
+function renderDiwen(doc) {
+  if (!doc || typeof doc !== 'object') return '';
+  const parts = [];
+  const words = Array.isArray(doc.words) ? doc.words : [];
+  for (const w of words) {
+    if (!w || typeof w !== 'object') continue;
+    const surface = String(w.surface || w.lemma_zh || '');
+    const lemma = String(w.lemma_zh || w.lemma || surface);
+    const bfo = BFO_ZH[String(w.bfo_type || w.bfo || '')] || String(w.bfo_type || w.bfo || '');
+    const def = String(w.definitionZh || w.definition || '');
+    const place = Array.isArray(w.place) ? w.place.map((p) => `${String((p || {}).role || '')}:${String((p || {}).type || '')}`).join(',') : '';
+    const nsm = Array.isArray(w.nsm) ? w.nsm.map(String).join('/') : '';
+    let s = `「${surface}」=概念「${lemma}」`;
+    if (bfo) s += `（类型:${bfo}）`;
+    if (def) s += `：${def}`;
+    if (place) s += `［位置:${place}］`;
+    if (nsm) s += `［义原:${nsm}］`;
+    parts.push(s);
+  }
+  const unc = Array.isArray(doc.uncovered) ? doc.uncovered.map((u) => String((u || {}).surface || u || '')).filter(Boolean) : [];
+  if (unc.length) parts.push('未映射原文片段（逐字保留）：' + unc.join('、'));
+  return parts.join('；');
+}
 const ciGanJing = (w) => w && !w.includes('_') && !['__proto__', 'constructor', 'prototype'].includes(w) && [...w].length <= 24;
 
 /** 构造一条私有词根（R263 最新规范：id∈[699051,1048576)、无字形坐标 s3a/s3b=null、pinyin 逐字带调、definitionZh 必需）。 */
@@ -218,6 +247,8 @@ function chuLi(req) {
       return hui(true, { ok: !r.notFound, ...r });
     }
     if (fn === 'improve') return hui(true, waJue(args.text));
+    /* R280：迪文→确定唯一自然语（LLM 输入通道） */
+    if (fn === 'render') return hui(true, { text: renderDiwen(args && args.doc) });
     if (fn === 'call') {
       /** mapText 统一走确定性最长匹配 + 自持词典（私有词根生效）；其余导出原样转发。 */
       if (args.fn === 'mapText') return hui(true, yingShe(args.args && args.args[0]));

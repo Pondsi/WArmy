@@ -25,12 +25,12 @@ import { shengChengDocx, shengChengPptx, keYongPptx, shengChengXlsx } from './of
 import { shengChengPdf } from './pdf-tools.js';
 import { lieYaSuoBaoTiaoMu, duYaSuoBaoTiaoMu, tiaoMuMingAnQuan, jieYaYaSuoBaoDao, ZIP_JIEYA_TIAO_SHANGXIAN, ZIP_JIEYA_ZONG_SHANGXIAN } from './zip-look.js';
 import { shiJianChuoWen } from './time-utils.js';
-import { protectedPathReason, consumeProtectedOnce } from './protected-paths.js';
+import { protectedPathReason, consumeProtectedOnce, hardProtectedReason } from './protected-paths.js';
 
 /** 工具名（与 function calling 暴露给模型的 name 一致） */
 export const WORK_TOOL_NAMES = [
   'list_dir', 'find_files', 'search_files', 'read_file', 'write_file', 'edit_file',
-  'copy_file', 'move_file', 'make_dir', 'make_docx', 'make_pptx', 'make_xlsx', 'make_pdf',
+  'copy_file', 'move_file', 'delete_file', 'make_dir', 'make_docx', 'make_pptx', 'make_xlsx', 'make_pdf',
   'list_archive', 'read_archive_entry', 'extract_archive',
 ] as const;
 export type WorkToolName = (typeof WORK_TOOL_NAMES)[number];
@@ -531,6 +531,29 @@ export function workMoveFile(baseDir: string, args: { path?: string; destination
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.renameSync(src, dst);
     return { ok: true, content: `[move_file] 已移动到 ${dst}`, meta: { tool, ok: true, bytes: fs.statSync(dst).size, path: relOf(baseDir, dst), abs: dst, exists: true } };
+  } catch (e) { return fail(tool, e); }
+}
+
+/**
+ * R282：删除工作区内文件/目录（补齐会话工具缺失的删除能力）。
+ * 安全边界：工作区沙箱＋写授权＋能力格写闸＋硬门禁（道）＋会话「要求」只读；
+ * 目录必须显式 recursive=true；不许删工作区根；**永久删除**（不可恢复）——
+ * 如需可恢复删除走 desktop_file_op op=delete（回收站，需授权卡）。回退点/写前快照提供工作区回滚。
+ */
+export function workDeleteFile(baseDir: string, args: { path?: string; recursive?: boolean }, kuaiQuan = false): WorkToolResult {
+  const tool = 'delete_file';
+  try {
+    if (shiYaoQiuLuJing(args.path)) return fail(tool, new Error('yaoqiu-readonly：会话「要求」只能由用户修改（产品硬门禁 E）'), String(args.path || ''));
+    const abs = resolveInside(baseDir, args.path, kuaiQuan, 'write');
+    const ying = hardProtectedReason(abs);
+    if (ying) return fail(tool, new Error(ying), relOf(baseDir, abs));
+    if (path.resolve(abs) === path.resolve(baseDir)) return fail(tool, new Error('workspace-root-undeletable：不允许删除工作区根目录'), relOf(baseDir, abs));
+    if (!fs.existsSync(abs)) return fail(tool, new Error('not-exists：目标不存在，没有可删除的东西'), relOf(baseDir, abs));
+    const st = fs.statSync(abs);
+    const recursive = args.recursive === true;
+    if (st.isDirectory() && !recursive) return fail(tool, new Error('directory-needs-recursive：删除目录必须显式传 recursive:true（防误删整棵）'), relOf(baseDir, abs));
+    fs.rmSync(abs, { recursive: st.isDirectory() && recursive, force: false });
+    return { ok: true, content: `[delete_file] 已永久删除 ${relOf(baseDir, abs)}${st.isDirectory() ? '（目录，recursive）' : ''}。不可恢复；如需可恢复删除请用 desktop_file_op op=delete（回收站）。`, meta: { tool, ok: true, bytes: 0, path: relOf(baseDir, abs), abs, exists: false } };
   } catch (e) { return fail(tool, e); }
 }
 
@@ -1223,6 +1246,7 @@ export function runWorkTool(baseDir: string, call: { function?: { name?: string;
     find: 'find_files', glob: 'find_files', grep: 'search_files', search: 'search_files',
     patch_file: 'edit_file', replace_in_file: 'edit_file',
     cp: 'copy_file', copy: 'copy_file', mv: 'move_file', rename_file: 'move_file',
+    rm: 'delete_file', remove_file: 'delete_file', unlink: 'delete_file', delete: 'delete_file',
     make_slides: 'make_pptx', make_doc: 'make_docx', make_sheet: 'make_xlsx',
   };
   const name = BIE_MING[name0] || name0;
@@ -1263,6 +1287,7 @@ export function runWorkTool(baseDir: string, call: { function?: { name?: string;
     case 'edit_file': return workEditFile(baseDir, args as { path?: string; oldText?: string; newText?: string; replaceAll?: boolean }, kuaiQuan);
     case 'copy_file': return workCopyFile(baseDir, { path: String(args.path || args.source || ''), destination: String(args.destination || ''), overwrite: !!args.overwrite }, kuaiQuan);
     case 'move_file': return workMoveFile(baseDir, { path: String(args.path || args.source || ''), destination: String(args.destination || ''), overwrite: !!args.overwrite }, kuaiQuan);
+    case 'delete_file': return workDeleteFile(baseDir, { path: String(args.path || ''), recursive: !!args.recursive }, kuaiQuan);
     case 'make_dir': return workMakeDir(baseDir, args as { path?: string }, kuaiQuan);
     case 'make_docx': return workMakeDocx(baseDir, args as { path?: string; paragraphs?: string[]; content?: string }, kuaiQuan);
     case 'make_pptx': return workMakePptx(baseDir, args as { path?: string; slides?: Array<{ title?: string; body?: string[] }> }, kuaiQuan, gaoJiMuLu);
@@ -1371,6 +1396,16 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
         name: 'move_file',
         description: '在工作区内移动或重命名单个文件；不允许逃出工作区。',
         parameters: { type: 'object', properties: { source: { type: 'string' }, destination: { type: 'string' } }, required: ['source', 'destination'] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'delete_file',
+        description: '删除工作区内的文件或目录（**永久删除、不可恢复**；如需可恢复删除用 desktop_file_op op=delete 进回收站）。'
+          + '目录必须显式 recursive:true；不允许删工作区根；会话「要求」与道等硬门禁文件不可删；不允许逃出工作区。'
+          + '删除前先向用户说明要删什么、为什么（写类操作受授权档约束）。',
+        parameters: { type: 'object', properties: { path: { type: 'string' }, recursive: { type: 'boolean' } }, required: ['path'] },
       },
     },
     {
@@ -1578,8 +1613,8 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'read_profile',
-        description: '按需读取本牛马的**社交档案**（邮箱/网站账号/手机号/昵称/钱包地址等）。'
-          + '档案不会自动进入上下文；用户问到联系方式、账号、名片，或你需要给外部服务填资料时再调用。'
+        description: '按需读取本牛马**自己**的社交档案（邮箱/网站账号/手机号/昵称/钱包地址等）：这是牛马自己在社交圈里的账号（与用户平等），**不是用户的身份信息**。'
+          + '档案不会自动进入上下文；用户问到**你的**联系方式/账号/名片、或你要以自己的身份给外部服务填资料/登录时再调用。'
           + '**密码/口令不会返回**（安全保管）；没有该项就如实说没有。',
         parameters: {
           type: 'object',
