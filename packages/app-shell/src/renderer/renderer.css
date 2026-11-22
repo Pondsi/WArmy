@@ -763,8 +763,9 @@ button.ddWen:hover { background: transparent !important; color: var(--ink); }
   background: var(--queue-bg);
   border-top: 1px solid var(--queue-border);
   padding: 8px 12px;
-  max-height: 140px;
-  overflow: auto;
+  /* R293：与 app.css 同步——高度交给内层列表（默认 5 行＋滚动） */
+  max-height: none;
+  overflow: visible;
 }
 .duiLieTiaoHead {
   display: flex; justify-content: space-between; align-items: center;

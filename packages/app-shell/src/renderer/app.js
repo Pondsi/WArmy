@@ -11982,6 +11982,31 @@ window.__keYiLiaoTian = keYiLiaoTian;
     }
   }
 
+  /* R293：插话区展开态（按消息对象记，不进持久化/跨窗同步） */
+  const qZhanKaiJi = new WeakSet();
+  const chaHuaMoXingHuan = new Map();
+  /** R293：这条插话将用的模型 —— 单聊取本牛马默认模型（智能模式＝自动安排）；
+   *  群/项目取值班的牛马的默认模型（问主进程，30s 缓存，异步回填）；拿不到如实给 —。 */
+  function chaHuaMoXingWen(sid) {
+    const inst = (state.instances || []).find((x) => x.id === sid);
+    if (inst) return shiZhiNengMoShi(inst) ? t('instances.smartPick') : (lianMoRenMoXing(inst) || String(inst.defaultModel || '') || '—');
+    const huan = chaHuaMoXingHuan.get(sid);
+    if (!huan || Date.now() - huan.at > 30000) {
+      void (async () => {
+        try {
+          const r = await window.warmy.groupDuty?.(sid);
+          const zid = String((r && r.dutyId) || '');
+          const zhu = zid ? (state.instances || []).find((x) => x.id === zid) : null;
+          const ming = zhu ? (shiZhiNengMoShi(zhu) ? t('instances.smartPick') : (lianMoRenMoXing(zhu) || String(zhu.defaultModel || '') || '—')) : '—';
+          chaHuaMoXingHuan.set(sid, { ming, at: Date.now() });
+          const an = (window.CSS && CSS.escape) ? CSS.escape(sid) : sid;
+          document.querySelectorAll('[data-q-moxing="' + an + '"]').forEach((el) => { el.textContent = ming; });
+        } catch { /* 拿不到就保持 — */ }
+      })();
+    }
+    return (huan && huan.ming) || '—';
+  }
+
   function renderQueueBar() {
     const jinDuTiao = $('duiLieTiao');
     const LieBiao = $('duiLieTiaoMuJi');
@@ -11999,7 +12024,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
     $('duiLieCount').textContent = String(q.length);
     /**
      * **插话区高度可拉伸**（产品要求）：上下拖这条把手改 `--queue-h`。
-     * 范围：至少 1 条（72px）、最多 12 条 —— 再高就把输入框顶没了。
+     * R293：范围改为至少 1 行（43px）、最多 5 行（216px）——再多走滚动条。
      */
     (function bindQueueResize() {
       const ba = $('duiLieLaShen');
@@ -12015,7 +12040,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
       });
       ba.addEventListener('pointermove', (e) => {
         if (!startY) return;
-        const h = Math.max(72, Math.min(12 * 78, startH - (e.clientY - startY)));
+        const h = Math.max(43, Math.min(216, startH - (e.clientY - startY)));
         LieBiao.style.setProperty('--queue-h', h + 'px');
         try { window.warmy.settingsSave?.({ queueHeightPx: h }); } catch { /* noop */ }
       });
@@ -12024,14 +12049,15 @@ window.__keYiLiaoTian = keYiLiaoTian;
       ba.addEventListener('pointercancel', ting);
     })();
     LieBiao.innerHTML = '';
+    const sid = String(state.selectedChat.id || '');
     q.forEach((item, suoYin) => {
       const li = document.createElement('li');
       const tag = chaHuaBiaoQian(item.u);
       const ts = Number(item.ts || 0) || Date.now();
-      // 发出时间（月日 时:分）+ 已等待（时:分:秒）
-      // 时间/等待/标签都是**内容上方的小字**（不显眼、不占左侧），下面才是正文
-      li.innerHTML = `<div class="qTouXiaoZi"><span class="qBiaoQian">${escapeHtml(tag)}</span><span class="qShiJian" title="${escapeHtml(wanZhengShiJian(ts))}">${escapeHtml(yueRiShiFen(ts))}</span><span class="qDengDai">${escapeHtml(tOr('chat.waiting', '已等'))} <b data-deng="${suoYin}">${escapeHtml(dengDaiShiChang(ts))}</b></span></div><div class="qZhengWen"></div>`;
       if (item.editing) {
+        /* 编辑态：textarea＋保存/删除并排（与查看态同一行式布局） */
+        const hang = document.createElement('div');
+        hang.className = 'qHang qBianJi';
         const ta = document.createElement('textarea');
         ta.value = item.text;
         const save = document.createElement('button');
@@ -12053,15 +12079,30 @@ window.__keYiLiaoTian = keYiLiaoTian;
           persistUiQueuesSoon();
           chaHuaTongBu(state.selectedChat.id);
         };
-        // 编辑态的确定/删除也**并排**（和查看态一致，不许竖着排）
         const caoE = document.createElement('div');
         caoE.className = 'qCaoZuoJi';
         caoE.append(save, del);
-        (li.querySelector('.qZhengWen') || li).append(ta, caoE);
+        hang.append(ta, caoE);
+        li.appendChild(hang);
       } else {
-        const kuaDu = document.createElement('div');
-        kuaDu.className = 'qWenBen';
-        kuaDu.textContent = item.text;
+        /* R293：一行一条 —— 内容单行截断，右侧全部按钮（升档/上移/下移/编辑/移除，一个不少）；
+           点击内容展开：全文＋插话方式＋模型＋时间/已等。 */
+        const zhanKai = qZhanKaiJi.has(item);
+        const hang = document.createElement('div');
+        hang.className = 'qHang';
+        const dan = document.createElement('span');
+        dan.className = 'qDanHang';
+        dan.textContent = item.text;
+        dan.title = zhanKai ? tOr('chat.queueCollapse', '点击收起') : tOr('chat.queueExpand', '点击展开完整消息');
+        dan.setAttribute('role', 'button');
+        dan.setAttribute('aria-expanded', zhanKai ? 'true' : 'false');
+        dan.tabIndex = 0;
+        const qieHuan = () => {
+          if (qZhanKaiJi.has(item)) qZhanKaiJi.delete(item); else qZhanKaiJi.add(item);
+          renderQueueBar();
+        };
+        dan.onclick = qieHuan;
+        dan.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); qieHuan(); } };
         const edit = document.createElement('button');
         edit.className = 'anNiuXiao';
         edit.textContent = t('chat.queueEdit');
@@ -12136,12 +12177,19 @@ window.__keYiLiaoTian = keYiLiaoTian;
             showToast(chaHuaBiaoQian(xia) + '：' + String(item.text || '').slice(0, 40));
           };
         }
-        (li.querySelector('.qZhengWen') || li).append(kuaDu);
-        // 操作按钮**并排**在会话下方（升档/上移/下移/编辑/移除 —— 不许竖着排）
         const cao = document.createElement('div');
         cao.className = 'qCaoZuoJi';
         cao.append(cu, up, dn, edit, del);
-        (li.querySelector('.qZhengWen') || li).append(cao);
+        hang.append(dan, cao);
+        li.appendChild(hang);
+        if (zhanKai) {
+          /* 展开详情：插话方式标签＋时间＋已等＋模型＋全文（按钮仍在右侧行上） */
+          const xiang = document.createElement('div');
+          xiang.className = 'qXiangQing';
+          xiang.innerHTML = '<div class="qTouXiaoZi"><span class="qBiaoQian">' + escapeHtml(tag) + '</span><span class="qShiJian" title="' + escapeHtml(wanZhengShiJian(ts)) + '">' + escapeHtml(yueRiShiFen(ts)) + '</span><span class="qDengDai">' + escapeHtml(tOr('chat.waiting', '已等')) + ' <b data-deng="' + suoYin + '">' + escapeHtml(dengDaiShiChang(ts)) + '</b></span><span class="qMoXing">' + escapeHtml(tOr('chat.queueModel', '模型')) + '：<b data-q-moxing="' + escapeHtml(sid) + '">' + escapeHtml(chaHuaMoXingWen(sid)) + '</b></span></div><div class="qWenBenQuan"></div>';
+          (xiang.querySelector('.qWenBenQuan') || xiang).textContent = item.text;
+          li.appendChild(xiang);
+        }
       }
       LieBiao.appendChild(li);
     });
