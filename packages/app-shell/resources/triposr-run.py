@@ -14,6 +14,9 @@ def main():
     if len(sys.argv) < 4:
         fail("usage: triposr-run.py <input_image> <output_glb> <model_dir> [device] [resolution]")
     img_path, out_glb, model_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+    # R294：tsr 是源码包（local-gen/TripoSR），按路径导入；DINO 骨干下载走 HF 镜像（国内可达）
+    sys.path.insert(0, os.path.join(model_dir, "TripoSR"))
+    os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
     device = sys.argv[4] if len(sys.argv) > 4 else ("cuda" if _has_cuda() else "cpu")
     resolution = int(sys.argv[5]) if len(sys.argv) > 5 else 256
     if not os.path.isfile(img_path):

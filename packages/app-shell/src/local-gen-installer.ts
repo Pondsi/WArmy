@@ -83,6 +83,7 @@ export function chaXunBenDiShengCheng(root: string): { installed: boolean; versi
     if (!hit) return { installed: false, verified: false, reason: 'manifest-unverified' };
     /* R294：config.yaml 缺失＝装得不完整（旧版只下了权重）⇒ 报未安装，让下载按钮补齐 */
     if (!fs.existsSync(path.join(dir, 'config.yaml'))) return { installed: false, verified: true, reason: 'config-missing' };
+    if (!fs.existsSync(path.join(dir, 'TripoSR', 'tsr', 'system.py'))) return { installed: false, verified: true, reason: 'src-missing' };
     return { installed: true, version: hit.version, verified: true };
   } catch {
     return { installed: false, verified: YI_YAN_ZHENG_QING_DAN.length > 0, reason: YI_YAN_ZHENG_QING_DAN.length ? 'not-installed' : 'source-unverified' };
@@ -136,4 +137,62 @@ export async function anZhuangBenDiShengCheng(root: string, onProgress?: (p: num
   }
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ version: zhu.version, sha256: zhu.sha256, license: zhu.license }, null, 2));
   return { ok: true, version: zhu.version };
+}
+
+/**
+ * R294：TripoSR 源码抓取（tsr 是研究仓库源码包，非 pip 包；按路径导入）。
+ * 网络现状：api.github.com/codeload 被 404，raw.githubusercontent.com 可用 ⇒ 逐文件抓取，
+ * 从 system.py/utils.py＋config.yaml 的类路径出发递归解析 tsr.* 导入；__init__.py 缺则补空。
+ * 许可 MIT（随仓库 LICENSE）；失败如实返回，不伪造已安装。
+ */
+export async function anZhuangTripoSYuanMa(dir: string): Promise<{ ok: boolean; error?: string; files?: number }> {
+  const RAW = 'https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/';
+  const tsrDir = path.join(dir, 'TripoSR');
+  if (fs.existsSync(path.join(tsrDir, 'tsr', 'system.py'))) return { ok: true, files: 0 };
+  const yiZhua = new Set<string>();
+  const duiLie = ['tsr/system.py', 'tsr/utils.py'];
+  /* config.yaml 里的动态类路径（omegaconf instantiate 不走 import，必须显式补） */
+  try {
+    const cfg = fs.readFileSync(path.join(dir, 'config.yaml'), 'utf8');
+    for (const m of cfg.matchAll(/tsr\.[\w.]+/g)) {
+      duiLie.push('tsr/' + m[0].slice(4).replace(/\./g, '/') + '.py');
+    }
+  } catch { /* config 还没下就不补 */ }
+  let n = 0;
+  while (duiLie.length) {
+    const rel = duiLie.shift()!;
+    if (yiZhua.has(rel)) continue;
+    yiZhua.add(rel);
+    let wen: string | null = null;
+    try { const r = await fetch(RAW + rel); wen = r.ok ? await r.text() : null; } catch { wen = null; }
+    const mu = path.join(tsrDir, rel);
+    fs.mkdirSync(path.dirname(mu), { recursive: true });
+    if (wen === null) {
+      if (rel.endsWith('__init__.py')) { fs.writeFileSync(mu, ''); continue; }
+      return { ok: false, error: 'src-miss: ' + rel };
+    }
+    fs.writeFileSync(mu, wen);
+    n += 1;
+    for (const m of wen.matchAll(/(?:from|import)\s+tsr\.([\w.]+)/g)) {
+      duiLie.push('tsr/' + m[1]!.replace(/\./g, '/') + '.py');
+      duiLie.push('tsr/' + m[1]!.replace(/\./g, '/') + '/__init__.py');
+    }
+    const muLu = rel.split('/').slice(0, -1).join('/');
+    for (const m of wen.matchAll(/from\s+(\.+)([\w.]*)\s+import/g)) {
+      const shang = m[1]!.length - 1;
+      const parts = muLu.split('/');
+      const ji = parts.slice(0, Math.max(0, parts.length - shang)).join('/');
+      const xia = m[2] ? m[2].replace(/\./g, '/') : '';
+      const he = xia ? (ji ? ji + '/' + xia : xia) : ji;
+      if (he) { duiLie.push(he + '.py'); duiLie.push(he + '/__init__.py'); }
+    }
+  }
+  for (const init of ['tsr/__init__.py', 'tsr/models/__init__.py', 'tsr/models/tokenizers/__init__.py', 'tsr/models/transformer/__init__.py']) {
+    const mu = path.join(tsrDir, init);
+    if (!fs.existsSync(mu)) { fs.mkdirSync(path.dirname(mu), { recursive: true }); fs.writeFileSync(mu, ''); }
+  }
+  /* LICENSE 随源码保留（MIT 要求） */
+  try { const r = await fetch(RAW + 'LICENSE'); if (r.ok) fs.writeFileSync(path.join(tsrDir, 'LICENSE'), await r.text()); } catch { /* 不挡安装 */ }
+  if (!fs.existsSync(path.join(tsrDir, 'tsr', 'system.py'))) return { ok: false, error: 'src-incomplete' };
+  return { ok: true, files: n };
 }

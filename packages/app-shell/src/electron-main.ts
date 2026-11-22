@@ -130,6 +130,7 @@ import { chongShengTiaoGuo, qianYiGongZuoQu, jieXiChongShengWenJian, type ChongS
 import { chuangJianGongJuShouQuan, type ShouQuanTiao } from './ying-yong/gong-ju-shou-quan.js';
 import { chuangJianAnQuanDangWei } from './ying-yong/an-quan-dang-wei.js';
 import { chuangJianJsonlDouDi } from './ji-chu/jsonl-dou-di.js';
+import { chuangJianHarnessZiJinHua } from './ying-yong/harness-zi-jin-hua.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -236,7 +237,7 @@ import { duJsonWenJian, qingLiLinShiWenJian, anQuanYuanZiXieJson } from './atomi
  * **不是**落到本机设置里（产品主：记录文件的改动是无限牛马的功能，不是本机的功能）。
  */
 import { setFileAccessSink, withFileAccessScope, dangqianWenjianFangwenZuoyongyu } from './helper-tool.js';
-import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS, isHostTool, hostToolSpecs, yingSheYongHuWenJianJia, sheZhiXiTongWenJianJia, resolveInside, jieXiGongJuCanShu, quLuJingCanShu, sheZhiYiCiZhiDuGen, qingKongYiCiZhiDuGen, shiZhuiJia, type WorkToolResult } from './work-tools.js';
+import { isWorkTool, runWorkTool, workToolSpecs, workspaceDirOf, WORK_TOOL_SECURITY, WORK_TOOL_LIMITS, isHostTool, hostToolSpecs, yingSheYongHuWenJianJia, sheZhiXiTongWenJianJia, resolveInside, jieXiGongJuCanShu, quLuJingCanShu, sheZhiYiCiZhiDuGen, qingKongYiCiZhiDuGen, shiZhuiJia, sheZhiYuFaShouWei, type WorkToolResult } from './work-tools.js';
 import {
   anquanJianCeMingLing, anquanJianCeJiNeng, panDuanShouQuan, panDuanMingLingShouQuan, yunXingMingLing, mingLingShouQuanJian, guiFanMingLing,
   duDocx, duPptx, zhuaQuWangZhi, xiaZaiWenJian,
@@ -1924,6 +1925,16 @@ const jsonlDouDi = chuangJianJsonlDouDi({
   shenJi: (op, d) => { audit?.log(op, d); },
 });
 function daBaoXieRuJsonl(key: string, role: string, ti: string): void { jsonlDouDi.daBaoXieRuJsonl(key, role, ti); }
+
+/* R294-3 Harness 自我改进（EDG/GDR/CCS 适配）：守卫注册表＋执行台账＋总结裁决＋净收益核算。
+ * 无手动开关：启用/停用/更换全由总结裁决与净收益自动决定；越安全白名单的提议转系统消息求授权（同类合并）。 */
+const harnessZiJinHua = chuangJianHarnessZiJinHua({
+  du: () => { try { return JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'harness-guards.json'), 'utf8')) as { guards?: never[]; ledger?: never[] }; } catch { return undefined; } },
+  cun: (j) => { anQuanYuanZiXieJson(path.join(app.getPath('userData'), 'harness-guards.json'), j); },
+  jiXiTongXiaoXi: (k, t, b) => { jiXiTongXiaoXi(k, t, b); },
+  auditLog: (op, d) => { audit?.log(op, d); },
+});
+sheZhiYuFaShouWei(() => { const g = harnessZiJinHua.guards.find((x) => x.id === 'aci-syntax'); return !g || g.enabled; });
 
 function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
   // 归一后写入：去重、镜像、回读全部只认这一套角色名
@@ -7659,6 +7670,16 @@ async function yunXingLiaoTianXunHuan(
             content: `[${gongJuMing}] 用户没有指定桌面/文档/下载，按默认规则写到工作区：${gaiDaoMoRen}\n` + String(wr.content || ''),
           };
         }
+        /* R294-3：守卫执行留标记（总结自我改进素材）——语法反射每命中一次＝省一轮「要不要检查」的模型往返 */
+        try {
+          const yf = (wr?.meta as { yuFa?: { checked?: boolean; ok?: boolean; cuoWu?: number; quanJiao?: number } } | undefined)?.yuFa;
+          if (yf && yf.checked) {
+            const sidJi = String(sessionId || '');
+            harnessZiJinHua.jiLu({ sessionId: sidJi, guardId: 'aci-syntax', kind: 'fire' });
+            harnessZiJinHua.jiLu({ sessionId: sidJi, guardId: 'aci-syntax', kind: 'save', detail: yf.ok ? '语法通过' : '检出' + String(yf.cuoWu || 0) + '处' });
+            if ((yf.quanJiao || 0) > 0) harnessZiJinHua.jiLu({ sessionId: sidJi, guardId: 'aci-fullwidth', kind: 'fire', detail: String(yf.quanJiao) });
+          }
+        } catch { /* 台账失败不影响工具结果 */ }
         // 有文件生成 ⇒ 广播给界面（自动补上「文件产物」卡片，见渲染层）
         if (wr.ok && wr.meta && (wr.meta.tool === 'write_file' || wr.meta.tool === 'make_docx' || wr.meta.tool === 'make_pptx' || wr.meta.tool === 'make_xlsx' || wr.meta.tool === 'make_pdf' || wr.meta.tool === 'edit_file' || wr.meta.tool === 'move_file' || wr.meta.tool === 'delete_file')) {
           try {
@@ -33145,6 +33166,8 @@ async function guiDangYiGeHuiHua(
                       + (gf ? '【本会话的短记忆（按它归置；它由宿主按知识库使用频率更新，不需要你重写）】\n' + gf.slice(0, 1500) + '\n\n' : '');
                   })()
                   + '短记忆由宿主按**知识库使用频率**维护，你只负责把本次会话整理成知识条目；**不要输出对「要求」的修改建议**。\n\n'
+                  /* R294-3：守卫台账＋裁决请求置于动态尾段（R291：静态前缀不动，动态置尾） */
+                  + harnessZiJinHua.zongJieDuan() + '\n'
                   + yuanWen.slice(0, 12000),
               }],
               maxTokens: 900,
@@ -33152,7 +33175,15 @@ async function guiDangYiGeHuiHua(
             new Promise<never>((_, rej) => setTimeout(() => rej(new Error('archive-timeout')), 60000)),
           ]);
           const txt = neiRongWenBen((r as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0]?.message?.content) || '';
-          if (txt.trim()) { zhengLi = txt.trim(); jiangJi = false; break; }
+          if (txt.trim()) {
+            /* R294-3：总结自我改进——解析守卫裁决并应用（白名单内直接生效；越界转系统消息求授权），
+               裁决块不进知识条目。裁决失败不影响总结本身。 */
+            try {
+              const cai = harnessZiJinHua.jieXiCaiJue(txt);
+              if (cai.length) harnessZiJinHua.yingYongCaiJue(cai);
+            } catch { /* noop */ }
+            zhengLi = harnessZiJinHua.boLiCaiJueKuai(txt.trim()) || txt.trim(); jiangJi = false; break;
+          }
           else jiangJi = true;
         } else {
           jiangJi = true;
@@ -39495,7 +39526,7 @@ chuliIpc('warmy:jiaRuJiLuLieBiao', () => {
  * ══════════════════════════════════════════════════════════════ */
 import { jieXiYanShou, paoGuiZe, panDingZhiXian, xuanOverlay, type ZiJinHuaShiYan, type ZhiXian, type XueXiOverlay } from './self-evolution.js';
 import { duZhuoMianTuBiao } from './desktop-icons.js';
-import { chaXunBenDiShengCheng, anZhuangBenDiShengCheng } from './local-gen-installer.js';
+import { chaXunBenDiShengCheng, anZhuangBenDiShengCheng, anZhuangTripoSYuanMa } from './local-gen-installer.js';
 const ziJinHuaLu = path.join(app.getPath('userData'), 'self-evolution.json');
 const ziJinHuaXueXiLu = path.join(app.getPath('userData'), 'self-evolution-overlays.json');
 const ziJinHuaBiao = new Map<string, ZiJinHuaShiYan>();
@@ -39899,10 +39930,10 @@ chuliIpc('warmy:mimicTuBiaoHuDong', async (_e, p0?: { x?: number; y?: number; ki
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 }, ['mimic.html', 'desktop-anim.html']);
 /** R259：子进程跑 CLI（无 shell，超时杀），返回退出码+输出尾部。 */
-function paoMingLingZiJinCheng(cmd: string, args: string[], cwd: string, timeoutMs: number): Promise<{ ok: boolean; code: number; out: string }> {
+function paoMingLingZiJinCheng(cmd: string, args: string[], cwd: string, timeoutMs: number, env?: Record<string, string>): Promise<{ ok: boolean; code: number; out: string }> {
   return new Promise((resolve) => {
     try {
-      const z = spawn(cmd, args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      const z = spawn(cmd, args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: env ? { ...process.env, ...env } : process.env });
       let out = ''; let done = false;
       const fin = (code: number) => { if (done) return; done = true; clearTimeout(t); resolve({ ok: code === 0, code, out: out.slice(-6000) }); };
       const t = setTimeout(() => { try { z.kill(); } catch { /* noop */ } fin(-1); }, timeoutMs);
@@ -39977,18 +40008,24 @@ chuliIpc('warmy:benDiShengChengChaXun', () => chaXunBenDiShengCheng(app.getPath(
 /** R259 报障26：3D 捏脸环境复检（打开面板/切换形态时调）——模型已装 + Python/TripoSR 推理环境就绪才可用；中途卸载/环境缺失如实报不可用。 */
 chuliIpc('warmy:sanDHuiTuHuanJing', async () => {
   const an = chaXunBenDiShengCheng(app.getPath('userData'));
+  const lg = path.join(app.getPath('userData'), 'local-gen');
+  const tsrLu = path.join(lg, 'TripoSR');
+  const yuanMaZai = fs.existsSync(path.join(tsrLu, 'tsr', 'system.py'));
   let python = false; let triposr = false;
   try {
-    const r = await paoMingLingZiJinCheng(process.platform === 'win32' ? 'python' : 'python3', ['-c', 'import torch, triposr; print("ok")'], app.getPath('userData'), 15000);
+    /* R294：tsr 是源码包（按路径导入，非 pip 包）；检查 torch＋tsr.system 可导入才算就绪 */
+    const r = await paoMingLingZiJinCheng(process.platform === 'win32' ? 'python' : 'python3', ['-c', "import torch, sys; sys.path.insert(0, r'" + tsrLu.replace(/'/g, "\\'") + "'); import tsr.system; print('ok')"], app.getPath('userData'), 30000);
     python = r.ok; triposr = r.ok && /ok/.test(r.out);
   } catch { /* 无 Python 环境 */ }
-  const ready = !!an.installed && triposr;
+  const ready = !!an.installed && triposr && yuanMaZai;
   const hint = !an.installed
     ? '需先点下载按钮安装本地生成后端（TripoSR，约1.6GB）。'
-    : !triposr
-      ? '模型已装，但推理环境未就绪：需 Python + torch + TripoSR（pip install triposr torch）。'
-      : '';
-  return { ok: true, installed: !!an.installed, version: an.version || null, python, triposr, ready, hint };
+    : !yuanMaZai
+      ? '权重已装，但 TripoSR 源码缺失：再点一次下载按钮补齐。'
+      : !triposr
+        ? '模型已装，但推理环境未就绪：需 Python + torch + TripoSR 依赖（pip install torch omegaconf einops PyMCubes transformers trimesh rembg xatlas moderngl）。'
+        : '';
+  return { ok: true, installed: !!an.installed, version: an.version || null, python, triposr, yuanMaZai, ready, hint };
 });
 /** R260 项10：3D AI 捏脸推理管线——单图→TripoSR→mesh.glb，落 characters3d/。
  *  零原生：Python/torch 只活在独立子进程；环境未就绪如实返回错误，绝不伪造成功。 */
@@ -40013,7 +40050,8 @@ chuliIpc('warmy:sanDShengCheng', async (_e, p0: { png?: string; name?: string })
     : path.join(app.getAppPath(), 'resources', 'triposr-run.py');
   if (!fs.existsSync(script)) return { ok: false, error: 'script-missing' };
   const py = process.platform === 'win32' ? 'python' : 'python3';
-  const r = await paoMingLingZiJinCheng(py, [script, inPng, outGlb, genDir], ud, 600000);
+  /* R294：DINO 骨干走 HF 镜像（国内可达）；tsr 源码路径由脚本自行插入 sys.path */
+  const r = await paoMingLingZiJinCheng(py, [script, inPng, outGlb, genDir], ud, 600000, { HF_ENDPOINT: 'https://hf-mirror.com' });
   let jie: { ok?: boolean; glb?: string; error?: string } | null = null;
   for (const ln of String(r.out || '').split('\n')) { const t = ln.trim(); if (t.startsWith('{')) { try { jie = JSON.parse(t); } catch { /* noop */ } } }
   try { fs.rmSync(inPng, { force: true }); } catch { /* noop */ }
@@ -40025,7 +40063,14 @@ chuliIpc('warmy:sanDShengCheng', async (_e, p0: { png?: string; name?: string })
 });
 chuliIpc('warmy:benDiShengChengAnZhuang', async () => {
   const r = await anZhuangBenDiShengCheng(app.getPath('userData'));
-  if (r.ok) jiXiTongXiaoXi('system', '本地生成后端', '已安装 v' + (r.version || '') + '，可使用程序内 3D 生成。');
+  /* R294：权重装好后补 TripoSR 源码（tsr 包按路径导入；raw 逐文件抓取，失败不伪造成功） */
+  if (r.ok) {
+    try {
+      const yuan = await anZhuangTripoSYuanMa(path.join(app.getPath('userData'), 'local-gen'));
+      if (!yuan.ok) return { ok: false, error: 'src-download-failed: ' + (yuan.error || '') };
+    } catch (e) { return { ok: false, error: 'src-download-failed: ' + xiJingCuoWu(e) }; }
+    jiXiTongXiaoXi('system', '本地生成后端', '已安装 v' + (r.version || '') + '，可使用程序内 3D 生成。');
+  }
   return r;
 });
 /* R232 能力格政策：人工选择进系统消息；默认拒绝超出上限。 */

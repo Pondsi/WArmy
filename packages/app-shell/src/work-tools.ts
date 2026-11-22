@@ -28,6 +28,10 @@ import { shiJianChuoWen } from './time-utils.js';
 import { protectedPathReason, consumeProtectedOnce, hardProtectedReason } from './protected-paths.js';
 import { jianChaYuFa, yuFaJianYiWen } from './ji-chu/yu-fa-jian-cha.js';
 
+/** R294-3：语法守卫是否启用由 harness 自我改进注册表决定（无手动开关，总结裁决/净收益自动停启）；默认启用。 */
+let yuFaShouWeiKai: () => boolean = () => true;
+export function sheZhiYuFaShouWei(kai: () => boolean): void { yuFaShouWeiKai = kai; }
+
 /** 工具名（与 function calling 暴露给模型的 name 一致） */
 export const WORK_TOOL_NAMES = [
   'list_dir', 'find_files', 'search_files', 'read_file', 'write_file', 'edit_file',
@@ -501,8 +505,8 @@ export function workEditFile(baseDir: string, args: { path?: string; oldText?: s
     const next = args.replaceAll ? text.split(oldText).join(newText) : text.replace(oldText, newText);
     fs.writeFileSync(file, next, 'utf8');
     /* R294-4 ACI：改后语法自动检查（建议性，绝不阻止写入；中文错误＋行/列＋全角标点提示）。
-       BOM/EOL 由精确替换天然保留；检查结果进 meta.yuFa 供总结自我改进统计。 */
-    const yuFa = jianChaYuFa(file, next);
+       BOM/EOL 由精确替换天然保留；检查结果进 meta.yuFa 供总结自我改进统计。守卫停用则不检（自我改进裁决）。 */
+    const yuFa = yuFaShouWeiKai() ? jianChaYuFa(file, next) : { checked: false, ok: true, errors: [], quanJiao: [], fangShi: 'none' as const };
     return { ok: true, content: `[edit_file] 已修改 ${relOf(baseDir, file)}（替换 ${args.replaceAll ? count : 1} 处）` + yuFaJianYiWen(yuFa), meta: { tool, ok: true, bytes: Buffer.byteLength(next), chars: [...next].length, path: relOf(baseDir, file), abs: file, exists: true, yuFa: { checked: yuFa.checked, ok: yuFa.ok, fangShi: yuFa.fangShi, cuoWu: yuFa.errors.length, quanJiao: yuFa.quanJiao.length } } };
   } catch (e) { return fail(tool, e); }
 }
@@ -832,7 +836,7 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
     /* R294-4 ACI：其余可检扩展（.js/.ts/.tsx/.json 追加态）给建议性检查（不删文件不阻断）＋全角标点提示 */
     let yuFaJianYi = '';
     let yuFaMeta: WorkToolResult['meta']['yuFa'];
-    if (cun && !/\.(mjs|cjs)$/i.test(file)) {
+    if (cun && yuFaShouWeiKai() && !/\.(mjs|cjs)$/i.test(file)) {
       try {
         const zhenWen = fs.readFileSync(file, 'utf8');
         const yf = jianChaYuFa(file, zhenWen);
