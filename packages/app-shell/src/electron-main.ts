@@ -18,7 +18,6 @@ import { zhongWenYuChuLi, yanZhengBaoHu } from './zheng-li-v3.js';
 import { chuangJianXiTongXiaoXi } from './ying-yong/xi-tong-xiao-xi.js';
 import { chuangJianEtaJiaQuJian } from './ying-yong/eta-jia-qu-jian.js';
 import { chuangJianIpcAnQuanZha } from './ji-chu/ipc-an-quan-zha.js';
-import { wenDingGongJuBiao } from './ji-chu/gong-ju-wen-ding.js';
 import { ceShiLianTong as sheJiaoCeShiLianTong, type SheJiaoPingTai } from './she-jiao-lian-tong.js';
 import { ChuanShuDuiLie, qunRuXiangJianYan, type ChuanShuZhen } from './hui-hua-chuan-shu.js';
 import { TouDiFuWu, WangLuoFaJianXiang } from './wang-luo-tou-di.js';
@@ -90,7 +89,7 @@ import { jieGuoShouWei, readFileXuDu, type DuZheShouKou } from './jie-guo-shou-k
 /** 类型契约（v1.1）：实现处只 import、不再另写同名类型（门禁 verify-r48-qiyue 逐个核对） */
 import type { XiaoxiJilu } from '@warmy/contracts';
 import { zaoHeiBanCun, zaoHeShiChanWu, zaoCunZhengLiuQuanWen } from './hei-ban-cun.js';
-import { fenDangJieWei, dianMingGongJu } from './gong-ju-fen-dang.js';
+import { dianMingGongJu } from './gong-ju-fen-dang.js';
 import { gongJuZhiWen as suanGongJuZhiWen } from './gong-ju-zhi-wen.js';
 /** 错误分类表的唯一实现（契约 CuowuLeibie/GuileiCuowu）：收缩重试、异常卡片、审计都按同一张表判 */
 import { fenLeiCuoWu, shiShangXiaWenChaoXian, LEI_BIE_MING } from './cuowu-fenlei.js';
@@ -132,6 +131,7 @@ import { chuangJianAnQuanDangWei } from './ying-yong/an-quan-dang-wei.js';
 import { chuangJianJsonlDouDi } from './ji-chu/jsonl-dou-di.js';
 import { chuangJianHarnessZiJinHua } from './ying-yong/harness-zi-jin-hua.js';
 import { chuangJianHuiHuaXieRu } from './ying-yong/hui-hua-xie-ru.js';
+import { chuangJianGongJuZhuangPei } from './ying-yong/gong-ju-zhuang-pei.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -4735,32 +4735,19 @@ function mcpGuanWang(): import('./mcp-gateway.js').McpGuanWang {
   return _mcpGuanWang;
 }
 
+/* R287 P3-6：工具规格装配唯一 owner 迁至 ying-yong/gong-ju-zhuang-pei（装配顺序/可见性过滤/档位截尾/R291 稳定化逐字保持）；
+   此处仅装配窄注入＋薄转发。规格来源/可见性/点名/审计仍主进程持有；截尾与稳定化复用既有纯模块。构造无副作用（闭包懒引用）。 */
+const gongJuZhuangPei = chuangJianGongJuZhuangPei({
+  jiYiGuiGe: () => memoryToolSpecs(toolLabels()) as unknown as GongJuGuiGe[],
+  ganHuoGuiGe: (xiaoDiShangXian) => [...workToolSpecs(), ...hostToolSpecs(), ...(xiaoDiShangXian > 0 ? (xiaoDiToolSpecs() as unknown as GongJuGuiGe[]) : [])] as unknown as GongJuGuiGe[],
+  mcpGuiGe: async () => { await mcpGuanWang().dong(); return mcpGuanWang().gongJuGuiGe() as unknown as GongJuGuiGe[]; },
+  ziDingLie: () => ziDingGongJuJiQu(),
+  keJian: (ming) => gongJuKeJian(ming),
+  dianMing: (sid) => benLunDianMingGongJu.get(sid),
+  auditLog: (op, d) => { audit?.log(op, d); },
+});
 async function zuJingGongJuGuiGe(sessionId: string, xiaoDiShangXian: number, jiyiJiuxu: boolean, keGanHuo: boolean, zuiDuo = 0): Promise<GongJuGuiGe[]> {
-  const jiyiTools: GongJuGuiGe[] = jiyiJiuxu ? (memoryToolSpecs(toolLabels()) as unknown as GongJuGuiGe[]) : [];
-  const ganHuoTools = keGanHuo
-    ? ([...workToolSpecs(), ...hostToolSpecs(), ...(xiaoDiShangXian > 0 ? (xiaoDiToolSpecs() as unknown as GongJuGuiGe[]) : [])] as unknown as GongJuGuiGe[])
-    : [];
-  /** T148：第三方 MCP 工具（经监管网关过滤/标记后并入）；没配置时为空 */
-  const mcpTools: GongJuGuiGe[] = await (async () => {
-    try { await mcpGuanWang().dong(); return mcpGuanWang().gongJuGuiGe() as unknown as GongJuGuiGe[]; } catch { return []; }
-  })();
-  const ziDing = ziDingGongJuJiQu().filter((g) => gongJuKeJian(g.name));
-  const ziDingGuiGe = ziDing.map((g) => ({
-    type: 'function' as const,
-    function: { name: g.name, description: g.description || `自定义工具：${g.name}`, parameters: g.parameters },
-  })) as unknown as GongJuGuiGe[];
-  const quan = [...ganHuoTools, ...jiyiTools, ...ziDingGuiGe, ...mcpTools].filter((g) => gongJuKeJian(g.function.name));
-  /**
-   * **窗口装不下整套工具规格时按档位截尾**（`gong-ju-fen-dang.ts`，计价侧与发送侧同调这一个函数）：
-   * 用户这一轮点名/明显要用的工具与最小干活集永远不许被裁 —— 裁到连活都干不了、或者把用户点名的工具裁掉，比超预算更坏。
-   */
-  const dianMing = benLunDianMingGongJu.get(String(sessionId || ''));
-  const fd = fenDangJieWei(quan, zuiDuo, { ziDingMing: new Set(ziDing.map((z) => z.name)), dianMing });
-  if (fd.jieWei) {
-    try { audit?.log('chat.tools.trim-list', { sessionId, zuiDuo: fd.shou, baoDi: fd.baoDi, liu: fd.liu.map((g) => g.function.name), diu: fd.diu, dianMing: [...(dianMing || [])] }); } catch { /* 审计失败不挡发送 */ }
-  }
-  /* R291：稳定前缀——同集合下逐轮字节一致（排序＋键序规范化），最大化 prefix cache LCP。 */
-  return wenDingGongJuBiao(fd.liu);
+  return gongJuZhuangPei.zuJingGongJuGuiGe(sessionId, xiaoDiShangXian, jiyiJiuxu, keGanHuo, zuiDuo);
 }
 /** 这一轮用户点名的工具（新用户轮开始时算一次；内部续派轮沿用上一次，免得续派时把用户点名的工具又裁掉） */
 const benLunDianMingGongJu = new Map<string, Set<string>>();
