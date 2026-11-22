@@ -1106,6 +1106,8 @@
   "ctx.archive": "Archivieren",
   "ctx.archiveConfirm": "Archivieren?",
   "ctx.autoArchive": "Überprüfung",
+  "ctx.autoDrive": "Selbststeuerung",
+  "ctx.autoDriveTip": "Bei der Zusammenfassung prüft der Workhorse dieser Sitzung eigenständig den Kontext und schlägt einen Plan für den nächsten Schritt vor (Ansatz, Begründung, Vor- und Nachteile, Kosten, Wirkung) und fragt, ob fortgefahren werden soll. Standardmäßig an; übersprungen, wenn die letzte Antwort unter 12 Stunden alt ist, die Selbststeuerung unter 66 Stunden zurückliegt oder bereits 3 Mal erfolgte.",
   "ctx.avatarLocalUnsupported": "Gruppen-Avatare: nur voreingestellte Avatare (lokaler Upload nicht unterstützt)",
   "ctx.avatarSaved": "Avatar aktualisiert",
   "ctx.avatarSettings": "Avatar-Einstellungen",

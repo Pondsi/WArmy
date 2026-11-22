@@ -1106,6 +1106,8 @@
   "ctx.archive": "보관",
   "ctx.archiveConfirm": "보관할까요?",
   "ctx.autoArchive": "회고",
+  "ctx.autoDrive": "자율 주행",
+  "ctx.autoDriveTip": "요약 시 이 세션의 워크호스가 자율적으로 맥락을 검토하고 다음 단계 계획(방안, 이유, 장단점, 비용, 효과)을 제시하며 진행 여부를 묻습니다. 기본 켜짐. 최근 답변 12시간 이내, 66시간 이내 자율 주행済み, 누적 3회면 건너뜁니다.",
   "ctx.avatarLocalUnsupported": "그룹 아바타는 프리셋만 가능(로컬 업로드 미지원)",
   "ctx.avatarSaved": "아바타가 업데이트되었습니다",
   "ctx.avatarSettings": "아바타 설정",

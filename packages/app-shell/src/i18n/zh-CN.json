@@ -1106,6 +1106,8 @@
   "ctx.archive": "总结",
   "ctx.archiveConfirm": "确定总结？",
   "ctx.autoArchive": "总结",
+  "ctx.autoDrive": "自驱",
+  "ctx.autoDriveTip": "总结时让本会话牛马自主查看上下文并给出下一步计划（方案/理由/优缺点/成本/效果），询问你是否按此进行。默认开启；最近回复12小时内、66小时内已自驱、或累计3次则跳过。",
   "ctx.avatarLocalUnsupported": "群聊头像请选预设头像（本地上传暂不支持）",
   "ctx.avatarSaved": "头像已更新",
   "ctx.avatarSettings": "头像设置",

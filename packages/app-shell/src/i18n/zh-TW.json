@@ -1106,6 +1106,8 @@
   "ctx.archive": "總結",
   "ctx.archiveConfirm": "確定總結？",
   "ctx.autoArchive": "總結",
+  "ctx.autoDrive": "自驅",
+  "ctx.autoDriveTip": "總結時讓本會話牛馬自主查看上下文並給出下一步計畫（方案/理由/優缺點/成本/效果），詢問你是否按此進行。預設開啟；最近回覆12小時內、66小時內已自驅、或累計3次則跳過。",
   "ctx.avatarLocalUnsupported": "群聊頭像請選預設頭像（本地上傳暫不支援）",
   "ctx.avatarSaved": "頭像已更新",
   "ctx.avatarSettings": "頭像設定",

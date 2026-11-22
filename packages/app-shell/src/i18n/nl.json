@@ -1106,6 +1106,8 @@
   "ctx.archive": "Archiveren",
   "ctx.archiveConfirm": "Archiveren?",
   "ctx.autoArchive": "Beoordelen",
+  "ctx.autoDrive": "Zelfsturing",
+  "ctx.autoDriveTip": "Tijdens samenvatting bekijkt de workhorse van deze sessie zelfstandig de context en stelt een plan voor de volgende stap voor (aanpak, reden, voor- en nadelen, kosten, effect), en vraagt of doorgaan. Standaard aan; overgeslagen bij laatste antwoord jonger dan 12 uur, zelfsturing jonger dan 66 uur of al 3 keer.",
   "ctx.avatarLocalUnsupported": "Groepsavatars: alleen vooraf ingestelde avatars (lokale upload niet ondersteund)",
   "ctx.avatarSaved": "Avatar bijgewerkt",
   "ctx.avatarSettings": "Avatar-instellingen",

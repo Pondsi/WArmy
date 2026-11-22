@@ -1106,6 +1106,8 @@
   "ctx.archive": "Arkivér",
   "ctx.archiveConfirm": "Arkivér?",
   "ctx.autoArchive": "Gennemgå",
+  "ctx.autoDrive": "Selvkørsel",
+  "ctx.autoDriveTip": "Under opsummering gennemgår denne sessions workhorse konteksten selvstændigt og foreslår en plan for næste trin (tilgang, årsag, fordele og ulemper, omkostning, effekt) og spørger om fortsættelse. Til som standard; springes over hvis seneste svar er yngre end 12 timer, selvkørsel yngre end 66 timer eller allerede 3 gange.",
   "ctx.avatarLocalUnsupported": "Gruppe-avatars: kun forudindstillede avatars (lokalt upload understøttes ikke)",
   "ctx.avatarSaved": "Avatar opdateret",
   "ctx.avatarSettings": "Avatarindstillinger",

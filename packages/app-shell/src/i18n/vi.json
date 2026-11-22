@@ -1106,6 +1106,8 @@
   "ctx.archive": "Lưu trữ",
   "ctx.archiveConfirm": "Lưu trữ?",
   "ctx.autoArchive": "Xem lại",
+  "ctx.autoDrive": "Tự vận hành",
+  "ctx.autoDriveTip": "Khi tóm tắt, workhorse của phiên này tự xem ngữ cảnh và đề xuất kế hoạch cho bước tiếp theo (cách làm, lý do, ưu nhược điểm, chi phí, hiệu quả), rồi hỏi có tiếp tục không. Mặc định bật; bỏ qua nếu trả lời gần nhất dưới 12 giờ, tự vận hành dưới 66 giờ hoặc đã 3 lần.",
   "ctx.avatarLocalUnsupported": "Ảnh đại diện nhóm: chỉ dùng ảnh có sẵn (không hỗ trợ tải lên cục bộ)",
   "ctx.avatarSaved": "Đã cập nhật ảnh đại diện",
   "ctx.avatarSettings": "Cài đặt ảnh đại diện",

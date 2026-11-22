@@ -1106,6 +1106,8 @@
   "ctx.archive": "Archivia",
   "ctx.archiveConfirm": "Archiviare?",
   "ctx.autoArchive": "Revisione",
+  "ctx.autoDrive": "Autoguida",
+  "ctx.autoDriveTip": "Durante il riepilogo, il workhorse di questa sessione esamina autonomamente il contesto e propone un piano per il passo successivo (approccio, motivo, pro e contro, costo, effetto), chiedendo se procedere. Attivo per default; saltato se l'ultima risposta ha meno di 12 ore, l'autoguida meno di 66 ore o è già avvenuta 3 volte.",
   "ctx.avatarLocalUnsupported": "Avatar di gruppo: solo avatar predefiniti (caricamento locale non supportato)",
   "ctx.avatarSaved": "Avatar aggiornato",
   "ctx.avatarSettings": "Impostazioni avatar",

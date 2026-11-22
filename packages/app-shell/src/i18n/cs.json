@@ -1106,6 +1106,8 @@
   "ctx.archive": "Archivovat",
   "ctx.archiveConfirm": "Archivovat?",
   "ctx.autoArchive": "Revize",
+  "ctx.autoDrive": "Samořízení",
+  "ctx.autoDriveTip": "Při shrnutí workhorse této relace samostatně prohlédne kontext a navrhne plán dalšího kroku (přístup, důvod, klady a zápory, náklad, efekt) a ptá se, zda pokračovat. Defaultně zapnuto; přeskočí se, pokud je poslední odpověď mladší 12 hodin, samořízení mladší 66 hodin nebo již 3krát.",
   "ctx.avatarLocalUnsupported": "Avatary skupin: pouze přednastavené avatary (lokální nahrávání není podporováno)",
   "ctx.avatarSaved": "Avatar aktualizován",
   "ctx.avatarSettings": "Nastavení avatara",

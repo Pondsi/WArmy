@@ -1106,6 +1106,8 @@
   "ctx.archive": "Arquivar",
   "ctx.archiveConfirm": "Arquivar?",
   "ctx.autoArchive": "Retrospectiva",
+  "ctx.autoDrive": "Autoimpulso",
+  "ctx.autoDriveTip": "Durante o resumo, o workhorse desta sessão revê autonomamente o contexto e propõe um plano para o próximo passo (abordagem, razão, prós e contras, custo, efeito), perguntando se deve prosseguir. Ligado por padrão; ignorado se a última resposta tem menos de 12 horas, o autoimpulso menos de 66 horas ou já ocorreu 3 vezes.",
   "ctx.avatarLocalUnsupported": "Avatar de grupo: somente predefinidos (upload local não suportado)",
   "ctx.avatarSaved": "Avatar atualizado",
   "ctx.avatarSettings": "Configurações de avatar",

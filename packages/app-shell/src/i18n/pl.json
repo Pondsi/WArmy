@@ -1106,6 +1106,8 @@
   "ctx.archive": "Archiwizuj",
   "ctx.archiveConfirm": "Zarchiwizować?",
   "ctx.autoArchive": "Przejrzyj",
+  "ctx.autoDrive": "Samoster",
+  "ctx.autoDriveTip": "Podczas podsumowania workhorse tej sesji samodzielnie przegląda kontekst i proponuje plan kolejnego kroku (podejście, powód, za i przeciw, koszt, efekt), pytając, czy kontynuować. Domyślnie włączone; pomijane, gdy ostatnia odpowiedź ma mniej niż 12 godzin, samoster mniej niż 66 godzin lub już 3 razy.",
   "ctx.avatarLocalUnsupported": "Awatary grup: tylko gotowe awatary (przesyłanie lokalne nieobsługiwane)",
   "ctx.avatarSaved": "Awatar zaktualizowany",
   "ctx.avatarSettings": "Ustawienia awatara",

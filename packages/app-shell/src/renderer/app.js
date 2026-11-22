@@ -30559,6 +30559,7 @@ async function renderDashboard(host) {
       if (b === t('list.pin') || b === t('list.unpin')) return 1;
       if (b === t('ctx.settings') || b === tOr('ctx.view', '查看')) return 2;
       if (b === t('ctx.rename')) return 3;
+      if (b.startsWith(tOr('ctx.autoDrive', '自驱'))) return 3.5;
       if (b.startsWith(t('ctx.autoArchive'))) return 4;
       if (b.startsWith(t('ctx.notify'))) return 5;
       if (b === t('ctx.stop') || b === t('ctx.enable') || b === tOr('ctx.groupEnable', '启用') || b === tOr('ctx.groupDisable', '停用')) return 6;
@@ -30791,6 +30792,16 @@ async function renderDashboard(host) {
       {
         biaoQian: tOr('ctx.duijie', '对接') + (shiDuiJieGou('singleAi', inst.id) ? ' ✓' : ''),
         onClick: () => void qieDuiJie('singleAi', inst.id, mingOf(inst)),
+      },
+      {
+        /* R296 自驱：勾选项，默认勾选，放在总结上方。取消仅关本会话自驱。 */
+        biaoQian: tOr('ctx.autoDrive', '自驱') + ((inst.autoDrive !== false) ? ' ✓' : ''),
+        onClick: () => {
+          inst.autoDrive = (inst.autoDrive === false);
+          saveState();
+          renderList();
+          try { window.warmy.ziQuKaiShe?.({ sessionId: inst.id, on: inst.autoDrive !== false }); } catch { /* noop */ }
+        },
       },
       {
         /**
@@ -31270,6 +31281,16 @@ async function renderDashboard(host) {
         },
       } : null,
     ].concat(projectItems).concat([
+      {
+        /* R296 自驱：勾选项，默认勾选，放在总结上方（项目/群聊都有）。 */
+        biaoQian: tOr('ctx.autoDrive', '自驱') + ((g.autoDrive !== false) ? ' ✓' : ''),
+        onClick: () => {
+          g.autoDrive = (g.autoDrive === false);
+          saveState();
+          renderList();
+          try { window.warmy.ziQuKaiShe?.({ sessionId: g.id, on: g.autoDrive !== false }); } catch { /* noop */ }
+        },
+      },
       /* R263：去掉「对接」「同步」菜单项——默认自动和所有在线我的设备同步 */
       g.type === 'internal'
         ? {
@@ -31485,6 +31506,16 @@ async function renderDashboard(host) {
           c.note = String(zhu);
           try { window.__saveState?.(); } catch { /* noop */ }
           renderList();
+        },
+      },
+      {
+        /* R296 自驱：勾选项，默认勾选，放在总结上方。 */
+        biaoQian: tOr('ctx.autoDrive', '自驱') + ((c.autoDrive !== false) ? ' ✓' : ''),
+        onClick: () => {
+          c.autoDrive = (c.autoDrive === false);
+          try { window.__saveState?.(); } catch { /* noop */ }
+          renderList();
+          try { window.warmy.ziQuKaiShe?.({ sessionId: c.id, on: c.autoDrive !== false }); } catch { /* noop */ }
         },
       },
       {

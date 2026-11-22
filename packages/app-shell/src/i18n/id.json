@@ -1106,6 +1106,8 @@
   "ctx.archive": "Arsip",
   "ctx.archiveConfirm": "Arsipkan?",
   "ctx.autoArchive": "Tinjau",
+  "ctx.autoDrive": "Swakemudi",
+  "ctx.autoDriveTip": "Saat ringkasan, workhorse sesi ini meninjau konteks secara mandiri dan mengusulkan rencana langkah berikutnya (pendekatan, alasan, pro-kontra, biaya, efek), lalu bertanya apakah lanjut. Default aktif; dilewati jika balasan terakhir kurang dari 12 jam, swakemudi kurang dari 66 jam, atau sudah 3 kali.",
   "ctx.avatarLocalUnsupported": "Avatar grup: hanya avatar preset (unggahan lokal tidak didukung)",
   "ctx.avatarSaved": "Avatar diperbarui",
   "ctx.avatarSettings": "Pengaturan avatar",

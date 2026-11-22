@@ -1106,6 +1106,8 @@
   "ctx.archive": "Summarize",
   "ctx.archiveConfirm": "Summarize?",
   "ctx.autoArchive": "Summarize",
+  "ctx.autoDrive": "Self-drive",
+  "ctx.autoDriveTip": "During summary, this session's workhorse autonomously reviews the context and proposes a next-step plan (approach, rationale, pros and cons, cost, expected effect), then asks whether to proceed. On by default; skipped if the latest reply is within 12 hours, it self-drove within 66 hours, or it has already driven 3 times.",
   "ctx.avatarLocalUnsupported": "Group avatars: preset avatars only (local upload not supported)",
   "ctx.avatarSaved": "Avatar updated",
   "ctx.avatarSettings": "Avatar settings",

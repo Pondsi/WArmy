@@ -1106,6 +1106,8 @@
   "ctx.archive": "Arşivle",
   "ctx.archiveConfirm": "Arşivlensin mi?",
   "ctx.autoArchive": "Gözden geçir",
+  "ctx.autoDrive": "Öz sürüş",
+  "ctx.autoDriveTip": "Özet sırasında bu oturumun workhorse'u bağlamı özerk biçimde inceleyip sonraki adım için bir plan (yaklaşım, gerekçe, artı ve eksiler, maliyet, etki) önerir ve devam edilip edilmeyeceğini sorar. Varsayılan açık; son yanıt 12 saatten yeniyse, öz sürüş 66 saatten yeniyse veya zaten 3 kez olduysa atlanır.",
   "ctx.avatarLocalUnsupported": "Grup avatarları: yalnızca hazır avatarlar (yerel yükleme desteklenmiyor)",
   "ctx.avatarSaved": "Avatar güncellendi",
   "ctx.avatarSettings": "Avatar ayarları",

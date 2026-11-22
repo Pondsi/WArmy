@@ -1106,6 +1106,8 @@
   "ctx.archive": "アーカイブ",
   "ctx.archiveConfirm": "アーカイブしますか？",
   "ctx.autoArchive": "振り返り",
+  "ctx.autoDrive": "自駆",
+  "ctx.autoDriveTip": "要約時に本セッションのワークホースが自律的に文脈を確認し、次のステップの計画（方針・理由・長所短所・コスト・効果）を提示して、進めるかを確認します。既定でオン。最新返信が12時間以内、66時間以内に自駆済み、または累計3回の場合はスキップ。",
   "ctx.avatarLocalUnsupported": "グループアバターはプリセットのみ（ローカルアップロード非対応）",
   "ctx.avatarSaved": "アバターを更新しました",
   "ctx.avatarSettings": "アバター設定",

@@ -57,8 +57,8 @@ export interface FenJuQiPeiZhi {
 }
 
 export interface HarnessZiJinHuaYiLai {
-  du: () => { guards?: ShouWei[]; ledger?: HarnessShiJian[]; fenJuQi?: FenJuQiPeiZhi } | undefined;
-  cun: (j: { guards: ShouWei[]; ledger: HarnessShiJian[]; fenJuQi: FenJuQiPeiZhi }) => void;
+  du: () => { guards?: ShouWei[]; ledger?: HarnessShiJian[]; fenJuQi?: FenJuQiPeiZhi; lastCaiJueTs?: number } | undefined;
+  cun: (j: { guards: ShouWei[]; ledger: HarnessShiJian[]; fenJuQi: FenJuQiPeiZhi; lastCaiJueTs: number }) => void;
   jiXiTongXiaoXi: (kind: 'system', title: string, body: string) => void;
   auditLog: (op: string, detail: unknown) => void;
   shiZhong?: () => number;
@@ -114,6 +114,8 @@ export function chuangJianHarnessZiJinHua(yiLai: HarnessZiJinHuaYiLai) {
   let guards: ShouWei[] = MO_REN_SHOU_WEI.map((g) => ({ ...g, stats: { ...g.stats } }));
   let ledger: HarnessShiJian[] = [];
   let fenJuQi: FenJuQiPeiZhi = { ...MO_REN_FEN_JU_QI, huaYuBiaoJi: [...MO_REN_FEN_JU_QI.huaYuBiaoJi], leadBias: [...MO_REN_FEN_JU_QI.leadBias] };
+  /* R296 增量自我改进：上次裁决时间戳——总结只展示此后的新台账事件，防反复查看/改进同一历史 */
+  let lastCaiJueTs = 0;
   let yiDu = false;
   function duHui(): void {
     if (yiDu) return;
@@ -128,10 +130,11 @@ export function chuangJianHarnessZiJinHua(yiLai: HarnessZiJinHuaYiLai) {
       }
       if (j && Array.isArray(j.ledger)) ledger = j.ledger.slice(-LEDGER_SHANG);
       if (j && j.fenJuQi) fenJuQi = guiFanFenJuQi(j.fenJuQi, MO_REN_FEN_JU_QI);
+      if (j && typeof j.lastCaiJueTs === 'number') lastCaiJueTs = j.lastCaiJueTs;
     } catch { /* 读不回按内建默认 */ }
   }
   function luoPan(): void {
-    try { yiLai.cun({ guards, ledger: ledger.slice(-LEDGER_SHANG), fenJuQi }); } catch { /* 落盘失败不影响本次 */ }
+    try { yiLai.cun({ guards, ledger: ledger.slice(-LEDGER_SHANG), fenJuQi, lastCaiJueTs }); } catch { /* 落盘失败不影响本次 */ }
   }
   function zhao(id: string): ShouWei | undefined { duHui(); return guards.find((g) => g.id === id); }
 
@@ -164,10 +167,10 @@ export function chuangJianHarnessZiJinHua(yiLai: HarnessZiJinHuaYiLai) {
   function zongJieDuan(): string {
     duHui();
     const biao = guards.map((g) => `- ${g.id}｜${g.ming}｜${g.enabled ? '启用' : (g.autoDisabled ? '自动停用' : '停用')}｜触发 ${g.stats.fires} 省 ${g.stats.saves} 败 ${g.stats.fails}｜净 ${g.netTokens}`).join('\n');
-    const shi = ledger.slice(-20).map((e) => `- ${new Date(e.ts).toISOString().slice(0, 16)} ${e.guardId} ${e.kind}${e.detail ? ' ' + e.detail.slice(0, 60) : ''}`).join('\n');
+    const shi = ledger.filter((e) => e.ts > lastCaiJueTs).slice(-20).map((e) => `- ${new Date(e.ts).toISOString().slice(0, 16)} ${e.guardId} ${e.kind}${e.detail ? ' ' + e.detail.slice(0, 60) : ''}`).join('\n');
     const ziTing = guards.filter((g) => g.autoDisabled && !g.enabled).map((g) => g.id);
     const fen = `maxJu=${fenJuQi.maxJu} 短文阈值=${fenJuQi.duanWen} 话语标记=[${fenJuQi.huaYuBiaoJi.join('/')}] leadBias=[${fenJuQi.leadBias.join(',')}] 密度权=${fenJuQi.miDuQuan} 长度惩罚分母=${fenJuQi.changFa}`;
-    return '\n【Harness 守卫台账（自我改进素材）】\n' + biao + '\n近期执行：\n' + (shi || '（无）')
+    return '\n【Harness 守卫台账（自我改进素材）】\n' + biao + '\n近期新增执行（上次裁决后）：\n' + (shi || '（无新增）')
       + (ziTing.length ? '\n以下守卫因净收益持续为负被自动停用，若你判断失败原因已消除/收益转好，可裁决 enable 重新启用（宿主会把净收益重置≥0）：' + ziTing.join('、') : '')
       + '\n【中文分句器当前参数】' + fen
       + '\n请裁决这些守卫：是否正确、是否允许、是否更换、是否此处不用守卫更好（目标：不增加性能负担的前提下提高效率，净收益为正并持续扩大）；'
@@ -252,7 +255,7 @@ export function chuangJianHarnessZiJinHua(yiLai: HarnessZiJinHuaYiLai) {
         applied += 1;
       }
     }
-    if (applied) luoPan();
+    if (applied) { lastCaiJueTs = shiZhong(); luoPan(); }
     if (yueJie.length) {
       /* 同类合并为一条系统消息：好处/可能突破的防护/可能后果，求授权 */
       try {

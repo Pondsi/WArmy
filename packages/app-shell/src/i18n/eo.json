@@ -1106,6 +1106,8 @@
   "ctx.archive": "Arkivi",
   "ctx.archiveConfirm": "Ĉu arkivi?",
   "ctx.autoArchive": "Retrospektivo",
+  "ctx.autoDrive": "Memstirado",
+  "ctx.autoDriveTip": "Dum resumado, la workhorse de ĉi tiu sesio memstare revizias la kuntekston kaj proponas planon por la sekva paŝo (aliro, kialo, avantaĝoj kaj malavantaĝoj, kosto, efiko), demandante ĉu daŭrigi. Defaŭlte ŝaltita; preterlasita se lasta respondo estas pli nova ol 12 horoj, memstirado pli nova ol 66 horoj aŭ jam 3 fojojn.",
   "ctx.avatarLocalUnsupported": "Grupa avataro: nur antaŭdifinitaj (loka alŝuto ne subtenata)",
   "ctx.avatarSaved": "Avataro ĝisdatigita",
   "ctx.avatarSettings": "Avatar-agordoj",

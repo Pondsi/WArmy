@@ -1106,6 +1106,8 @@
   "ctx.archive": "Arkivera",
   "ctx.archiveConfirm": "Arkivera?",
   "ctx.autoArchive": "Granska",
+  "ctx.autoDrive": "Självkörning",
+  "ctx.autoDriveTip": "Vid sammanfattning granskar denna sessions workhorse kontexten självständigt och föreslår en plan för nästa steg (upplägg, skäl, för- och nackdelar, kostnad, effekt) och frågar om fortsättning. På som standard; hoppas över om senaste svar är yngre än 12 timmar, självkörning yngre än 66 timmar eller redan 3 gånger.",
   "ctx.avatarLocalUnsupported": "Gruppavatarer: endast förinställda avatarer (lokala uppladdningar stöds inte)",
   "ctx.avatarSaved": "Avataren uppdaterad",
   "ctx.avatarSettings": "Avatarinställningar",

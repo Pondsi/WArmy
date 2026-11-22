@@ -1106,6 +1106,8 @@
   "ctx.archive": "Archiválás",
   "ctx.archiveConfirm": "Archiválja?",
   "ctx.autoArchive": "Áttekintés",
+  "ctx.autoDrive": "Önvezetés",
+  "ctx.autoDriveTip": "Összegzéskor e munkamenet workhorse-a önállóan áttekinti a kontextust és tervet javasol a következő lépésre (megközelítés, ok, előnyök és hátrányok, költség, hatás), megkérdezve, folytassa-e. Alapból be; kihagyva, ha a legutóbbi válasz 12 óránál frissebb, az önvezetés 66 óránál frissebb vagy már 3-szor megtörtént.",
   "ctx.avatarLocalUnsupported": "Csoportos avatarok: csak előre beállított avatarok (helyi feltöltés nem támogatott)",
   "ctx.avatarSaved": "Avatar frissítve",
   "ctx.avatarSettings": "Avatar beállítások",

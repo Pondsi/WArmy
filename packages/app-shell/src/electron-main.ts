@@ -133,6 +133,7 @@ import { asrWuYuYin, asrPcm16JingYin } from './ji-chu/asr-jing-yin.js';
 import { buZhouZhaiYao, buZhouJian, buZhouNeiRongZhaiYao } from './ji-chu/bu-zhou-zhi-wen.js';
 import { yaoQiuZiShu, buZhouXuYaoZhengJu } from './ji-chu/bu-zhou-zheng-ju.js';
 import { chuangJianBuZhouZhengJuHeDui } from './ying-yong/bu-zhou-zheng-ju-he-dui.js';
+import { chuangJianZiQu } from './ying-yong/zi-qu.js';
 import { chuangJianHarnessZiJinHua } from './ying-yong/harness-zi-jin-hua.js';
 import { chuangJianHuiHuaXieRu } from './ying-yong/hui-hua-xie-ru.js';
 import { chuangJianGongJuZhuangPei } from './ying-yong/gong-ju-zhuang-pei.js';
@@ -15756,6 +15757,87 @@ chuliIpc('warmy:jianJieJieGou', async (_e, p0?: { text?: string; sessionId?: str
     return { ok: true, title, points };
   } catch (e) { return shiBai(xiJingCuoWu(e)); }
 });
+
+/* R296 自驱：总结时扫描有牛马的会话，符合条件者用该会话牛马自主发起“下一步计划”对话（询问用户）。
+   跳过：未勾选/牛马不可用/最近回复12h内/66h冷却/累计3次。状态落 zi-qu.json（lastTs/count/enabled）。 */
+const ziQuWenJian = () => path.join(app.getPath('userData'), 'zi-qu.json');
+function duZiQuZhuangTai(): Record<string, { lastTs: number; count: number; enabled?: boolean }> {
+  try { return JSON.parse(fs.readFileSync(ziQuWenJian(), 'utf8')) || {}; } catch { return {}; }
+}
+function cunZiQuZhuangTai(j: Record<string, { lastTs: number; count: number; enabled?: boolean }>): void {
+  try { fs.writeFileSync(ziQuWenJian(), JSON.stringify(j), 'utf8'); } catch { /* noop */ }
+}
+const ziQuMo = chuangJianZiQu({
+  suoYouHuiHua: () => {
+    const ids = new Set<string>();
+    try {
+      const s = settingsStore?.load() as { instances?: Array<{ id?: string }>; chats?: Array<{ id?: string }> } | undefined;
+      for (const x of s?.instances || []) if (x?.id) ids.add(String(x.id));
+      for (const g of groupStore?.listGroups() || []) if ((g as { groupId?: string }).groupId) ids.add(String((g as { groupId?: string }).groupId));
+      for (const c of s?.chats || []) if (c?.id) ids.add(String(c.id));
+    } catch { /* noop */ }
+    return [...ids];
+  },
+  ziQuKai: (sid) => { const z = duZiQuZhuangTai()[sid]; return !z || z.enabled !== false; },
+  xuanNiuMa: (sid) => {
+    try {
+      const lei = huiHuaLeiXing(sid);
+      const s = settingsStore?.load() as { instances?: Array<{ id?: string; ming?: string; name?: string }> } | undefined;
+      if (lei === 'my') {
+        const inst = (s?.instances || []).find((x) => String(x?.id || '') === sid);
+        if (!inst) return null;
+        return { id: sid, ming: String(inst.ming || inst.name || sid), lian: lianMingOf(sid) };
+      }
+      if (lei === 'project') {
+        const d = router.duty(sid) as { instance?: { id?: string; ming?: string } } | undefined;
+        const inst = d?.instance;
+        if (!inst?.id) return null;
+        return { id: String(inst.id), ming: String(inst.ming || inst.id), lian: lianMingOf(String(inst.id)) };
+      }
+      /* 群聊/联系人：任意可用牛马（随机） */
+      const members = (router.listMembers(sid) || []) as Array<{ instanceId?: string; id?: string; ming?: string }>;
+      const avail = members.map((m) => { const id = String(m.instanceId || m.id || ''); return { id, ming: String(m.ming || id), lian: lianMingOf(id) }; }).filter((w) => w.id);
+      if (!avail.length) return null;
+      return avail[Math.floor(Math.random() * avail.length)]!;
+    } catch { return null; }
+  },
+  moXingKeYong: async (mo) => { try { const an = await jieMoXingGongYingShang(mo); return !!(an && (an.apiKey || an.protocol === 'ollama')); } catch { return false; } },
+  zuiJinHuiFuTs: (sid) => {
+    const lie = chatLogs.get(sid) || [];
+    for (let i = lie.length - 1; i >= 0; i--) { const x = lie[i]; if (x && guiYiJiaoSe(x.role) === 'assistant' && !((x as { hidden?: boolean }).hidden)) return Number(x.ts || 0) || 0; }
+    return 0;
+  },
+  duRiZhi: (sid) => chatLogs.get(sid) as Array<{ role?: string; content?: string; ts?: number; seq?: number; hidden?: boolean }> | undefined,
+  sessionMingOf: (sid) => sessionMingOf(sid),
+  qingQiuMoXing: async (mo, prompt) => {
+    const an = await jieMoXingGongYingShang(mo);
+    if (!an) throw new Error('no-provider');
+    const p = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL || undefined, protocol: an.protocol } as never, an.protocol);
+    const moId = mo.includes('·') ? mo.split('·').pop()!.trim() : mo;
+    const r = await Promise.race([
+      p.chat({ model: moId, maxTokens: 1500, xiaoXiJi: [{ role: 'user', content: prompt }] }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('ziQu-timeout')), 60000)),
+    ]);
+    return neiRongWenBen((r as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0]?.message?.content) || '';
+  },
+  faSongZiQu: (sid, ming, content) => {
+    /* 以牛马对话形式自主发出：zhuiJiaLiaoTianRiZhi 内部广播 liaoTianUpdated，渲染层未选会话自然计未读 */
+    zhuiJiaLiaoTianRiZhi(sid, { role: 'assistant', content, ming, ts: Date.now() } as never);
+  },
+  duZhuangTai: () => duZiQuZhuangTai(),
+  cunZhuangTai: (j) => cunZiQuZhuangTai(j),
+  auditLog: (op, d) => { audit?.log(op, d); },
+  shiZhong: () => Date.now(),
+});
+chuliIpc('warmy:ziQuSaoMiao', async () => { try { return { ok: true, ...(await ziQuMo.ziQuSaoMiao()) }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; } });
+chuliIpc('warmy:ziQuKaiShe', (_e, p0?: { sessionId?: string; on?: boolean }) => {
+  const sid = String(p0?.sessionId || ''); if (!sid) return { ok: false, error: 'bad-session' };
+  const z = duZiQuZhuangTai(); const cur = z[sid] || { lastTs: 0, count: 0 };
+  z[sid] = { ...cur, enabled: p0?.on !== false };
+  cunZiQuZhuangTai(z);
+  return { ok: true, enabled: z[sid].enabled };
+});
+chuliIpc('warmy:ziQuZhuangTai', (_e, p0?: { sessionId?: string }) => { const z = duZiQuZhuangTai(); return { ok: true, state: p0?.sessionId ? (z[String(p0.sessionId)] || null) : z }; });
 
 function jiHuaAnZhengJuZiDongYanZheng(sessionId: string, huiFu: string): number {
   try {
@@ -33000,6 +33082,8 @@ chuliIpc('warmy:guiDangYiPi', async (_e, p0?: { sessionIds?: string[]; moXing?: 
     const r = await guiDangYiGeHuiHua(sid, { moXing: p0?.moXing, quanLiang: p0?.quanLiang === true });
     jieGuo.push({ sessionId: sid, tiaoShu: r.tiaoShu || 0, ok: !!r.ok, jiangJi: !!r.jiangJi });
   }
+  /* R296：总结的时候对所有有牛马的会话扫一遍自驱（跳过规则在模块内：未勾选/不可用/12h活跃/66h冷却/3次上限） */
+  try { await ziQuMo.ziQuSaoMiao(); } catch { /* 自驱失败不影响总结 */ }
   return { ok: true, jieGuo };
 });
 /** 总结游标查询/清空（排障用） */

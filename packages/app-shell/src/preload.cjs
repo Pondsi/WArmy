@@ -823,6 +823,10 @@ contextBridge.exposeInMainWorld('warmy', {
   harnessShouWei: () => ipcRenderer.invoke('warmy:harnessShouWei'),
   /** R295 ② 结构化简洁（支持结构化模型可选，守卫启用才跑；失败回落抽取式） */
   jianJieJieGou: (p) => ipcRenderer.invoke('warmy:jianJieJieGou', p),
+  /** R296 自驱：扫描会话/开关设置/状态查询 */
+  ziQuSaoMiao: () => ipcRenderer.invoke('warmy:ziQuSaoMiao'),
+  ziQuKaiShe: (p) => ipcRenderer.invoke('warmy:ziQuKaiShe', p),
+  ziQuZhuangTai: (p) => ipcRenderer.invoke('warmy:ziQuZhuangTai', p),
   onHuiHuaChongSheng: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:huiHuaChongSheng', h); return () => ipcRenderer.removeListener('warmy:huiHuaChongSheng', h); },
   daKaiBangZhuWenDang: () => ipcRenderer.invoke('warmy:daKaiBangZhuWenDang'),
   daKaiZhenDuanChuang: () => ipcRenderer.invoke('warmy:daKaiZhenDuanChuang'),
