@@ -133,6 +133,7 @@ import { asrWuYuYin, asrPcm16JingYin } from './ji-chu/asr-jing-yin.js';
 import { buZhouZhaiYao, buZhouJian, buZhouNeiRongZhaiYao } from './ji-chu/bu-zhou-zhi-wen.js';
 import { duanJiYiNorm, duanJiYiHash, shiDuanJiYiTiao, riQiKaiShi, duanJiYiShiYongFen, duanJiYiZhaoShiJian, duanJiYiYuYaoDianChongFu, RI_HAO_MIAO, DUAN_JIYI_BAN_SHUAI_RI, DUAN_JIYI_CHUANG_RI, DUAN_JIYI_ZUI_CHANG_RI } from './ji-chu/duan-ji-yi.js';
 import { chuangJianDuanJiYiGuiNa } from './ying-yong/duan-ji-yi-gui-na.js';
+import { chuangJianShuGuiNa } from './ying-yong/shu-gui-na.js';
 import { yaoQiuZiShu, buZhouXuYaoZhengJu } from './ji-chu/bu-zhou-zheng-ju.js';
 import { chuangJianBuZhouZhengJuHeDui } from './ying-yong/bu-zhou-zheng-ju-he-dui.js';
 import { chuangJianZiQu } from './ying-yong/zi-qu.js';
@@ -24404,14 +24405,6 @@ async function moXingGuiNaYinXiang(
   return { ok: false, moXing: cand[0]!, hang: 0, yuanYin: lastErr };
 }
 
-/**
- * **「术」的总结归纳**（用户新增：术也要在总结时整理进去，同样是"程序自动归纳 + 用户手动"）。
- * 只从**用户自己说过的话**里挑"做事章法"（顺序、流程、验收、禁止），带与印象同一道幻觉硬闸
- * （必须能在素材里找到连续原话 ⇒ 只能挑选与压缩，不许创作），敏感类目不落，去重后追加在自己的小节里；
- * **用户手写的其它部分一字不动**，段内最多留 20 条（丢最旧的）。
- */
-const SHU_GUI_ZE = /(先.+再|第一步|按.{1,10}(顺序|来|办|做)|每次|以后|从现在起|不要.+要|必须|禁止|验收|检查|核对)/;
-const SHU_GUI_BIAO = '## 牛马归纳（总结时自动整理；可直接改或删）';
 /** 「术」的总量上限（第 53 轮项 2：直接取硬上限表，不再有"存 8000 / 上限 4200"两套数字）——超了只停止**归纳侧追加**，用户手写的部分不动 */
 
 /**
@@ -24563,93 +24556,20 @@ function guiNaDuanJiYi(sessionId: string): number { return duanJiYiGuiNaMo.guiNa
 /* R287 P5-7：yaSuoDuanJiYi 同迁 duan-ji-yi-gui-na 模块（短记忆压缩）；薄转发，调用点不动。 */
 function yaSuoDuanJiYi(sessionId: string): void { duanJiYiGuiNaMo.yaSuoDuanJiYi(sessionId); }
 
-function guiNaShu(caiLiao: { yuanHua?: string[]; suCaiZhengWen?: string; sid?: string }): { jia: number; diu: number } {
-  try {
-    const yuan = duShu();
-    const yiYou = new Set(yuan.split('\n').filter((l) => /^\s*-\s+/.test(l)).map((l) => l.replace(/^\s*-\s+/, '').trim()));
-    /** 只有“牛马归纳”段里的条目允许被自动替换；用户手写段一字不动 */
-    const ziDongWeiZhi = new Map<string, number>();
-    {
-      const hs = yuan.split('\n');
-      const i0 = hs.indexOf(SHU_GUI_BIAO);
-      if (i0 >= 0) {
-        const i1 = hs.findIndex((l, i) => i > i0 && /^##\s/.test(l));
-        hs.slice(i0 + 1, i1 < 0 ? hs.length : i1).forEach((l, k) => {
-          if (/^\s*-\s+/.test(l)) ziDongWeiZhi.set(l.replace(/^\s*-\s+/, '').trim(), i0 + 1 + k);
-        });
-      }
-    }
-    const quZheng = (s: string) => String(s || '').replace(/[\s\p{P}]/gu, '');
-    const suCai = quZheng(String(caiLiao.suCaiZhengWen || '') + (caiLiao.yuanHua || []).join('\n'));
-    /** 互斥组：知识库 + 印象；同一条内容已经在别处就不再写进「术」 */
-    const zhiShi = huChiZhiShiWenBen();
-    const yinXian = tiShiXingWenBen('yinXiang');
-    const xian: string[] = [];
-    const tiHuanCu: string[] = [];
-    let tiaoGuo = 0;
-    for (const h of (caiLiao.yuanHua || [])) {
-      for (const j of String(h || '').split(/[。！？!?\n]/)) {
-        const w = j.replace(/^\s*[-—•·]+\s*/, '').replace(/\s+/g, ' ').trim();
-        if (!w || w.length < 6 || w.length > 80) continue;
-        if (!SHU_GUI_ZE.test(w)) continue;
-        if (yiYou.has(w) || xian.includes(w)) continue;
-        if (minGanLeiMing(w)) continue;
-        if (suCai.length >= 10 && !suCai.includes(quZheng(w.slice(0, 12)))) continue;
-        const yiZhan = zhaoHuChiWeiZhi(w, { knowledge: zhiShi, yinXiang: yinXian }, 'shu');
-        if (yiZhan) { tiaoGuo += 1; continue; }
-        /** 自动段里已有同义旧条目 ⇒ 旧条目先迁进知识库，再在这里写新说法 */
-        const jiuTiao = [...ziDongWeiZhi.keys()].find((old) => old !== w && !tiHuanCu.includes(old) && shiTongYiNeiRong(old, w));
-        if (jiuTiao) {
-          if (!qianYiTiShiDaoZhiShi(jiuTiao, 'shu', caiLiao.sid)) continue;
-          tiHuanCu.push(jiuTiao);
-        }
-        xian.push(w);
-      }
-    }
-    const jia = xian.slice(0, 8);
-    if (!jia.length) return { jia: 0, diu: 0 };
-    /** 总量闸：整份「术」超过 8000 字就**不再追加**（用户手写的部分一个字都不动，只停止归纳侧的膨胀） */
-    if (yuan.length > shuZongLiangMax()) {
-      try { audit?.log('shu.over-cap', { ziShu: yuan.length, max: shuZongLiangMax(), benLunYi: jia.length }); } catch { /* noop */ }
-      return { jia: 0, diu: 0 };
-    }
-    let quan = yuan.trimEnd();
-    if (tiHuanCu.length) {
-      quan = quan.split('\n').filter((l) => !(tiHuanCu.includes(l.replace(/^\s*-\s+/, '').trim()))).join('\n');
-    }
-    if (quan.includes(SHU_GUI_BIAO)) {
-      quan = quan.replace(SHU_GUI_BIAO, SHU_GUI_BIAO + '\n' + jia.map((s) => '- ' + s).join('\n'));
-    } else {
-      quan += (quan ? '\n\n' : '') + SHU_GUI_BIAO + '\n' + jia.map((s) => '- ' + s).join('\n') + '\n';
-    }
-    /** 段内防膨胀：最多留最近 20 条；被裁掉的旧条目**先迁进知识库**，迁不动就保留（绝不静默丢） */
-    const hang = quan.split('\n');
-    let diu = 0;
-    const biaoHang = hang.indexOf(SHU_GUI_BIAO);
-    if (biaoHang >= 0) {
-      const jieShu = hang.findIndex((l, i) => i > biaoHang && /^##\s/.test(l));
-      const qian = hang.slice(0, biaoHang + 1);
-      const duan = hang.slice(biaoHang + 1, jieShu < 0 ? hang.length : jieShu);
-      const hou = jieShu < 0 ? [] : hang.slice(jieShu);
-      const feiTiao = duan.filter((l) => !/^\s*-\s+/.test(l));
-      const tiao = duan.filter((l) => /^\s*-\s+/.test(l));
-      let liu = tiao.slice(-20);
-      if (tiao.length > 20) {
-        for (const l of tiao.slice(0, tiao.length - 20)) {
-          const w = l.replace(/^\s*-\s+/, '').trim();
-          if (qianYiTiShiDaoZhiShi(w, 'shu', caiLiao.sid)) diu += 1;
-          else liu = [l, ...liu]; // 迁不动就留着，不能丢
-        }
-      }
-      quan = qian.concat(feiTiao, liu, hou).join('\n');
-    }
-    fs.mkdirSync(path.dirname(shuLu()), { recursive: true });
-    beiFenTiShi(shuLu());
-    fs.writeFileSync(shuLu(), quan, 'utf8');
-    try { audit?.log('shu.zhengli', { jia: jia.length, diu, yiYou: yiYou.size, tiHuan: tiHuanCu.length, huChiTiaoGuo: tiaoGuo }); } catch { /* noop */ }
-    return { jia: jia.length, diu };
-  } catch { return { jia: 0, diu: 0 }; }
-}
+/* R287 P5-8：术归纳唯一 owner 迁至 ying-yong/shu-gui-na（guiNaShu 逐字保持，强差分 6000/6000＋分支覆盖自检）；
+   互斥/同义/敏感判据复用 prompt-placement/yinxiang-guolv；状态/副作用窄注入；此处仅装配＋薄转发（调用点 24217/24393/24403 不动）。 */
+const shuGuiNaMo = chuangJianShuGuiNa({
+  duShu: () => duShu(),
+  huChiZhiShiWenBen: () => huChiZhiShiWenBen(),
+  tiShiXingWenBen: (ceng) => tiShiXingWenBen(ceng),
+  qianYiTiShiDaoZhiShi: (wen, from, sid) => qianYiTiShiDaoZhiShi(wen, from, sid),
+  shuZongLiangMax: () => shuZongLiangMax(),
+  shuLu: () => shuLu(),
+  beiFenTiShi: (lu) => beiFenTiShi(lu),
+  fs: { mkdirSync: (p, o) => fs.mkdirSync(p, o), writeFileSync: (p, d, e) => fs.writeFileSync(p, d, e as BufferEncoding) },
+  auditLog: (op, d) => { audit?.log(op, d); },
+});
+function guiNaShu(caiLiao: { yuanHua?: string[]; suCaiZhengWen?: string; sid?: string }): { jia: number; diu: number } { return shuGuiNaMo.guiNaShu(caiLiao); }
 
 function zhengLiYinXiang(caiLiao: { zhaiYao?: string; yuanHua?: string[]; zanCai?: Array<{ pingJia: string; wenTi?: string; moXing?: string }>; /** 第 38 轮 项 5：整理模型给出的候选行（必须能在素材里找到原话，见下面的幻觉闸） */ moXingHang?: string[]; suCaiZhengWen?: string; sid?: string }): { jia: number; shan: number; ziShu: number } {
   let yuan = duYinXiang();
