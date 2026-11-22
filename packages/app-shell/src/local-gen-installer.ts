@@ -181,7 +181,7 @@ async function xiaZaiWenJian(item: BenDiShengChengQingDan, target: string, onPro
 export async function anZhuangTripoSYuanMa(dir: string): Promise<{ ok: boolean; error?: string; files?: number }> {
   const RAW = 'https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/';
   const tsrDir = path.join(dir, 'TripoSR');
-  if (fs.existsSync(path.join(tsrDir, 'tsr', 'system.py'))) return { ok: true, files: 0 };
+  if (fs.existsSync(path.join(tsrDir, 'tsr', 'system.py'))) { qingLiYuShim(tsrDir); return { ok: true, files: 0 }; }
   const yiZhua = new Set<string>();
   const duiLie = ['tsr/system.py', 'tsr/utils.py'];
   /* config.yaml 里的动态类路径（omegaconf instantiate 不走 import，必须显式补） */
@@ -224,7 +224,17 @@ export async function anZhuangTripoSYuanMa(dir: string): Promise<{ ok: boolean; 
     const mu = path.join(tsrDir, init);
     if (!fs.existsSync(mu)) { fs.mkdirSync(path.dirname(mu), { recursive: true }); fs.writeFileSync(mu, ''); }
   }
-  /* R294：X.py 与 X/__init__.py 并存时目录包会遮蔽模块 ⇒ 删只含空 __init__ 的遮蔽目录 */
+  /* R294：遮蔽目录清理＋torchmcubes shim（幂等，源码已在时也跑） */
+  qingLiYuShim(tsrDir);
+  /* LICENSE 随源码保留（MIT 要求） */
+  try { const r = await fetch(RAW + 'LICENSE'); if (r.ok) fs.writeFileSync(path.join(tsrDir, 'LICENSE'), await r.text()); } catch { /* 不挡安装 */ }
+  if (!fs.existsSync(path.join(tsrDir, 'tsr', 'system.py'))) return { ok: false, error: 'src-incomplete' };
+  return { ok: true, files: n };
+}
+
+/** R294：X.py 与 X/__init__.py 并存时目录包会遮蔽模块 ⇒ 删只含空 __init__ 的遮蔽目录；
+ *  torchmcubes 需 C++ 编译，Windows 常装不上 ⇒ 随源码发 PyMCubes 兼容 shim（纯 Python，同接口）。幂等。 */
+function qingLiYuShim(tsrDir: string): void {
   const qingLi = (dir: string): void => {
     let lie: fs.Dirent[];
     try { lie = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -242,7 +252,6 @@ export async function anZhuangTripoSYuanMa(dir: string): Promise<{ ok: boolean; 
     }
   };
   qingLi(tsrDir);
-  /* R294：torchmcubes 需 C++ 编译，Windows 常装不上 ⇒ 随源码发 PyMCubes 兼容 shim（纯 Python，同接口） */
   const shim = path.join(tsrDir, 'torchmcubes.py');
   if (!fs.existsSync(shim)) {
     fs.writeFileSync(shim, [
@@ -261,8 +270,4 @@ export async function anZhuangTripoSYuanMa(dir: string): Promise<{ ok: boolean; 
       '',
     ].join('\n'));
   }
-  /* LICENSE 随源码保留（MIT 要求） */
-  try { const r = await fetch(RAW + 'LICENSE'); if (r.ok) fs.writeFileSync(path.join(tsrDir, 'LICENSE'), await r.text()); } catch { /* 不挡安装 */ }
-  if (!fs.existsSync(path.join(tsrDir, 'tsr', 'system.py'))) return { ok: false, error: 'src-incomplete' };
-  return { ok: true, files: n };
 }
