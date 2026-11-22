@@ -132,6 +132,7 @@ import { chuangJianJsonlDouDi } from './ji-chu/jsonl-dou-di.js';
 import { asrWuYuYin, asrPcm16JingYin } from './ji-chu/asr-jing-yin.js';
 import { buZhouZhaiYao, buZhouJian, buZhouNeiRongZhaiYao } from './ji-chu/bu-zhou-zhi-wen.js';
 import { duanJiYiNorm, duanJiYiHash, shiDuanJiYiTiao, riQiKaiShi, duanJiYiShiYongFen, duanJiYiZhaoShiJian, duanJiYiYuYaoDianChongFu, RI_HAO_MIAO, DUAN_JIYI_BAN_SHUAI_RI, DUAN_JIYI_CHUANG_RI, DUAN_JIYI_ZUI_CHANG_RI } from './ji-chu/duan-ji-yi.js';
+import { chuangJianDuanJiYiGuiNa } from './ying-yong/duan-ji-yi-gui-na.js';
 import { yaoQiuZiShu, buZhouXuYaoZhengJu } from './ji-chu/bu-zhou-zheng-ju.js';
 import { chuangJianBuZhouZhengJuHeDui } from './ying-yong/bu-zhou-zheng-ju-he-dui.js';
 import { chuangJianZiQu } from './ying-yong/zi-qu.js';
@@ -24611,185 +24612,22 @@ function qianYiTiShiDaoZhiShi(wen: string, from: 'shu' | 'yinXiang', sid?: strin
  * 来源只取**当前会话的聊天记录**：用户明确偏好/规则的语句优先，其次最近几条用户发言。
  * 与知识库事件重叠的文本在这里就排除（知识库来源另算，最多占 3/5）。
  */
-function duanJiYiHuiHuaSuCai(
-  sessionId: string,
-  yaoDian: readonly string[],
-  kbNorm: readonly string[],
-): Array<{ wen: string; n: number; last: number; score: number }> {
-  const sid = String(sessionId || '');
-  if (!sid) return [];
-  const out: Array<{ wen: string; n: number; last: number; score: number }> = [];
-  const seen = new Set<string>();
-  const kbSet = new Set((kbNorm || []).map((x) => String(x || '')).filter((x) => x.length >= 6));
-  const logs = (chatLogs.get(sid) || []).filter((m) => m && !m.system && !(m as { hidden?: boolean }).hidden
-    && String(m.content || '').trim().length >= 6).slice(-300);
-  const chong = (w: string): boolean => {
-    const k = duanJiYiNorm(w);
-    if (k.length < 6 || seen.has(k)) return true;
-    if (duanJiYiYuYaoDianChongFu(w, yaoDian)) return true;
-    for (const y of kbSet) {
-      if (y && (y.includes(k) || k.includes(y)) && Math.min(y.length, k.length) >= 6) return true;
-    }
-    return false;
-  };
-  const push = (text: unknown, ts: number, n: number): void => {
-    const w = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 160);
-    if (w.length < 6 || chong(w)) return;
-    const k = duanJiYiNorm(w);
-    if (!k) return;
-    seen.add(k);
-    const age = Math.max(0, Date.now() - (Number(ts) || Date.now())) / 86400000;
-    out.push({ wen: w, n, last: Number(ts) || Date.now(), score: n * Math.pow(0.5, age / DUAN_JIYI_BAN_SHUAI_RI) });
-  };
-  const users = logs.filter((m) => m.role === 'user');
-  /** 用户明确说过的规则/偏好：优先级高于普通聊天 */
-  const explicit = /记住|以后|每次|不要|必须|喜欢|偏好|习惯|统一|默认|约定|规则|禁止|别再|别用|总是/;
-  for (const m of users.slice(-80)) {
-    const s = String(m.content || '');
-    if (explicit.test(s)) push(s, Number(m.ts) || 0, 2.5);
-  }
-  /** 兜底：最近几条用户发言也算本会话内容（保证 2/5 有余量） */
-  for (const m of users.slice(-8)) push(m.content, Number(m.ts) || 0, 1);
-  return out.sort((a, b) => b.score - a.score || b.last - a.last).slice(0, 12);
-}
-
-const GUI_FAN_GUI_BIAO = '## 短记忆（总结自动整理；界面不可见）';
-function guiNaDuanJiYi(sessionId: string): number {
-  try {
-    const sid = String(sessionId || '');
-    if (!sid || !knowledge) return 0;
-    const p = guiFanLu(sid);
-    let yuan = '';
-    try { yuan = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : ''; } catch { yuan = ''; }
-    const pin = duanJiYiPinLu(sid);
-    const layers = kbLayersFor(sid);
-    const eventsAll = knowledge.activeEventsIn(layers);
-    const yaoDian = duBenHuiHuaYaoDian(sid);
-    const hs0 = yuan.split('\n');
-    const yiYouNorm: string[] = [];
-    const keptLines: string[] = [];
-    const removedPoints: string[] = [];
-    let existingKb = 0;
-    let existingChat = 0;
-    for (const line of hs0) {
-      if (!shiDuanJiYiTiao(line)) { keptLines.push(line); continue; }
-      const w = String(line).replace(/^\s*-\s+/, '').trim();
-      const key = duanJiYiHash(w);
-      if (!pin[key]) pin[key] = { n: 1, last: 0 };
-      /** 第 96 轮 #6：短记忆不能和本会话最新总结的“要点/决策/待办/风险”重复 */
-      if (duanJiYiYuYaoDianChongFu(w, yaoDian)) {
-        removedPoints.push(w);
-        delete pin[key];
-        continue;
-      }
-      /**
-       * 老短记忆不再补写知识库（第 97 轮澄清）：没有 KB 事件的行 = 本会话聊天内容，
-       * 保留并计入“聊天内容”一侧；知识库应当已经包含它自己的内容。
-       */
-      const ev = duanJiYiZhaoShiJian(w, eventsAll);
-      if (ev) existingKb += 1; else existingChat += 1;
-      yiYouNorm.push(duanJiYiNorm(w));
-      keptLines.push(line);
-    }
-    yuan = keptLines.join('\n');
-    const chuang = huiHuaShiJianChuang(sid);
-    const events = eventsAll
-      .filter((e) => Number(e.useCount) > 0)
-      .map((e) => {
-        const biao = String(e.biaoTi || '').trim();
-        const jie = String(e.result || '').trim();
-        /** 标题是泛称（会话总结/测试知识）时以正文为主，避免短记忆里出现一堆同名条目 */
-        let wen = /^(会话总结|测试知识|短记忆溢出|短记忆迁移)$/.test(biao) || !biao ? jie : biao;
-        if (jie && wen && !duanJiYiNorm(jie).startsWith(duanJiYiNorm(wen).slice(0, 12))) wen += '：' + jie;
-        wen = wen.replace(/\s+/g, ' ').trim().slice(0, 160);
-        return {
-          wen, n: Number(e.useCount) || 0,
-          last: Number(e.lastUsedAt) || Number(e.jiluTs) || Number(e.ts) || 0,
-          id: e.id,
-          score: duanJiYiShiYongFen(e as never, chuang, false),
-        };
-      })
-      .filter((x) => x.wen.length >= 6)
-      .filter((x) => !duanJiYiYuYaoDianChongFu(x.wen, yaoDian))
-      .filter((x) => {
-        const k = duanJiYiNorm(x.wen);
-        return !yiYouNorm.some((y) => y && (y.includes(k) || k.includes(y)) && Math.min(y.length, k.length) >= 6);
-      })
-      .sort((a, b) => b.score - a.score || b.last - a.last);
-    /** 本会话聊天内容：先补足 2/5，再按 3/5 上限补知识库内容 */
-    const kbNorm = [
-      ...yiYouNorm,
-      ...events.map((x) => duanJiYiNorm(x.wen)),
-      ...eventsAll.map((e) => duanJiYiNorm([e.biaoTi, e.result].filter(Boolean).join('：'))),
-    ].filter((x) => x.length >= 6);
-    const chatNew = duanJiYiHuiHuaSuCai(sid, yaoDian, kbNorm);
-    const add: Array<{ wen: string; n: number; last: number; id: string; score: number }> = [];
-    const seen = new Set<string>();
-    let totalCount = yiYouNorm.length;
-    let kbCount = existingKb;
-    let chatCount = existingChat;
-    const addOne = (x: { wen: string; n: number; last: number; id?: string; score: number }): boolean => {
-      const key = duanJiYiHash(x.wen);
-      if (seen.has(key) || add.length >= 10) return false;
-      seen.add(key);
-      add.push({ wen: x.wen, n: x.n, last: x.last, id: String(x.id || ''), score: x.score });
-      totalCount += 1;
-      return true;
-    };
-    // ① 本会话聊天内容（最多 10 条；先到先得，保证不被 KB 挤掉）
-    for (const x of chatNew) {
-      if (add.length >= 10) break;
-      if (addOne(x)) chatCount += 1;
-    }
-    // ② 知识库内容：KB 条数不得超过聊天条数的 3/2（即总占比 ≤3/5）；没有聊天时最多 3 条起步
-    const kbCap = (): number => (chatCount === 0 ? 3 : Math.floor((chatCount * 3) / 2));
-    for (const x of events) {
-      if (add.length >= 10 || kbCount >= kbCap()) break;
-      if (addOne(x)) kbCount += 1;
-    }
-    if (!add.length && !removedPoints.length) return 0;
-    let quan = yuan.trimEnd();
-    if (add.length) {
-      const xinHang = add.map((x) => '- ' + x.wen);
-      if (quan.includes(GUI_FAN_GUI_BIAO)) {
-        quan = quan.replace(GUI_FAN_GUI_BIAO, GUI_FAN_GUI_BIAO + '\n' + xinHang.join('\n'));
-      } else {
-        quan += (quan ? '\n\n' : '') + GUI_FAN_GUI_BIAO + '\n' + xinHang.join('\n');
-      }
-      for (const x of add) pin[duanJiYiHash(x.wen)] = { n: x.n, last: x.last };
-    }
-    /** 段内最多 40 条；整份按频率/KB 3/5 比例压到上限内 */
-    const cat = () => {
-      const hs = quan.split('\n');
-      const i0 = hs.indexOf(GUI_FAN_GUI_BIAO);
-      if (i0 < 0) return;
-      const i1 = hs.findIndex((l, i) => i > i0 && /^##\s/.test(l));
-      const duan = hs.slice(i0 + 1, i1 < 0 ? hs.length : i1);
-      const tiao = duan.filter((l) => /^\s*-\s+/.test(l));
-      if (tiao.length > 40) {
-        const qu = new Set(tiao.slice(0, tiao.length - 40));
-        const jian = duan.filter((l) => !qu.has(l));
-        quan = hs.slice(0, i0 + 1).concat(jian, i1 < 0 ? [] : hs.slice(i1)).join('\n');
-      }
-    };
-    cat();
-    fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, quan, 'utf8');
-    xieDuanJiYiPinLu(sid, pin);
-    yaSuoDuanJiYi(sid);
-    try {
-      audit?.log('duanjiyi.archive-summary', {
-        sessionId: sid, jia: add.length, chars: quan.length,
-        kb: { entries: kbCount, total: totalCount },
-        chat: chatCount,
-        pointsPruned: removedPoints.length,
-        window: { start: chuang.start, end: chuang.end, activeDays: chuang.activeDays, capped: chuang.capped },
-        top: add.slice(0, 5).map((x) => ({ score: Number(x.score.toFixed(2)), n: x.n, wen: x.wen.slice(0, 40) })),
-      });
-    } catch { /* noop */ }
-    return add.length;
-  } catch { return 0; }
-}
+/* R287 P5-6：短记忆归纳唯一 owner 迁至 ying-yong/duan-ji-yi-gui-na（duanJiYiHuiHuaSuCai＋guiNaDuanJiYi 逐字保持，强差分 6000/6000）；
+   纯助手复用 ji-chu/duan-ji-yi；状态/副作用窄注入；此处仅装配＋薄转发（调用点 24305 不动）。 */
+const duanJiYiGuiNaMo = chuangJianDuanJiYiGuiNa({
+  chatLogs, knowledge,
+  guiFanLu: (sid) => guiFanLu(sid),
+  fs: { existsSync: (p) => fs.existsSync(p), readFileSync: (p, e) => fs.readFileSync(p, e as BufferEncoding), mkdirSync: (p, o) => fs.mkdirSync(p, o), writeFileSync: (p, d, e) => fs.writeFileSync(p, d, e as BufferEncoding) },
+  duanJiYiPinLu: (sid) => duanJiYiPinLu(sid),
+  xieDuanJiYiPinLu: (sid, items) => xieDuanJiYiPinLu(sid, items as never),
+  kbLayersFor: (sid) => kbLayersFor(sid),
+  duBenHuiHuaYaoDian: (sid) => duBenHuiHuaYaoDian(sid),
+  huiHuaShiJianChuang: (sid) => huiHuaShiJianChuang(sid),
+  yaSuoDuanJiYi: (sid) => yaSuoDuanJiYi(sid),
+  auditLog: (op, d) => { audit?.log(op, d); },
+  shiZhong: () => Date.now(),
+});
+function guiNaDuanJiYi(sessionId: string): number { return duanJiYiGuiNaMo.guiNaDuanJiYi(sessionId); }
 
 function guiNaShu(caiLiao: { yuanHua?: string[]; suCaiZhengWen?: string; sid?: string }): { jia: number; diu: number } {
   try {
