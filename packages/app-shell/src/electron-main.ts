@@ -7670,6 +7670,26 @@ async function yunXingLiaoTianXunHuan(
             content: `[${gongJuMing}] 用户没有指定桌面/文档/下载，按默认规则写到工作区：${gaiDaoMoRen}\n` + String(wr.content || ''),
           };
         }
+        /* R294-5 Poka-yoke 软门禁：模型显式请求越出工作区（带理由）→ 用户审批卡；
+           同意＝仅这一次全权重跑（受保护区域/硬门禁仍拦）；拒绝＝留在工作区。模型有自主请求权，用户有最终决定权。 */
+        try {
+          const esc = (wr?.meta as { escapeRequest?: { path?: string; reason?: string } } | undefined)?.escapeRequest;
+          if (esc) {
+            const da = await qingQiuKaPian(
+              sessionId,
+              '请求越出工作区（软门禁）',
+              `操作：${gongJuMing}\n路径：${esc.path}\n模型理由：${esc.reason}\n（同意 = 仅这一次放行；受保护区域仍不可碰。拒绝 = 改用工作区内路径）`,
+              [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }],
+            );
+            if (/^同意/.test(da)) {
+              wr = daiHuiDang(String(sessionId || ''), () => runWorkTool(base, call as { function?: { name?: string; arguments?: unknown } }, true, app.getAppPath()));
+              try { harnessZiJinHua.jiLu({ sessionId: String(sessionId || ''), guardId: 'poka-escape', kind: 'save', detail: '用户批准越狱一次' }); } catch { /* noop */ }
+            } else {
+              wr = { ok: false, content: `[${gongJuMing}] 用户拒绝越出工作区。请改用工作区内路径完成任务。`, meta: { tool: gongJuMing, ok: false, bytes: 0, error: 'escape-denied' } };
+              try { harnessZiJinHua.jiLu({ sessionId: String(sessionId || ''), guardId: 'poka-escape', kind: 'fire', detail: '用户拒绝' }); } catch { /* noop */ }
+            }
+          }
+        } catch { /* 卡片失败保持原拒绝，不静默放行 */ }
         /* R294-3：守卫执行留标记（总结自我改进素材）——语法反射每命中一次＝省一轮「要不要检查」的模型往返 */
         try {
           const yf = (wr?.meta as { yuFa?: { checked?: boolean; ok?: boolean; cuoWu?: number; quanJiao?: number } } | undefined)?.yuFa;

@@ -32,6 +32,16 @@ import { jianChaYuFa, yuFaJianYiWen } from './ji-chu/yu-fa-jian-cha.js';
 let yuFaShouWeiKai: () => boolean = () => true;
 export function sheZhiYuFaShouWei(kai: () => boolean): void { yuFaShouWeiKai = kai; }
 
+/** R294-5 Poka-yoke 软门禁：相对路径越狱＋模型显式给出理由 ⇒ 转用户审批（留缺口，不一棒子打死）；
+ *  绝对路径/受保护区域仍走原有授权/硬门禁流程。批准与否由用户定，模型有自主请求权。 */
+function ruanMenJinQingQiu(tool: string, e: unknown, args: unknown): WorkToolResult | null {
+  const msg = String((e as Error)?.message || e);
+  const reason = String((args as { escapeReason?: unknown })?.escapeReason || '').trim();
+  if (!/^workspace-escape/.test(msg) || !reason) return null;
+  const raw = String((args as { path?: unknown })?.path || '');
+  return { ok: false, content: `[${tool}] 越出工作区的请求已转用户审批（路径：${raw}；理由：${reason.slice(0, 200)}）。同意 = 仅这一次放行；拒绝 = 改用工作区内路径。`, meta: { tool, ok: false, bytes: 0, escapeRequest: { path: raw, reason: reason.slice(0, 200) } } };
+}
+
 /** 工具名（与 function calling 暴露给模型的 name 一致） */
 export const WORK_TOOL_NAMES = [
   'list_dir', 'find_files', 'search_files', 'read_file', 'write_file', 'edit_file',
@@ -104,6 +114,8 @@ export interface WorkToolResult {
     wroteChars?: number;
     /** R294-4 ACI：写/改后语法检查结果（建议性，供台账与自我改进统计） */
     yuFa?: { checked: boolean; ok: boolean; fangShi: string; cuoWu: number; quanJiao: number };
+    /** R294-5 软门禁：模型请求越出工作区（带理由）⇒ 主进程转用户审批卡 */
+    escapeRequest?: { path: string; reason: string };
     /** read_archive_entry：读的是压缩包里的哪一条 */
     entry?: string;
     /** make_pdf：内嵌用的字体路径 */
@@ -508,7 +520,7 @@ export function workEditFile(baseDir: string, args: { path?: string; oldText?: s
        BOM/EOL 由精确替换天然保留；检查结果进 meta.yuFa 供总结自我改进统计。守卫停用则不检（自我改进裁决）。 */
     const yuFa = yuFaShouWeiKai() ? jianChaYuFa(file, next) : { checked: false, ok: true, errors: [], quanJiao: [], fangShi: 'none' as const };
     return { ok: true, content: `[edit_file] 已修改 ${relOf(baseDir, file)}（替换 ${args.replaceAll ? count : 1} 处）` + yuFaJianYiWen(yuFa), meta: { tool, ok: true, bytes: Buffer.byteLength(next), chars: [...next].length, path: relOf(baseDir, file), abs: file, exists: true, yuFa: { checked: yuFa.checked, ok: yuFa.ok, fangShi: yuFa.fangShi, cuoWu: yuFa.errors.length, quanJiao: yuFa.quanJiao.length } } };
-  } catch (e) { return fail(tool, e); }
+  } catch (e) { const rq = ruanMenJinQingQiu(tool, e, args); if (rq) return rq; return fail(tool, e); }
 }
 
 /** 复制文件（仅文件；默认不覆盖）。 */
@@ -855,6 +867,7 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
       meta: { tool, ok: cun, bytes: zongBytes, chars: zongZi, path: relOf(baseDir, file), abs: file, exists: cun, appended: zhuiJia, wroteChars: [...content].length, yuFa: yuFaMeta },
     };
   } catch (e) {
+    const rq = ruanMenJinQingQiu(tool, e, args); if (rq) return rq;
     return fail(tool, e);
   }
 }
@@ -1401,8 +1414,8 @@ export function workToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'edit_file',
-        description: '精确局部修改文本文件：把 oldText 替换为 newText。默认要求 oldText 唯一，避免误改；多处替换需显式 replaceAll:true。',
-        parameters: { type: 'object', properties: { path: { type: 'string' }, oldText: { type: 'string' }, newText: { type: 'string' }, replaceAll: { type: 'boolean' } }, required: ['path', 'oldText', 'newText'] },
+        description: '精确局部修改文本文件：把 oldText 替换为 newText。默认要求 oldText 唯一，避免误改；多处替换需显式 replaceAll:true。路径默认在工作区内；确需越出时填 escapeReason 说明理由，会转用户审批（软门禁），不填则拒绝。',
+        parameters: { type: 'object', properties: { path: { type: 'string' }, oldText: { type: 'string' }, newText: { type: 'string' }, replaceAll: { type: 'boolean' }, escapeReason: { type: 'string', description: '可选：路径必须越出工作区时的理由（转用户审批）' } }, required: ['path', 'oldText', 'newText'] },
       },
     },
     {
