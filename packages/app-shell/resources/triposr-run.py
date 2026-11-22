@@ -35,7 +35,25 @@ def main():
         model.renderer.set_chunk_size(8192)
         model.to(device)
         image = Image.open(img_path).convert("RGBA")
-        image = remove_background(image)
+        # R294：rembg 首次需下 u2net（GitHub 可能不可达）⇒ 有限等待＋失败优雅降级（用原 alpha 合白底），警告如实输出。
+        # 用 daemon 线程＋队列：超时真能弃（ThreadPoolExecutor 的 with 会等线程结束，下载挂死会拖住进程）。
+        try:
+            import threading, queue
+            _q = queue.Queue()
+            def _rembg_work():
+                try:
+                    _q.put(("ok", remove_background(image)))
+                except Exception as _e:
+                    _q.put(("err", _e))
+            _t = threading.Thread(target=_rembg_work, daemon=True)
+            _t.start()
+            _kind, _val = _q.get(timeout=90)
+            if _kind == "ok":
+                image = _val
+            else:
+                raise _val
+        except Exception as e:
+            print(json.dumps({"warning": "rembg-degraded: " + str(e)[:120]}), file=sys.stderr)
         image = resize_foreground(image, 0.85)
         arr = np.array(image).astype(np.float32) / 255.0
         arr = arr[:, :, :3] * arr[:, :, 3:4] + (1.0 - arr[:, :, 3:4])
