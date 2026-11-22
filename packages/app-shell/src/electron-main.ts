@@ -129,6 +129,7 @@ import { daiHuiDuYanZheng, anGuiFanHuaQuChong, guiFanLuJingMiyao } from './read-
 import { chongShengTiaoGuo, qianYiGongZuoQu, jieXiChongShengWenJian, type ChongShengBiao } from './ying-yong/hui-hua-chong-sheng.js';
 import { chuangJianGongJuShouQuan, type ShouQuanTiao } from './ying-yong/gong-ju-shou-quan.js';
 import { chuangJianAnQuanDangWei } from './ying-yong/an-quan-dang-wei.js';
+import { chuangJianJsonlDouDi } from './ji-chu/jsonl-dou-di.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -1915,34 +1916,14 @@ function jingXiangXieRu(key: string, role: LiaoTianXiaoXi['role'], content: stri
  * 记忆服务恢复后会按 JSONL 冷启动重建（coldStartRebuild），所以这份与它是**同一份真相**。
  * 行形状与 memory-runtime 的 append 完全一致：`{...record, seq, ts, id, sessionId, kind}`。
  */
-function daBaoXieRuJsonl(key: string, role: string, ti: string): void {
-  try {
-    const dir = path.join(app.getPath('userData'), 'memory');
-    const p = path.join(dir, 'fast-memory.jsonl');
-    fs.mkdirSync(dir, { recursive: true });
-    // seq 取「已有最大 seq + 1」，与记忆服务同一条单调序列（空文件从 1 起）
-    let seq = 1;
-    try {
-      const yuan = fs.readFileSync(p, 'utf8');
-      for (const line of yuan.split('\n')) {
-        if (!line.trim()) continue;
-        try { const d = JSON.parse(line); const s = Number(d && d.seq); if (Number.isFinite(s) && s >= seq) seq = s + 1; } catch { /* 坏行跳过 */ }
-      }
-    } catch { /* 文件还没有 */ }
-    const ts = Date.now();
-    const id = (String(role).toLowerCase() === 'assistant' ? 'a-' : 'u-') + 'fb-' + ts.toString(36);
-    /** 兜底直写的这一行必须与记忆服务写的同形（契约 `XiaoxiJilu`），否则重启重建会读出两种格式 */
-    const jiaoSe = String(role).toLowerCase();
-    const jiLu: XiaoxiJilu = {
-      id, sessionId: key, kind: 'message',
-      role: jiaoSe === 'assistant' ? 'assistant' : jiaoSe === 'system' ? 'system' : 'user',
-      ti: String(ti || ''), groupId: key, entityType: 'chat', seq, ts,
-    };
-    const hang = JSON.stringify(jiLu) + '\n';
-    fs.appendFileSync(p, hang, 'utf8');
-    audit?.log('chat.jsonl-fallback', { sessionId: key, role, chars: String(ti || '').length, seq });
-  } catch { /* 兜底也写不进去时不打断对话 */ }
-}
+/* R287 P3-4：JSONL 兜底写迁 ji-chu/jsonl-dou-di.ts（唯一 owner）；装配＋薄转发。
+ * 行形状/seq 单调/角色归一/吞错不打断对话全在模块内；构造无副作用。
+ * 差分 1200/1200（dev/r287/jsonl-dou-di-cha-fen.mjs，4 fixture×300 事件，真实临时目录＋故障注入）。 */
+const jsonlDouDi = chuangJianJsonlDouDi({
+  shuJuMuLu: () => app.getPath('userData'),
+  shenJi: (op, d) => { audit?.log(op, d); },
+});
+function daBaoXieRuJsonl(key: string, role: string, ti: string): void { jsonlDouDi.daBaoXieRuJsonl(key, role, ti); }
 
 function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
   // 归一后写入：去重、镜像、回读全部只认这一套角色名
