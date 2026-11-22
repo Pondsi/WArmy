@@ -136,6 +136,7 @@ import { chuangJianGongJuZhuangPei } from './ying-yong/gong-ju-zhuang-pei.js';
 import { chuangJianMimicPeiZhi } from './ying-yong/mimic-pei-zhi.js';
 import { chuangJianZiDongGuiDang } from './ying-yong/zi-dong-gui-dang.js';
 import { chuangJianGuiDangYouBiao, type GuiDangYouBiaoJi } from './ying-yong/gui-dang-you-biao.js';
+import { chuangJianYuYinZhuanXie } from './ying-yong/yu-yin-zhuan-xie.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -9800,43 +9801,18 @@ async function tuFenCiKanTu(
   return { wen: duan.join('\n'), piCi: zongPi, shibai };
 }
 
-function shiYinPinFuJian(a: { path?: string; name?: string; dataUrl?: string }): boolean {
-  return /^data:audio\//i.test(String(a?.dataUrl || ''))
-    || /\.(mp3|wav|m4a|ogg|oga|opus|flac|webm)$/i.test(String(a?.path || a?.name || ''));
-}
-
+/* R287 P4-5：音频附件转写委托唯一 owner 迁至 ying-yong/yu-yin-zhuan-xie（dataUrl 优先/格式别名/失败必抛逐字保持）；
+   此处仅装配窄注入＋薄转发。文件读取/转写管线/审计/错误净化仍主进程持有；构造无副作用。 */
+const yuYinZhuanXieMo = chuangJianYuYinZhuanXie({
+  wenJianCunZai: (lu) => fs.existsSync(lu),
+  duWenJian: (lu) => fs.readFileSync(lu),
+  zhuanXie: (buf, geShi, source) => zhuanXieYinPinBuf(buf, geShi, source),
+  auditLog: (op, d) => { audit?.log(op, d); },
+  jingCuoWu: (e) => xiJingCuoWu(e),
+});
+function shiYinPinFuJian(a: { path?: string; name?: string; dataUrl?: string }): boolean { return yuYinZhuanXieMo.shiYinPinFuJian(a); }
 /** 附件不受话筒开关/语言影响。失败必须抛给调用方终止，不可冒充专业模型的转写结果。 */
-async function yuYinZhuanXie(att: Array<{ path?: string; name?: string; dataUrl?: string }>): Promise<string | null> {
-  const yinPin = (att || []).filter(shiYinPinFuJian);
-  if (!yinPin.length) return null;
-  const wen: string[] = [];
-  for (const a of yinPin) {
-    try {
-      let buf: Buffer | null = null;
-      let geShi = '';
-      // 上传转码后的 dataUrl 优先，不能又读回 path 指向的压缩原件。
-      if (/^data:audio\//i.test(String(a.dataUrl || ''))) {
-        buf = Buffer.from(String(a.dataUrl).replace(/^data:[^,]*,/, ''), 'base64');
-        geShi = (/^data:audio\/([a-z0-9.+-]+)/i.exec(String(a.dataUrl))?.[1] || '').toLowerCase();
-      } else if (a.path && fs.existsSync(a.path)) {
-        buf = fs.readFileSync(a.path);
-        geShi = String(a.path).toLowerCase().replace(/^.*\./, '');
-      }
-      if (!buf?.length) throw new Error('audio-attachment-read-failed（音频附件为空或无法读取）');
-      const aliases: Record<string, string> = { mpeg: 'mp3', 'x-wav': 'wav', wave: 'wav', mp4: 'm4a', 'x-m4a': 'm4a', oga: 'ogg' };
-      geShi = aliases[geShi] || geShi;
-      const r = await zhuanXieYinPinBuf(buf, geShi || 'wav', 'attachment');
-      if (!r.ok || !r.text?.trim()) throw new Error(r.error || 'asr-empty-result');
-      wen.push(yinPin.length === 1 ? r.text : `${a.name || a.path || '音频附件'}：${r.text}`);
-      try { audit?.log('asr.used', { model: r.model, chars: r.text.length, source: r.source }); } catch { /* noop */ }
-    } catch (e) {
-      const error = `${a.name || a.path || '音频附件'}: ${xiJingCuoWu(e)}`;
-      try { audit?.log('asr-delegate.failed', { error: error.slice(0, 160) }); } catch { /* noop */ }
-      throw new Error(error);
-    }
-  }
-  return wen.join('\n');
-}
+async function yuYinZhuanXie(att: Array<{ path?: string; name?: string; dataUrl?: string }>): Promise<string | null> { return yuYinZhuanXieMo.yuYinZhuanXie(att); }
 
 /** 规则三：视频附件 → 走 videoUnd 链描述（无可用模型返回 null） */
 async function kanShiPinWeiTuo(att: Array<{ path?: string; name?: string }>): Promise<string | null> {
