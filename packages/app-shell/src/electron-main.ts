@@ -137,6 +137,7 @@ import { chuangJianMimicPeiZhi } from './ying-yong/mimic-pei-zhi.js';
 import { chuangJianZiDongGuiDang } from './ying-yong/zi-dong-gui-dang.js';
 import { chuangJianGuiDangYouBiao, type GuiDangYouBiaoJi } from './ying-yong/gui-dang-you-biao.js';
 import { chuangJianYuYinZhuanXie } from './ying-yong/yu-yin-zhuan-xie.js';
+import { chuangJianTtsChatShi } from './ying-yong/tts-chat-shi.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -33964,29 +33965,16 @@ chuliIpc('warmy:tingHuaZhuangTai', async () => {
  * 形状与坑见 `@warmy/providers` 的 `audio.ts`（要读的文本必须放 assistant 消息、不能带 system）。
  * 音色不对时端点会在报错里给出**可用清单** —— 按它重试一次，并如实把清单带回界面。
  */
+/* R287 P4-6：chat 式 TTS 唯一 owner 迁至 ying-yong/tts-chat-shi（voice 纠错重试/返回逐字保持）；
+   URL 拼接/请求体/响应解析复用 @warmy/providers 纯函数；fetch/审计窄注入；此处仅装配＋薄转发。 */
+const ttsChatShiMo = chuangJianTtsChatShi({
+  fetch: (url, opts) => fetch(url, opts as RequestInit),
+  auditLog: (op, d) => { audit?.log(op, d); },
+});
 async function ttsChatShi(
   an: MoXingGongYingXinXi, mo: string, text: string, voice: string, speed: number,
 ): Promise<{ ok: boolean; dataUrl?: string; model?: string; voice?: string; error?: string; voices?: string[]; via?: string }> {
-  const yong = async (v: string) => {
-    const r = await fetch(pinJieUrl(an.baseURL, 'chat/completions'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(an.apiKey ? { Authorization: `Bearer ${an.apiKey}` } : {}) },
-      body: JSON.stringify(taoTtsChatBody({ model: mo, text: text, voice: v || undefined, format: 'wav', speed })),
-    });
-    const j = await r.json().catch(() => null);
-    return { status: r.status, jie: jieXiTtsChatResponse(j, 'wav') };
-  };
-  let r = await yong(voice);
-  if (!r.jie.ok && r.jie.voices && r.jie.voices.length) {
-    const dai = r.jie.voices[0]!;
-    const r2 = await yong(dai);
-    if (r2.jie.ok) {
-      try { audit?.log('tts.voice-corrected', { model: mo, from: voice, to: dai }); } catch { /* noop */ }
-      return { ok: true, dataUrl: `data:${r2.jie.mime};base64,${r2.jie.audioBase64}`, model: mo, voice: dai, via: 'chat-completions' };
-    }
-  }
-  if (r.jie.ok) return { ok: true, dataUrl: `data:${r.jie.mime};base64,${r.jie.audioBase64}`, model: mo, voice, via: 'chat-completions' };
-  return { ok: false, error: r.jie.error || ('tts HTTP ' + r.status), ...(r.jie.voices ? { voices: r.jie.voices } : {}) };
+  return ttsChatShiMo.ttsChatShi(an, mo, text, voice, speed);
 }
 
 /* R287 P4-3：ASR 静音/无语音判定纯函数唯一 owner 迁至 ji-chu/asr-jing-yin（asrWuYuYin/asrPcm16JingYin，阈值与 RIFF 解析逐字保持）；
