@@ -55,11 +55,15 @@ def main():
         except Exception as e:
             print(json.dumps({"warning": "rembg-degraded: " + str(e)[:120]}), file=sys.stderr)
         image = resize_foreground(image, 0.85)
+        # R294：resize_foreground 输出尺寸随前景变（实测 601×601），模型 cond_image_size=512 ⇒ 显式归一（官方 gradio 同做法）
+        image = image.resize((512, 512))
+        # R294：新版 tsr API 直收 PIL/np（image_processor 内部归一化）；手搭 (1,3,H,W) 张量会被当 HWC 错排维度。
+        # RGBA 须先合白底转 RGB（image_processor 不去 alpha，4 通道会与 mean 3 冲突）
         arr = np.array(image).astype(np.float32) / 255.0
         arr = arr[:, :, :3] * arr[:, :, 3:4] + (1.0 - arr[:, :, 3:4])
-        tensor = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device)
+        image = Image.fromarray((arr * 255.0).astype(np.uint8), "RGB")
         with torch.no_grad():
-            codes = model(tensor, device=device)
+            codes = model(image, device=device)
         mesh = model.extract_mesh(codes, has_vertex_color=True, resolution=resolution)[0]
         os.makedirs(os.path.dirname(os.path.abspath(out_glb)), exist_ok=True)
         mesh.export(out_glb)
