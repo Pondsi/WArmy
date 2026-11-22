@@ -11,6 +11,7 @@ import type { ZhishiCang, ZhishiCeng } from '@warmy/knowledge-base';
 import { guiHuaZhengLi } from '../zhi-shi-zheng-li.js';
 import { paiShengDuiWaiGaiLao, type NengLiTiao } from '../zhi-shi-fen-ceng.js';
 import type { CaiJue, FenJuQiPeiZhi } from './harness-zi-jin-hua.js';
+import type { ZiQuYaoSuCaiJue } from './zi-qu-zhi-liang.js';
 
 export interface MoXingGongYingXinXi { presetId: string; baseURL: string; protocol: 'openai-compatible' | 'anthropic' | 'ollama'; apiKey: string; biaoQian: string }
 export interface GuiDangHuiHuaJieGuo { ok: boolean; tiaoShu?: number; zhiShiJian?: string; jiangJi?: boolean; guiDangHeXin?: boolean; skipped?: string; error?: string }
@@ -32,6 +33,13 @@ export interface GuiDangHuiHuaYiLai {
     yingYongCaiJue: (pan: CaiJue[]) => { applied: number; needsAuth: string[] };
     jieXiFenJuQi: (txt: string) => Partial<FenJuQiPeiZhi> | null;
     yingYongFenJuQi: (p: Partial<FenJuQiPeiZhi> | null) => boolean;
+    boLiCaiJueKuai: (txt: string) => string;
+  };
+  /** R297 自驱质量自我改进（可选）：总结段＋演化裁决＋剥离。未提供则不动。 */
+  ziQuZhiLiang?: {
+    zongJieDuan: () => string;
+    jieXiCaiJue: (txt: string) => ZiQuYaoSuCaiJue | null;
+    yanHuaYaoSu: (pan: ZiQuYaoSuCaiJue) => { add: number; remove: number };
     boLiCaiJueKuai: (txt: string) => string;
   };
   TI_SHI_CENG_BAN_BEN: string;
@@ -149,6 +157,7 @@ export function chuangJianGuiDangHuiHua(yiLai: GuiDangHuiHuaYiLai) {
                     })()
                     + '短记忆由宿主按**知识库使用频率**维护，你只负责把本次会话整理成知识条目；**不要输出对「要求」的修改建议**。\n\n'
                     + yiLai.harnessZiJinHua.zongJieDuan() + '\n'
+                    + (yiLai.ziQuZhiLiang?.zongJieDuan() || '') + '\n'
                     + yuanWen.slice(0, 12000),
                 }],
                 maxTokens: 900,
@@ -162,8 +171,13 @@ export function chuangJianGuiDangHuiHua(yiLai: GuiDangHuiHuaYiLai) {
                 if (cai.length) yiLai.harnessZiJinHua.yingYongCaiJue(cai);
                 const fen = yiLai.harnessZiJinHua.jieXiFenJuQi(txt);
                 if (fen) yiLai.harnessZiJinHua.yingYongFenJuQi(fen);
+                /* R297：自驱质量演化裁决（增删可选元素） */
+                const zq = yiLai.ziQuZhiLiang?.jieXiCaiJue(txt);
+                if (zq) yiLai.ziQuZhiLiang?.yanHuaYaoSu(zq);
               } catch { /* noop */ }
-              zhengLi = yiLai.harnessZiJinHua.boLiCaiJueKuai(txt.trim()) || txt.trim(); jiangJi = false; break;
+              let clean = yiLai.harnessZiJinHua.boLiCaiJueKuai(txt.trim()) || txt.trim();
+              if (yiLai.ziQuZhiLiang) clean = yiLai.ziQuZhiLiang.boLiCaiJueKuai(clean) || clean;
+              zhengLi = clean; jiangJi = false; break;
             }
             else jiangJi = true;
           } else {

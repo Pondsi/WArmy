@@ -136,6 +136,7 @@ import { chuangJianDuanJiYiGuiNa } from './ying-yong/duan-ji-yi-gui-na.js';
 import { yaoQiuZiShu, buZhouXuYaoZhengJu } from './ji-chu/bu-zhou-zheng-ju.js';
 import { chuangJianBuZhouZhengJuHeDui } from './ying-yong/bu-zhou-zheng-ju-he-dui.js';
 import { chuangJianZiQu } from './ying-yong/zi-qu.js';
+import { chuangJianZiQuZhiLiang } from './ying-yong/zi-qu-zhi-liang.js';
 import { chuangJianHarnessZiJinHua } from './ying-yong/harness-zi-jin-hua.js';
 import { chuangJianHuiHuaXieRu } from './ying-yong/hui-hua-xie-ru.js';
 import { chuangJianGongJuZhuangPei } from './ying-yong/gong-ju-zhuang-pei.js';
@@ -15576,6 +15577,8 @@ async function zhenZhengFaSong(
   xiaoXi: { sessionId: string; internal?: boolean; [k: string]: unknown },
 ): Promise<{ ok: boolean; reply: string; [k: string]: unknown }> {
   const sid = String((xiaoXi && xiaoXi.sessionId) || '');
+  /* R297：用户真实回复（非内部续派）捕获自驱反馈，驱动质量自我改进（赞同/不赞同/追问细节） */
+  if (sid && !xiaoXi.internal) { try { ziQuZhiLiangMo.yongHuHuiFu(sid, String((xiaoXi as { content?: string }).content || '')); } catch { /* noop */ } }
   zuiHouHuoDongTs = Date.now(); // R262：空闲判定用（任何真实发送都算活动）
   if (xiaoXi && xiaoXi.internal && sid && zaiTuLiao.has(sid)) {
     try { audit?.log('chat.dispatch-skipped-inflight', { sessionId: sid, kaiShi: zaiTuLiao.get(sid) }); } catch { /* noop */ }
@@ -15769,6 +15772,14 @@ function duZiQuZhuangTai(): Record<string, { lastTs: number; count: number; enab
 function cunZiQuZhuangTai(j: Record<string, { lastTs: number; count: number; enabled?: boolean }>): void {
   try { fs.writeFileSync(ziQuWenJian(), JSON.stringify(j), 'utf8'); } catch { /* noop */ }
 }
+/* R297 自驱质量自我改进（UCB1 多臂赌博机，proved sublinear regret）：状态落 zi-qu-zhi-liang.json。 */
+const ziQuZhiLiangWenJian = () => path.join(app.getPath('userData'), 'zi-qu-zhi-liang.json');
+const ziQuZhiLiangMo = chuangJianZiQuZhiLiang({
+  du: () => { try { return JSON.parse(fs.readFileSync(ziQuZhiLiangWenJian(), 'utf8')); } catch { return undefined; } },
+  cun: (j) => { try { fs.writeFileSync(ziQuZhiLiangWenJian(), JSON.stringify(j), 'utf8'); } catch { /* noop */ } },
+  auditLog: (op, d) => { audit?.log(op, d); },
+  shiZhong: () => Date.now(),
+});
 const ziQuMo = chuangJianZiQu({
   suoYouHuiHua: () => {
     const ids = new Set<string>();
@@ -15830,8 +15841,12 @@ const ziQuMo = chuangJianZiQu({
   cunZhuangTai: (j) => cunZiQuZhuangTai(j),
   auditLog: (op, d) => { audit?.log(op, d); },
   shiZhong: () => Date.now(),
+  zhiLiang: {
+    gouZaoTiShi: (sid, ming, shangCiTs, shangXiaWen, huiHuaMing) => ziQuZhiLiangMo.gouZaoTiShi(sid, ming, shangCiTs, shangXiaWen, huiHuaMing),
+    jiLuFaSong: (sid, elements) => ziQuZhiLiangMo.jiLuFaSong(sid, elements),
+  },
 });
-chuliIpc('warmy:ziQuSaoMiao', async () => { try { return { ok: true, ...(await ziQuMo.ziQuSaoMiao()) }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; } });
+chuliIpc('warmy:ziQuSaoMiao', async () => { try { ziQuZhiLiangMo.saoMiaoWuHuiFu(); return { ok: true, ...(await ziQuMo.ziQuSaoMiao()) }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; } });
 chuliIpc('warmy:ziQuKaiShe', (_e, p0?: { sessionId?: string; on?: boolean }) => {
   const sid = String(p0?.sessionId || ''); if (!sid) return { ok: false, error: 'bad-session' };
   const z = duZiQuZhuangTai(); const cur = z[sid] || { lastTs: 0, count: 0 };
@@ -32745,6 +32760,12 @@ const guiDangHuiHuaMo = chuangJianGuiDangHuiHua({
   settingsStore, audit,
   fs: { existsSync: (p) => fs.existsSync(p), writeFileSync: (p, d, e) => fs.writeFileSync(p, d, { encoding: e as BufferEncoding }), appendFileSync: (p, d, e) => fs.appendFileSync(p, d, { encoding: e as BufferEncoding }) },
   harnessZiJinHua,
+  ziQuZhiLiang: {
+    zongJieDuan: () => ziQuZhiLiangMo.zongJieDuan(),
+    jieXiCaiJue: (txt) => ziQuZhiLiangMo.jieXiCaiJue(txt),
+    yanHuaYaoSu: (pan) => ziQuZhiLiangMo.yanHuaYaoSu(pan),
+    boLiCaiJueKuai: (txt) => ziQuZhiLiangMo.boLiCaiJueKuai(txt),
+  },
   TI_SHI_CENG_BAN_BEN,
   shiZhong: () => Date.now(),
   isoShiZhong: () => new Date().toISOString(),

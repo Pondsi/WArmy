@@ -46,18 +46,27 @@ export interface ZiQuYiLai {
   cunZhuangTai: (j: Record<string, ZiQuZhuangTai>) => void;
   auditLog: (op: string, detail: unknown) => void;
   shiZhong: () => number;
+  /** R297 质量自我改进（可选）：演化提示词＋记录待反馈。未提供则用内建基线提示词。 */
+  zhiLiang?: {
+    gouZaoTiShi: (sid: string, ming: string, shangCiTs: number, shangXiaWen: string, huiHuaMing: string) => { prompt: string; elements: string[] };
+    jiLuFaSong: (sid: string, elements: string[]) => void;
+  };
 }
 
 export function chuangJianZiQu(yiLai: ZiQuYiLai) {
-  /** 构造自驱提示词：查看会话全部内容 → 下一步计划（方案/理由/优缺点/成本/效果）→ 询问用户。聚焦上次自驱后的新增内容。 */
-  function gouZaoTiShi(sid: string, ming: string, shangCiTs: number): string {
+  /** 构造会话上下文摘要（最近 60 条非隐藏，每条≤600 字，总≤12000 字）。 */
+  function buildShangXiaWen(sid: string): string {
     const lie = yiLai.duRiZhi(sid) || [];
-    const shangXiaWen = lie
+    return lie
       .filter((x) => !x.hidden && String(x.content || '').trim())
       .slice(-60)
       .map((x) => `[${String(x.role || '')}] ${String(x.content || '').slice(0, 600)}`)
       .join('\n')
       .slice(0, 12000);
+  }
+  /** 构造自驱提示词（内建基线）：查看会话全部内容 → 下一步计划（方案/理由/优缺点/成本/效果）→ 询问用户。聚焦上次自驱后的新增内容。 */
+  function gouZaoTiShi(sid: string, ming: string, shangCiTs: number): string {
+    const shangXiaWen = buildShangXiaWen(sid);
     const xinZeng = shangCiTs > 0
       ? `上次自驱以来（${new Date(shangCiTs).toISOString()} 之后）请聚焦新增内容，不要重复改进/查看过的旧内容。`
       : '这是本会话首次自驱。';
@@ -85,7 +94,16 @@ export function chuangJianZiQu(yiLai: ZiQuYiLai) {
     const keYong: string[] = [];
     for (const m of niuMa.lian || []) { if (m && await yiLai.moXingKeYong(m)) keYong.push(m); }
     if (!keYong.length) return { ok: false, skipped: 'unavailable' };
-    const prompt = gouZaoTiShi(sid, niuMa.ming, cur.lastTs);
+    /* R297：有质量模块则用演化提示词（UCB1 选元素）＋记录待反馈；否则内建基线。 */
+    let prompt: string;
+    let elements: string[];
+    if (yiLai.zhiLiang) {
+      const r = yiLai.zhiLiang.gouZaoTiShi(sid, niuMa.ming, cur.lastTs, buildShangXiaWen(sid), yiLai.sessionMingOf(sid));
+      prompt = r.prompt; elements = r.elements;
+    } else {
+      prompt = gouZaoTiShi(sid, niuMa.ming, cur.lastTs);
+      elements = ['plan', 'reason', 'proscons', 'cost', 'effect', 'ask'];
+    }
     let content = '';
     let yongMo = '';
     for (const mo of keYong) {
@@ -99,6 +117,7 @@ export function chuangJianZiQu(yiLai: ZiQuYiLai) {
       return { ok: false, skipped: 'model-fail' };
     }
     try { yiLai.faSongZiQu(sid, niuMa.ming, content); } catch { /* 发送失败不更新状态 */ return { ok: false, skipped: 'send-fail' }; }
+    try { yiLai.zhiLiang?.jiLuFaSong(sid, elements); } catch { /* 记录待反馈失败不挡自驱 */ }
     const xin = yiLai.duZhuangTai();
     xin[sid] = { ...xin[sid], lastTs: now, count: (xin[sid]?.count || cur.count) + 1 };
     try { yiLai.cunZhuangTai(xin); } catch { /* 落盘失败不影响本次 */ }
