@@ -24,6 +24,7 @@ export interface DuanJiYiGuiNaYiLai {
   duBenHuiHuaYaoDian: (sid: string) => string[];
   huiHuaShiJianChuang: (sid: string) => DuanJiYiShiJianChuang;
   yaSuoDuanJiYi: (sid: string) => void;
+  guiFanMaxChars: () => number;
   auditLog: (op: string, detail: unknown) => void;
   shiZhong: () => number;
 }
@@ -198,5 +199,83 @@ export function chuangJianDuanJiYiGuiNa(yiLai: DuanJiYiGuiNaYiLai) {
     } catch { return 0; }
   }
 
-  return { duanJiYiHuiHuaSuCai, guiNaDuanJiYi };
+  /** R287 P5-7：按使用频率压缩短记忆——KB 抽取≤3/5，超字数从衰减分最低丢（并列更久没用先丢）；丢的只是副本，KB 仍保有。 */
+  function yaSuoDuanJiYi(sessionId: string): void {
+    try {
+      const sid = String(sessionId || '');
+      const p = yiLai.guiFanLu(sid);
+      if (!yiLai.fs.existsSync(p)) return;
+      let quan = yiLai.fs.readFileSync(p, 'utf8');
+      const max = yiLai.guiFanMaxChars();
+      const pin = yiLai.duanJiYiPinLu(sid);
+      const hs = quan.split('\n');
+      const chuang = yiLai.huiHuaShiJianChuang(sid);
+      const events = yiLai.knowledge ? yiLai.knowledge.activeEventsIn(yiLai.kbLayersFor(sid)) : [];
+      type Tiao = { idx: number; key: string; text: string; score: number; last: number; kb: boolean };
+      const tiao: Tiao[] = [];
+      for (let i = 0; i < hs.length; i++) {
+        if (!shiDuanJiYiTiao(hs[i]!)) continue;
+        const text = String(hs[i]).replace(/^\s*-\s+/, '').trim();
+        const key = duanJiYiHash(text);
+        const ev = duanJiYiZhaoShiJian(text, events);
+        const kb = !!ev;
+        let score = ev ? duanJiYiShiYongFen(ev as never, chuang, false) : 0;
+        let last = Number((ev as { lastUsedAt?: number } | null)?.lastUsedAt || 0);
+        if (!score) {
+          const c = pin[key] || { n: 1, last: 0 };
+          score = duanJiYiShiYongFen({ useCount: c.n, lastUsedAt: c.last, ts: c.last }, chuang, true);
+          last = Number(c.last) || last;
+        }
+        if (!score) score = 0.001;
+        tiao.push({ idx: i, key, text, score, last, kb });
+      }
+      if (!tiao.length) return;
+      const removed: string[] = [];
+      const removedKb: string[] = [];
+      const pickLowest = (pool: Tiao[]): Tiao | null => {
+        let best: Tiao | null = null;
+        for (const x of pool) {
+          if (!best || x.score < best.score || (x.score === best.score && x.last < best.last)) best = x;
+        }
+        return best;
+      };
+      const drop = (x: Tiao) => {
+        hs[x.idx] = '';
+        delete pin[x.key];
+        removed.push(x.text);
+        if (x.kb) removedKb.push(x.text);
+        quan = hs.filter((l) => l !== '').join('\n');
+      };
+      let kbCount = tiao.filter((x) => x.kb).length;
+      let totalCount = tiao.length;
+      const chatCount = () => totalCount - kbCount;
+      const kbCap = () => (chatCount() === 0 ? Math.min(3, totalCount) : Math.floor((chatCount() * 3) / 2));
+      while (kbCount > kbCap()) {
+        const x = pickLowest(tiao.filter((t) => t.kb && hs[t.idx] !== ''));
+        if (!x) break;
+        drop(x);
+        kbCount -= 1;
+        totalCount -= 1;
+      }
+      while (quan.length > max) {
+        const x = pickLowest(tiao.filter((t) => hs[t.idx] !== ''));
+        if (!x) break;
+        drop(x);
+        totalCount -= 1;
+      }
+      if (!removed.length) return;
+      yiLai.fs.writeFileSync(p, quan.replace(/\x0a{3,}/g, String.fromCharCode(10, 10)).trim() + (quan.trim() ? String.fromCharCode(10) : ''), 'utf8');
+      yiLai.xieDuanJiYiPinLu(sid, pin);
+      if (removed.length) {
+        try {
+          yiLai.auditLog('prompt.duanjiyi-compressed', {
+            sessionId: sid, removed: removed.length, kbRemoved: removedKb.length,
+            chars: quan.length, max, window: { start: chuang.start, end: chuang.end, activeDays: chuang.activeDays, capped: chuang.capped },
+          });
+        } catch { /* noop */ }
+      }
+    } catch { /* 压缩失败不挡对话 */ }
+  }
+
+  return { duanJiYiHuiHuaSuCai, guiNaDuanJiYi, yaSuoDuanJiYi };
 }

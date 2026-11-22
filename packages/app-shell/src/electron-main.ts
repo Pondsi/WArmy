@@ -23486,91 +23486,7 @@ function duBenHuiHuaYaoDian(sessionId: string): string[] {
  * **不再把丢掉的条目写回知识库**（第 96 轮用户口径：短记忆内容本来就来自知识库，
  * 知识库应当已经包含它；删除只删短记忆副本，避免重复条目和"越删越多"）。
  */
-function yaSuoDuanJiYi(sessionId: string): void {
-  try {
-    const sid = String(sessionId || '');
-    const p = guiFanLu(sid);
-    if (!fs.existsSync(p)) return;
-    let quan = fs.readFileSync(p, 'utf8');
-    const max = guiFanMaxChars();
-    const pin = duanJiYiPinLu(sid);
-    const hs = quan.split('\n');
-    const chuang = huiHuaShiJianChuang(sid);
-    const events = knowledge ? knowledge.activeEventsIn(kbLayersFor(sid)) : [];
-    type Tiao = { idx: number; key: string; text: string; score: number; last: number; kb: boolean };
-    const tiao: Tiao[] = [];
-    for (let i = 0; i < hs.length; i++) {
-      if (!shiDuanJiYiTiao(hs[i]!)) continue;
-      const text = String(hs[i]).replace(/^\s*-\s+/, '').trim();
-      const key = duanJiYiHash(text);
-      const ev = duanJiYiZhaoShiJian(text, events);
-      /** 第 97 轮澄清：3/5 限制的是**知识库抽取**的内容；没有 KB 事件的就是本会话聊天内容 */
-      const kb = !!ev;
-      let score = ev ? duanJiYiShiYongFen(ev as never, chuang, false) : 0;
-      let last = Number((ev as { lastUsedAt?: number } | null)?.lastUsedAt || 0);
-      if (!score) {
-        /** 老侧车/老条目兜底：按会话时间线算，仅用于排序，不改变来源判定 */
-        const c = pin[key] || { n: 1, last: 0 };
-        score = duanJiYiShiYongFen({ useCount: c.n, lastUsedAt: c.last, ts: c.last }, chuang, true);
-        last = Number(c.last) || last;
-      }
-      if (!score) score = 0.001;
-      tiao.push({ idx: i, key, text, score, last, kb });
-    }
-    if (!tiao.length) return;
-    const removed: string[] = [];
-    const removedKb: string[] = [];
-    const pickLowest = (pool: Tiao[]): Tiao | null => {
-      let best: Tiao | null = null;
-      for (const x of pool) {
-        if (!best || x.score < best.score || (x.score === best.score && x.last < best.last)) best = x;
-      }
-      return best;
-    };
-    const drop = (x: Tiao) => {
-      hs[x.idx] = '';
-      delete pin[x.key];
-      removed.push(x.text);
-      if (x.kb) removedKb.push(x.text);
-      quan = hs.filter((l) => l !== '').join('\n');
-    };
-    /**
-     * ① **知识库抽取的内容**最多占五分之三；其余应是本会话聊天内容。
-     * 第 97 轮澄清：不是只限共享 session 层，internal/private 的 KB 条目也算 KB 抽取。
-     * 若当前完全没有聊天内容（例如刚升级的旧短记忆全是 KB），允许最多 3 条 KB 起步，
-     * 等下一次总结从聊天记录补上会话内容后再恢复 3/5。
-     */
-    let kbCount = tiao.filter((x) => x.kb).length;
-    let totalCount = tiao.length;
-    const chatCount = () => totalCount - kbCount;
-    const kbCap = () => (chatCount() === 0 ? Math.min(3, totalCount) : Math.floor((chatCount() * 3) / 2));
-    while (kbCount > kbCap()) {
-      const x = pickLowest(tiao.filter((t) => t.kb && hs[t.idx] !== ''));
-      if (!x) break;
-      drop(x);
-      kbCount -= 1;
-      totalCount -= 1;
-    }
-    /** ② 超字数：从时间衰减分最低的条目开始丢（并列时更久没用的先丢） */
-    while (quan.length > max) {
-      const x = pickLowest(tiao.filter((t) => hs[t.idx] !== ''));
-      if (!x) break; // 没有可丢的条目（纯散文）：保住内容，交给注入侧压缩
-      drop(x);
-      totalCount -= 1;
-    }
-    if (!removed.length) return;
-    fs.writeFileSync(p, quan.replace(/\x0a{3,}/g, String.fromCharCode(10, 10)).trim() + (quan.trim() ? String.fromCharCode(10) : ''), 'utf8');
-    xieDuanJiYiPinLu(sid, pin);
-    if (removed.length) {
-      try {
-        audit?.log('prompt.duanjiyi-compressed', {
-          sessionId: sid, removed: removed.length, kbRemoved: removedKb.length,
-          chars: quan.length, max, window: { start: chuang.start, end: chuang.end, activeDays: chuang.activeDays, capped: chuang.capped },
-        });
-      } catch { /* noop */ }
-    }
-  } catch { /* 压缩失败不挡对话 */ }
-}
+/* R287 P5-7：yaSuoDuanJiYi 迁至 ying-yong/duan-ji-yi-gui-na（薄转发在装配区） */
 function duGuiFan(sessionId: string): string {
   try {
     const p = guiFanLu(sessionId);
@@ -24623,11 +24539,14 @@ const duanJiYiGuiNaMo = chuangJianDuanJiYiGuiNa({
   kbLayersFor: (sid) => kbLayersFor(sid),
   duBenHuiHuaYaoDian: (sid) => duBenHuiHuaYaoDian(sid),
   huiHuaShiJianChuang: (sid) => huiHuaShiJianChuang(sid),
-  yaSuoDuanJiYi: (sid) => yaSuoDuanJiYi(sid),
+  yaSuoDuanJiYi: (sid) => { duanJiYiGuiNaMo.yaSuoDuanJiYi(sid); },
+  guiFanMaxChars: () => guiFanMaxChars(),
   auditLog: (op, d) => { audit?.log(op, d); },
   shiZhong: () => Date.now(),
 });
 function guiNaDuanJiYi(sessionId: string): number { return duanJiYiGuiNaMo.guiNaDuanJiYi(sessionId); }
+/* R287 P5-7：yaSuoDuanJiYi 同迁 duan-ji-yi-gui-na 模块（短记忆压缩）；薄转发，调用点不动。 */
+function yaSuoDuanJiYi(sessionId: string): void { duanJiYiGuiNaMo.yaSuoDuanJiYi(sessionId); }
 
 function guiNaShu(caiLiao: { yuanHua?: string[]; suCaiZhengWen?: string; sid?: string }): { jia: number; diu: number } {
   try {
