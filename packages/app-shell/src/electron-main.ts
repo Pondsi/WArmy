@@ -128,6 +128,7 @@ import { AiWenTiZhongXin, AI_QUESTION_CUSTOM } from './ai-questions.js';
 import { daiHuiDuYanZheng, anGuiFanHuaQuChong, guiFanLuJingMiyao } from './read-back.js';
 import { chongShengTiaoGuo, qianYiGongZuoQu, jieXiChongShengWenJian, type ChongShengBiao } from './ying-yong/hui-hua-chong-sheng.js';
 import { chuangJianGongJuShouQuan, type ShouQuanTiao } from './ying-yong/gong-ju-shou-quan.js';
+import { chuangJianAnQuanDangWei } from './ying-yong/an-quan-dang-wei.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -2899,19 +2900,15 @@ async function lieKeYongMoXing(): Promise<string[]> {
 }
 
 /** 当前安全档位 + 「超出权限是否询问」（默认询问） */
-function anQuanDangWei(sessionId?: string): { full: boolean; ask: boolean; dang: AnquanDang } {
-  try {
-    const s = settingsStore?.load() as { globalSecurity?: string; askOnExceed?: boolean; sessionSecurity?: Record<string, string> } | undefined;
-    /* R251：授权档位按会话独立——先取本会话档位（settings.sessionSecurity），没有才回落全局默认。 */
-    const sid = String(sessionId || '');
-    const huiHuaRaw = sid ? String((s?.sessionSecurity || {})[sid] || '') : '';
-    const raw = huiHuaRaw || String(p1?.security.getMode() || s?.globalSecurity || 'normal');
-    const dang: AnquanDang = raw === 'full' ? 'full' : raw === 'strict' ? 'strict' : 'normal';
-    return { full: dang === 'full', ask: s?.askOnExceed !== false, dang };
-  } catch {
-    return { full: false, ask: true, dang: 'normal' };
-  }
-}
+/* R287 P3-3：会话安全档位＋记忆作用域规则迁 ying-yong/an-quan-dang-wei.ts（唯一 owner）；装配＋薄转发。
+ * 会话独立档位/回落顺序/异常收窄/外部群作用域全在模块内；构造无副作用。
+ * 差分 8000/8000（dev/r287/an-quan-dang-wei-cha-fen.mjs，4 fixture×2000 事件＋读仓/模式/群查询故障注入）。 */
+const anQuanDangWeiMo = chuangJianAnQuanDangWei({
+  duSheZhi: () => settingsStore?.load() as { globalSecurity?: string; askOnExceed?: boolean; sessionSecurity?: Record<string, string> } | undefined,
+  duMoShi: () => String(p1?.security.getMode() || ''),
+  chaQunLei: (sid) => groupStore?.getGroup(sid)?.type || router.getGroup(sid)?.type,
+});
+function anQuanDangWei(sessionId?: string): { full: boolean; ask: boolean; dang: AnquanDang } { return anQuanDangWeiMo.anQuanDangWei(sessionId); }
 
 /**
  * 轮询等某张请求卡被回答（400ms 一次）。
@@ -4708,16 +4705,7 @@ function xiaoDiShangXianOf(xiaoDiShuLiang?: string | number): number {
  * 单聊与内部项目只有你一个人，跨会话"永远记得"是承诺的一部分 ⇒ 不加作用域。
  * 查群类型出错时**收窄**（按本会话作用域）而不是放开：宁可这次少召回，也不越权。
  */
-function jiYiZuoYongYu(sessionId: string): { groupId: string } | undefined {
-  const sid = String(sessionId || '');
-  if (!sid) return undefined;
-  try {
-    const lei = groupStore?.getGroup(sid)?.type || router.getGroup(sid)?.type;
-    return lei === 'external' ? { groupId: sid } : undefined;
-  } catch {
-    return { groupId: sid };
-  }
-}
+function jiYiZuoYongYu(sessionId: string): { groupId: string } | undefined { return anQuanDangWeiMo.jiYiZuoYongYu(sessionId); }
 
 /**
  * **本轮真正挂给模型的工具规格**（第 44 轮后半抽成唯一入口）。
