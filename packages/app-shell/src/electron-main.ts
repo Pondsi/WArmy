@@ -131,6 +131,7 @@ import { chuangJianAnQuanDangWei } from './ying-yong/an-quan-dang-wei.js';
 import { chuangJianJsonlDouDi } from './ji-chu/jsonl-dou-di.js';
 import { asrWuYuYin, asrPcm16JingYin } from './ji-chu/asr-jing-yin.js';
 import { buZhouZhaiYao, buZhouJian, buZhouNeiRongZhaiYao } from './ji-chu/bu-zhou-zhi-wen.js';
+import { duanJiYiNorm, duanJiYiHash, shiDuanJiYiTiao, riQiKaiShi, duanJiYiShiYongFen, duanJiYiZhaoShiJian, duanJiYiYuYaoDianChongFu, RI_HAO_MIAO, DUAN_JIYI_BAN_SHUAI_RI, DUAN_JIYI_CHUANG_RI, DUAN_JIYI_ZUI_CHANG_RI } from './ji-chu/duan-ji-yi.js';
 import { yaoQiuZiShu, buZhouXuYaoZhengJu } from './ji-chu/bu-zhou-zheng-ju.js';
 import { chuangJianBuZhouZhengJuHeDui } from './ying-yong/bu-zhou-zheng-ju-he-dui.js';
 import { chuangJianZiQu } from './ying-yong/zi-qu.js';
@@ -23410,16 +23411,10 @@ function xieDuanJiYiPinLu(sessionId: string, items: Record<string, DuanJiYiPin>)
   } catch { /* 频率记不上不影响短记忆本身 */ }
 }
 /** 短记忆条目的规范化键：去空白/标点、统一小写（用于和知识条目比对、查频率） */
-function duanJiYiNorm(s: unknown): string {
-  return String(s || '').replace(/[\s\p{P}]/gu, '').toLowerCase();
-}
-function duanJiYiHash(s: unknown): string {
-  return crypto.createHash('sha1').update(duanJiYiNorm(s)).digest('hex').slice(0, 16);
-}
+/* R287 P5-5：duanJiYiNorm 迁至 ji-chu/duan-ji-yi（纯函数 import 复用） */
+/* R287 P5-5：duanJiYiHash 迁至 ji-chu/duan-ji-yi（纯函数 import 复用） */
 /** 一行是不是短记忆里的“条目”（`- xxx`） */
-function shiDuanJiYiTiao(line: string): boolean {
-  return /^\s*-\s+\S/.test(String(line || ''));
-}
+/* R287 P5-5：shiDuanJiYiTiao 迁至 ji-chu/duan-ji-yi（纯函数 import 复用） */
 /**
  * **短记忆频率的时间口径**（第 96 轮用户要求）：
  *  · 会话内容跟会话时间线走：窗口 = 最近 1000 个"有对话的活跃日"，允许跨过无对话的空档，
@@ -23429,15 +23424,8 @@ function shiDuanJiYiTiao(line: string): boolean {
  *  · 频率不是简单计数：每次使用按 180 天半衰期衰减，`score = Σ 0.5^(距今天数/180)`。
  *    这比“次数/距今”更稳：一次性很久以前的命中不会因为分母小而虚高，近期高频会自然胜出。
  */
-const RI_HAO_MIAO = 86_400_000;
-const DUAN_JIYI_BAN_SHUAI_RI = 180;
-const DUAN_JIYI_CHUANG_RI = 1000;
-const DUAN_JIYI_ZUI_CHANG_RI = 2000;
-function riQiKaiShi(ts: number): number {
-  const d = new Date(Number(ts) || Date.now());
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
+/* R287 P5-5：短记忆常量迁至 ji-chu/duan-ji-yi */
+/* R287 P5-5：riQiKaiShi 迁至 ji-chu/duan-ji-yi（纯函数 import 复用） */
 function huiHuaShiJianChuang(sessionId: string): {
   start: number; end: number; today: number; activeDays: number; capped: boolean;
 } {
@@ -23460,40 +23448,9 @@ function huiHuaShiJianChuang(sessionId: string): {
   return { start, end, today, activeDays, capped };
 }
 /** 一条事件在某窗口内的**时间衰减使用分**（useLog 优先；老数据回退 useCount/lastUsedAt） */
-function duanJiYiShiYongFen(
-  e: { useLog?: number[]; useCount?: number; lastUsedAt?: number; ts?: number },
-  chuang: { start: number; end: number; today: number; capped?: boolean },
-  huiHuaNei: boolean,
-): number {
-  const end = huiHuaNei && !chuang.capped ? chuang.end : chuang.today;
-  const start = huiHuaNei && !chuang.capped ? chuang.start : chuang.today - DUAN_JIYI_CHUANG_RI * RI_HAO_MIAO;
-  const fen = (t: number): number => {
-    const day = Math.max(0, (end - riQiKaiShi(t)) / RI_HAO_MIAO);
-    return Math.pow(0.5, day / DUAN_JIYI_BAN_SHUAI_RI);
-  };
-  const log = Array.isArray(e.useLog) ? e.useLog.filter((t) => Number(t) >= start && Number(t) <= end + RI_HAO_MIAO) : [];
-  if (log.length) return log.reduce((n, t) => n + fen(Number(t)), 0);
-  const n = Math.max(0, Number(e.useCount) || 0);
-  const last = Number(e.lastUsedAt) || Number(e.ts) || 0;
-  if (!n || !last) return 0;
-  return n * fen(last);
-}
+/* R287 P5-5：duanJiYiShiYongFen 迁至 ji-chu/duan-ji-yi（纯函数 import 复用） */
 /** 把一条短记忆文本匹配到本会话可读的知识事件（用于判断来源层/频率） */
-function duanJiYiZhaoShiJian<T extends { biaoTi?: string; result?: string }>(line: string, events: readonly T[]): T | null {
-  const k = duanJiYiNorm(line);
-  if (k.length < 6) return null;
-  let best: T | null = null;
-  let bestLen = 0;
-  for (const e of events) {
-    const t = duanJiYiNorm(String((e as { biaoTi?: string }).biaoTi || '') + String((e as { result?: string }).result || ''));
-    if (!t) continue;
-    if (t.includes(k) || k.includes(t)) {
-      const len = Math.min(k.length, t.length);
-      if (len >= 6 && len > bestLen) { best = e; bestLen = len; }
-    }
-  }
-  return best;
-}
+/* R287 P5-5：duanJiYiZhaoShiJian 迁至 ji-chu/duan-ji-yi（纯函数 import 复用） */
 /** 本会话最新总结摘要里的“要点/决策/待办/风险”行（短记忆不得和它们重复） */
 function duBenHuiHuaYaoDian(sessionId: string): string[] {
   try {
@@ -23521,14 +23478,7 @@ function duBenHuiHuaYaoDian(sessionId: string): string[] {
     return [...new Set(out.map((x) => String(x).trim()).filter((x) => x.length >= 6))];
   } catch { return []; }
 }
-function duanJiYiYuYaoDianChongFu(text: string, yaoDian: readonly string[]): boolean {
-  const k = duanJiYiNorm(text);
-  if (k.length < 6) return false;
-  return yaoDian.some((y) => {
-    const t = duanJiYiNorm(y);
-    return t.length >= 6 && (t.includes(k) || k.includes(t)) && Math.min(t.length, k.length) >= 6;
-  });
-}
+/* R287 P5-5：duanJiYiYuYaoDianChongFu 迁至 ji-chu/duan-ji-yi（纯函数 import 复用） */
 /**
  * 按使用频率压缩短记忆：总长超过上限时，从**频率最低**的条目开始丢；
  * 同频率再比 lastUsedAt（更久没用先丢），再比文件里的先后（更早的条目前丢）。
