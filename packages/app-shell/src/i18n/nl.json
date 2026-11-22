@@ -234,6 +234,8 @@
   "chat.emptyReply": "(Dit antwoord heeft geen inhoud)",
   "chat.collapseOriginal": "Korte weergave inklappen",
   "chat.expandOriginal": "Origineel tonen",
+  "chat.conciseOutput": "Beknopte uitvoer",
+  "chat.conciseOutputTip": "Lange antwoorden tonen een beknopte weergave (origineel behouden, met één klik uit te vouwen); pure technische compressie zonder modelkosten, gestructureerde versie optioneel voor ondersteunende modellen.",
   "chat.emptyReplyWhy": "Het model heeft deze beurt geen tekst teruggegeven (misschien heeft het een tool-aanroep afgerond zonder uitleg). Vraag opnieuw of formuleer anders.",
   "chat.enhanceReply": "Verbeterde antwoorden",
   "chat.enhanceReplyTip": "Je agent gebruikt dynamische inhoud om dingen begrijpelijker te maken. Dit duurt langer en gebruikt meer tokens.",

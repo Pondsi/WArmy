@@ -118,6 +118,8 @@
     nmKaiWenJian: true,
     /** 回复内容加强：牛马按内容自选文字/SVG/图表/交互页/语音讲解（更慢、更费 token） */
     enhanceReply: false,
+    /** R295 简洁输出（默认关）：勾选后长回复显示抽取式简洁视图（原文可展开），分句器/守卫由 harness 自我改进 */
+    jianJieShuChu: false,
     /** 加强 AI 语言约束：思考过程与回复严格用界面语言 */
     strictAiLanguage: false,
     soundFiles: { complete: '', request: '', error: '' },
@@ -7113,9 +7115,13 @@ async function langDuWenBen(text, btnEl) {
 
   /** 每个会话的滚动位置（切换界面再回来不丢） */
   const chatScrollPos = new Map();
-  /* R294-2 工程级简洁视图：长回复默认显示抽取式压缩视图，原文完整保留可展开（创造性零损失）。
-     启用与否由 harness 自我改进守卫 concise-view 裁决（无手动开关）；压缩器在 jian-jie-ya-suo.js（单一 owner）。 */
+  /* R294-2/R295 工程级简洁视图：长回复显示抽取式压缩视图，原文完整保留可展开（创造性零损失）。
+     R295：启用总闸＝用户三点菜单「简洁输出」勾选（默认关）；勾选后①抽取式默认（零模型成本），
+     ②结构化简洁对支持结构化模型可选（concise-structured 守卫启用时异步升级，失败回落①）；
+     分句器参数由 harness 自我改进裁决（__jianJiePeiZhi）；守卫 concise-view 裁决可自动停用/恢复。压缩器在 jian-jie-ya-suo.js（单一 owner）。 */
   let __jianJieKai = true;
+  let __jianJieJieGouKai = false;
+  let __jianJiePeiZhi = null;
   let __jianJieChaShi = 0;
   function shuaJianJieKai() {
     const now = Date.now();
@@ -7123,21 +7129,41 @@ async function langDuWenBen(text, btnEl) {
     __jianJieChaShi = now;
     try {
       window.warmy.harnessShouWei?.().then((r) => {
-        const g = ((r && r.guards) || []).find((x) => x.id === 'concise-view');
+        const lie = (r && r.guards) || [];
+        const g = lie.find((x) => x.id === 'concise-view');
         __jianJieKai = !g || g.enabled !== false;
+        const jg = lie.find((x) => x.id === 'concise-structured');
+        __jianJieJieGouKai = !!(jg && jg.enabled);
+        __jianJiePeiZhi = (r && r.fenJuQi) || null;
       }).catch(() => { /* 拿不到按启用 */ });
+    } catch { /* noop */ }
+  }
+  /* ② 结构化简洁异步升级：成功则把简洁视图换成「标题＋要点」，失败保留①抽取式（宿主记台账） */
+  function jianJieJieGouShengJi(jian, yuan, sid) {
+    try {
+      window.warmy.jianJieJieGou?.({ text: yuan, sessionId: sid }).then((r) => {
+        if (!r || !r.ok || !jian.isConnected) return;
+        const biao = String(r.title || '').trim();
+        const dian = Array.isArray(r.points) ? r.points.map((x) => String(x || '').trim()).filter(Boolean) : [];
+        if (!biao && !dian.length) return;
+        jian.innerHTML = '';
+        if (biao) { const bt = document.createElement('div'); bt.className = 'jianJieBiaoTi'; bt.textContent = biao; jian.appendChild(bt); }
+        if (dian.length) { const ul = document.createElement('ul'); ul.className = 'jianJieYaoDian'; dian.forEach((d) => { const li = document.createElement('li'); li.textContent = d; ul.appendChild(li); }); jian.appendChild(ul); }
+      }).catch(() => { /* 结构化失败保留抽取式 */ });
     } catch { /* noop */ }
   }
   function yingYongJianJieShiTu(heZi) {
     if (!heZi || !window.WarmyJianJie) return;
     shuaJianJieKai();
-    if (!__jianJieKai) return;
+    /* R295：用户「简洁输出」勾选总闸（默认关）＋守卫裁决，两者都开才生效 */
+    if (!state.jianJieShuChu || !__jianJieKai) return;
+    const sid = String(state.selectedChat && state.selectedChat.id || '');
     heZi.querySelectorAll('.xiaoXi.them .bubble').forEach((pao) => {
       if (pao.dataset.jianJieYiChu === '1') return;
       if (pao.querySelector('pre, code, img, table')) return;
       const yuan = pao.textContent || '';
       if (yuan.trim().length <= 300) return;
-      const ya = window.WarmyJianJie.jianJieYaSuo(yuan, 3);
+      const ya = window.WarmyJianJie.jianJieYaSuo(yuan, 0, __jianJiePeiZhi);
       if (!ya || ya.length >= yuan.length * 0.85) return;
       pao.dataset.jianJieYiChu = '1';
       const yuanHtml = pao.innerHTML;
@@ -7165,6 +7191,8 @@ async function langDuWenBen(text, btnEl) {
       pao.innerHTML = '';
       pao.appendChild(jian);
       pao.appendChild(an);
+      /* ② 结构化可选：守卫启用时异步升级（不阻塞渲染，失败回落①） */
+      if (__jianJieJieGouKai) jianJieJieGouShengJi(jian, yuan, sid);
     });
   }
 
@@ -11094,6 +11122,29 @@ window.__keYiLiaoTian = keYiLiaoTian;
       });
     }
     syncJia();
+    /* R295：简洁输出（勾选，默认关）——勾选后长回复显示抽取式简洁视图（原文完整保留可展开）；
+       ① 纯工程零模型成本默认，② 结构化对支持模型可选；分句器参数与守卫由 harness 自我改进裁决。 */
+    const miJian = $('caiDanTuBiaoJianJie');
+    const markJian = $('caiDanTuBiaoJianJieMark');
+    const syncJian = () => {
+      if (markJian) markJian.style.visibility = state.jianJieShuChu ? 'visible' : 'hidden';
+      if (miJian) {
+        miJian.setAttribute('aria-checked', state.jianJieShuChu ? 'true' : 'false');
+        miJian.title = tOr('chat.conciseOutputTip', '长回复默认显示简洁视图（原文完整保留，一键展开）；纯工程压缩零模型成本，支持结构化的模型可选结构化简洁。');
+      }
+    };
+    if (miJian && !miJian.dataset.bound) {
+      miJian.dataset.bound = '1';
+      miJian.addEventListener('click', async () => {
+        state.jianJieShuChu = !state.jianJieShuChu;
+        syncJian();
+        try { await window.warmy.settingsSave({ jianJieShuChu: state.jianJieShuChu }); } catch { /* noop */ }
+        /* 切换后重画聊天：开＝应用简洁视图，关＝恢复原文（原文一直在数据模型里） */
+        try { renderChat({ keepScroll: true }); } catch { /* noop */ }
+      });
+    }
+    syncJian();
+    window.__syncJian = syncJian;
     // 输入字数
     const input = $('shuRu');
     const counter = $('shuRuCounter');
@@ -39342,6 +39393,9 @@ try {
         state.mimicAutoSelect = s.settings.mimicAutoSelect !== false;
         /** 回复内容加强：默认关（只有显式存过 true 才开） */
         state.enhanceReply = s.settings.enhanceReply === true;
+        /** R295 简洁输出：默认关（只有显式存过 true 才开） */
+        state.jianJieShuChu = s.settings.jianJieShuChu === true;
+        try { window.__syncJian?.(); } catch { /* noop */ }
         state.emailOnRequest = !!s.settings.emailOnRequest;
         state.globalSecurity = s.settings.globalSecurity || 'normal';
         /* R251：加载每会话授权档位（顶部授权选项按会话独立） */

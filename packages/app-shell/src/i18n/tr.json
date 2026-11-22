@@ -234,6 +234,8 @@
   "chat.emptyReply": "(Bu yanıtın içeriği yok)",
   "chat.collapseOriginal": "Kısa görünümü daralt",
   "chat.expandOriginal": "Orijinali göster",
+  "chat.conciseOutput": "Kısa çıktı",
+  "chat.conciseOutputTip": "Uzun yanıtlar kısa görünüm gösterir (özgün metin korunur, tek tıkla genişletilir); saf mühendislik sıkıştırması, model maliyeti yok; yapılandırılmış sürüm destekleyen modeller için isteğe bağlı.",
   "chat.emptyReplyWhy": "Model bu turda metin döndürmedi (belki bir araç çağrısını açıklamadan bitirdi). Lütfen tekrar sorun veya ifadeyi değiştirin.",
   "chat.enhanceReply": "Gelişmiş yanıtlar",
   "chat.enhanceReplyTip": "Ajanınız işleri anlaşılır kılmak için dinamik içerik kullanır. Bu daha uzun sürer ve daha fazla token harcar.",

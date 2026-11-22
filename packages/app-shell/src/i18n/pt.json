@@ -234,6 +234,8 @@
   "chat.emptyReply": "(Esta resposta não tem conteúdo)",
   "chat.collapseOriginal": "Recolher vista concisa",
   "chat.expandOriginal": "Mostrar original",
+  "chat.conciseOutput": "Saída concisa",
+  "chat.conciseOutputTip": "Respostas longas mostram uma visão concisa (original mantido, expansível com um clique); compressão puramente técnica sem custo de modelo, versão estruturada opcional para modelos compatíveis.",
   "chat.emptyReplyWhy": "O modelo não retornou texto neste turno. Tente novamente.",
   "chat.enhanceReply": "Respostas aprimoradas",
   "chat.enhanceReplyTip": "Seu agente usará conteúdo dinâmico para facilitar o entendimento. Isso leva mais tempo e usa mais tokens.",

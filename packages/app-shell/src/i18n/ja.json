@@ -234,6 +234,8 @@
   "chat.emptyReply": "（この返信に内容はありません）",
   "chat.collapseOriginal": "簡潔ビューを閉じる",
   "chat.expandOriginal": "原文を表示",
+  "chat.conciseOutput": "簡潔出力",
+  "chat.conciseOutputTip": "長い返信は簡潔ビューを表示（原文は保持、ワンクリックで展開）；純粋な工学圧縮でモデルコストゼロ、構造化対応モデルは構造化簡潔を選択可。",
   "chat.emptyReplyWhy": "このターン、モデルはテキストを返しませんでした。もう一度お試しください。",
   "chat.enhanceReply": "返信を強化",
   "chat.enhanceReplyTip": "エージェントが動的なコンテンツで分かりやすく伝えます。時間とトークンがより多くかかります。",

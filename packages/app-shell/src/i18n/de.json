@@ -234,6 +234,8 @@
   "chat.emptyReply": "(Diese Antwort hat keinen Inhalt)",
   "chat.collapseOriginal": "Kurzfassung einklappen",
   "chat.expandOriginal": "Original anzeigen",
+  "chat.conciseOutput": "Kurze Ausgabe",
+  "chat.conciseOutputTip": "Lange Antworten zeigen eine Kurzfassung (Original bleibt, jederzeit aufklappbar); rein technische Kompression ohne Modellkosten, strukturierte Kurzfassung optional für Modelle mit Strukturunterstützung.",
   "chat.emptyReplyWhy": "Das Modell hat in dieser Runde keinen Text zurückgegeben (vielleicht hat es einen Tool-Aufruf beendet, ohne etwas zu erklären). Bitte frag erneut oder formuliere anders.",
   "chat.enhanceReply": "Verbesserte Antworten",
   "chat.enhanceReplyTip": "Dein Agent verwendet dynamische Inhalte, um Dinge verständlicher zu machen. Das dauert länger und verbraucht mehr Tokens.",

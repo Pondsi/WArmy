@@ -821,6 +821,8 @@ contextBridge.exposeInMainWorld('warmy', {
   xiangMuMaoYan: (p) => ipcRenderer.invoke('warmy:xiangMuMaoYan', p),
   /** R294：守卫状态（简洁视图等）——启用与否由总结自我改进裁决，无手动开关 */
   harnessShouWei: () => ipcRenderer.invoke('warmy:harnessShouWei'),
+  /** R295 ② 结构化简洁（支持结构化模型可选，守卫启用才跑；失败回落抽取式） */
+  jianJieJieGou: (p) => ipcRenderer.invoke('warmy:jianJieJieGou', p),
   onHuiHuaChongSheng: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:huiHuaChongSheng', h); return () => ipcRenderer.removeListener('warmy:huiHuaChongSheng', h); },
   daKaiBangZhuWenDang: () => ipcRenderer.invoke('warmy:daKaiBangZhuWenDang'),
   daKaiZhenDuanChuang: () => ipcRenderer.invoke('warmy:daKaiZhenDuanChuang'),

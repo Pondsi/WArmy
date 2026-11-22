@@ -234,6 +234,8 @@
   "chat.emptyReply": "(Ĉi tiu respondo ne havas enhavon)",
   "chat.collapseOriginal": "Faldi koncizan vidon",
   "chat.expandOriginal": "Montri originalon",
+  "chat.conciseOutput": "Konciza eligo",
+  "chat.conciseOutputTip": "Longaj respondoj montras koncizan vidon (originalo konservita, malfermebla per unu alklako); pura inĝeniera kunpremado sen modelkosto, strukturita versio laŭvole por subtenantaj modeloj.",
   "chat.emptyReplyWhy": "La modelo ne redonis tekston. Bonvolu reprovi.",
   "chat.enhanceReply": "Plibonigitaj respondoj",
   "chat.enhanceReplyTip": "Via agento uzos dinamikan enhavon por pli facila kompreno. Tio daŭras pli kaj uzas pli da ĵetonoj.",

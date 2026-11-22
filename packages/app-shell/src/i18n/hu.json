@@ -234,6 +234,8 @@
   "chat.emptyReply": "(Ennek a válasznak nincs tartalma)",
   "chat.collapseOriginal": "Tömör nézet összecsukása",
   "chat.expandOriginal": "Eredeti megjelenítése",
+  "chat.conciseOutput": "Tömör kimenet",
+  "chat.conciseOutputTip": "A hosszú válaszok tömör nézetet mutatnak (az eredeti megmarad, egy kattintással kibontható); tisztán mérnöki tömörítés modellköltség nélkül, strukturált verzió opcionálisan a támogató modellekhez.",
   "chat.emptyReplyWhy": "A modell ebben a körben nem adott vissza szöveget (talán egy eszközhívást fejezett be magyarázat nélkül). Kérdezz újra, vagy fogalmazz másképp.",
   "chat.enhanceReply": "Fokozott válaszok",
   "chat.enhanceReplyTip": "Az ügynököd dinamikus tartalmat használ, hogy könnyebb legyen megérteni. Ez hosszabb időt vesz igénybe és több tokent használ.",

@@ -234,6 +234,8 @@
   "chat.emptyReply": "（本条回复无内容）",
   "chat.collapseOriginal": "收起简洁视图",
   "chat.expandOriginal": "展开原文",
+  "chat.conciseOutput": "简洁输出",
+  "chat.conciseOutputTip": "长回复显示简洁视图（原文完整保留，一键展开）；纯工程压缩零模型成本，支持结构化的模型可选结构化简洁。",
   "chat.emptyReplyWhy": "本轮模型没有返回文字内容（可能是工具调用后未作说明）。请再问一次，或换个说法。",
   "chat.enhanceReply": "回复加强",
   "chat.enhanceReplyTip": "你的牛马将使用动态的内容让你更容易理解，这将需要花费更长的时间以及更多的token",

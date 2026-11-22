@@ -234,6 +234,8 @@
   "chat.emptyReply": "(Dette svar har intet indhold)",
   "chat.collapseOriginal": "Fold kort visning sammen",
   "chat.expandOriginal": "Vis original",
+  "chat.conciseOutput": "Kort output",
+  "chat.conciseOutputTip": "Lange svar viser en kort visning (original bevaret, udvides med ét klik); ren teknisk komprimering uden modelomkostning, struktureret version valgfri for modeller der understøtter det.",
   "chat.emptyReplyWhy": "Modellen returnerede ingen tekst i denne tur (måske afsluttede den et værktøjskald uden at forklare). Spørg igen eller omformulér.",
   "chat.enhanceReply": "Forbedrede svar",
   "chat.enhanceReplyTip": "Din agent bruger dynamisk indhold til at gøre tingene lettere at forstå. Det tager længere tid og bruger flere tokens.",

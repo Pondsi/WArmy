@@ -4065,6 +4065,10 @@ html { font-weight: var(--fw-ui, 400); }
 /* R294-2：长回复简洁视图（原文可展开，创造性零损失） */
 .jianJieShiTu { white-space: pre-wrap; word-break: break-word; }
 .jianJieZhanKai { margin-top: 6px; }
+/* R295 ② 结构化简洁视图（标题＋要点） */
+.jianJieBiaoTi { font-weight: 600; margin-bottom: 4px; }
+.jianJieYaoDian { margin: 0; padding-left: 18px; }
+.jianJieYaoDian li { margin: 2px 0; word-break: break-word; }
 
 /* 说话模型专属参数（语速/语音） */
 .moXingZhuanShu { display: inline-flex; align-items: center; gap: 8px; margin: 0 8px; font-size: var(--fs-xs); color: var(--muted); }

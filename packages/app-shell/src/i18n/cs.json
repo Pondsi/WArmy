@@ -234,6 +234,8 @@
   "chat.emptyReply": "(Tato odpověď nemá žádný obsah)",
   "chat.collapseOriginal": "Sbalit stručné zobrazení",
   "chat.expandOriginal": "Zobrazit originál",
+  "chat.conciseOutput": "Stručný výstup",
+  "chat.conciseOutputTip": "Dlouhé odpovědi zobrazí stručné zobrazení (originál zachován, rozbalení jedním kliknutím); čistě technická komprese bez nákladů modelu, strukturovaná verze volitelná pro podporující modely.",
   "chat.emptyReplyWhy": "Model v tomto tahu nevrátil žádný text (možná dokončil volání nástroje bez vysvětlení). Zeptejte se znovu nebo formulujte jinak.",
   "chat.enhanceReply": "Rozšířené odpovědi",
   "chat.enhanceReplyTip": "Váš agent použije dynamický obsah, aby byly věci srozumitelnější. Trvá to déle a spotřebuje více tokenů.",

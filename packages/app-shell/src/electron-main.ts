@@ -7643,6 +7643,14 @@ async function yunXingLiaoTianXunHuan(
             if ((yf.quanJiao || 0) > 0) harnessZiJinHua.jiLu({ sessionId: sidJi, guardId: 'aci-fullwidth', kind: 'fire', detail: String(yf.quanJiao) });
           }
         } catch { /* 台账失败不影响工具结果 */ }
+        /* R295：写后回读守卫进总结自我改进（write_file 成功落盘字节＝回读核证） */
+        try {
+          if (wr?.ok && wr.meta?.tool === 'write_file') {
+            const sidH = String(sessionId || '');
+            harnessZiJinHua.jiLu({ sessionId: sidH, guardId: 'guard-readback', kind: 'fire' });
+            harnessZiJinHua.jiLu({ sessionId: sidH, guardId: 'guard-readback', kind: 'save', detail: '落盘' + String(wr.meta.bytes || 0) + '字节' });
+          }
+        } catch { /* noop */ }
         // 有文件生成 ⇒ 广播给界面（自动补上「文件产物」卡片，见渲染层）
         if (wr.ok && wr.meta && (wr.meta.tool === 'write_file' || wr.meta.tool === 'make_docx' || wr.meta.tool === 'make_pptx' || wr.meta.tool === 'make_xlsx' || wr.meta.tool === 'make_pdf' || wr.meta.tool === 'edit_file' || wr.meta.tool === 'move_file' || wr.meta.tool === 'delete_file')) {
           try {
@@ -15806,7 +15814,40 @@ chuliIpc('warmy:xiangMuMaoYan', async (_e, p0?: { sessionId?: string }) => {
   return { ...r, ok: true, yanOk: r.ok };
 });
 /* R294：渲染层查守卫状态（简洁视图等）——只读暴露，裁决仍走总结自我改进 */
-chuliIpc('warmy:harnessShouWei', () => ({ ok: true, guards: harnessZiJinHua.guards }));
+chuliIpc('warmy:harnessShouWei', () => ({ ok: true, guards: harnessZiJinHua.guards, fenJuQi: harnessZiJinHua.fenJuQi }));
+/* R295 ②：结构化简洁（支持结构化模型可选）——concise-structured 守卫启用才跑；请求 JSON｛title,points｝，
+   解析成功⇒结构化视图，失败/超时⇒渲染层回落①抽取式；台账记 save/fail 供总结自我改进（净负自动停用）。 */
+chuliIpc('warmy:jianJieJieGou', async (_e, p0?: { text?: string; sessionId?: string }) => {
+  const sid = String(p0?.sessionId || '');
+  const wen = String(p0?.text || '').trim();
+  const g = harnessZiJinHua.guards.find((x) => x.id === 'concise-structured');
+  if (!g || !g.enabled) return { ok: false, error: 'guard-disabled' };
+  if (wen.length <= 300 || /```/.test(wen)) return { ok: false, error: 'not-eligible' };
+  try { harnessZiJinHua.jiLu({ sessionId: sid, guardId: 'concise-structured', kind: 'fire' }); } catch { /* noop */ }
+  const shiBai = (error: string) => { try { harnessZiJinHua.jiLu({ sessionId: sid, guardId: 'concise-structured', kind: 'fail', detail: error.slice(0, 80) }); } catch { /* noop */ } return { ok: false, error }; };
+  try {
+    const st = settingsStore?.load() as { archiveChain?: string[]; archiveModel?: string; activeProvider?: { model?: string } } | undefined;
+    const moQuan = String((st?.archiveChain || [])[0] || st?.archiveModel || st?.activeProvider?.model || '').trim();
+    const mo = moQuan.includes('·') ? moQuan.split('·').pop()!.trim() : moQuan;
+    if (!mo) return shiBai('no-model');
+    const an = await jieMoXingGongYingShang(mo);
+    if (!an || (an.protocol !== 'ollama' && !an.apiKey)) return shiBai('provider-unavailable');
+    const p = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL || undefined, protocol: an.protocol } as never, an.protocol);
+    const r = await Promise.race([
+      p.chat({ model: mo, maxTokens: 400, xiaoXiJi: [{ role: 'user', content: '把下面这段回复压缩成结构化简洁视图，只输出 JSON：{"title":"一句概括","points":["要点1","要点2","要点3"]}；要点≤5条、每条≤40字，保留关键事实，不要寒暄。\n\n' + wen.slice(0, 6000) }] }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('concise-structured-timeout')), 20000)),
+    ]);
+    const txt = neiRongWenBen((r as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0]?.message?.content) || '';
+    const m = /\{[\s\S]*\}/.exec(txt);
+    if (!m) return shiBai('bad-json');
+    const j = JSON.parse(m[0]) as { title?: unknown; points?: unknown };
+    const title = String(j.title || '').trim().slice(0, 120);
+    const points = Array.isArray(j.points) ? j.points.map((x) => String(x || '').trim().slice(0, 80)).filter(Boolean).slice(0, 5) : [];
+    if (!title && !points.length) return shiBai('empty-structure');
+    try { harnessZiJinHua.jiLu({ sessionId: sid, guardId: 'concise-structured', kind: 'save', detail: '结构化' + points.length + '要点' }); } catch { /* noop */ }
+    return { ok: true, title, points };
+  } catch (e) { return shiBai(xiJingCuoWu(e)); }
+});
 
 function jiHuaAnZhengJuZiDongYanZheng(sessionId: string, huiFu: string): number {
   try {
@@ -15822,6 +15863,11 @@ function jiHuaAnZhengJuZiDongYanZheng(sessionId: string, huiFu: string): number 
       const ju = maoYanZhengJu.get(sid);
       maoYanOk = !!ju && ju.ok && Date.now() - ju.ts < 600000;
       if (!maoYanOk) void paoXiangMuMaoYan(sid);
+      /* R295：冒烟门禁进总结自我改进——正确执行（放行有据/拦下无据）记 save（安全门禁不因净负自动停用） */
+      try {
+        harnessZiJinHua.jiLu({ sessionId: sid, guardId: 'smoke-gate', kind: 'fire' });
+        harnessZiJinHua.jiLu({ sessionId: sid, guardId: 'smoke-gate', kind: 'save', detail: maoYanOk ? '冒烟新鲜通过⇒放行verified' : '冒烟未过/未跑⇒拦下verified' });
+      } catch { /* noop */ }
     }
     let gai = 0;
     for (const b of bu) {
@@ -33144,6 +33190,9 @@ async function guiDangYiGeHuiHua(
             try {
               const cai = harnessZiJinHua.jieXiCaiJue(txt);
               if (cai.length) harnessZiJinHua.yingYongCaiJue(cai);
+              /* R295：中文分句器参数自我改进（模型裁决 splitter 字段，宿主收窄到安全范围） */
+              const fen = harnessZiJinHua.jieXiFenJuQi(txt);
+              if (fen) harnessZiJinHua.yingYongFenJuQi(fen);
             } catch { /* noop */ }
             zhengLi = harnessZiJinHua.boLiCaiJueKuai(txt.trim()) || txt.trim(); jiangJi = false; break;
           }
@@ -38325,6 +38374,11 @@ chuliIpc('warmy:huiHuaChongSheng', async (_e, p0?: { sessionId?: string }) => {
     const notice = tMain('chat.rebornNotice', '会话已经重生。聊天记录已清空；记忆、配置、成员、定时与计划任务、要求、工作区文件均保留，规范已重置。')
       + '\n上工须知：先 recall 最近交接与日志再动手；每次只改一个功能；冒烟未过不宣布完成。'
       + (maoYan.ran ? (maoYan.ok ? '\n项目冒烟：通过。' : '\n项目冒烟：未通过（' + maoYan.out.slice(0, 120) + '）——先修它再继续。') : '');
+    /* R295：接班先读交接/日志守卫进总结自我改进（上工须知发出＝守卫执行） */
+    try {
+      harnessZiJinHua.jiLu({ sessionId: sid, guardId: 'handoff-read', kind: 'fire' });
+      harnessZiJinHua.jiLu({ sessionId: sid, guardId: 'handoff-read', kind: 'save', detail: '重生上工须知已发' });
+    } catch { /* noop */ }
     const rid = xinLiaoTianJiLuId('a');
     let memSeq: number | undefined;
     try {
