@@ -106,37 +106,70 @@ export async function anZhuangBenDiShengCheng(root: string, onProgress?: (p: num
         if (crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex') === item.sha256) continue;
       } catch { /* 读不了就重下 */ }
     }
-    const res = await fetch(item.url);
-    if (!res.ok || !res.body) return { ok: false, error: 'download-failed' };
-    const hash = crypto.createHash('sha256');
-    const tmp = target + '.tmp';
-    const out = fs.createWriteStream(tmp);
-    let n = 0;
-    try {
-      const reader = res.body.getReader();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const b = Buffer.from(value);
-        hash.update(b);
-        n += b.length;
-        if (!out.write(b)) await new Promise<void>((r) => out.once('drain', () => r()));
-        onProgress?.(Math.min(99, Math.round(((yiXia + n) / 1.7e9) * 100)));
-      }
-      await new Promise<void>((r, j) => { out.end(() => r()); out.on('error', j); });
-    } catch (e) {
-      try { out.destroy(); fs.rmSync(tmp, { force: true }); } catch { /* noop */ }
-      return { ok: false, error: 'download-failed: ' + String((e as Error)?.message || e).slice(0, 120) };
-    }
-    if (hash.digest('hex') !== item.sha256) {
-      try { fs.rmSync(tmp, { force: true }); } catch { /* noop */ }
-      return { ok: false, error: 'sha256-mismatch' };
-    }
-    fs.renameSync(tmp, target);
-    yiXia += n;
+    const r = await xiaZaiWenJian(item, target, onProgress, yiXia);
+    if (!r.ok) return { ok: false, error: r.error };
+    try { yiXia += fs.statSync(target).size; } catch { /* noop */ }
   }
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ version: zhu.version, sha256: zhu.sha256, license: zhu.license }, null, 2));
   return { ok: true, version: zhu.version };
+}
+
+/** R294：大文件下载——HTTP Range 断点续传＋自动重试（1.6GB 权重在抖动网络下必须能续）。
+ *  流式落 tmp（不囤内存）；中断保留 tmp 下次续；完成后整文件 sha256 校验，过了才 rename（TOCTOU 防护）。 */
+async function xiaZaiWenJian(item: BenDiShengChengQingDan, target: string, onProgress: ((p: number) => void) | undefined, yiXia: number): Promise<{ ok: boolean; error?: string }> {
+  const tmp = target + '.tmp';
+  for (let changShi = 0; changShi < 60; changShi++) {
+    let pianYi = 0;
+    try { pianYi = fs.existsSync(tmp) ? fs.statSync(tmp).size : 0; } catch { pianYi = 0; }
+    try {
+      const headers: Record<string, string> = {};
+      if (pianYi > 0) headers['Range'] = 'bytes=' + pianYi + '-';
+      const res = await fetch(item.url, { headers });
+      if (res.status === 200 && pianYi > 0) { pianYi = 0; try { fs.rmSync(tmp, { force: true }); } catch { /* noop */ } }
+      if (!res.ok && res.status !== 206) return { ok: false, error: 'download-failed: HTTP ' + res.status };
+      if (!res.body) return { ok: false, error: 'download-failed: no-body' };
+      const out = fs.createWriteStream(tmp, { flags: pianYi > 0 ? 'a' : 'w' });
+      let n = pianYi;
+      let zhongDuan = false;
+      try {
+        const reader = res.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const b = Buffer.from(value);
+          n += b.length;
+          if (!out.write(b)) await new Promise<void>((r) => out.once('drain', () => r()));
+          onProgress?.(Math.min(99, Math.round(((yiXia + n) / 1.7e9) * 100)));
+        }
+        await new Promise<void>((r, j) => { out.end(() => r()); out.on('error', j); });
+      } catch {
+        zhongDuan = true;
+        try { out.destroy(); } catch { /* noop */ }
+      }
+      if (zhongDuan) { await new Promise((r) => setTimeout(r, 2000)); continue; }
+      /* 下载完整 ⇒ 整文件哈希（流式读，不囤 1.6GB） */
+      const hash = crypto.createHash('sha256');
+      const fd = fs.openSync(tmp, 'r');
+      const buf = Buffer.alloc(1 << 20);
+      try {
+        for (;;) {
+          const bytesRead = fs.readSync(fd, buf, 0, buf.length, null);
+          if (!bytesRead) break;
+          hash.update(buf.subarray(0, bytesRead));
+        }
+      } finally { fs.closeSync(fd); }
+      if (hash.digest('hex') !== item.sha256) {
+        try { fs.rmSync(tmp, { force: true }); } catch { /* noop */ }
+        return { ok: false, error: 'sha256-mismatch' };
+      }
+      fs.renameSync(tmp, target);
+      return { ok: true };
+    } catch {
+      await new Promise((r) => setTimeout(r, 2000));
+      continue;
+    }
+  }
+  return { ok: false, error: 'download-failed: retries-exhausted' };
 }
 
 /**
@@ -190,6 +223,43 @@ export async function anZhuangTripoSYuanMa(dir: string): Promise<{ ok: boolean; 
   for (const init of ['tsr/__init__.py', 'tsr/models/__init__.py', 'tsr/models/tokenizers/__init__.py', 'tsr/models/transformer/__init__.py']) {
     const mu = path.join(tsrDir, init);
     if (!fs.existsSync(mu)) { fs.mkdirSync(path.dirname(mu), { recursive: true }); fs.writeFileSync(mu, ''); }
+  }
+  /* R294：X.py 与 X/__init__.py 并存时目录包会遮蔽模块 ⇒ 删只含空 __init__ 的遮蔽目录 */
+  const qingLi = (dir: string): void => {
+    let lie: fs.Dirent[];
+    try { lie = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of lie) {
+      if (!e.isDirectory()) continue;
+      const p = path.join(dir, e.name);
+      qingLi(p);
+      const py = p + '.py';
+      const init = path.join(p, '__init__.py');
+      try {
+        if (fs.existsSync(py) && fs.existsSync(init) && !fs.readFileSync(init, 'utf8').trim() && fs.readdirSync(p).length === 1) {
+          fs.rmSync(p, { recursive: true, force: true });
+        }
+      } catch { /* noop */ }
+    }
+  };
+  qingLi(tsrDir);
+  /* R294：torchmcubes 需 C++ 编译，Windows 常装不上 ⇒ 随源码发 PyMCubes 兼容 shim（纯 Python，同接口） */
+  const shim = path.join(tsrDir, 'torchmcubes.py');
+  if (!fs.existsSync(shim)) {
+    fs.writeFileSync(shim, [
+      '# R294: torchmcubes compatibility shim via PyMCubes (pure Python, no C++ build).',
+      'import numpy as np',
+      'import torch',
+      'from mcubes import marching_cubes as _mc_numpy',
+      '',
+      '',
+      'def marching_cubes(level, threshold=0.0):',
+      '    vol = level.detach().cpu().numpy() if isinstance(level, torch.Tensor) else np.asarray(level)',
+      '    verts, faces = _mc_numpy(vol, threshold)',
+      '    v = torch.from_numpy(np.ascontiguousarray(verts)).float()',
+      '    f = torch.from_numpy(np.ascontiguousarray(faces)).long()',
+      '    return v, f',
+      '',
+    ].join('\n'));
   }
   /* LICENSE 随源码保留（MIT 要求） */
   try { const r = await fetch(RAW + 'LICENSE'); if (r.ok) fs.writeFileSync(path.join(tsrDir, 'LICENSE'), await r.text()); } catch { /* 不挡安装 */ }
