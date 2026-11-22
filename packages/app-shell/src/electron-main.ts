@@ -131,6 +131,7 @@ import { chuangJianGongJuShouQuan, type ShouQuanTiao } from './ying-yong/gong-ju
 import { chuangJianAnQuanDangWei } from './ying-yong/an-quan-dang-wei.js';
 import { chuangJianJsonlDouDi } from './ji-chu/jsonl-dou-di.js';
 import { chuangJianHarnessZiJinHua } from './ying-yong/harness-zi-jin-hua.js';
+import { chuangJianHuiHuaXieRu } from './ying-yong/hui-hua-xie-ru.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -1936,71 +1937,23 @@ const harnessZiJinHua = chuangJianHarnessZiJinHua({
 });
 sheZhiYuFaShouWei(() => { const g = harnessZiJinHua.guards.find((x) => x.id === 'aci-syntax'); return !g || g.enabled; });
 
-function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void {
-  // 归一后写入：去重、镜像、回读全部只认这一套角色名
-  const tiaoMu = { ...entry, role: guiYiJiaoSe(entry.role) } as LogEntry;
-  /**
-   * **内部指令不进聊天记录**（真事故：用户看到聊天里冒出「【继续执行计划】…」自己没说过的话）。
-   * 自动续派的工单只进模型上下文（chatHistories），不进会话日志（chatLogs）⇒ 界面不显示。
-   */
-  if ((entry as { hidden?: boolean }).hidden) {
-    jingXiangXieRu(key, tiaoMu.role, tiaoMu.content);
-    return;
-  }
-  /**
-   * **每一次模型回复都单独落一条**（第 110 轮硬规则）。
-   *
-   * 旧行为把自动续派轮的 assistant 回复合并进上一条（`mergeWithPrev`）：第二次“最终回复”
-   * 一旦出现，会覆盖/改写第一条已经展示给用户的回复 —— 真机表现为“之前的回复完全消失了”。
-   * 用户要求：所有模型的回复都要保留，按出现时间排序；因此这里**绝不合并正文、思考、
-   * 中间回复或行动**，续派轮也作为一条新的 assistant 消息追在后面（时间戳取落账时刻）。
-   * `mergeWithPrev` 字段保留只为兼容旧调用方，写入路径忽略它。
-   */
-  /**
-   * **纯标点/零宽不入账**（真机反馈：回答完下面多出一个只有「。」的回复）。
-   * 主进程各条写入路径都经这里，所以在入口统一拦掉 —— 任何来源的空话都不进会话日志。
-   * （JSONL 侧另有 `yiJingXieGuo`；系统提示类（system:true）如实保留。）
-   */
-  if (!tiaoMu.system && tiaoMu.role !== 'user' && String(tiaoMu.content || '').trim() && !youShiZhiWenBen(String(tiaoMu.content))) {
-    try { audit?.log('chat.punct-only-dropped', { sessionId: key, chars: String(tiaoMu.content || '').length }); } catch { /* noop */ }
-    return;
-  }
-  /**
-   * **短窗口去重**：同一条消息有两条写入路径（渲染层统一推送里补写 + 主进程自己的路径
-   * chat-send / 群聊编排里的值班记录），不去重就会在日志里出现两份 ⇒ 用户看到"消息显示 2 次"。
-   * 只对"与上一条完全相同、且 3 秒内"生效：用户真连发两句一样的话（间隔 > 3 秒）仍各显示一条。
-   */
-  {
-    const arr0 = chatLogs.get(key) || [];
-    const last = arr0[arr0.length - 1];
-    const ts = Number(tiaoMu.ts || 0) || Date.now();
-    /** 第 123 轮（用户实测「第二次对话回复出现 2 条一样」）：去重窗口 3 秒 → 10 分钟 + 归一化比较（与渲染层同口径） */
-    const guiYiBi = (s: unknown) => String((s as string) || '').replace(/\s+/g, ' ').trim();
-    if (last && last.role === tiaoMu.role && guiYiBi(last.content) === guiYiBi(tiaoMu.content) && ts - Number(last.ts || 0) < 600000) {
-      return; // 跳过：同一条消息被两条路径重复写入（窗口 10 分钟）
-    }
-  }
-  /** 新话题判断：用户消息进入时刷新话题起点（换题设点 / 回题清除 / 超 30 分钟设点） */
-  if (tiaoMu.role === 'user') void shuaXinHuaTi(key, String(tiaoMu.content || ''), Number(tiaoMu.seq) || 0);
-  const shuZu = chatLogs.get(key);
-  if (shuZu) shuZu.push(tiaoMu);
-  else chatLogs.set(key, [tiaoMu]);
-  /** 第 38 轮 项 2/8：富字段（思考/模型/词元/附件）另存旁路，重启后还能显示 */
-  try { jiLuMeta(key, tiaoMu); } catch { /* noop */ }
-  jingXiangXieRu(key, tiaoMu.role, tiaoMu.content);
-  /**
-   * 日志一写就**播给所有窗口**：对方（另一个窗口）据此重新拉一次该会话的日志。
-   * 只带 sessionId 与 seq，不带正文 —— 正文仍由渲染层按既有通道回读，
-   * 保证"看到的就是日志里那份"，不会出现第二个真相。
-   */
-  try {
-    broadcastToWindows('warmy:liaoTianUpdated', { sessionId: key, seq: (entry as { seq?: number }).seq ?? null, ts: Date.now() });
-  } catch { /* noop */ }
-  // 记忆服务不可用 ⇒ 直接落 JSONL（否则重启即丢）；服务在跑时由 memory.append 写，不重复
-  if (!memory || !(memory as { isReady?: boolean }).isReady) {
-    daBaoXieRuJsonl(key, tiaoMu.role, String(tiaoMu.content || ''));
-  }
-}
+/* R287 P3-5：会话写入主路迁 ying-yong/hui-hua-xie-ru.ts（唯一 owner）；装配＋薄转发。
+ * 规则闭包（归一/hidden/纯标点/10分钟去重/话题/旁路/镜像/广播/兜底）行为逐字保持；
+ * 差分 8000/8000（dev/r287/hui-hua-xie-ru-cha-fen.mjs，4 fixture×2000 事件＋故障注入）。 */
+const huiHuaXieRu = chuangJianHuiHuaXieRu({
+  guiYiJiaoSe,
+  youShiZhiWenBen,
+  shuaXinHuaTi: (k, c, sq) => { void shuaXinHuaTi(k, c, sq); },
+  duRiZhi: (k) => chatLogs.get(k),
+  sheRiZhi: (k, v) => { chatLogs.set(k, v); },
+  jiLuMeta: (k, e) => jiLuMeta(k, e),
+  jingXiangXieRu: (k, r, c) => jingXiangXieRu(k, r, c),
+  guangBo: (c, d) => broadcastToWindows(c, d),
+  memoryJiuXu: () => !!(memory && (memory as { isReady?: boolean }).isReady),
+  daBaoXieRuJsonl: (k, r, ti) => daBaoXieRuJsonl(k, r, ti),
+  auditLog: (op, d) => { audit?.log(op, d); },
+});
+function zhuiJiaLiaoTianRiZhi(key: string, entry: LogEntry): void { huiHuaXieRu.zhuiJiaLiaoTianRiZhi(key, entry); }
 
 /** 读会话历史（缺镜像时按需从日志派生，绝不返回第二份真相） */
 function quHuiHuaLiShi(key: string): LiaoTianXiaoXi[] {
