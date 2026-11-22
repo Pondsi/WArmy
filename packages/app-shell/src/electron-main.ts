@@ -18,6 +18,7 @@ import { zhongWenYuChuLi, yanZhengBaoHu } from './zheng-li-v3.js';
 import { chuangJianXiTongXiaoXi } from './ying-yong/xi-tong-xiao-xi.js';
 import { chuangJianEtaJiaQuJian } from './ying-yong/eta-jia-qu-jian.js';
 import { chuangJianIpcAnQuanZha } from './ji-chu/ipc-an-quan-zha.js';
+import { wenDingGongJuBiao } from './ji-chu/gong-ju-wen-ding.js';
 import { ceShiLianTong as sheJiaoCeShiLianTong, type SheJiaoPingTai } from './she-jiao-lian-tong.js';
 import { ChuanShuDuiLie, qunRuXiangJianYan, type ChuanShuZhen } from './hui-hua-chuan-shu.js';
 import { TouDiFuWu, WangLuoFaJianXiang } from './wang-luo-tou-di.js';
@@ -4794,7 +4795,8 @@ async function zuJingGongJuGuiGe(sessionId: string, xiaoDiShangXian: number, jiy
   if (fd.jieWei) {
     try { audit?.log('chat.tools.trim-list', { sessionId, zuiDuo: fd.shou, baoDi: fd.baoDi, liu: fd.liu.map((g) => g.function.name), diu: fd.diu, dianMing: [...(dianMing || [])] }); } catch { /* 审计失败不挡发送 */ }
   }
-  return fd.liu;
+  /* R291：稳定前缀——同集合下逐轮字节一致（排序＋键序规范化），最大化 prefix cache LCP。 */
+  return wenDingGongJuBiao(fd.liu);
 }
 /** 这一轮用户点名的工具（新用户轮开始时算一次；内部续派轮沿用上一次，免得续派时把用户点名的工具又裁掉） */
 const benLunDianMingGongJu = new Map<string, Set<string>>();
@@ -11944,6 +11946,17 @@ let kongzhitaiXulie = 0;
 /* R290：控制台尾环（只读，供其他智能体排障）；只存元数据，不存正文/密钥。 */
 const kztWeiHuan: Array<{ seq: number; ts: number; cat: string; code: string; data?: Record<string, unknown> }> = [];
 const KZT_WEI_SHANG = 200;
+/* R291：prefix cache 命中计量（模型无关：OpenAI/Anthropic/DeepSeek/Gemini 各自字段）。 */
+const cacheMingZhong = { hit: 0, total: 0, calls: 0 };
+function jiLuCacheMingZhong(usage: unknown): void {
+  try {
+    const u = (usage || {}) as Record<string, any>;
+    const total = Number(u.prompt_tokens ?? u.input_tokens ?? 0) || 0;
+    const hit = Number(u.prompt_tokens_details?.cached_tokens ?? u.cache_read_input_tokens ?? u.prompt_cache_hit_tokens ?? u.cached_tokens ?? 0) || 0;
+    if (total > 0) { cacheMingZhong.hit += hit; cacheMingZhong.total += total; cacheMingZhong.calls += 1; }
+  } catch { /* noop */ }
+}
+chuliIpc('warmy:cacheMingZhongLv', () => ({ ok: true, ...cacheMingZhong, lv: cacheMingZhong.total > 0 ? cacheMingZhong.hit / cacheMingZhong.total : 0 }));
 /**
  * 第 35 轮 项 12：**行动台账**（界面「执行过程」里的单行明细）。
  *
@@ -17887,6 +17900,7 @@ async function zhenZhengFaSongBen(
             throw e0;
           }
         }
+        try { jiLuCacheMingZhong((loop as { xiangYingTi?: { usage?: unknown } })?.xiangYingTi?.usage); } catch { /* noop */ }
         /**
          * **自称做不到 ⇒ 纠正并重跑一轮完整工具循环**（真机事故：模型回「我没有权限操作你的
          * 桌面文件系统」「我无法计时」，可 write_file / make_pptx / open_path / run_shell /
