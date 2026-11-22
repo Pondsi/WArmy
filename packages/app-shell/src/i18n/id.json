@@ -232,6 +232,8 @@
   "chat.editorNoChat": "Buka percakapan terlebih dahulu.",
   "chat.editorTip": "Editor teks",
   "chat.emptyReply": "(Balasan ini tidak memiliki konten)",
+  "chat.collapseOriginal": "Ciutkan tampilan ringkas",
+  "chat.expandOriginal": "Tampilkan asli",
   "chat.emptyReplyWhy": "Model tidak mengembalikan teks pada giliran ini (mungkin ia menyelesaikan panggilan alat tanpa penjelasan). Silakan tanyakan lagi atau susun ulang kalimatnya.",
   "chat.enhanceReply": "Balasan yang disempurnakan",
   "chat.enhanceReplyTip": "Agen Anda akan menggunakan konten dinamis agar lebih mudah dipahami. Ini memakan waktu lebih lama dan menggunakan lebih banyak token.",

@@ -232,6 +232,8 @@
   "chat.editorNoChat": "Open a conversation first.",
   "chat.editorTip": "Text editor",
   "chat.emptyReply": "(This reply has no content)",
+  "chat.collapseOriginal": "Collapse concise view",
+  "chat.expandOriginal": "Expand original",
   "chat.emptyReplyWhy": "The model returned no text this turn (perhaps it finished a tool call without explaining). Please ask again or rephrase.",
   "chat.enhanceReply": "Enhanced replies",
   "chat.enhanceReplyTip": "Your agent will use dynamic content to make things easier to understand. This takes longer and uses more tokens.",

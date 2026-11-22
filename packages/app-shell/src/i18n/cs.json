@@ -232,6 +232,8 @@
   "chat.editorNoChat": "Nejdříve otevřete konverzaci.",
   "chat.editorTip": "Textový editor",
   "chat.emptyReply": "(Tato odpověď nemá žádný obsah)",
+  "chat.collapseOriginal": "Sbalit stručné zobrazení",
+  "chat.expandOriginal": "Zobrazit originál",
   "chat.emptyReplyWhy": "Model v tomto tahu nevrátil žádný text (možná dokončil volání nástroje bez vysvětlení). Zeptejte se znovu nebo formulujte jinak.",
   "chat.enhanceReply": "Rozšířené odpovědi",
   "chat.enhanceReplyTip": "Váš agent použije dynamický obsah, aby byly věci srozumitelnější. Trvá to déle a spotřebuje více tokenů.",

@@ -232,6 +232,8 @@
   "chat.editorNoChat": "먼저 대화를 여세요",
   "chat.editorTip": "텍스트 편집기",
   "chat.emptyReply": "(이 응답에 내용이 없습니다)",
+  "chat.collapseOriginal": "간결 보기 접기",
+  "chat.expandOriginal": "원문 펼치기",
   "chat.emptyReplyWhy": "이번 턴에 모델이 텍스트를 반환하지 않았습니다. 다시 시도해 주세요.",
   "chat.enhanceReply": "답변 강화",
   "chat.enhanceReplyTip": "에이전트가 동적인 콘텐츠로 더 쉽게 이해하도록 돕습니다. 시간과 토큰이 더 많이 듭니다.",

@@ -15876,11 +15876,54 @@ function benCiRenWuXieZiShu(sid: string): number {
 function renWuZiShu(sid: string): number {
   return Math.max(benCiRenWuXieZiShu(sid), benCiRenWuChangWen.get(String(sid || '')) || 0);
 }
+/** R294-5 冒烟证据缓存（sid → 最近一次项目冒烟结果）；verified 门禁用它判「新鲜通过」。 */
+const maoYanZhengJu = new Map<string, { ok: boolean; ts: number; out: string }>();
+/** R294-5 项目冒烟钩子：workspace/smoke.mjs 存在即用捆绑 Node 跑（零新依赖，不内置 puppeteer）。
+ *  重生/接班即跑＋每轮验证异步补跑；结果进台账（自我改进可裁决是否保留该门禁）。 */
+async function paoXiangMuMaoYan(sessionId: string): Promise<{ ran: boolean; ok: boolean; out: string; ms: number }> {
+  const sid = String(sessionId || '');
+  const ws = workspaceDirOf(app.getPath('userData'), sid);
+  const gou = path.join(ws, 'smoke.mjs');
+  if (!sid || !fs.existsSync(gou)) return { ran: false, ok: true, out: '', ms: 0 };
+  const t0 = Date.now();
+  try {
+    const r = await paoMingLingZiJinCheng(jiexiJiedianYunxingShi().path, [gou], ws, 120000);
+    const ok = r.ok;
+    const out = String(r.out || '').slice(-1500);
+    maoYanZhengJu.set(sid, { ok, ts: Date.now(), out });
+    try { harnessZiJinHua.jiLu({ sessionId: sid, guardId: 'smoke-hook', kind: ok ? 'save' : 'fail', detail: ok ? '冒烟通过' : out.slice(0, 80) }); } catch { /* noop */ }
+    try { audit?.log('project.smoke', { sessionId: sid, ok, ms: Date.now() - t0 }); } catch { /* noop */ }
+    return { ran: true, ok, out, ms: Date.now() - t0 };
+  } catch (e) {
+    const out = xiJingCuoWu(e).slice(0, 300);
+    maoYanZhengJu.set(sid, { ok: false, ts: Date.now(), out });
+    return { ran: true, ok: false, out, ms: Date.now() - t0 };
+  }
+}
+chuliIpc('warmy:xiangMuMaoYan', async (_e, p0?: { sessionId?: string }) => {
+  const sid = String(p0?.sessionId || '');
+  if (!sid) return { ok: false, error: 'bad-session' };
+  const r = await paoXiangMuMaoYan(sid);
+  return { ...r, ok: true, yanOk: r.ok };
+});
+/* R294：渲染层查守卫状态（简洁视图等）——只读暴露，裁决仍走总结自我改进 */
+chuliIpc('warmy:harnessShouWei', () => ({ ok: true, guards: harnessZiJinHua.guards }));
+
 function jiHuaAnZhengJuZiDongYanZheng(sessionId: string, huiFu: string): number {
   try {
     const sid = String(sessionId || '');
     const bu = jiHuaRenWuJi.get(sid) || [];
     if (!bu.length) return 0;
+    /* R294-5：项目有冒烟钩子（workspace/smoke.mjs）时，verified 必须挂新鲜通过的冒烟证据；
+       没有/过期/未过 ⇒ 这轮不标 verified（不谎报完成），同时异步跑一次供下轮用。 */
+    const maoYanLu = path.join(workspaceDirOf(app.getPath('userData'), sid), 'smoke.mjs');
+    const youGouZi = fs.existsSync(maoYanLu);
+    let maoYanOk = !youGouZi;
+    if (youGouZi) {
+      const ju = maoYanZhengJu.get(sid);
+      maoYanOk = !!ju && ju.ok && Date.now() - ju.ts < 600000;
+      if (!maoYanOk) void paoXiangMuMaoYan(sid);
+    }
     let gai = 0;
     for (const b of bu) {
       /** blocked 也核对：证据在就说明其实做成了（例如续派到顶被跳过、后来又补做了） */
@@ -15888,6 +15931,7 @@ function jiHuaAnZhengJuZiDongYanZheng(sessionId: string, huiFu: string): number 
       /** 这一轮回空（例如核对轮回了 NO_REPLY）⇒ "作答"看本次任务有没有写过正文，不按空回复判没答 */
       const hd = buZhouZhengJuHeDui(sid, b, String(huiFu || '').trim() ? huiFu : undefined);
       if (!hd.renDe || hd.que.length) continue;
+      if (!maoYanOk) { b.note = '（宿主证据齐，但项目冒烟未通过/未跑 ⇒ 暂不标 verified；冒烟过后下轮自动补）'.slice(0, 300); continue; }
       b.status = 'verified';
       b.note = (hd.you.join('；') + '（宿主按工具证据自动验证）').slice(0, 300);
       gai += 1;
@@ -38420,12 +38464,16 @@ chuliIpc('warmy:huiHuaChongSheng', async (_e, p0?: { sessionId?: string }) => {
     /* 4) 清规范（短记忆：模型自己总结的）＋频率台账 */
     try { fs.rmSync(guiFanLu(sid), { force: true }); } catch { /* noop */ }
     try { fs.rmSync(guiFanLu(sid).replace(/\.md$/, '.freq.json'), { force: true }); } catch { /* noop */ }
+    /* R294-5 重生/接班：先跑项目冒烟（有钩子才跑）——防换会话后重复执行/假完工 */
+    const maoYan = await paoXiangMuMaoYan(sid);
     /* 5) 重生标记＋开头系统小字（ts 晚于标记 ⇒ 重启重建后仍在） */
     const ts = Date.now();
     const ci = (chongShengBiaoJi.get(sid)?.ci || 0) + 1;
     chongShengBiaoJi.set(sid, { ts, ci });
     baoCunChongSheng();
-    const notice = tMain('chat.rebornNotice', '会话已经重生。聊天记录已清空；记忆、配置、成员、定时与计划任务、要求、工作区文件均保留，规范已重置。');
+    const notice = tMain('chat.rebornNotice', '会话已经重生。聊天记录已清空；记忆、配置、成员、定时与计划任务、要求、工作区文件均保留，规范已重置。')
+      + '\n上工须知：先 recall 最近交接与日志再动手；每次只改一个功能；冒烟未过不宣布完成。'
+      + (maoYan.ran ? (maoYan.ok ? '\n项目冒烟：通过。' : '\n项目冒烟：未通过（' + maoYan.out.slice(0, 120) + '）——先修它再继续。') : '');
     const rid = xinLiaoTianJiLuId('a');
     let memSeq: number | undefined;
     try {

@@ -232,6 +232,8 @@
   "chat.editorNoChat": "Öppna en konversation först.",
   "chat.editorTip": "Textredigerare",
   "chat.emptyReply": "(Det här svaret har inget innehåll)",
+  "chat.collapseOriginal": "Fäll ihop kort vy",
+  "chat.expandOriginal": "Visa original",
   "chat.emptyReplyWhy": "Modellen returnerade ingen text den här vurmen (kanske avslutade den ett verktygsanrop utan att förklara). Fråga igen eller omformulera.",
   "chat.enhanceReply": "Förbättrade svar",
   "chat.enhanceReplyTip": "Din agent använder dynamiskt innehåll för att göra saker lättare att förstå. Det tar längre tid och använder fler tokens.",

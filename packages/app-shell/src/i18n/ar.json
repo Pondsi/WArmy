@@ -232,6 +232,8 @@
   "chat.editorNoChat": "افتح محادثة أولًا.",
   "chat.editorTip": "محرر نصوص",
   "chat.emptyReply": "(هذا الرد بلا محتوى)",
+  "chat.collapseOriginal": "طي العرض الموجز",
+  "chat.expandOriginal": "عرض النص الأصلي",
   "chat.emptyReplyWhy": "لم يُرجع النموذج أي نص في هذا الدور (ربما أنهى استدعاء أداة دون شرح). يرجى السؤال مجددًا أو إعادة الصياغة.",
   "chat.enhanceReply": "ردود محسّنة",
   "chat.enhanceReplyTip": "سيستخدم وكيلك محتوى ديناميكيًا لتسهيل الفهم. يستغرق هذا وقتًا أطول ويستخدم tokens أكثر.",

@@ -232,6 +232,8 @@
   "chat.editorNoChat": "先に会話を開いてください",
   "chat.editorTip": "テキストエディタ",
   "chat.emptyReply": "（この返信に内容はありません）",
+  "chat.collapseOriginal": "簡潔ビューを閉じる",
+  "chat.expandOriginal": "原文を表示",
   "chat.emptyReplyWhy": "このターン、モデルはテキストを返しませんでした。もう一度お試しください。",
   "chat.enhanceReply": "返信を強化",
   "chat.enhanceReplyTip": "エージェントが動的なコンテンツで分かりやすく伝えます。時間とトークンがより多くかかります。",

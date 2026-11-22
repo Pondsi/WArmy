@@ -7113,6 +7113,61 @@ async function langDuWenBen(text, btnEl) {
 
   /** 每个会话的滚动位置（切换界面再回来不丢） */
   const chatScrollPos = new Map();
+  /* R294-2 工程级简洁视图：长回复默认显示抽取式压缩视图，原文完整保留可展开（创造性零损失）。
+     启用与否由 harness 自我改进守卫 concise-view 裁决（无手动开关）；压缩器在 jian-jie-ya-suo.js（单一 owner）。 */
+  let __jianJieKai = true;
+  let __jianJieChaShi = 0;
+  function shuaJianJieKai() {
+    const now = Date.now();
+    if (now - __jianJieChaShi < 30000) return;
+    __jianJieChaShi = now;
+    try {
+      window.warmy.harnessShouWei?.().then((r) => {
+        const g = ((r && r.guards) || []).find((x) => x.id === 'concise-view');
+        __jianJieKai = !g || g.enabled !== false;
+      }).catch(() => { /* 拿不到按启用 */ });
+    } catch { /* noop */ }
+  }
+  function yingYongJianJieShiTu(heZi) {
+    if (!heZi || !window.WarmyJianJie) return;
+    shuaJianJieKai();
+    if (!__jianJieKai) return;
+    heZi.querySelectorAll('.xiaoXi.them .bubble').forEach((pao) => {
+      if (pao.dataset.jianJieYiChu === '1') return;
+      if (pao.querySelector('pre, code, img, table')) return;
+      const yuan = pao.textContent || '';
+      if (yuan.trim().length <= 300) return;
+      const ya = window.WarmyJianJie.jianJieYaSuo(yuan, 3);
+      if (!ya || ya.length >= yuan.length * 0.85) return;
+      pao.dataset.jianJieYiChu = '1';
+      const yuanHtml = pao.innerHTML;
+      const jian = document.createElement('div');
+      jian.className = 'jianJieShiTu';
+      jian.textContent = ya;
+      const an = document.createElement('button');
+      an.type = 'button';
+      an.className = 'anNiuXiao jianJieZhanKai';
+      an.textContent = tOr('chat.expandOriginal', '展开原文');
+      let zhan = false;
+      an.onclick = () => {
+        zhan = !zhan;
+        if (zhan) {
+          pao.innerHTML = yuanHtml;
+          pao.appendChild(an);
+          an.textContent = tOr('chat.collapseOriginal', '收起简洁视图');
+        } else {
+          pao.innerHTML = '';
+          pao.appendChild(jian);
+          pao.appendChild(an);
+          an.textContent = tOr('chat.expandOriginal', '展开原文');
+        }
+      };
+      pao.innerHTML = '';
+      pao.appendChild(jian);
+      pao.appendChild(an);
+    });
+  }
+
   function renderChat(opts) {
     try {
       const sid0 = state.selectedChat && state.selectedChat.id;
@@ -7744,6 +7799,8 @@ async function langDuWenBen(text, btnEl) {
       jinHuaShuRuFenLan();
     } catch { /* 进化块画不出来不影响聊天 */ }
     chatRendered.set(sidNow, { n: xiaoXi.length, lastTs: zuiTs });
+    /* R294-2：长回复简洁视图（原文可展开）——在滚动定位前处理，高度变化一并计入 */
+    try { yingYongJianJieShiTu(heZi); } catch { /* 简洁视图画不出不影响原文 */ }
     /**
      * 用户点执行过程/中间回复的 summary ⇒ 记住"这一次是他手动开/关的"，整块重绘后恢复。
      * 用 capture 在默认动作之前按"即将变成的状态"记账，避免和系统自动展开打架。

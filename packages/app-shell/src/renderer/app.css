@@ -4062,6 +4062,9 @@ html { font-weight: var(--fw-ui, 400); }
 .qXiangQing { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; width: 100%; }
 .qWenBenQuan { white-space: pre-wrap; word-break: break-word; width: 100%; }
 .qMoXing { display: inline-flex; gap: 2px; align-items: center; }
+/* R294-2：长回复简洁视图（原文可展开，创造性零损失） */
+.jianJieShiTu { white-space: pre-wrap; word-break: break-word; }
+.jianJieZhanKai { margin-top: 6px; }
 
 /* 说话模型专属参数（语速/语音） */
 .moXingZhuanShu { display: inline-flex; align-items: center; gap: 8px; margin: 0 8px; font-size: var(--fs-xs); color: var(--muted); }

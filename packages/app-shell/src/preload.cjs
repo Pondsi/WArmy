@@ -817,6 +817,10 @@ contextBridge.exposeInMainWorld('warmy', {
   qingChuHuiHuaNeiRong: (p) => ipcRenderer.invoke('warmy:qingChuHuiHuaNeiRong', p),
   /** R292-4：重生（仅牛马/项目）——迁移到新会话：清聊天记录/规范，保留记忆/配置/成员/定时/计划/要求/工作区 */
   huiHuaChongSheng: (p) => ipcRenderer.invoke('warmy:huiHuaChongSheng', p),
+  /** R294-5：项目冒烟钩子（workspace/smoke.mjs）——重生/接班即跑，也可手动触发 */
+  xiangMuMaoYan: (p) => ipcRenderer.invoke('warmy:xiangMuMaoYan', p),
+  /** R294：守卫状态（简洁视图等）——启用与否由总结自我改进裁决，无手动开关 */
+  harnessShouWei: () => ipcRenderer.invoke('warmy:harnessShouWei'),
   onHuiHuaChongSheng: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:huiHuaChongSheng', h); return () => ipcRenderer.removeListener('warmy:huiHuaChongSheng', h); },
   daKaiBangZhuWenDang: () => ipcRenderer.invoke('warmy:daKaiBangZhuWenDang'),
   daKaiZhenDuanChuang: () => ipcRenderer.invoke('warmy:daKaiZhenDuanChuang'),

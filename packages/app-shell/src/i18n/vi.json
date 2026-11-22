@@ -232,6 +232,8 @@
   "chat.editorNoChat": "Hãy mở một cuộc trò chuyện trước.",
   "chat.editorTip": "Trình soạn thảo văn bản",
   "chat.emptyReply": "(Phản hồi này không có nội dung)",
+  "chat.collapseOriginal": "Thu gọn xem ngắn gọn",
+  "chat.expandOriginal": "Xem bản gốc",
   "chat.emptyReplyWhy": "Mô hình không trả về văn bản trong lượt này (có thể nó đã hoàn tất lệnh gọi công cụ mà không giải thích). Hãy hỏi lại hoặc diễn đạt lại.",
   "chat.enhanceReply": "Phản hồi nâng cao",
   "chat.enhanceReplyTip": "Tác tử của bạn sẽ dùng nội dung động để làm mọi thứ dễ hiểu hơn. Việc này lâu hơn và tốn nhiều token hơn.",

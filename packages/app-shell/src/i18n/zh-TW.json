@@ -232,6 +232,8 @@
   "chat.editorNoChat": "先開啟一個會話",
   "chat.editorTip": "文字編輯器",
   "chat.emptyReply": "（本條回覆無內容）",
+  "chat.collapseOriginal": "收起簡潔視圖",
+  "chat.expandOriginal": "展開原文",
   "chat.emptyReplyWhy": "本輪模型沒有返回文字內容（可能是工具調用後未作說明）。請再問一次，或換個說法。",
   "chat.enhanceReply": "回覆加強",
   "chat.enhanceReplyTip": "你的牛馬將使用動態的內容讓你更容易理解，這將需要花費更長的時間以及更多的 token",

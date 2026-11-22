@@ -232,6 +232,8 @@
   "chat.editorNoChat": "Open eerst een gesprek.",
   "chat.editorTip": "Teksteditor",
   "chat.emptyReply": "(Dit antwoord heeft geen inhoud)",
+  "chat.collapseOriginal": "Korte weergave inklappen",
+  "chat.expandOriginal": "Origineel tonen",
   "chat.emptyReplyWhy": "Het model heeft deze beurt geen tekst teruggegeven (misschien heeft het een tool-aanroep afgerond zonder uitleg). Vraag opnieuw of formuleer anders.",
   "chat.enhanceReply": "Verbeterde antwoorden",
   "chat.enhanceReplyTip": "Je agent gebruikt dynamische inhoud om dingen begrijpelijker te maken. Dit duurt langer en gebruikt meer tokens.",

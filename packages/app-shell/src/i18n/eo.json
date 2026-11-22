@@ -232,6 +232,8 @@
   "chat.editorNoChat": "Unue malfermu konversacion",
   "chat.editorTip": "Teksta redaktilo",
   "chat.emptyReply": "(Ĉi tiu respondo ne havas enhavon)",
+  "chat.collapseOriginal": "Faldi koncizan vidon",
+  "chat.expandOriginal": "Montri originalon",
   "chat.emptyReplyWhy": "La modelo ne redonis tekston. Bonvolu reprovi.",
   "chat.enhanceReply": "Plibonigitaj respondoj",
   "chat.enhanceReplyTip": "Via agento uzos dinamikan enhavon por pli facila kompreno. Tio daŭras pli kaj uzas pli da ĵetonoj.",

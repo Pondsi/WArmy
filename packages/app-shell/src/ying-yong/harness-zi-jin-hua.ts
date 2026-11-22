@@ -13,9 +13,9 @@
  * 构造无副作用；持久化/系统消息/审计窄注入。
  */
 
-export type ShouWeiDongZuo = 'syntax-check' | 'fullwidth-scan' | 'read-back';
-/** 安全白名单：只读/建议性动作，不触碰授权/审批/写盘边界 */
-export const AN_QUAN_BAI: ShouWeiDongZuo[] = ['syntax-check', 'fullwidth-scan', 'read-back'];
+export type ShouWeiDongZuo = 'syntax-check' | 'fullwidth-scan' | 'read-back' | 'concise-view';
+/** 安全白名单：只读/建议性/视图变换动作，不触碰授权/审批/写盘边界 */
+export const AN_QUAN_BAI: ShouWeiDongZuo[] = ['syntax-check', 'fullwidth-scan', 'read-back', 'concise-view'];
 
 export interface ShouWei {
   id: string;
@@ -45,6 +45,7 @@ const MO_REN_SHOU_WEI: ShouWei[] = [
   { id: 'aci-syntax', ming: '写/改后语法检查', family: 'aci', trigger: { tool: 'write_file|edit_file', ext: '.js/.ts/.json/.mjs/.cjs' }, action: 'syntax-check', enabled: true, source: 'builtin', stats: { fires: 0, saves: 0, fails: 0 }, netTokens: 0 },
   { id: 'aci-fullwidth', ming: '代码区全角标点提示', family: 'aci', trigger: { tool: 'write_file|edit_file', ext: '.js/.ts/.json/.mjs/.cjs' }, action: 'fullwidth-scan', enabled: true, source: 'builtin', stats: { fires: 0, saves: 0, fails: 0 }, netTokens: 0 },
   { id: 'guard-readback', ming: '写后存在/字节回读', family: 'guard', trigger: { tool: 'write_file' }, action: 'read-back', enabled: true, source: 'builtin', stats: { fires: 0, saves: 0, fails: 0 }, netTokens: 0 },
+  { id: 'concise-view', ming: '长回复简洁视图（原文可展开）', family: 'aci', trigger: { tool: 'reply' }, action: 'concise-view', enabled: true, source: 'builtin', stats: { fires: 0, saves: 0, fails: 0 }, netTokens: 0 },
 ];
 const LEDGER_SHANG = 500;
 const FU_ZI_DONG_TING = -6000;

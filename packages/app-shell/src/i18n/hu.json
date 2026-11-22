@@ -232,6 +232,8 @@
   "chat.editorNoChat": "Előbb nyisson meg egy beszélgetést.",
   "chat.editorTip": "Szövegszerkesztő",
   "chat.emptyReply": "(Ennek a válasznak nincs tartalma)",
+  "chat.collapseOriginal": "Tömör nézet összecsukása",
+  "chat.expandOriginal": "Eredeti megjelenítése",
   "chat.emptyReplyWhy": "A modell ebben a körben nem adott vissza szöveget (talán egy eszközhívást fejezett be magyarázat nélkül). Kérdezz újra, vagy fogalmazz másképp.",
   "chat.enhanceReply": "Fokozott válaszok",
   "chat.enhanceReplyTip": "Az ügynököd dinamikus tartalmat használ, hogy könnyebb legyen megérteni. Ez hosszabb időt vesz igénybe és több tokent használ.",

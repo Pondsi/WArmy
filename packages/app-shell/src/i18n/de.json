@@ -232,6 +232,8 @@
   "chat.editorNoChat": "Öffnen Sie zuerst eine Konversation.",
   "chat.editorTip": "Texteditor",
   "chat.emptyReply": "(Diese Antwort hat keinen Inhalt)",
+  "chat.collapseOriginal": "Kurzfassung einklappen",
+  "chat.expandOriginal": "Original anzeigen",
   "chat.emptyReplyWhy": "Das Modell hat in dieser Runde keinen Text zurückgegeben (vielleicht hat es einen Tool-Aufruf beendet, ohne etwas zu erklären). Bitte frag erneut oder formuliere anders.",
   "chat.enhanceReply": "Verbesserte Antworten",
   "chat.enhanceReplyTip": "Dein Agent verwendet dynamische Inhalte, um Dinge verständlicher zu machen. Das dauert länger und verbraucht mehr Tokens.",

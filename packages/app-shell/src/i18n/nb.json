@@ -232,6 +232,8 @@
   "chat.editorNoChat": "Åpne en samtale først.",
   "chat.editorTip": "Tekstredigerer",
   "chat.emptyReply": "(Dette svaret har ikke noe innhold)",
+  "chat.collapseOriginal": "Slå sammen kort visning",
+  "chat.expandOriginal": "Vis original",
   "chat.emptyReplyWhy": "Modellen returnerte ingen tekst denne runden (kanskje den fullførte et verktøykall uten å forklare). Spør igjen eller omformuler.",
   "chat.enhanceReply": "Forbedrede svar",
   "chat.enhanceReplyTip": "Agenten din bruker dynamisk innhold for å gjøre ting lettere å forstå. Dette tar lengre tid og bruker flere tokens.",

@@ -232,6 +232,8 @@
   "chat.editorNoChat": "Abra uma conversa primeiro",
   "chat.editorTip": "Editor de texto",
   "chat.emptyReply": "(Esta resposta não tem conteúdo)",
+  "chat.collapseOriginal": "Recolher vista concisa",
+  "chat.expandOriginal": "Mostrar original",
   "chat.emptyReplyWhy": "O modelo não retornou texto neste turno. Tente novamente.",
   "chat.enhanceReply": "Respostas aprimoradas",
   "chat.enhanceReplyTip": "Seu agente usará conteúdo dinâmico para facilitar o entendimento. Isso leva mais tempo e usa mais tokens.",
