@@ -104,7 +104,7 @@ import { minGanLeiMing } from './yinxiang-guolv.js';
 import { jiageQingQiu, fenPeiYuSuan, JIANG_JI, tuChengBen, keYiFenCi, TU_ZHANG_SHANG_XIAN, TU_MEI_ZHANG_ZI_JIE, TU_DATA_URL_ZI_SHU, TU_JIANG_JI_BIAN_CHANG, ZHI_XING_YU_LIANG, SHI_TU_ZUI_XIAO_TOKENS, DAI_RU_CENG_ZUI_DA_ZI, ZHANG_BEN_ZUI_DA_ZI, BU_KE_YA_SUO, peizhiYuSuan, rangChuYuLiang, SHU_CHU_LIU_WEI_DI_BAO, WU_YANG_BEN_BEI_JIAN, congMingZiCaiChuangKou, MO_XING_CHUANG_KOU_DOU_DI, type JiangJiCao } from './yuSuan-jiage.js';
 import { BENG_DAO, cengOf, guiHuaYiLun, YA_SUO_BAN, YA_SUO_ZHEN, type YaSuoDuan } from './yaSuo-fenCeng.js';
 /** 长文副本判定（纯函数）：`write_file` 与 `copy_file` 共用同一套算法与放行条件，不留两份实现 */
-import { jingZiShu, chongHeLv, shiChangWenFuBen, fuBenBoHuiWen, type FuBenYueDing } from './chang-wen-fu-zhi.js';
+import { jingZiShu, chongHeLv, shiChangWenFuBen, fuBenBoHuiWen, changWenMenKan, type FuBenYueDing } from './chang-wen-fu-zhi.js';
 import { chuangjianXinTiao, XinTiao, type OsShouShiGou } from './xin-tiao.js';
 import { ShenJiRiZhi } from './audit.js';
 import { ZhenDuanRiZhi, yunXingZiJian, yingSheShenJi, type ZiJianXiang } from './zhen-duan-ri-zhi.js';
@@ -3333,10 +3333,7 @@ const benCiRenWuZiShu = new Map<string, number>();
 /** 其中**单条够长**（≥800 字）的回复合计：判"写 N 字"只认它 —— "已完成，文件在…"这类收尾汇报不是正文 */
 const benCiRenWuChangWen = new Map<string, number>();
 /** 字数按**不计空白和换行**算：`jingZiShu()` 与重合率算法一起搬进 `chang-wen-fu-zhi.ts`（纯函数、可单测），这里只 import */
-/** 多长的文件/回复才算"那篇长文"：同一任务里顺手写的短文件（「你是谁」txt）不是 */
-function changWenMenKan(yao: number): number {
-  return Math.min(800, Math.max(200, Math.round(yao * 0.12)));
-}
+/* R287 P5-4：changWenMenKan 迁至 chang-wen-fu-zhi（长文纯函数 owner，import 复用） */
 /** 本次任务的用户原话（「继续执行」这类续接消息不覆盖它 ⇒ 字数等要求在续接后仍然算数） */
 const benCiRenWuYuanWen = new Map<string, string>();
 /**

@@ -39,6 +39,11 @@ export function chongHeLv(jiu: string, xin: string): number {
 /** 多长的正文才算"那篇长文"（同一任务里顺手写的短文件不算副本） */
 export const CHANG_WEN_XIAN = 800;
 
+/** R287 P5-4：多长的文件/回复才算"那篇长文"（要求字数的 12%，收窄到 200–800）——自 electron-main 迁出，行为逐字保持 */
+export function changWenMenKan(yao: number): number {
+  return Math.min(800, Math.max(200, Math.round(yao * 0.12)));
+}
+
 export interface FuBenYueDing {
   /** 要被复制/另存出去的那份正文 */
   neiRong: string;
