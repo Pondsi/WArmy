@@ -67,6 +67,8 @@ export interface LogEntry {
   /** 本轮词元（输入/输出）——界面时间行旁显示；不进模型上下文 */
   promptTokens?: number;
   completionTokens?: number;
+  /** R292：本轮输入里**缓存命中**的词元（promptTokens 的子集）——悬停/使用量显示命中率；不进模型上下文 */
+  cachedTokens?: number;
   /**
    * **工具循环轮数**（同一发模型请求里跑了几轮工具）。
    * 界面时间行显示「输入X，输出Y · N次」；每条回复各记各的，跨回复不再累加。

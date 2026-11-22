@@ -126,6 +126,8 @@ import { xietiaoQunXiaoxi, buildStatusCard } from './orchestrator.js';
 import { projectMemoryForContext, readProjectMemory, writeProjectMemory } from './project-memory.js';
 import { AiWenTiZhongXin, AI_QUESTION_CUSTOM } from './ai-questions.js';
 import { daiHuiDuYanZheng, anGuiFanHuaQuChong, guiFanLuJingMiyao } from './read-back.js';
+import { chongShengTiaoGuo, qianYiGongZuoQu, jieXiChongShengWenJian, type ChongShengBiao } from './ying-yong/hui-hua-chong-sheng.js';
+import { chuangJianGongJuShouQuan, type ShouQuanTiao } from './ying-yong/gong-ju-shou-quan.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -1589,7 +1591,7 @@ function qingChongXieJiLu(sid?: string): void {
  * 有上限（每会话 400 条消息 / 200 条操作、最多 40 个会话），超了丢最旧 —— 这是缓存不是档案，
  * 正文永远以 JSONL 为准，所以这份文件删了也只是丢掉重启前的思考/台账显示，不会丢对话。
  */
-type ChatMetaXiaoXi = { ts: number; role: string; reasoning?: string; reasoningDuan?: Array<{ ts: number; text: string; moXing?: string }>; zhongJian?: Array<{ ts: number; text: string; moXing?: string }>; moXing?: string; moXingJiangJi?: string; promptTokens?: number; completionTokens?: number; turnCount?: number; artifacts?: unknown[]; zhengWen?: number; stopped?: boolean; evolvePair?: { expId?: string; winner?: string; mode?: string; arms?: Record<string, { history?: unknown[] }> } };
+type ChatMetaXiaoXi = { ts: number; role: string; reasoning?: string; reasoningDuan?: Array<{ ts: number; text: string; moXing?: string }>; zhongJian?: Array<{ ts: number; text: string; moXing?: string }>; moXing?: string; moXingJiangJi?: string; promptTokens?: number; completionTokens?: number; cachedTokens?: number; turnCount?: number; artifacts?: unknown[]; zhengWen?: number; stopped?: boolean; system?: boolean; evolvePair?: { expId?: string; winner?: string; mode?: string; arms?: Record<string, { history?: unknown[] }> } };
 type ChatMetaXingDong = { hao: string; tool: string; detail?: string; phase: string; ok?: boolean; ms?: number; chars?: number; ts: number; stopped?: boolean; reason?: string };
 
 /**
@@ -1668,6 +1670,23 @@ function quMetaHuiHua(sid: string): ChatMetaHuiHua {
   if (!h) { h = { msgs: [], xingDong: [] }; chatMetaBen.set(sid, h); }
   return h;
 }
+/**
+ * R292-4 重生标记（userData/rebirth.json）：sessionId → { ts, ci }。
+ * 记忆记录原样保留（记忆完整不变）；重建聊天窗口时跳过 ts 之前的 message 记录
+ * ⇒ 最近聊天记录为空。工作区走「重命名→同名新夹→复制→核对→删旧」（hui-hua-chong-sheng.ts）。
+ */
+const chongShengBiaoJi = new Map<string, ChongShengBiao>();
+function chongShengWenJianLu(): string { return path.join(app.getPath('userData'), 'rebirth.json'); }
+function duChongSheng(): void {
+  try {
+    const j = JSON.parse(fs.readFileSync(chongShengWenJianLu(), 'utf8'));
+    chongShengBiaoJi.clear();
+    for (const [k, v] of jieXiChongShengWenJian(j)) chongShengBiaoJi.set(k, v);
+  } catch { /* 没有/坏了都当空表，不影响对话 */ }
+}
+function baoCunChongSheng(): void {
+  try { anQuanYuanZiXieJson(chongShengWenJianLu(), { version: 1, sessions: Object.fromEntries(chongShengBiaoJi) }); } catch { /* 标记写失败不影响本次重生（内存里已有） */ }
+}
 /** 记一条消息的富字段（同 (角色,时间戳) 覆盖 ⇒ 续派累加的词元也是最新的） */
 function jiLuMeta(sid: string, e: LogEntry | undefined | null): void {
   if (!sid || !e) return;
@@ -1686,12 +1705,16 @@ function jiLuMeta(sid: string, e: LogEntry | undefined | null): void {
     moXingJiangJi: String((e as { moXingJiangJi?: unknown }).moXingJiangJi || ''),
     promptTokens: Number((e as { promptTokens?: number }).promptTokens || 0),
     completionTokens: Number((e as { completionTokens?: number }).completionTokens || 0),
+    /* R292：缓存命中词元随旁路落盘（重启后悬停/使用量的命中率不丢） */
+    cachedTokens: Number((e as { cachedTokens?: number }).cachedTokens || 0),
     turnCount: Number((e as { turnCount?: number }).turnCount || 0),
     artifacts: Array.isArray((e as { artifacts?: unknown[] }).artifacts) ? (e as { artifacts?: unknown[] }).artifacts : [],
     /* R274：进化并排块 payload 走旁路台账持久化（JSONL 只存正文），重启后合回 ⇒ 双栏与续发上下文不丢 */
     evolvePair: (e as { evolvePair?: ChatMetaXiaoXi['evolvePair'] }).evolvePair || undefined,
     zhengWen: String(e.content || '').length,
     ...(e.stopped === true ? { stopped: true } : {}),
+    /* R292-4：系统小字标记随旁路落盘（重生开头那行重启后仍画成居中浅色行） */
+    ...(e.system === true ? { system: true } : {}),
   };
   const i = h.msgs.findIndex(ke);
   const jiu = i >= 0 ? h.msgs[i] : undefined;
@@ -1770,6 +1793,8 @@ function yingYongMeta(sid: string): number {
   const metaYouZJ = h.msgs.some((x) => Array.isArray(x.zhongJian) && x.zhongJian.length > 0);
   /* R274：旁路里有进化并排块才需要补它 */
   const metaYouPair = h.msgs.some((x) => !!x.evolvePair);
+  /* R292-4：旁路里有系统小字标记才需要补它（重生开头那行） */
+  const metaYouXT = h.msgs.some((x) => x.system === true);
   for (const m of zhi) {
     /**
      * 「已经合过了就跳过」以前只看 `reasoning || moXing || 词元` —— **任一个有就整条跳过**。
@@ -1782,6 +1807,7 @@ function yingYongMeta(sid: string): number {
     const queDuan = !(Array.isArray(anyM.reasoningDuan) && (anyM.reasoningDuan as unknown[]).length);
     const queSiKao = !String(anyM.reasoning || '');
     const queZJ = metaYouZJ && String(m.role || '') === 'assistant' && !(Array.isArray(anyM.zhongJian) && (anyM.zhongJian as unknown[]).length);
+    const queXT = metaYouXT && String(m.role || '') === 'assistant' && anyM.system !== true;
     const quePair = metaYouPair && String(m.role || '') === 'assistant' && !anyM.evolvePair
       /* R274 回归真 bug：evolvePair 只许合回“同时间戳±4s”的那条并排块本人；
        * 按“同角色就近”会把后续普通回复误挂成并排块（界面把正常回复画成双栏）。 */
@@ -1794,7 +1820,7 @@ function yingYongMeta(sid: string): number {
     const queTing = String(m.role || '') === 'assistant' && anyM.stopped !== true
       && (h.msgs.some((x) => x.stopped === true && Math.abs(Number(x.ts || 0) - mTs) <= 5000)
         || shiTingZhiZhanWei(m.content));
-    if (!queMoXing && !queCi && !queDuan && !queSiKao && !queZJ && !queTing && !quePair) continue;
+    if (!queMoXing && !queCi && !queDuan && !queSiKao && !queZJ && !queTing && !quePair && !queXT) continue;
     const jse = String(m.role || '');
     const duiLie = (chuan[jse] || []).slice();
     const idx = xiaYin[jse] ?? 0;
@@ -1808,6 +1834,7 @@ function yingYongMeta(sid: string): number {
       || (queMoXing ? !!String(x.moXing || '') : false)
       || (queDuan ? (Array.isArray(x.reasoningDuan) && x.reasoningDuan.length > 0) : false)
       || (queZJ ? (Array.isArray(x.zhongJian) && x.zhongJian.length > 0) : false)
+      || (queXT ? x.system === true : false)
       || (quePair ? !!x.evolvePair : false)
       || (queTing ? (x.stopped === true && Math.abs(Number(x.ts || 0) - mTs) <= 5000) : false);
     const cha = (x: ChatMetaXiaoXi) => Math.abs(Number(x.ts || 0) - mTs);
@@ -1827,12 +1854,14 @@ function yingYongMeta(sid: string): number {
     if (queSiKao && zhao.reasoning) anyM.reasoning = zhao.reasoning;
     if (queDuan && Array.isArray(zhao.reasoningDuan) && zhao.reasoningDuan.length) anyM.reasoningDuan = zhao.reasoningDuan;
     if (queZJ && Array.isArray(zhao.zhongJian) && zhao.zhongJian.length) anyM.zhongJian = zhao.zhongJian;
+    if (queXT && zhao.system === true) anyM.system = true;
     if (quePair && zhao.evolvePair && Math.abs(Number(zhao.ts || 0) - mTs) <= 4000) anyM.evolvePair = zhao.evolvePair;
     if (queMoXing) anyM.moXing = zhao.moXing || '';
     if (!anyM.moXingJiangJi) anyM.moXingJiangJi = zhao.moXingJiangJi || null;
     if (queCi) {
       anyM.promptTokens = zhao.promptTokens || 0;
       anyM.completionTokens = zhao.completionTokens || 0;
+      anyM.cachedTokens = zhao.cachedTokens || 0;
     }
     if (!Number(anyM.turnCount || 0)) anyM.turnCount = zhao.turnCount || 0;
     if (Array.isArray(zhao.artifacts) && zhao.artifacts.length) anyM.artifacts = zhao.artifacts;
@@ -2044,6 +2073,8 @@ async function youJiYiHuiFuHuiHuaRiZhi(trigger: string): Promise<typeof historyR
       const key = String(r['sessionId'] ?? '');
       const seq = Number(r['seq']);
       if (!key || !Number.isFinite(seq) || seq <= 0) continue;
+      /* R292-4：重生标记之前的聊天记录不进窗口（记忆记录本身保留，recall 仍找得到） */
+      if (chongShengTiaoGuo(r as { ts?: unknown }, chongShengBiaoJi.get(key))) continue;
       if (yiShanChuHuiHuaJi.has(key) || daiShanChuHuiHua.has(key)) continue; // R241/R245：已删或延迟待删会话不恢复聊天（不回魂）
       const Lie = fenZu.get(key);
       if (Lie) Lie.push(r); else fenZu.set(key, [r]);
@@ -11305,6 +11336,8 @@ function qishiJiyiCangYibu() {
         // 不变量 #5：记忆服务的 JSONL 是唯一事实来源 → 启动即重建会话日志（ADR 002 §9.4 待办 4）
         // 第 38 轮 项 2/8：先把旁路元数据读进内存，重建完会话日志才能把思考/模型/词元/执行过程合回去
         try { duChatMeta(); } catch { /* noop */ }
+        /* R292-4：重生标记必须在重建之前读进内存（否则旧聊天会回魂） */
+        try { duChongSheng(); } catch { /* noop */ }
         return youJiYiHuiFuHuiHuaRiZhi('boot').then((r) => {
           /**
            * 第 38 轮 项 2：账本里还挂着中断标记的会话，**重启后要把"继续/重试"重新点亮**
@@ -18567,6 +18600,8 @@ async function zhenZhengFaSongBen(
         /** 词元：随日志落盘，重启后时间行旁仍可显示 */
         promptTokens: xiangYing.usage?.promptTokens || 0,
         completionTokens: xiangYing.usage?.completionTokens || 0,
+        /* R292：缓存命中词元（输入的子集）——悬停显示「输入(减缓存)/输出/缓存(命中率)」 */
+        cachedTokens: xiangYing.usage?.cacheHitTokens || 0,
       });
       /**
        * 这一轮正文已经落账 ⇒ 清掉“当前这一段正文/本轮中间回复”的快照：
@@ -22279,6 +22314,8 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
         artifacts: Array.isArray((e as { artifacts?: unknown[] }).artifacts) ? (e as { artifacts?: unknown[] }).artifacts : [],
         promptTokens: (e as { promptTokens?: number }).promptTokens || 0,
         completionTokens: (e as { completionTokens?: number }).completionTokens || 0,
+        /* R292：缓存命中词元回给渲染层（悬停/使用量统计命中率用） */
+        cachedTokens: (e as { cachedTokens?: number }).cachedTokens || 0,
         /** 第 35 轮 项 8：这一轮跑了几轮（工具循环）—— 悬停词元时要显示 */
         turnCount: Number((e as { turnCount?: number }).turnCount || 0) || 0,
         /* R261 项6：进化双支线并排块（聊天记录的一部分）必须原样带回渲染层 */
@@ -22357,11 +22394,12 @@ chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string
          * 以前这里只补 `reasoningDuan` ⇒ 旁路元数据里的 `moXing/promptTokens` 一直是空的，
          * 重启后"回复下方那行小字"就什么都没了（用户原话：重启后看不到所用模型等信息）。
          */
-        const fu = payload as unknown as { moXing?: string; promptTokens?: number; completionTokens?: number; turnCount?: number; moXingJiangJi?: string };
-        const you = last as unknown as { moXing?: string; promptTokens?: number; completionTokens?: number; turnCount?: number; moXingJiangJi?: string };
+        const fu = payload as unknown as { moXing?: string; promptTokens?: number; completionTokens?: number; cachedTokens?: number; turnCount?: number; moXingJiangJi?: string };
+        const you = last as unknown as { moXing?: string; promptTokens?: number; completionTokens?: number; cachedTokens?: number; turnCount?: number; moXingJiangJi?: string };
         if (String(fu.moXing || '')) you.moXing = String(fu.moXing);
         if (Number(fu.promptTokens || 0) > 0) you.promptTokens = Number(fu.promptTokens);
         if (Number(fu.completionTokens || 0) > 0) you.completionTokens = Number(fu.completionTokens);
+        if (Number(fu.cachedTokens || 0) > 0) you.cachedTokens = Number(fu.cachedTokens);
         if (Number(fu.turnCount || 0) > 0) you.turnCount = Number(fu.turnCount);
         if (String(fu.moXingJiangJi || '')) you.moXingJiangJi = String(fu.moXingJiangJi);
         jiLuMeta(sid, last);
@@ -22419,6 +22457,7 @@ chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string
       artifacts: Array.isArray((payload as { artifacts?: unknown[] })?.artifacts) ? (payload as { artifacts?: unknown[] }).artifacts as never : undefined,
       promptTokens: Number((payload as { promptTokens?: number })?.promptTokens || 0) || undefined,
       completionTokens: Number((payload as { completionTokens?: number })?.completionTokens || 0) || undefined,
+      cachedTokens: Number((payload as { cachedTokens?: number })?.cachedTokens || 0) || undefined,
     });
     return { ok: true, appended: true };
   } catch (e3) {
@@ -22441,6 +22480,7 @@ chuliIpc('warmy:liaoTianRiZhi', (_e, payload?: { sessionId?: string; limit?: num
         chars: e.content.length,
         promptTokens: e.promptTokens,
         completionTokens: e.completionTokens,
+        cachedTokens: e.cachedTokens,
         recordId: e.recordId || null,
         digest: neirongZhaiyao(e.content),
         ts: e.ts ?? null,
@@ -27168,147 +27208,28 @@ function ziDingGongJuJiQu(): ZiDingGongJu[] {
     return Array.isArray(a) ? a.filter((x) => x && x.name && x.command) : [];
   } catch { return []; }
 }
-function gongJuQiYongBiao(): Record<string, boolean> {
-  try {
-    const s = settingsStore?.load() as { toolEnabled?: Record<string, boolean> } | undefined;
-    return s?.toolEnabled && typeof s.toolEnabled === 'object' ? { ...s.toolEnabled } : {};
-  } catch { return {}; }
-}
+/* R287 P3-2：工具启停＋会话授权仓迁 ying-yong/gong-ju-shou-quan.ts（唯一 owner）；此处装配＋薄转发。
+ * 规则/状态/懒加载/落盘/广播全在模块内；构造无副作用，设置仓就绪前首次读写才恢复（与旧懒加载同序）。
+ * 差分 6000/6000（dev/r287/gong-ju-shou-quan-cha-fen.mjs，4 fixture×1500 事件＋读/写/广播/映射故障注入）。 */
+const gongJuShouQuan = chuangJianGongJuShouQuan({
+  duSheZhi: () => settingsStore?.load() as Record<string, unknown> | undefined,
+  xieSheZhi: (p) => { settingsStore?.save(p as never); },
+  guangBo: (c, d) => broadcastToWindows(c, d),
+  buZhouBieMing: BU_ZHOU_BIE_MING,
+  yingSheWenJianJia: yingSheYongHuWenJianJia,
+});
+function gongJuQiYongBiao(): Record<string, boolean> { return gongJuShouQuan.gongJuQiYongBiao(); }
 /** 这个工具对模型可见吗（默认可见；显式 false 才隐藏） */
-function gongJuKeJian(ming: string): boolean {
-  return gongJuQiYongBiao()[String(ming)] !== false;
-}
-
-/**
- * **授权卡**（产品要求）：每个会话一份长期授权，互不干扰。
- * 授权过的不再重复询问；可在右栏撤销。
- */
-type ShouQuanTiao = {
-  id: string; text: string; ts: number; path?: string;
-  /** 项 10：用户附件带来的"只读"授权（精确路径） */
-  du?: boolean;
-  /** 第 36 轮【项 6】：权限类别 —— 'read' 只覆盖只读工具，'write' 覆盖读+写 */
-  cls?: 'read' | 'write';
-  /** 这条授权是**对某个路径**的（按路径匹配，不按工具名） */
-  luJingQuan?: boolean;
-};
-/**
- * 只读工具集合（授权分档用）。
- * 与聊天循环里那份 `ZHI_DU_CHONG_FU` 同口径，但那份是函数内的局部常量，
- * 这里在模块层再声明一份给"授权分档"用（两边都只增不改，语义一致）。
- */
-const ZHI_DU_GONG_JU_MING = new Set([
-  'read_file', 'list_dir', 'find_files', 'search_files', 'list_archive', 'read_archive_entry',
-  'read_document', 'read_docx', 'read_pptx', 'read_xlsx', 'read_pdf', 'read_skill', 'read_profile',
-  'lsp_diagnostics', 'check_safety', 'monitor_process', 'list_subagents', 'list_plans',
-]);
-const shouQuanCang = new Map<string, ShouQuanTiao[]>();
-let shouQuanYiHuiFu = false;
-function shouQuanQu(sid: string): ShouQuanTiao[] {
-  if (!shouQuanYiHuiFu) shouQuanHuiFu();
-  return shouQuanCang.get(String(sid)) || [];
-}
-/**
- * 第 36 轮【项 6】：**授权按「路径 + 读写类别」记，不按工具名记**。
- *
- * 真机证据（用户那次"一直要授权、始终完不成"的会话，一条链上问了 10 次）：
- *   list_dir(<桌面目录>) → read_file(同一目录的文件) → read_document(同一文件)
- *   → read_pptx → write_file(同一路径) → make_pptx(同一路径) → write_file → write_file → edit_file
- * 每一次都是独立的一次「工作区外访问」询问 —— 因为旧授权键里塞了 `操作：<工具名>`，
- * 换个工具就被当成"从没授权过"。用户看到的就是"牛马一遍遍来要授权"。
- *
- * 现在：一次批准写进授权卡的是「这个路径允许读/写」，之后
- *   · 写授权覆盖读；读授权不覆盖写（写更危险，仍要问）；
- *   · 同一路径换任何工具都不再问。
- */
-function gongJuQuanLei(gongJu: string): 'read' | 'write' {
-  const m = BU_ZHOU_BIE_MING[gongJu] || gongJu;
-  return ZHI_DU_GONG_JU_MING.has(m) ? 'read' : 'write';
-}
-/** 授权卡里有没有一条"覆盖这次请求"的路径授权 */
-function luJingQuanPiPei(sid: string, abs: string, yao: 'read' | 'write'): ShouQuanTiao | null {
-  let mu = '';
-  try { mu = path.resolve(String(abs || '')); } catch { return null; }
-  if (!mu) return null;
-  for (const x of shouQuanQu(sid)) {
-    const px = String((x as { path?: string }).path || '');
-    if (!px) continue;
-    let pu = '';
-    try { pu = path.resolve(px); } catch { continue; }
-    if (pu !== mu) continue;
-    const c = (x as { cls?: string }).cls;
-    if (c === 'write') return x;
-    if (c === 'read') return yao === 'read' ? x : null;
-    /** 老条目（没有 cls）：附件带来的 du 只算读；其它老条目按"一次性"看待，不自动放行 */
-    if ((x as { du?: boolean }).du && yao === 'read') return x;
-  }
-  return null;
-}
-/** 把一次批准记成路径授权（同路径同类别只留一条） */
-function jiLuLuJingQuan(sid: string, abs: string, yao: 'read' | 'write'): void {
-  try {
-    let mu = '';
-    try { mu = path.resolve(String(abs || '')); } catch { return; }
-    if (!mu) return;
-    const list = shouQuanQu(sid);
-    const yiYou = list.find((x) => String((x as { path?: string }).path || '') && path.resolve(String((x as { path?: string }).path)) === mu
-      && ((x as { cls?: string }).cls === yao || ((x as { cls?: string }).cls === 'write' && yao === 'read')));
-    if (yiYou) return;
-    list.push({
-      id: 'lu-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-      text: (yao === 'write' ? '允许读写：' : '允许读取：') + mu,
-      ts: Date.now(),
-      path: mu,
-      cls: yao,
-      luJingQuan: true,
-    } as never);
-    shouQuanCun(sid, list);
-  } catch { /* 记账失败不影响放行 */ }
-}
-/** 授权条目的完整绝对路径：新条目登记时就存了 path；旧条目从键里解析，`Desktop/…` 映射到系统真实文件夹 */
-function shouQuanLuQuan(x: { text?: string; path?: string }): string {
-  const cun = String(x.path || '').trim();
-  if (cun) return cun;
-  const m = /(?:路径|path)[:：]\s*(.+?)(?:\s*[（(]拒绝|\s*$)/im.exec(String(x.text || ''));
-  const p0 = m && m[1] ? m[1].trim() : '';
-  if (!p0) return '';
-  if (/^[a-zA-Z]:[\\/]/.test(p0) || p0.startsWith('/') || p0.startsWith('\\\\')) return p0;
-  try {
-    const ys = yingSheYongHuWenJianJia(p0);
-    if (ys) return ys.rest ? path.join(ys.abs, ys.rest) : ys.abs;
-  } catch { /* 映射不了就原样给 */ }
-  return p0;
-}
-function shouQuanCun(sid: string, list: ShouQuanTiao[]): void {
-  if (!shouQuanYiHuiFu) shouQuanHuiFu();
-  shouQuanCang.set(String(sid), list);
-  try {
-    const s = (settingsStore?.load() as { authGrants?: Record<string, unknown> } | undefined) || {};
-    const all = (s.authGrants && typeof s.authGrants === 'object') ? { ...s.authGrants } : {};
-    all[String(sid)] = list;
-    settingsStore?.save({ authGrants: all } as never);
-  } catch { /* 落盘失败不影响本次 */ }
-  try { broadcastToWindows('warmy:shouQuanUpdated', { sessionId: String(sid) }); } catch { /* noop */ }
-}
-/**
- * 把落盘的授权读回内存。**懒加载**：启动时 settingsStore 还没建好（yindao 里才建），
- * 早调用会读空、随后第一次新授权又把落盘的整份覆盖掉 —— 所以设置仓就绪前不置位，
- * 第一次真正读写授权时再读；读回来的与内存里已有的按键合并，不丢任何一边。
- */
-function shouQuanHuiFu(): void {
-  if (!settingsStore) return;
-  shouQuanYiHuiFu = true;
-  try {
-    const s = settingsStore.load() as { authGrants?: Record<string, unknown> } | undefined;
-    const all = (s?.authGrants && typeof s.authGrants === 'object') ? s.authGrants : {};
-    for (const [sid, list] of Object.entries(all)) {
-      if (!Array.isArray(list)) continue;
-      const he = (list as ShouQuanTiao[]).filter((x) => x && typeof x.text === 'string');
-      for (const x of shouQuanCang.get(sid) || []) if (!he.some((y) => y.text === x.text)) he.push(x);
-      shouQuanCang.set(sid, he);
-    }
-  } catch { /* noop */ }
-}
+function gongJuKeJian(ming: string): boolean { return gongJuShouQuan.gongJuKeJian(ming); }
+function shouQuanQu(sid: string): ShouQuanTiao[] { return gongJuShouQuan.shouQuanQu(sid); }
+function gongJuQuanLei(gongJu: string): 'read' | 'write' { return gongJuShouQuan.gongJuQuanLei(gongJu); }
+function luJingQuanPiPei(sid: string, abs: string, yao: 'read' | 'write'): ShouQuanTiao | null { return gongJuShouQuan.luJingQuanPiPei(sid, abs, yao); }
+function jiLuLuJingQuan(sid: string, abs: string, yao: 'read' | 'write'): void { gongJuShouQuan.jiLuLuJingQuan(sid, abs, yao); }
+function shouQuanLuQuan(x: { text?: string; path?: string }): string { return gongJuShouQuan.shouQuanLuQuan(x); }
+function shouQuanCun(sid: string, list: ShouQuanTiao[]): void { gongJuShouQuan.shouQuanCun(sid, list); }
+/** 启动期显式读回（yindao 之后）；平时懒加载同走模块 */
+function shouQuanHuiFu(): void { gongJuShouQuan.shouQuanHuiFu(); }
+/* 授权规则实现已迁模块（上方装配）；旧 gongJuQuanLei/luJingQuanPiPei/jiLuLuJingQuan/shouQuanLuQuan/shouQuanCun/shouQuanHuiFu 不再留副本。 */
 /** 手动添加模型：用该供应商设置验证模型是否可用 */
 chuliIpc('warmy:shouDongMoXingYanZheng', async (_e, p0?: {
   providerId?: string; model?: string; contextLen?: number; maxOut?: number;
@@ -38433,6 +38354,64 @@ chuliIpc('warmy:qingChuHuiHuaNeiRong', (_e, p0?: { sessionId?: string }) => {
     // 待整理区条目不带会话 id，清除不动它（避免误清他会话）
     audit?.log('chat.cleared', { sessionId: sid });
     return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/**
+ * R292-4 重生：把当前会话迁移到新会话 —— 前台窗口与组网会话 id 不变；
+ * 聊天记录清空（开头写「会话已经重生」）、规范清空；
+ * 记忆/牛马配置/成员/定时任务/计划任务/要求/工作区文件全部保留（同 id 天然不动）。
+ * 仅牛马/项目（主进程再验一道）；渲染层二次确认。
+ * 工作区按用户口径：旧夹重命名 → 同名新夹 → 复制 → 核对无误 → 删旧；失败回滚并中止重生。
+ */
+chuliIpc('warmy:huiHuaChongSheng', async (_e, p0?: { sessionId?: string }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    if (!sid) return { ok: false, error: 'bad-session' };
+    const shiNiuMa = !!(p1?.instances.LieBiao() || []).find((x) => x.id === sid);
+    const g = groupStore?.getGroup(sid) as { type?: string } | undefined;
+    const shiXiangMu = !!g && g.type === 'internal';
+    if (!shiNiuMa && !shiXiangMu) return { ok: false, error: 'kind-not-allowed' };
+    /* 1) 停掉本会话正在进行的轮（不留半成品） */
+    try { await tingZhiHuiHuaNeiHe(sid, Date.now()); } catch { /* noop */ }
+    /* 2) 工作区迁移：重命名→同名新夹→复制→核对→删旧；失败回滚并中止重生（文件一份不丢） */
+    const ws = workspaceDirOf(app.getPath('userData'), sid);
+    let qianYi = false;
+    try { ({ qianYi } = await qianYiGongZuoQu(ws)); }
+    catch (e) { return { ok: false, error: 'workspace: ' + xiJingCuoWu(e) }; }
+    /* 工作区里的聊天抄本不进新会话 */
+    try { fs.rmSync(path.join(ws, 'chat.jsonl'), { force: true }); } catch { /* noop */ }
+    /* 3) 清聊天记录（记忆记录原样保留 ⇒ 记忆完整不变，recall 仍找得到旧事） */
+    chatLogs.delete(sid); chatHistories.delete(sid);
+    const h = quMetaHuiHua(sid); h.msgs = []; h.xingDong = []; delete h.jinXing;
+    for (const f of [
+      path.join(app.getPath('userData'), 'chat-logs', sid + '.jsonl'),
+      path.join(app.getPath('userData'), 'chat-logs', sid + '.json'),
+    ]) { try { fs.rmSync(f, { force: true }); } catch { /* noop */ } }
+    try { zhuSiKaoQing(sid); } catch { /* noop */ }
+    try { ZHU_LIU_SHI.delete(sid); ZHU_ZHONG_JIAN.delete(sid); } catch { /* noop */ }
+    try { benCiRenWuZiShu.delete(sid); benCiRenWuChangWen.delete(sid); } catch { /* noop */ }
+    /* 4) 清规范（短记忆：模型自己总结的）＋频率台账 */
+    try { fs.rmSync(guiFanLu(sid), { force: true }); } catch { /* noop */ }
+    try { fs.rmSync(guiFanLu(sid).replace(/\.md$/, '.freq.json'), { force: true }); } catch { /* noop */ }
+    /* 5) 重生标记＋开头系统小字（ts 晚于标记 ⇒ 重启重建后仍在） */
+    const ts = Date.now();
+    const ci = (chongShengBiaoJi.get(sid)?.ci || 0) + 1;
+    chongShengBiaoJi.set(sid, { ts, ci });
+    baoCunChongSheng();
+    const notice = tMain('chat.rebornNotice', '会话已经重生。聊天记录已清空；记忆、配置、成员、定时与计划任务、要求、工作区文件均保留，规范已重置。');
+    const rid = xinLiaoTianJiLuId('a');
+    let memSeq: number | undefined;
+    try {
+      memSeq = memSeqOf(await memory?.append({ id: rid, sessionId: sid, kind: 'message', role: 'assistant', ti: notice, groupId: sid, entityType: 'chat' }, 'duty'));
+    } catch { /* 记忆服务不可用：日志照写 */ }
+    zhuiJiaLiaoTianRiZhi(sid, {
+      seq: xiaYiLiaoTianXuLie(memSeq), role: 'assistant', content: notice,
+      system: true, ts: ts + 1, recordId: memSeq !== undefined ? rid : undefined,
+    });
+    xieChatMeta();
+    try { broadcastToWindows('warmy:huiHuaChongSheng', { sessionId: sid, ts, ci }); } catch { /* noop */ }
+    try { audit?.log('session.reborn', { sessionId: sid, ci, workspaceMigrated: qianYi }); } catch { /* noop */ }
+    return { ok: true, ts, ci };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 /** R183 项12：帮助文档做到程序里；nm 查看器启用则用 nm，否则系统默认打开。 */

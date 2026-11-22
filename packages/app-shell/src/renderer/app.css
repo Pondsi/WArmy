@@ -1168,6 +1168,17 @@ button.ddWen:hover { background: transparent !important; color: var(--ink); }
   padding: 2px 8px; cursor: pointer;
 }
 .kongZhiTaiMianBan .kongZhiTaiQingChu:hover { color: #d4d4d4; border-color: var(--accent); }
+/* R289：本机控制台＝终端观感（深色等宽、ANSI 着色、输入行） */
+#ctgKongZhiTaiShuChu {
+  background: #1e222a; color: #d4d4d4; font-family: var(--font-mono, Consolas, monospace);
+  font-size: 12px; line-height: 1.55; padding: 8px 10px; margin: 0;
+  overflow: auto; white-space: pre-wrap; word-break: break-all;
+}
+#ctgKongZhiTaiShuRu {
+  background: #1e222a; color: #d4d4d4; border: 1px solid #3a3f4a; border-radius: 6px;
+  font-family: var(--font-mono, Consolas, monospace); font-size: 12px; padding: 6px 8px;
+}
+#ctgKongZhiTaiShuRu:focus { outline: none; border-color: var(--accent, #a87654); }
 .kongZhiTaiShuChu {
   flex: 1; margin: 0; padding: 8px 10px; overflow: auto;
   font-size: var(--fs-sm); line-height: 1.4; white-space: pre-wrap;
@@ -1599,8 +1610,10 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 .duiHuaKuangBiaoTi { font-size: var(--fs-lg); font-weight: 600; margin-bottom: 8px; }
 .duiHuaKuangTi { font-size: var(--fs-base); line-height: 1.5; color: var(--ink); margin-bottom: 16px; white-space: pre-wrap; }
 .duiHuaKuangDongZuoJi { display: flex; justify-content: flex-end; gap: 8px; }
-/* R267 项1：牛马设置右上关闭按钮 */
-.niuMaSheZhiClose { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; z-index: 2; }
+/* R267 项1：牛马设置右上关闭按钮；R292-5：创建项目/群聊弹窗也用同一颗叉。
+   默认隐藏，只在带显示类的弹窗里出现（牛马设置 niuMaSheZhi / 加入创建 youGuanCha），不会漏到确认框等通用弹窗。 */
+.niuMaSheZhiClose { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; display: none; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; z-index: 2; }
+.duiHuaKuangGen.niuMaSheZhi .niuMaSheZhiClose, .duiHuaKuangGen.youGuanCha .niuMaSheZhiClose { display: flex; }
 .niuMaSheZhiClose:hover { background: var(--hover); color: var(--ink); }
 .niuMaSheZhiClose svg { width: 14px; height: 14px; }
 .duiHuaKuangDongZuoJi button { min-width: 72px; }
