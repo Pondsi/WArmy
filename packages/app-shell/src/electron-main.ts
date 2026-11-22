@@ -135,6 +135,7 @@ import { chuangJianHuiHuaXieRu } from './ying-yong/hui-hua-xie-ru.js';
 import { chuangJianGongJuZhuangPei } from './ying-yong/gong-ju-zhuang-pei.js';
 import { chuangJianMimicPeiZhi } from './ying-yong/mimic-pei-zhi.js';
 import { chuangJianZiDongGuiDang } from './ying-yong/zi-dong-gui-dang.js';
+import { chuangJianGuiDangYouBiao, type GuiDangYouBiaoJi } from './ying-yong/gui-dang-you-biao.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -33031,22 +33032,16 @@ chuliIpc('warmy:zhiShiKuCongLiaoTian', (_e, payload: { sessionId: string; biaoTi
    绝不每次都从头再做一遍 —— 否则既浪费调用，又会往知识库里塞重复条目。
    ══════════════════════════════════════════════════════════════════════ */
 
-/** 总结游标：sessionId → 上次总结到的最后一条消息的 seq/ts */
-type GuiDangYouBiaoJi = Record<string, number>;
-function guiDangYouBiaoQu(): GuiDangYouBiaoJi {
-  try {
-    const s = settingsStore?.load() as { archiveCursors?: GuiDangYouBiaoJi } | undefined;
-    return (s?.archiveCursors && typeof s.archiveCursors === 'object') ? { ...s.archiveCursors } : {};
-  } catch { return {}; }
-}
-function guiDangYouBiaoCun(next: GuiDangYouBiaoJi): void {
-  try { settingsStore?.save({ archiveCursors: next } as never); } catch { /* 游标写失败不影响本次总结 */ }
-}
+/* R287 P4-4：归档游标唯一 owner 迁至 ying-yong/gui-dang-you-biao（游标读写＋消息时间戳提取逐字保持）；
+   此处仅装配窄注入＋薄转发。设置快照读写仍主进程持有；游标写失败不影响本次总结；构造无副作用。 */
+const guiDangYouBiao = chuangJianGuiDangYouBiao({
+  duSheZhi: () => settingsStore?.load(),
+  cunSheZhi: (j) => { settingsStore?.save(j as never); },
+});
+function guiDangYouBiaoQu(): GuiDangYouBiaoJi { return guiDangYouBiao.guiDangYouBiaoQu(); }
+function guiDangYouBiaoCun(next: GuiDangYouBiaoJi): void { guiDangYouBiao.guiDangYouBiaoCun(next); }
 /** 一条消息的时间戳（用来推进游标）：优先 seq，没有就用 ts */
-function xiaoXiShiJian(x: { seq?: number | string; ts?: number | string } | null | undefined): number {
-  const n = Number(x && (x.seq ?? x.ts)) || 0;
-  return n;
-}
+function xiaoXiShiJian(x: { seq?: number | string; ts?: number | string } | null | undefined): number { return guiDangYouBiao.xiaoXiShiJian(x); }
 
 /**
  * 总结一个会话的**新增**内容进知识库。
