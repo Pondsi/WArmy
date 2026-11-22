@@ -23,6 +23,23 @@ donate, you always have full use of everything in this project. A donation is si
 - **Français**：Merci à tous ceux qui soutiennent ce projet. C'est grâce à vous qu'il continue d'avancer.
 - **Português**：Obrigado a todos que apoiam este projeto. Vocês são o motivo de ele continuar.
 - **Esperanto**：Dankon al ĉiuj, kiuj subtenas ĉi tiun projekton. Vi estas la kialo, ke ĝi daŭras.
+- **العربية**：شكرًا لكل من يدعم هذا المشروع. أنتم السبب في استمراره.
+- **Čeština**：Děkujeme všem, kteří tento projekt podporují. Díky vám pokračuje dál.
+- **Dansk**：Tak til alle, der støtter dette projekt. I er grunden til, at det fortsætter.
+- **Deutsch**：Danke an alle, die dieses Projekt unterstützen. Ihr seid der Grund, dass es weitergeht.
+- **فارسی**：سپاس از همه کسانی که از این پروژه حمایت می‌کنند. شما دلیل ادامهٔ آن هستید.
+- **हिन्दी**：इस परियोजना का समर्थन करने वाले हर व्यक्ति को धन्यवाद। आप ही इसे आगे बढ़ाते हैं।
+- **Magyar**：Köszönet mindenkinek, aki támogatja ezt a projektet. Miattatok folytatódhat.
+- **Bahasa Indonesia**：Terima kasih kepada semua yang mendukung proyek ini. Kalianlah alasan ia terus berjalan.
+- **Italiano**：Grazie a chiunque sostenga questo progetto. Siete voi la ragione per cui continua.
+- **Norsk bokmål**：Takk til alle som støtter dette prosjektet. Dere er grunnen til at det fortsetter.
+- **Nederlands**：Dank aan iedereen die dit project steunt. Jullie zijn de reden dat het doorgaat.
+- **Polski**：Dziękujemy wszystkim, którzy wspierają ten projekt. To dzięki wam trwa dalej.
+- **Svenska**：Tack till alla som stöttar detta projekt. Ni är anledningen till att det fortsätter.
+- **ไทย**：ขอบคุณทุกคนที่สนับสนุนโครงการนี้ คุณคือเหตุผลที่มันเดินหน้าต่อ
+- **Türkçe**：Bu projeyi destekleyen herkese teşekkürler. Devam etmesinin sebebi sizsiniz.
+- **Українська**：Дякуємо всім, хто підтримує цей проєкт. Саме ви допомагаєте йому розвиватися.
+- **Tiếng Việt**：Cảm ơn mọi người đã ủng hộ dự án này. Chính các bạn là lý do nó tiếp tục.
 
 ---
 

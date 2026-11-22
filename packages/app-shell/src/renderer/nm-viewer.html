@@ -80,6 +80,15 @@
         </span>
         <!-- 结果数 = 展开/收起替换的按钮（点它才出现替换输入与替换按钮）；无匹配时只显示图标 -->
         <button id="souJi" class="souJiAnNiu" title="展开 / 收起替换" aria-expanded="false" aria-controls="tiHuanZu">0/0</button>
+        <!-- R288 项7：聊天编辑模式的话筒+箭头（与聊天框同选项/快捷键）；重组仅对本次输入生效 -->
+        <span id="bianJiYuYinZu" hidden style="display:inline-flex;align-items:center;gap:2px;">
+          <button id="bjYuYin" class="tb2" title="语音输入（F6 / Ctrl+Space）" aria-label="语音输入">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 2.2a2 2 0 0 1 2 2v3.6a2 2 0 0 1-4 0V4.2a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4.4 7.8a3.6 3.6 0 0 0 7.2 0M8 11.4v2.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </button>
+          <button id="bjYuYinXiaLa" class="tb2" title="语音选项" aria-label="语音选项" aria-haspopup="menu">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </span>
         <span id="tiHuanZu" hidden>
           <input id="tiHuanRu" type="text" placeholder="替换为…" autocomplete="off" spellcheck="false" aria-label="替换为"/>
           <button id="anNiuTiHuan" class="tb2" title="替换当前匹配（需要先有搜索结果且文件可编辑）" aria-label="替换" disabled>

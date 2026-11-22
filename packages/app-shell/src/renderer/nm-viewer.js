@@ -5470,3 +5470,77 @@ setInterval(hui,1000);hui();
       } catch (e) { zhuangTaiWen('打开失败：' + String((e && e.message) || e)); }
     });
   })();
+
+  /* R288 项7：聊天编辑模式话筒+箭头。与聊天框同选项/快捷键；
+   * 区别：语言重组/特效**只对本次输入**（点话筒→停止之间新增的片段）生效，不碰已有内容。 */
+  (function bindBianJiYuYin() {
+    if (!chatEditor) return;
+    const zu = el('bianJiYuYinZu'), mic = el('bjYuYin'), trig = el('bjYuYinXiaLa'), ta = el('wenBen');
+    if (!zu || !mic || !trig || !ta) return;
+    zu.hidden = false;
+    let chongZu = true, ziDong = false;
+    let rec = null, stream = null, chunks = [], mime = '', segStart = 0, stopping = false;
+    const menu = document.createElement('div');
+    menu.className = 'bjYuYinCaiDan';
+    menu.style.cssText = 'position:fixed;z-index:13000;min-width:180px;background:var(--card,#2a2d36);border:1px solid var(--line,#444);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.25);padding:8px;display:none;';
+    menu.innerHTML = '<label style="display:flex;gap:6px;align-items:center;margin:4px 0;"><input type="checkbox" id="bjChongZu">语言重组V3（仅本次输入）</label>' +
+      '<label style="display:flex;gap:6px;align-items:center;margin:4px 0;"><input type="checkbox" id="bjZiDong">自动发送</label>';
+    document.body.appendChild(menu);
+    const cC = menu.querySelector('#bjChongZu'), cZ = menu.querySelector('#bjZiDong');
+    const baoCun = (p) => { try { void window.warmy.settingsSave?.(p); } catch { /* noop */ } };
+    cC.addEventListener('change', () => { chongZu = !!cC.checked; baoCun({ yuYinChongZu: chongZu }); });
+    cZ.addEventListener('change', () => { ziDong = !!cZ.checked; baoCun({ yuYinZiDongFaSong: ziDong }); });
+    (async () => { try { const s = await window.warmy.settingsGet?.(); const st = (s && s.settings) || {}; chongZu = st.yuYinChongZu !== false; ziDong = st.yuYinZiDongFaSong === true; } catch { /* 默认 */ } cC.checked = chongZu; cZ.checked = ziDong; })();
+    const kaiMenu = (k) => { menu.style.display = k ? 'block' : 'none'; if (k) { const r = trig.getBoundingClientRect(); menu.style.left = Math.min(r.left, window.innerWidth - 200) + 'px'; menu.style.top = (r.bottom + 4) + 'px'; } };
+    trig.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); kaiMenu(menu.style.display === 'none'); });
+    document.addEventListener('click', (e) => { if (menu.style.display !== 'none' && !menu.contains(e.target) && !trig.contains(e.target)) kaiMenu(false); }, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') kaiMenu(false); });
+    const b64 = async (blob) => { const buf = await blob.arrayBuffer(); const by = new Uint8Array(buf); let bin = ''; for (let i = 0; i < by.length; i += 0x8000) bin += String.fromCharCode(...by.subarray(i, i + 0x8000)); return btoa(bin); };
+    async function tingXie() {
+      if (!chunks.length) return;
+      const blob = new Blob(chunks, { type: mime || 'audio/webm' });
+      const ext = /wav/.test(mime) ? 'wav' : 'webm';
+      const r = await window.warmy.asrTranscribe?.({ dataUrl: 'data:audio/' + ext + ';base64,' + await b64(blob), ext }).catch(() => null);
+      const wen = String((r && r.ok && r.text) || '').trim();
+      if (!wen) return;
+      /* 追加到本次输入片段末尾 */
+      const qian = ta.value.slice(0, segStart);
+      const cur = ta.value.slice(segStart);
+      ta.value = qian + (cur ? cur + ' ' : '') + wen;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      /* R288：重组只作用于本次输入片段 [segStart, end) */
+      if (chongZu) {
+        const seg = ta.value.slice(segStart);
+        if (seg.trim()) {
+          ta.classList.add('bjZhengLiZhong');
+          const zl = await window.warmy.zhengLiWenBen?.({ text: seg }).catch(() => null);
+          if (zl && zl.ok && String(zl.text || '').trim()) {
+            ta.value = ta.value.slice(0, segStart) + String(zl.text).trim();
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          setTimeout(() => ta.classList.remove('bjZhengLiZhong'), 900);
+        }
+      }
+      if (ziDong) { try { await window.warmy.chatEditorFaSong?.(); } catch { /* noop */ } }
+    }
+    function stop() { stopping = true; try { rec && rec.stop(); } catch { /* noop */ } try { stream && stream.getTracks().forEach((t) => t.stop()); } catch { /* noop */ } mic.setAttribute('aria-pressed', 'false'); }
+    async function start() {
+      if (!navigator.mediaDevices?.getUserMedia) { zhuangTaiWen('当前环境不支持麦克风'); return; }
+      try { void window.warmy.yuYinYuJiaZai?.(); } catch { /* noop */ } /* R285-2 预载 */
+      segStart = ta.value.length; chunks = []; stopping = false;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: true } });
+        const qian = ['audio/wav', 'audio/webm;codecs=opus', 'audio/webm'];
+        mime = qian.find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
+        rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        mime = String(rec.mimeType || mime);
+        rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.onstop = () => { void tingXie(); };
+        rec.start(3000);
+        mic.setAttribute('aria-pressed', 'true');
+      } catch (e) { zhuangTaiWen('打不开麦克风：' + String((e && e.message) || e)); stream = null; rec = null; }
+    }
+    mic.addEventListener('click', () => { if (rec && !stopping) stop(); else if (!rec || stopping) { rec = null; void start(); } });
+    /* 与聊天框同快捷键：F6 / Ctrl+Space */
+    document.addEventListener('keydown', (e) => { if (e.key === 'F6' || (e.ctrlKey && e.code === 'Space')) { e.preventDefault(); mic.click(); } });
+  })();

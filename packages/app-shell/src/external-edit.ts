@@ -80,6 +80,23 @@ export class WaiBuBianJiGuanLiQi {
     this.audit = opts.audit || (() => {});
     this.onStatus = opts.onStatus || (() => {});
     try { fs.mkdirSync(this.manifestDir, { recursive: true, mode: 0o700 }); } catch { /* noop */ }
+    /* R288 项5：主动巡检——原文件一旦被删，立即删除外部副本（不等用户点按钮），
+     * 避免明文副本继续留在外部编辑器里。unref 不阻止进程退出。 */
+    const t = setInterval(() => { this.jianChaYuanShan(); }, 2000);
+    (t as { unref?: () => void }).unref?.();
+  }
+
+  /** R288 项5：原文件已不存在的外部编辑会话 ⇒ 立即丢弃并删除副本。 */
+  private jianChaYuanShan(): void {
+    for (const [id, st] of [...this.states]) {
+      if (st.state !== 'open') continue;
+      try {
+        if (!fs.existsSync(st.original)) {
+          this.audit('workspace.external-edit-original-deleted', { original: st.original });
+          this.finish(id, true);
+        }
+      } catch { /* 巡检失败不影响其它 */ }
+    }
   }
 
   list(): WaiBuBianJiZhuangTai[] { return [...this.states.values()]; }
@@ -203,7 +220,12 @@ export class WaiBuBianJiGuanLiQi {
     try {
       if (writeBack) {
         if (!anQuanZai(this.root, man.original)) throw new Error('workspace-escape');
-        if (fs.existsSync(man.temp)) {
+        if (!fs.existsSync(man.original)) {
+          /* R288 项5：原文件在编辑期间被删除 ⇒ 不写回、立即删除外部副本（finally 清理），
+           * 旧版会误判 conflict-original-changed 而保留副本，导致编辑器里明文关不掉。 */
+          state.state = 'discarded';
+          this.audit('workspace.external-edit-original-deleted', { original: man.original, mode: 'explicit-session' });
+        } else if (fs.existsSync(man.temp)) {
           const nowHash = sha256File(man.temp);
           if (!nowHash) throw new Error('temp-unreadable');
           if (nowHash !== man.originalHash) {
