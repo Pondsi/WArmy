@@ -133,6 +133,7 @@ import { chuangJianHarnessZiJinHua } from './ying-yong/harness-zi-jin-hua.js';
 import { chuangJianHuiHuaXieRu } from './ying-yong/hui-hua-xie-ru.js';
 import { chuangJianGongJuZhuangPei } from './ying-yong/gong-ju-zhuang-pei.js';
 import { chuangJianMimicPeiZhi } from './ying-yong/mimic-pei-zhi.js';
+import { chuangJianZiDongGuiDang } from './ying-yong/zi-dong-gui-dang.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -38754,53 +38755,20 @@ chuliIpc('warmy:huiHuaZhaiYao', async (_e, payload?: { sessionId?: string; auto?
   return shengChengHuiHuaZhaiYao(sid, !!payload?.auto);
 });
 
-/**
- * **每总结一次的进度锚**（sessionId → 总结时的日志序号），用来判"又攒够一轮新的了没"。
- */
-const guiDangZuiHouXu = new Map<string, number>();
-/**
- * **长对话要自动总结**（产品要求：聊天记录涨到 10M 也不许"忘记中间"）。
- *
- * 实测缺陷（第 17 轮记忆压测）：总结摘要原来**只有渲染层在"这个会话被选中且空闲 3 分钟"
- * 时**才会被触发生成 —— 用户切到别的会话、或一直在连续对话，就永远不总结，
- * 于是"更早的对话"永远是空的，注入上下文也就无从谈起。
- * 现在改由**主进程**在每轮结束时按需触发（与界面焦点无关）：
- *   · 关了「自动摘要」的用户完全不触发（尊重开关）；
- *   · 每攒够 `GUI_DANG_MEI_LUN` 条新日志才归一次，不会把总结写爆；
- *   · 只在本轮**真的收了尾**之后触发（不打断续派），且失败只记审计、不影响对话。
- */
-const GUI_DANG_MEI_LUN = 30;
-async function ziDongGuiDangRuGuoXuYao(sessionId: string): Promise<void> {
-  try {
-    const k = String(sessionId || '');
-    if (!k) return;
-    if ((settingsStore?.load() as { autoSummary?: boolean } | undefined)?.autoSummary === false) return;
-    const rizhi = chatLogs.get(k) || [];
-    if (rizhi.length < GUI_DANG_MEI_LUN + 10) return;
-    const zuiHou = Number(rizhi[rizhi.length - 1]?.seq || 0) || chatLogSeq;
-    const shangCi = guiDangZuiHouXu.get(k) || 0;
-    if (zuiHou - shangCi < GUI_DANG_MEI_LUN) return;
-    guiDangZuiHouXu.set(k, zuiHou);
-    /**
-     * **自动总结 = 立即总结的同一管线**（用户定稿）：以前自动只调摘要核心、手动只调知识条目，
-     * 两边各写一半（`kind:'archive'`/锚点 只在自动那路，印象归纳/产物登记 只在手动那路）⇒
-     * 同一个"总结"两种结果。现在自动入口只调 `guiDangYiGeHuiHua`，它内部再调摘要核心。
-     */
-    const r = await guiDangYiGeHuiHua(k, { auto: true });
-    /* R272 项9：总结调用链均不可用⇒系统消息（不弹窗）；模型异常不影响程序本身 */
-    if (r && r.ok === false && r.skipped !== 'in-flight') {
-      try { jiXiTongXiaoXi('system', '自动总结', '自动总结未能完成（总结模型调用链均不可用或返回空）。可在 设置→功能→总结 调整调用链。'); } catch { /* noop */ }
-    }
-    /**
-     * **跳过时不许推进水位**（第 52 轮）：会话正在生成回复 ⇒ 这一轮总结被跳过，
-     * 如果水位照推进，被跳过的那几十条就永远不会被总结（丢的是原文，不是摘要）。
-     */
-    if (r && r.skipped === 'in-flight') guiDangZuiHouXu.set(k, shangCi);
-    audit?.log('chat.auto-archive', { sessionId: k, ok: !!r.ok, seq: zuiHou, at: Math.max(0, zuiHou - shangCi), jiangJi: !!r.jiangJi, guiDangHeXin: !!r.guiDangHeXin, tiaoguo: r.skipped === 'in-flight' ? 'in-flight' : '' });
-  } catch (e) {
-    try { audit?.log('chat.auto-archive-fail', { sessionId, error: xiJingCuoWu(e).slice(0, 140) }); } catch { /* noop */ }
-  }
-}
+/* R287 P4-2：自动归档触发规则唯一 owner 迁至 ying-yong/zi-dong-gui-dang（阈值/水位推进/在途回退/系统消息/审计逐字保持）；
+   水位 Map 与 GUI_DANG_MEI_LUN 移入模块内部持有；此处仅装配窄注入＋薄转发。
+   长对话自动总结（产品要求）：关「自动摘要」不触发；每攒够一轮新日志才归一次；只在真收尾后触发，失败只记审计不影响对话。
+   归档管线 guiDangYiGeHuiHua/系统消息/设置/日志/seq/错误净化仍主进程持有（窄注入）；构造无副作用（闭包懒引用）。 */
+const ziDongGuiDang = chuangJianZiDongGuiDang({
+  duSheZhi: () => settingsStore?.load(),
+  duRiZhi: (k) => chatLogs.get(k) as Array<{ seq?: number | string }> | undefined,
+  zuiHouSeq: () => chatLogSeq,
+  guiDang: (sid, opts) => guiDangYiGeHuiHua(sid, opts),
+  xiTongXiaoXi: (k, t, b) => { jiXiTongXiaoXi(k as Parameters<typeof jiXiTongXiaoXi>[0], t, b); },
+  auditLog: (op, d) => { audit?.log(op, d); },
+  jingCuoWu: (e) => xiJingCuoWu(e),
+});
+async function ziDongGuiDangRuGuoXuYao(sessionId: string): Promise<void> { return ziDongGuiDang.ziDongGuiDangRuGuoXuYao(sessionId); }
 chuliIpc('warmy:guiDangLieBiao', (_e, groupId?: string) => ({
   ok: true,
   entries: archiver?.LieBiao(groupId) || [],
