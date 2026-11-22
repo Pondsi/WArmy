@@ -138,6 +138,7 @@ import { chuangJianZiDongGuiDang } from './ying-yong/zi-dong-gui-dang.js';
 import { chuangJianGuiDangYouBiao, type GuiDangYouBiaoJi } from './ying-yong/gui-dang-you-biao.js';
 import { chuangJianYuYinZhuanXie } from './ying-yong/yu-yin-zhuan-xie.js';
 import { chuangJianTtsChatShi } from './ying-yong/tts-chat-shi.js';
+import { chuangJianGuiDangHuiHua } from './ying-yong/gui-dang-hui-hua.js';
 import {
   xuanranYoujieShitu,
   DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -33025,337 +33026,34 @@ function xiaoXiShiJian(x: { seq?: number | string; ts?: number | string } | null
  *  - `fromCursor` 为 true 时按游标只总结增量（默认）；false 时全量重做（「立即总结」里的"从头总结"）。
  *  - `moXing` 是用户在设置里选的整理模型；没给或调不通就**如实降级**为原文摘要，不假装整理过。
  */
+/* R287 P4-7：归档主函数唯一 owner 迁至 ying-yong/gui-dang-hui-hua（管线逐字保持，强差分 6000/6000 覆盖全部副作用轨迹＋终态）；
+   纯函数 guiHuaZhengLi/paiShengDuiWaiGaiLao 模块内复用；状态(Map/knowledge/settings/audit/fs)与副作用窄注入；此处仅装配＋薄转发（三调用点同名不动）。 */
+const guiDangHuiHuaMo = chuangJianGuiDangHuiHua({
+  zaiTuLiao, chatLogs, knowledge, ziLiPaiQianJiLu, huaTiFanKuiJiLu,
+  settingsStore, audit,
+  fs: { existsSync: (p) => fs.existsSync(p), writeFileSync: (p, d, e) => fs.writeFileSync(p, d, { encoding: e as BufferEncoding }), appendFileSync: (p, d, e) => fs.appendFileSync(p, d, { encoding: e as BufferEncoding }) },
+  harnessZiJinHua,
+  TI_SHI_CENG_BAN_BEN,
+  shiZhong: () => Date.now(),
+  isoShiZhong: () => new Date().toISOString(),
+  guiYiJiaoSe: (r) => guiYiJiaoSe(r as string),
+  xiaoXiShiJian, shuangShiJian, nengLiBiao, kbWriteLayers,
+  neiRongWenBen: (x) => neiRongWenBen(x as never),
+  xiJingCuoWu, sessionMingOf, chouGanDaiZhengLi,
+  zhiNengPeiZhi: () => { const c = zhiNengPeiZhi(); return { zhengLi: () => c.zhengLi(), tianJia: (x) => c.tianJia(x as never), du: () => c.du() }; },
+  moXingGuiNaYinXiang: (sid, hua, zan) => moXingGuiNaYinXiang(sid, hua, zan as never) as unknown as Promise<void>,
+  guiDangYouBiaoQu, guiDangYouBiaoCun, jieMoXingGongYingShang,
+  congYuSheChuangJian: (pid, cfg, proto) => { const p = congYuSheChuangJian(pid, cfg as never, proto as never); return { chat: (req) => p.chat(req as never) }; },
+  duYaoQiu, duGuiFan, zhuCeLiaoTianZiChan: (x) => { zhuCeLiaoTianZiChan({ ...x, scope: x.scope as never }); }, guiNaDuanJiYi, shengChengHuiHuaZhaiYao,
+  ziLiJingYanLu, huaTiFanKuiLu, duHuaTiFanKuiCi,
+  luoDianDiwenHua: (kind, x) => luoDianDiwenHua(kind, x as never) as unknown as Promise<void>,
+  zhiXinMoXing, jiZongJieJianBao: (t, b) => { jiZongJieJianBao(t, b); },
+});
 async function guiDangYiGeHuiHua(
   sessionId: string,
   opts?: { moXing?: string; biaoTi?: string; quanLiang?: boolean; auto?: boolean },
 ): Promise<{ ok: boolean; tiaoShu?: number; zhiShiJian?: string; jiangJi?: boolean; guiDangHeXin?: boolean; skipped?: string; error?: string }> {
-  try {
-    const sid = String(sessionId || '');
-    if (!sid) return { ok: false, error: 'bad-session' };
-    /**
-     * **这一轮有对话在跑就跳过总结**（第 52 轮用户口径）。总结要读整段日志、写记忆服务与知识库，
-     * 和正在生成的一轮并发时两边都只看得到"半条消息"：刚说完的内容没进摘要、游标却已经推过那段 seq
-     * ⇒ 那几句永久消失（第 44 轮的教训就是"游标比事实跑得快"）。
-     * 跳过不等于丢掉：自动入口把 `guiDangZuiHouXu` 退回去（下一轮再补），手动入口如实回 `skipped` 给用户看。
-     */
-    if (zaiTuLiao.has(sid)) {
-      try {
-        audit?.log('chat.archive-skipped-inflight', {
-          sessionId: sid, kaiShi: zaiTuLiao.get(sid), chuFa: opts?.auto ? 'auto' : 'manual',
-        });
-      } catch { /* noop */ }
-      return { ok: false, skipped: 'in-flight', error: 'in-flight（这个会话正在生成回复，本轮总结跳过；下一轮会自动补上）' };
-    }
-    /** 用户点过"重构"的内容：在**这次总结**里按总结流程写回（第 55 轮项 1） */
-    chouGanDaiZhengLi(sid);
-    /**
-     * **总结时整理智能配置文件**（产品要求）：把散记的条目重排成「按模型分组的质量表 +
-     * 用户评价小结」，让分类模型下次更容易读。先整理、再记本次的质量判断。
-     */
-    try {
-      const cfg0 = zhiNengPeiZhi();
-      cfg0.zhengLi();
-      cfg0.tianJia({
-        lei: 'archive-note',
-        huiHua: sid,
-        beiZhu: `总结整理：本次总结 ${String(opts?.biaoTi || '')}`.slice(0, 160),
-      });
-    } catch { /* 整理失败不影响总结本身 */ }
-    const suoyou = chatLogs.get(sid) || [];
-    /**
-     * 第 37 轮 项 2：**总结时顺手更新「印象」**（`yinxiang.md`）。
-     *
-     * 素材只用两种"用户自己说过的话"：
-     *  · 本会话最近的用户原话（带长期措辞的句子，如"以后都…""我不喜欢…"）；
-     *  · 总结要整理的这批原文里的用户部分。
-     * 提取规则见 `YIN_XIANG_TIQU_MENJIN`（软门禁）；这里是**确定性提取**，不调用模型 ⇒ 永不幻觉。
-     */
-    /**
-     * 第 38 轮 项 5：总结时**用模型整理印象**（整理模型优先，缺则用这只牛马的对话模型），
-     * 并按"只能摘录老板原话"的硬核验防幻觉。模型不可用时自动退回第 37 轮的确定性提取（同一条写入路径）。
-     * 素材仍然是"用户自己说过的话 + 赞/踩"，**不把牛马自己的话当成长期偏好**。
-     */
-    try {
-      const yongHuHua = suoyou
-        .filter((x) => guiYiJiaoSe(x.role) === 'user' && !((x as { hidden?: boolean }).hidden))
-        .slice(-40)
-        .map((x) => String(x.content || ''));
-      /** 赞/踩来自 `userData/zhinengpeizhi.md`（智能配置）：那是纯文本档案，按行取最近 20 条 */
-      const zanCai = (() => {
-        try {
-          const wen = String(zhiNengPeiZhi().du() || '');
-          return wen.split(/\r?\n/)
-            .filter((l) => /踩|赞|👍|👎/.test(l))
-            .slice(-20)
-            .map((l) => ({ pingJia: /踩|👎/.test(l) ? '踩' : '赞', wenTi: l.replace(/^[-*\s]+/, '').slice(0, 60), moXing: '' }));
-        } catch { return []; }
-      })();
-      await moXingGuiNaYinXiang(String(sessionId || ''), yongHuHua.concat(zanCai.map((v) => v.wenTi || '').filter(Boolean)), zanCai);
-    } catch { /* 印象整理失败不影响总结 */ }
-    const youBiao = guiDangYouBiaoQu();
-    const qiDian = opts?.quanLiang ? 0 : Number(youBiao[sid] || 0);
-    const xin = suoyou.filter((x) => xiaoXiShiJian(x) > qiDian && !((x as { hidden?: boolean }).hidden));
-    if (!xin.length) return { ok: true, tiaoShu: 0 };
-    const zuiHou = xin.reduce((mx, x) => Math.max(mx, xiaoXiShiJian(x)), qiDian);
-
-    // 先拼出"要整理的原文"，再看要不要让模型润一遍
-    const yuanWen = xin.map((x) => `[${guiYiJiaoSe(x.role)}] ${String(x.content || '')}`).join('\n');
-    let zhengLi = yuanWen;
-    let jiangJi = false;
-    /**
-     * 设置里存的是「供应商 · 模型id」（与可用模型同款），而 `jieMoXingGongYingShang` 要**裸模型 id**。
-     * 不剥前缀的话模型永远解析不到 ⇒ 每次都静默降级，"总结使用的模型"就成了摆设。
-     *
-     * **两条入口用同一个模型**（第 52 轮用户口径"效果与质量要一致"）：手动那路把设置里的
-     * `archiveModel` 传进来，自动那路以前不传 ⇒ 自动总结永远是生拼的原文、手动总结才是整理过的，
-     * 同一个功能两种质量。现在没显式传就回落到了设置里那一份，两边同模型、同指令、同降级。
-     */
-    /* R272 项9/10：总结改调用链模式——按链逐个尝试，成功即止；全失败如实降级（系统消息在上层） */
-    const archiveCand = (() => {
-      const st = settingsStore?.load() as { archiveModel?: string; archiveChain?: string[]; archiveChainDisabled?: string[] } | undefined;
-      const explicit = String(opts?.moXing || '').trim();
-      if (explicit) return [explicit];
-      const dis = new Set(st?.archiveChainDisabled || []);
-      const ch = (st?.archiveChain || []).filter((m) => m && !dis.has(m));
-      if (ch.length) return ch;
-      const am = String(st?.archiveModel || '').trim();
-      return am ? [am] : [];
-    })();
-    for (const moQuan of archiveCand) {
-    const mo = moQuan.includes('·') ? moQuan.split('·').pop()!.trim() : moQuan;
-    if (mo) {
-      try {
-        const an = await jieMoXingGongYingShang(mo);
-        if (an && (an.apiKey || an.protocol === 'ollama')) {
-          const p = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL || undefined, protocol: an.protocol } as never, an.protocol);
-          const r = await Promise.race([
-            p.chat({
-              model: mo,
-              xiaoXiJi: [{
-                role: 'user',
-                content: '把下面这段会话整理成一条可检索的知识条目：先给一句概括标题，再列要点/决定/待办/风险，最后保留关键事实。只输出整理结果，不要寒暄。\n'
-                  + '【放置规则】同一事实/偏好只能放在知识库或模型可改的提示词（术/印象）中的**一处**；本条只做知识记录，不要建议把同一条再抄进术/印象。要求、短记忆、道、教条、束缚、认知不参与互斥，可以重复。\n\n'
-                  + (() => {
-                    /**
-                     * 总结要对着**用户要求**与**短记忆**整理：
-                     *  · 要求是用户亲写的，只读；模型不得改写/删除/伪造；
-                     *  · 短记忆由总结维护，整理结果里可复用的短句会被宿主追加进去。
-                     */
-                    const yq = duYaoQiu(sid).trim();
-                    const gf = duGuiFan(sid).trim();
-                    return (yq ? '【本会话的用户要求（用户亲写，只读；不得改写/删除）】\n' + yq.slice(0, 1500) + '\n\n' : '')
-                      + (gf ? '【本会话的短记忆（按它归置；它由宿主按知识库使用频率更新，不需要你重写）】\n' + gf.slice(0, 1500) + '\n\n' : '');
-                  })()
-                  + '短记忆由宿主按**知识库使用频率**维护，你只负责把本次会话整理成知识条目；**不要输出对「要求」的修改建议**。\n\n'
-                  /* R294-3：守卫台账＋裁决请求置于动态尾段（R291：静态前缀不动，动态置尾） */
-                  + harnessZiJinHua.zongJieDuan() + '\n'
-                  + yuanWen.slice(0, 12000),
-              }],
-              maxTokens: 900,
-            }),
-            new Promise<never>((_, rej) => setTimeout(() => rej(new Error('archive-timeout')), 60000)),
-          ]);
-          const txt = neiRongWenBen((r as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0]?.message?.content) || '';
-          if (txt.trim()) {
-            /* R294-3：总结自我改进——解析守卫裁决并应用（白名单内直接生效；越界转系统消息求授权），
-               裁决块不进知识条目。裁决失败不影响总结本身。 */
-            try {
-              const cai = harnessZiJinHua.jieXiCaiJue(txt);
-              if (cai.length) harnessZiJinHua.yingYongCaiJue(cai);
-              /* R295：中文分句器参数自我改进（模型裁决 splitter 字段，宿主收窄到安全范围） */
-              const fen = harnessZiJinHua.jieXiFenJuQi(txt);
-              if (fen) harnessZiJinHua.yingYongFenJuQi(fen);
-            } catch { /* noop */ }
-            zhengLi = harnessZiJinHua.boLiCaiJueKuai(txt.trim()) || txt.trim(); jiangJi = false; break;
-          }
-          else jiangJi = true;
-        } else {
-          jiangJi = true;
-        }
-      } catch {
-        jiangJi = true; // 模型没跑通：如实降级，不假装整理过；继续链上下一个
-      }
-    }
-    }
-
-    const biaoTi = String(opts?.biaoTi || '')
-      || (zhengLi.split('\n')[0] || '').slice(0, 60)
-      || ('会话总结 ' + new Date().toISOString().slice(0, 10));
-    const evId = 'ev-arc-' + Date.now().toString(36);
-    /**
-     * **双时间**（第 53 轮项 5）：
-     *  · 记录时间 = 这批原文里**最后一条消息被说出来的时刻**（不是总结的此刻 —— 总结可能晚几天，
-     *    用此刻会把"你什么时候说的"抹成"机器什么时候处理的"）；
-     *  · 发生时间 = 从原文里解析出来的那句时间（"上个月5号"），**以说话时刻为参照系**，解析不出就留空。
-     */
-    /** 记录时间 = 这批原文里最后一条消息被说出来的时刻（不是总结的此刻；见上面 `shuangShiJian` 的注释） */
-    const jiLuTs = xin.reduce((mx, x) => Math.max(mx, Number(xiaoXiShiJian(x)) || 0), 0) || Date.now();
-    const zuiHouX = xin.reduce((mx, x) => Math.max(mx, Number(x.seq) || 0), 0);
-    const ssj = shuangShiJian(zhengLi + '\n' + yuanWen.slice(0, 8000), jiLuTs, zuiHouX);
-    knowledge?.internal.upsertEntity({ id: 'sess-' + sid, kind: 'project', ming: sid, attrs: {}, anchors: [] });
-    knowledge?.internal.addEvent({
-      id: evId,
-      biaoTi,
-      result: zhengLi.slice(0, 500),
-      entityIds: ['sess-' + sid],
-      anchors: [],
-      ts: Date.now(),
-      jiluTs: ssj.jiluTs,
-      fashengTs: ssj.fashengTs,
-      fashengBiao: ssj.fashengBiao,
-      fashengJingDu: ssj.fashengJingDu as 'ri' | 'yue' | 'nian' | 'wu',
-      fashengLaiYuan: ssj.fashengLaiYuan,
-      xuHao: ssj.xuHao,
-      laiYuan: opts?.auto ? 'archive:auto' : 'archive:manual',
-      tiShiCiBanBen: TI_SHI_CENG_BAN_BEN,
-    });
-    try {
-      audit?.log('kb.time-written', {
-        sessionId: sid, eventId: evId, jingDu: ssj.fashengJingDu, youFaSheng: !!ssj.fashengTs, yiChang: ssj.yiChang,
-      });
-    } catch { /* noop */ }
-    zhuCeLiaoTianZiChan({ id: evId, biaoTi, ti: zhengLi, scope: 'session' });
-    /**
-     * 第 93 轮：知识条目先落库，再按**使用频率**挑“高频且还不在短记忆里”的条目补进去。
-     * 放在落库之后是为了让本次新条目也成为候选（但它的 useCount 还是 0，要等真被检索过才会进）。
-     */
-    try { guiNaDuanJiYi(sid); } catch { /* 短记忆更新失败不影响总结 */ }
-
-    /**
-     * **内部库总结完成后，派生一份"可对外的能力概要"写进会话库**（第 52 轮项 6 的新功能）。
-     * 概要不是改写原文：只从能力白名单里挑条目，再过确定性检查器（数字/日期/路径/存在性说法/白名单外的字/哨兵）。
-     * 任何一项不过 ⇒ 整条不写，只落审计（宁缺勿泄）。写这层时**不做"内容升级"**：
-     * 概要的敏感度由检查器担保，`panDingCeng` 那套是给模型/用户手写内容用的。
-     */
-    try {
-      /**
-       * 抑制阈值要数得准，证据就得**按条给**：这批总结算一份，内部库里**其它未被取代的**事件各算一份。
-       * 刚写进去的那条要排除（否则同一件事被数两次，一条证据就凑够 k=2 把这一单业务说出去了）。
-       */
-      const bieDe = (knowledge?.internal.query('').events || [])
-        .filter((e) => e.id !== evId && !e.shiXiaoTs).map((e) => e.result || '');
-      const dm = paiShengDuiWaiGaiLao([zhengLi + '\n' + yuanWen.slice(0, 8000), ...bieDe], undefined, nengLiBiao());
-      if (!dm.ok || !dm.gai) {
-        try { audit?.log('kb.tumin-suppressed', { sessionId: sid, nengLi: dm.nengLi.length, why: dm.why.slice(0, 3).join(' | ').slice(0, 160) }); } catch { /* noop */ }
-      } else if (kbWriteLayers(sid).includes('session') && knowledge) {
-        const yaoTs = shuangShiJian(dm.gai, jiLuTs);
-        knowledge.session.addEvent({
-          id: 'ev-tu-' + Date.now().toString(36),
-          biaoTi: '能力清单（脱敏概要）',
-          result: dm.gai,
-          entityIds: ['sess-' + sid],
-          anchors: [],
-          ts: Date.now(),
-          jiluTs: yaoTs.jiluTs,
-          laiYuan: 'derived:redaction',
-          tiShiCiBanBen: TI_SHI_CENG_BAN_BEN,
-          /** 血缘：源事件被更正/取代时，这条对外概要要跟着重算（不能让它继续对外说旧话） */
-          yinZi: [evId],
-        });
-        try { audit?.log('kb.tumin-written', { sessionId: sid, nengLi: dm.nengLi.length, chars: dm.gai.length }); } catch { /* noop */ }
-      } else {
-        try { audit?.log('kb.tumin-denied', { sessionId: sid, why: '本会话不可写会话库' }); } catch { /* noop */ }
-      }
-    } catch { /* 脱敏概要失败不影响总结本身 */ }
-
-    /**
-     * **总结写完就要整理**（第 52 轮项 7；第 53 轮按调研升级）：同标题重复条目留最新、
-     * 超长截断；**被取代的说法不物理删除，只打 `shiXiaoTs`**（对齐 Graphiti/Zep 的双时态做法 ——
-     * Mem0 的纯 append-only 已被自家 issue 反证：可变事实会堆积、检索出陈旧矛盾；删掉又丢掉审计线索）。
-     * 源条目被取代 ⇒ 指向它的派生条目（会话库的脱敏概要）跟着标陈旧并**重算**，重算不过就降级为"不对外"。
-     */
-    try {
-      if (knowledge) {
-        const chaoQi: string[] = [];
-        for (const ceng of kbWriteLayers(sid)) {
-          const kb = knowledge.allow(ceng);
-          const quan = kb.query('').events;
-          const ji = guiHuaZhengLi(quan.map((e) => ({ id: e.id, biaoTi: e.biaoTi, result: e.result, ts: e.ts })));
-          for (const id of ji.shanChu) { if (kb.supersedeEvent(id)) chaoQi.push(id); }
-          for (const g of ji.gaiXie) {
-            const jiu = quan.find((e) => e.id === g.id);
-            if (!jiu) continue;
-            kb.addEvent({ ...jiu, biaoTi: g.biaoTi, result: g.result });
-          }
-          if (ji.shanChu.length || ji.gaiXie.length) {
-            audit?.log('kb.tidy', {
-              sessionId: sid, ceng, yuan: ji.yuan, hou: ji.hou,
-              shan: ji.shanChu.length, gai: ji.gaiXie.length,
-              fangShi: 'shiXiao（不删除）',
-              liYou: ji.liYou.slice(0, 6).map((x) => x.lei).join(','),
-            });
-          }
-        }
-        /** 派生层一致性：源被取代 ⇒ 概要陈旧 ⇒ 重算（重算不出来就把这条对外概要一起取代） */
-        if (chaoQi.length) {
-          const yinYong = (knowledge.session.query('').events || []).filter((e) => (e.yinZi || []).some((s) => chaoQi.includes(s)));
-          for (const y of yinYong) {
-            const re = paiShengDuiWaiGaiLao(knowledge.internal.activeEvents().map((x) => x.result || ''), undefined, nengLiBiao());
-            if (re.ok && re.gai) { knowledge.session.addEvent({ ...y, result: re.gai, ts: Date.now() }); audit?.log('kb.derived-rebuilt', { id: y.id }); }
-            else { knowledge.session.supersedeEvent(y.id); audit?.log('kb.derived-retired', { id: y.id, why: re.why.slice(0, 2).join(' | ') }); }
-          }
-          if (yinYong.length) { try { audit?.log('kb.stale-propagated', { sessionId: sid, yuan: chaoQi.length, yingXiang: yinYong.length }); } catch { /* noop */ } }
-        }
-      }
-    } catch { /* 整理失败不影响总结本身 */ }
-
-    /**
-     * 两条入口走同一条管线（用户定稿：立即总结与自动总结是同一个功能，只是一个手动一个自动）。
-     * 以前手动这一路只写知识库实体/事件，**不写 `kind:'archive'`、不写锚点、不出结构化摘要** ⇒
-     * 同样一句"总结"，两边落下的东西不一样，注入与召回的口径自然也不一样。现在手动也调同一个核心。
-     */
-    let heXinOk = false;
-    try {
-      const hx = await shengChengHuiHuaZhaiYao(sid, opts?.auto === true);
-      heXinOk = !!(hx && hx.ok);
-    } catch { heXinOk = false; }
-    if (!heXinOk) { try { audit?.log('chat.archive-core-fail', { sessionId: sid }); } catch { /* noop */ } }
-
-    const next = guiDangYouBiaoQu();
-    next[sid] = zuiHou;
-    guiDangYouBiaoCun(next);
-    try {
-      audit?.log('chat.archive-done', { sessionId: sid, tiaoShu: xin.length, jiangJi, hasMoXing: archiveCand.length > 0, guiDangHeXin: heXinOk, chuFa: opts?.auto ? 'auto' : 'manual' });
-    } catch { /* noop */ }
-    /** 第 123 轮：总结（总结）时才更新派遣经验 / 话题反馈参考文件（不影响运行中的对话） */
-    try {
-      const now = new Date().toISOString();
-      const pai = ziLiPaiQianJiLu.get(sid) || [];
-      if (pai.length) {
-                const lu1 = ziLiJingYanLu();
-        if (!fs.existsSync(lu1)) {
-          fs.writeFileSync(lu1, '# 子代理派遣经验（总结/总结时更新；派遣前先读本文件）\n\n> 判定式：拆分价值 = 隔离目的（噪音/时间/权限/并行） × 边界清晰度 ÷ 通信开销。能不分就不分。\n> 评分列：5=成功 3=中性/无结论 1=失败（崩/截断/超时/被过滤）——下次派活优先挑评分高的模式。\n\n| 时间 | 隔离目的 | 任务 | 结果/影响 | 评分 |\n| --- | --- | --- | --- | --- |\n', 'utf8');
-        }
-        /** R137：结果启发式评分（5 成功 / 3 中性 / 1 失败）——供下次派遣前挑模式 */
-        const ping = (guo: string) => /败|红|崩|超时|截断|失败|被过滤/.test(guo) ? 1 : (/成|绿|好|通过|完成/.test(guo) ? 5 : 3);
-        fs.appendFileSync(lu1, pai.map((x) => {
-          const guo = String(x.jieGuo || '完成').replace(/[|\n]/g, ' ').slice(0, 80);
-          return '| ' + now + ' | ' + x.muDi.replace(/[|\n]/g, ' ') + ' | ' + x.renWu.replace(/[|\n]/g, ' ').slice(0, 120) + ' | ' + guo + ' | ' + ping(String(x.jieGuo || '')) + ' |';
-        }).join('\n') + '\n', 'utf8');
-        ziLiPaiQianJiLu.delete(sid);
-      }
-      const tp = huaTiFanKuiJiLu.get(sid) || [];
-      if (tp.length) {
-        const lu2 = huaTiFanKuiLu();
-        if (!fs.existsSync(lu2)) {
-          fs.writeFileSync(lu2, '# 话题判定反馈（总结/总结时更新；判定前对照，成功/失败都记录）\n\n> 补充词表（会被读回生效）：\n> +换题词: 示例\n> +回题词: 示例\n\n| 时间 | 判定 | 用户纠正/备注 |\n| --- | --- | --- |\n', 'utf8');
-        }
-        fs.appendFileSync(lu2, tp.map((x) => '| ' + now + ' | ' + x.panDuan.replace(/[|\x0a]/g, ' ') + ' | ' + String(x.jiaoZheng || '（未见纠正，判为成功）').replace(/[|\x0a]/g, ' ') + ' |').join(String.fromCharCode(10)) + String.fromCharCode(10), 'utf8');
-        huaTiFanKuiJiLu.delete(sid);
-        try { duHuaTiFanKuiCi(); } catch { /* noop */ }
-      }
-    } catch { /* 总结写文件失败不影响总结 */ }
-    // R202：迪文化落点 reflection（总结结论经三态门控；不可用不阻断总结）
-    try { void luoDianDiwenHua('reflection', { text: String(jiangJi || '') }).catch(() => { /* noop */ }); } catch { /* noop */ }
-    try { zhiXinMoXing().fuPanZiWoGaiJin(); } catch { /* noop */ } // R203 I3：总结时置信度自我改进
-    // R241 卡顿修复：总结收尾立即落盘一次（防抖把整轮几十上百条变更合并成一次写，不再逐条同步重写整库）
-    try { knowledge?.flushAll(); } catch { /* noop */ }
-    /* R280：总结完成⇒总结简报系统消息（合并未读、始终一条） */
-    try { jiZongJieJianBao('总结简报 · ' + sessionMingOf(sid), `会话「${sessionMingOf(sid)}」总结完成：本次归档 ${xin.length} 条对话。要点：${String(jiangJi || '').replace(/\s+/g, ' ').slice(0, 300)}`); } catch { /* noop */ }
-    return { ok: true, tiaoShu: xin.length, zhiShiJian: evId, jiangJi, guiDangHeXin: heXinOk };
-  } catch (e) {
-    return { ok: false, error: xiJingCuoWu(e) };
-  }
+  return guiDangHuiHuaMo.guiDangYiGeHuiHua(sessionId, opts);
 }
 
 /** 增量总结：只总结一个会话的新增内容（渲染层按 autoArchive 勾选决定调不调） */
