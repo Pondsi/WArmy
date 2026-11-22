@@ -130,6 +130,7 @@ import { chuangJianGongJuShouQuan, type ShouQuanTiao } from './ying-yong/gong-ju
 import { chuangJianAnQuanDangWei } from './ying-yong/an-quan-dang-wei.js';
 import { chuangJianJsonlDouDi } from './ji-chu/jsonl-dou-di.js';
 import { asrWuYuYin, asrPcm16JingYin } from './ji-chu/asr-jing-yin.js';
+import { buZhouZhaiYao, buZhouJian, buZhouNeiRongZhaiYao } from './ji-chu/bu-zhou-zhi-wen.js';
 import { chuangJianHarnessZiJinHua } from './ying-yong/harness-zi-jin-hua.js';
 import { chuangJianHuiHuaXieRu } from './ying-yong/hui-hua-xie-ru.js';
 import { chuangJianGongJuZhuangPei } from './ying-yong/gong-ju-zhuang-pei.js';
@@ -3358,9 +3359,7 @@ const BU_ZHOU_BIE_MING: Record<string, string> = {
   create_file: 'write_file', save_file: 'write_file', write_text: 'write_file',
   make_slides: 'make_pptx', make_doc: 'make_docx', make_sheet: 'make_xlsx', open_file: 'open_path',
 };
-function buZhouZhaiYao(s: string): string {
-  return crypto.createHash('sha1').update(String(s || ''), 'utf8').digest('hex').slice(0, 16);
-}
+/* R287 P5-1：buZhouZhaiYao 迁至 ji-chu/bu-zhou-zhi-wen（纯函数 import 复用） */
 /** 与 resolveInside 同口径：系统文件夹别名先映射，再按工作区解析相对路径；键在 Windows 上不分大小写 */
 function buZhouLuJing(base: string, raw: string): { key: string; abs: string } {
   const r = String(raw || '').trim();
@@ -3403,21 +3402,9 @@ function heDuiLunChongXieZuDang(sessionId: string, base: string, gongJuMing: str
     } as WorkToolResult;
   } catch { return null; }
 }
-function buZhouJian(abs: string): string {
-  const a = String(abs || '');
-  return process.platform === 'win32' ? a.toLowerCase() : a;
-}
+/* R287 P5-1：buZhouJian 迁至 ji-chu/bu-zhou-zhi-wen */
 /** 生成器的"内容"指纹：去掉路径字段，只看要写进去的东西 */
-function buZhouNeiRongZhaiYao(a: Record<string, unknown>): string {
-  const o: Record<string, unknown> = {};
-  for (const k of Object.keys(a || {}).sort()) {
-    if (['path', 'file', 'filePath', 'filepath', 'filename', 'fileName', 'name', 'target', 'open', 'overwrite'].includes(k)) continue;
-    o[k] = a[k];
-  }
-  let s = '';
-  try { s = JSON.stringify(o); } catch { s = String(Object.keys(o)); }
-  return buZhouZhaiYao(s);
-}
+/* R287 P5-1：buZhouNeiRongZhaiYao 迁至 ji-chu/bu-zhou-zhi-wen */
 /**
  * 「要等多久 / 等几回」的解析搬到了 `shi-chang.ts`（零依赖、能被门禁直接 import 跑断言）：
  * 埋在 2 万行的主进程里就没人测得动，而 grep 字符串证明不了口径。
