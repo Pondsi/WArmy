@@ -26,6 +26,7 @@ import { shengChengPdf } from './pdf-tools.js';
 import { lieYaSuoBaoTiaoMu, duYaSuoBaoTiaoMu, tiaoMuMingAnQuan, jieYaYaSuoBaoDao, ZIP_JIEYA_TIAO_SHANGXIAN, ZIP_JIEYA_ZONG_SHANGXIAN } from './zip-look.js';
 import { shiJianChuoWen } from './time-utils.js';
 import { protectedPathReason, consumeProtectedOnce, hardProtectedReason } from './protected-paths.js';
+import { jianChaYuFa, yuFaJianYiWen } from './ji-chu/yu-fa-jian-cha.js';
 
 /** 工具名（与 function calling 暴露给模型的 name 一致） */
 export const WORK_TOOL_NAMES = [
@@ -97,6 +98,8 @@ export interface WorkToolResult {
     appended?: boolean;
     /** write_file：这次调用本身写了多少字符（chars 是文件当前总字数） */
     wroteChars?: number;
+    /** R294-4 ACI：写/改后语法检查结果（建议性，供台账与自我改进统计） */
+    yuFa?: { checked: boolean; ok: boolean; fangShi: string; cuoWu: number; quanJiao: number };
     /** read_archive_entry：读的是压缩包里的哪一条 */
     entry?: string;
     /** make_pdf：内嵌用的字体路径 */
@@ -497,7 +500,10 @@ export function workEditFile(baseDir: string, args: { path?: string; oldText?: s
     if (!args.replaceAll && count !== 1) return fail(tool, new Error(`oldText-not-unique (${count} matches); provide more context or set replaceAll=true`), relOf(baseDir, file));
     const next = args.replaceAll ? text.split(oldText).join(newText) : text.replace(oldText, newText);
     fs.writeFileSync(file, next, 'utf8');
-    return { ok: true, content: `[edit_file] 已修改 ${relOf(baseDir, file)}（替换 ${args.replaceAll ? count : 1} 处）`, meta: { tool, ok: true, bytes: Buffer.byteLength(next), chars: [...next].length, path: relOf(baseDir, file), abs: file, exists: true } };
+    /* R294-4 ACI：改后语法自动检查（建议性，绝不阻止写入；中文错误＋行/列＋全角标点提示）。
+       BOM/EOL 由精确替换天然保留；检查结果进 meta.yuFa 供总结自我改进统计。 */
+    const yuFa = jianChaYuFa(file, next);
+    return { ok: true, content: `[edit_file] 已修改 ${relOf(baseDir, file)}（替换 ${args.replaceAll ? count : 1} 处）` + yuFaJianYiWen(yuFa), meta: { tool, ok: true, bytes: Buffer.byteLength(next), chars: [...next].length, path: relOf(baseDir, file), abs: file, exists: true, yuFa: { checked: yuFa.checked, ok: yuFa.ok, fangShi: yuFa.fangShi, cuoWu: yuFa.errors.length, quanJiao: yuFa.quanJiao.length } } };
   } catch (e) { return fail(tool, e); }
 }
 
@@ -812,7 +818,9 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
     let yuFaTiShi = '';
     if (/\.(mjs|cjs)$/i.test(file) && !zhuiJia && cun) {
       try {
-        const jian = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8', timeout: 15000, windowsHide: true });
+        /* R294：ELECTRON_RUN_AS_NODE=1 —— 打包态 process.execPath 是 Electron exe，
+           旧版直接 `--check` 根本不是 node（检查静默失效）；加这个环境变量两者通吃。 */
+        const jian = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8', timeout: 15000, windowsHide: true, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } });
         if (jian.status !== 0) {
           const cuo = String(jian.stderr || '').split('\n').filter(Boolean).slice(0, 3).join(' | ');
           try { fs.rmSync(file, { force: true }); } catch { /* noop */ }
@@ -821,15 +829,26 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
         yuFaTiShi = '，node --check 语法通过';
       } catch { /* 检查器不可用时不阻断 */ }
     }
+    /* R294-4 ACI：其余可检扩展（.js/.ts/.tsx/.json 追加态）给建议性检查（不删文件不阻断）＋全角标点提示 */
+    let yuFaJianYi = '';
+    let yuFaMeta: WorkToolResult['meta']['yuFa'];
+    if (cun && !/\.(mjs|cjs)$/i.test(file)) {
+      try {
+        const zhenWen = fs.readFileSync(file, 'utf8');
+        const yf = jianChaYuFa(file, zhenWen);
+        yuFaJianYi = yuFaJianYiWen(yf);
+        yuFaMeta = { checked: yf.checked, ok: yf.ok, fangShi: yf.fangShi, cuoWu: yf.errors.length, quanJiao: yf.quanJiao.length };
+      } catch { /* 读不回就不检 */ }
+    }
     /** R137 大单次写提醒：单次>3000 字容易被小模型写截断，提示改分段追加 */
     const daDanCi = [...content].length > 3000 && !zhuiJia
       ? '\n〔提示：本次单次写了 3000+ 字——长文请分段写（先写第 1 段，后续 append:true 续写），降低截断风险〕'
       : '';
     return {
       ok: cun,
-      content: `${zhuiJia ? '已追加写入' : '已写入'} ${file}（本次 ${bytes} 字节 / ${[...content].length} 字符；文件当前共 ${zongBytes} 字节 / ${zongZi} 字符${yuFaTiShi}）${cun ? '，文件已自检存在' : '，⚠️ 自检未找到文件（异常）'}${daDanCi}\n`
+      content: `${zhuiJia ? '已追加写入' : '已写入'} ${file}（本次 ${bytes} 字节 / ${[...content].length} 字符；文件当前共 ${zongBytes} 字节 / ${zongZi} 字符${yuFaTiShi}）${cun ? '，文件已自检存在' : '，⚠️ 自检未找到文件（异常）'}${daDanCi}${yuFaJianYi}\n`
         + `【请在给用户的最终回复里**原样引用这个绝对路径**】${file}`,
-      meta: { tool, ok: cun, bytes: zongBytes, chars: zongZi, path: relOf(baseDir, file), abs: file, exists: cun, appended: zhuiJia, wroteChars: [...content].length },
+      meta: { tool, ok: cun, bytes: zongBytes, chars: zongZi, path: relOf(baseDir, file), abs: file, exists: cun, appended: zhuiJia, wroteChars: [...content].length, yuFa: yuFaMeta },
     };
   } catch (e) {
     return fail(tool, e);

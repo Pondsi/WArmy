@@ -50,6 +50,9 @@ const EXEMPT_DIRS = new Set([
   'GrShaderCache', 'ShaderCache', 'GraphiteDawnCache', 'search-index', 'Crashpad',
   'Shared Dictionary', 'blob_storage', 'Network', 'DIPS', 'fonts', 'screenshots',
   'node', 'pnpm-store', 'release', 'dist',
+  /* R294：本地生成后端（公开 MIT 权重＋临时推理输入）——Python 子进程读不了密文；
+     与 workspace/memory-runtime 同理：外部解释器边界外放行，非用户隐私数据。 */
+  'local-gen',
 ]);
 const EXEMPT_FILE = /^(vault\.bin.*|vault\.session.*|vault\.clean.*|warmy-boot\.log|memory\.db(?:-wal|-shm)?|DIPS(?:-wal)?|SharedStorage(?:-wal)?|Preferences|Local State|DevToolsActivePort|lockfile|Singleton.*)$/i;
 const EXEMPT_EXT = /\.(lock|log)$/i;

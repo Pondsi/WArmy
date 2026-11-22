@@ -13899,7 +13899,14 @@ chuliIpc('warmy:mimicHuiTu', async (e, p0?: { action?: string; prompt?: string; 
 });
 /* R263：捏脸对话框模型下拉＝统一链管理可用模型 */
 chuliIpc('warmy:mimicHuiTuMoXingLie', async () => {
-  try { return { ok: true, models: mimicMoXingLian().filter((m) => yunXuDuiHua(m)) }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+  try {
+    /* R294：与 generate 同口径（R288 项9）——对话闸过滤后为空⇒回落全部拟态链。
+       旧版下拉没有这层回落：白名单有效但拟态链不在其中时，面板整片灰罩「没有可用模型」，
+       而 generate 其实能跑——真机报障「创建2D形态无法使用」的真因。 */
+    let lie = mimicMoXingLian().filter((m) => yunXuDuiHua(m));
+    if (!lie.length) lie = mimicMoXingLian();
+    return { ok: true, models: lie };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:mimicWaiGuanShe', (_e, p0?: Record<string, unknown>) => {
   try {

@@ -1,14 +1,27 @@
 /**
- * R232 本地生成后端按需安装器（(i) 路线）。
+ * R232/R294 本地生成后端按需安装器（(i) 路线）。
  * 不随安装包携带；用户点下载按钮才下载/安装；安装前必须校验固定版本+sha256+许可。
  * 没有已验证来源时如实返回 source-unverified，不伪造下载/安装成功。
+ *
+ * R294 修复（3D 创建无法使用的三个真因）：
+ *  ① 清单补 config.yaml —— TSR.from_pretrained 必需，旧版只下权重 ⇒ 推理必失败；
+ *  ② local-gen 划出加密层（enc-fs EXEMPT_DIRS）—— Python 子进程读不了 WARMYEF2 密文；
+ *     旧版已落盘的密文权重/manifest 在首次查询时一次性迁移成明文（openBuffer 解密后原子重写）；
+ *  ③ 断点续传 —— 已存在且 sha256 吻合的文件跳过下载（不再为补 config 重下 1.6GB）。
+ * 下载流式落 tmp＋逐块哈希，校验通过才 rename（TOCTOU 防护不变，内存不再囤 1.6GB）。
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
+
+const requireCjs = createRequire(import.meta.url);
+const encFs = requireCjs('./enc-fs.cjs') as { openBuffer: (b: Buffer) => Buffer; MAGIC: Buffer };
 
 export interface BenDiShengChengQingDan {
   id: string;
+  /** 落盘文件名（Python 子进程按此读） */
+  file: string;
   version: string;
   url: string;
   sha256: string;
@@ -16,26 +29,60 @@ export interface BenDiShengChengQingDan {
   verified: boolean;
 }
 /** 已验证来源清单（人工核验后登记）。
- * TripoSR：HF API（镜像同源对象库）核验 model.ckpt LFS sha256 与固定 revision；许可 MIT（image-to-3D）。
- * 下载约1.6GB，仅用户点按钮才下载；安装前再算 sha256 防 TOCTOU。 */
+ * TripoSR：HF API（镜像同源对象库）核验固定 revision 的 LFS sha256；许可 MIT（image-to-3D）。
+ * 权重约1.6GB＋config.yaml（987B）；仅用户点按钮才下载；安装前再算 sha256 防 TOCTOU。 */
 export const YI_YAN_ZHENG_QING_DAN: BenDiShengChengQingDan[] = [
   {
     id: 'triposr',
+    file: 'model.bin',
     version: '5b521936b01fbe1890f6f9baed0254ab6351c04a',
     url: 'https://hf-mirror.com/stabilityai/TripoSR/resolve/5b521936b01fbe1890f6f9baed0254ab6351c04a/model.ckpt',
     sha256: '429e2c6b22a0923967459de24d67f05962b235f79cde6b032aa7ed2ffcd970ee',
     license: 'MIT',
     verified: true,
   },
+  {
+    id: 'triposr-config',
+    file: 'config.yaml',
+    version: '5b521936b01fbe1890f6f9baed0254ab6351c04a',
+    url: 'https://hf-mirror.com/stabilityai/TripoSR/resolve/5b521936b01fbe1890f6f9baed0254ab6351c04a/config.yaml',
+    sha256: '74ca708ce086bf68e97709ea6b3d91f14717921c04691e84043f0eb8fcc68e62',
+    license: 'MIT',
+    verified: true,
+  },
 ];
+
+/** 一次性迁移：旧版加密层把权重/manifest 落成了密文，Python 读不了 ⇒ 解密回明文。
+ *  密钥未就绪（未登录）时跳过——环境复检会如实报不可用，登录后再查询即迁移。 */
+function qianYiMingWen(dir: string): void {
+  for (const name of ['model.bin', 'manifest.json', 'config.yaml']) {
+    const p = path.join(dir, name);
+    try {
+      if (!fs.existsSync(p)) continue;
+      const fd = fs.openSync(p, 'r');
+      const head = Buffer.alloc(8);
+      const n = fs.readSync(fd, head, 0, 8, 0);
+      fs.closeSync(fd);
+      if (n < 8 || !head.equals(encFs.MAGIC)) continue;
+      /* local-gen 已豁免 ⇒ readFileSync 拿到的是原始密文；openBuffer 按头解密 */
+      const ming = encFs.openBuffer(fs.readFileSync(p));
+      const tmp = p + '.plain';
+      fs.writeFileSync(tmp, ming);
+      fs.renameSync(tmp, p);
+    } catch { /* 迁移失败保持原样，不伪造已安装 */ }
+  }
+}
 
 export function chaXunBenDiShengCheng(root: string): { installed: boolean; version?: string; verified: boolean; reason?: string } {
   const dir = path.join(root, 'local-gen');
+  try { qianYiMingWen(dir); } catch { /* noop */ }
   const meta = path.join(dir, 'manifest.json');
   try {
     const j = JSON.parse(fs.readFileSync(meta, 'utf8')) as { version?: string; sha256?: string };
-    const hit = YI_YAN_ZHENG_QING_DAN.find((x) => x.version === j.version && x.sha256 === j.sha256);
+    const hit = YI_YAN_ZHENG_QING_DAN.find((x) => x.id === 'triposr' && x.version === j.version && x.sha256 === j.sha256);
     if (!hit) return { installed: false, verified: false, reason: 'manifest-unverified' };
+    /* R294：config.yaml 缺失＝装得不完整（旧版只下了权重）⇒ 报未安装，让下载按钮补齐 */
+    if (!fs.existsSync(path.join(dir, 'config.yaml'))) return { installed: false, verified: true, reason: 'config-missing' };
     return { installed: true, version: hit.version, verified: true };
   } catch {
     return { installed: false, verified: YI_YAN_ZHENG_QING_DAN.length > 0, reason: YI_YAN_ZHENG_QING_DAN.length ? 'not-installed' : 'source-unverified' };
@@ -43,26 +90,50 @@ export function chaXunBenDiShengCheng(root: string): { installed: boolean; versi
 }
 
 export async function anZhuangBenDiShengCheng(root: string, onProgress?: (p: number) => void): Promise<{ ok: boolean; error?: string; version?: string }> {
-  const item = YI_YAN_ZHENG_QING_DAN[0];
-  if (!item || !item.verified) return { ok: false, error: 'source-unverified' };
+  const items = YI_YAN_ZHENG_QING_DAN.filter((x) => x.verified);
+  const zhu = items.find((x) => x.id === 'triposr');
+  if (!zhu || !items.length) return { ok: false, error: 'source-unverified' };
   const dir = path.join(root, 'local-gen');
   fs.mkdirSync(dir, { recursive: true });
-  const tmp = path.join(dir, 'download.tmp');
-  const res = await fetch(item.url);
-  if (!res.ok || !res.body) return { ok: false, error: 'download-failed' };
-  const hash = crypto.createHash('sha256');
-  const chunks: Buffer[] = [];
-  let total = 0;
-  const reader = res.body.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const b = Buffer.from(value); chunks.push(b); total += b.length; hash.update(b);
-    onProgress?.(Math.min(99, Math.round(total / 1e6)));
+  try { qianYiMingWen(dir); } catch { /* noop */ }
+  let yiXia = 0;
+  for (const item of items) {
+    const target = path.join(dir, item.file);
+    /* 断点续传：已有且 sha256 吻合 ⇒ 跳过（补 config 不必重下 1.6GB） */
+    if (fs.existsSync(target)) {
+      try {
+        if (crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex') === item.sha256) continue;
+      } catch { /* 读不了就重下 */ }
+    }
+    const res = await fetch(item.url);
+    if (!res.ok || !res.body) return { ok: false, error: 'download-failed' };
+    const hash = crypto.createHash('sha256');
+    const tmp = target + '.tmp';
+    const out = fs.createWriteStream(tmp);
+    let n = 0;
+    try {
+      const reader = res.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const b = Buffer.from(value);
+        hash.update(b);
+        n += b.length;
+        if (!out.write(b)) await new Promise<void>((r) => out.once('drain', () => r()));
+        onProgress?.(Math.min(99, Math.round(((yiXia + n) / 1.7e9) * 100)));
+      }
+      await new Promise<void>((r, j) => { out.end(() => r()); out.on('error', j); });
+    } catch (e) {
+      try { out.destroy(); fs.rmSync(tmp, { force: true }); } catch { /* noop */ }
+      return { ok: false, error: 'download-failed: ' + String((e as Error)?.message || e).slice(0, 120) };
+    }
+    if (hash.digest('hex') !== item.sha256) {
+      try { fs.rmSync(tmp, { force: true }); } catch { /* noop */ }
+      return { ok: false, error: 'sha256-mismatch' };
+    }
+    fs.renameSync(tmp, target);
+    yiXia += n;
   }
-  if (hash.digest('hex') !== item.sha256) { try { fs.rmSync(tmp, { force: true }); } catch { /* noop */ } return { ok: false, error: 'sha256-mismatch' }; }
-  fs.writeFileSync(tmp, Buffer.concat(chunks));
-  fs.renameSync(tmp, path.join(dir, 'model.bin'));
-  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ version: item.version, sha256: item.sha256, license: item.license }, null, 2));
-  return { ok: true, version: item.version };
+  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ version: zhu.version, sha256: zhu.sha256, license: zhu.license }, null, 2));
+  return { ok: true, version: zhu.version };
 }
