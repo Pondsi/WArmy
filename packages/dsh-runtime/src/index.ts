@@ -148,8 +148,11 @@ export function writeDshInstanceEntry(outFile: string, opts: {
   dshPackageDir: string;
   dshJiaMuLu: string;
   profile: string;
+  /** R298：所属会话的开发模式快照（只读继承；未开启为 enabled:false） */
+  kaiFa?: { enabled: boolean; modeVersion: number };
 }): void {
   const entry = resolveDshEntry(opts.dshPackageDir);
+  const kaiFa = opts.kaiFa ? { enabled: !!opts.kaiFa.enabled, modeVersion: Number(opts.kaiFa.modeVersion) || 1 } : { enabled: false, modeVersion: 1 };
   const src = `// WArmy dsh instance entry
 // 控制面消息按 @warmy/contracts 的 AcpKongzhiXiaoxi 定形（宿主 memory-client 按同一份类型解析）：
 //   { type:'ready', pid, dshPid } / { type:'dsh-exit', code } / { type:'pong' }
@@ -158,13 +161,14 @@ import { spawn } from 'node:child_process';
 const entry = ${JSON.stringify(entry)};
 const dshHome = ${JSON.stringify(opts.dshJiaMuLu)};
 const profile = ${JSON.stringify(opts.profile)};
+const kaiFa = ${JSON.stringify(kaiFa)};
 const child = spawn(process.execPath, [entry, '--profile', profile], {
   cwd: process.cwd(),
-  env: { ...process.env, DSH_HOME: dshHome, WARMY_DSH_DIR: ${JSON.stringify(opts.dshPackageDir)} },
+  env: { ...process.env, DSH_HOME: dshHome, WARMY_DSH_DIR: ${JSON.stringify(opts.dshPackageDir)}, WARMY_KAIFA_ENABLED: kaiFa.enabled ? '1' : '0', WARMY_KAIFA_MODE_VERSION: String(kaiFa.modeVersion) },
   stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
 });
 
-process.send?.({ type: 'ready', pid: process.pid, dshPid: child.pid });
+process.send?.({ type: 'ready', pid: process.pid, dshPid: child.pid, kaiFa });
 
 child.on('exit', (code) => {
   process.send?.({ type: 'dsh-exit', code });

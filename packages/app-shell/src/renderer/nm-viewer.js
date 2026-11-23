@@ -1500,7 +1500,7 @@
       + 'document.getElementById("scQuXiao").onclick=function(){window.close();};'
       + 'document.getElementById("scQueDing").onclick=async function(){var ming=String(document.getElementById("scMing").value||"").trim();var u=String(document.getElementById("scUrl").value||"").trim();var c=document.getElementById("scCuo");'
       + 'if(!ming){c.hidden=false;c.textContent="名称不能为空";return;}if(!/^https?:\\/\\//i.test(u)){c.hidden=false;c.textContent="网站地址不对（只支持 http/https）";return;}'
-      + 'var jia=document.getElementById("scJia").value;try{await window.warmy.nmShouCangTianJia({id:CHUANGKOU_ID,xiang:{ming:ming,url:u,tian:Date.now()},jia:jia===""?-1:Number(jia)});}catch(e){}window.close();};'
+      + 'var jia=document.getElementById("scJia").value;try{var r=await window.warmy.nmShouCangTianJia({id:CHUANGKOU_ID,xiang:{ming:ming,url:u,tian:Date.now()},jia:jia===""?-1:Number(jia)});if(r&&r.ok===false)throw new Error(r.error||"保存失败");}catch(e){c.hidden=false;c.textContent="收藏失败，请重试";return;}window.close();};'
       + '</scr' + 'ipt></body></html>';
     try { window.warmy.nmMoTaiKai?.({ id: chuangKouId, html: html.replace('CHUANGKOU_ID', String(chuangKouId)), width: 460, height: 360 }); } catch { /* noop */ }
   }
@@ -1538,10 +1538,10 @@
       + 'var ID=' + chuangKouId + ';var LIE=' + JSON.stringify(lieHtml) + ';'
       + 'document.getElementById("scLie").innerHTML=LIE;'
       + 'document.querySelectorAll(".scJia").forEach(function(j){j.addEventListener("mouseenter",function(){j.querySelector(".scJiaNei").hidden=false;});j.addEventListener("mouseleave",function(){j.querySelector(".scJiaNei").hidden=true;});});'
-      + 'document.addEventListener("click",function(e){var t=e.target;var a=t&&t.closest?t.closest("[data-sc-url]"):null;if(a){e.preventDefault();try{window.warmy.nmShouCangDaKai({id:ID,url:a.getAttribute("data-sc-url")});}catch(err){}window.close();}});'
+      + 'document.addEventListener("click",async function(e){var t=e.target;var a=t&&t.closest?t.closest("[data-sc-url]"):null;if(a){e.preventDefault();try{var r=await window.warmy.nmShouCangDaKai({id:ID,url:a.getAttribute("data-sc-url")});if(r&&r.ok===false)throw new Error("open-failed");}catch(err){alert("打开收藏失败，请重试");return;}window.close();}});'
       + 'var xj=document.getElementById("scXinJian"),kk=document.getElementById("scXinJianKuang");'
       + 'xj.onclick=function(){kk.hidden=false;xj.hidden=true;document.getElementById("scXinMing").focus();};'
-      + 'document.getElementById("scXinQue").onclick=function(){var m=String(document.getElementById("scXinMing").value||"").trim();if(!m)return;try{window.warmy.nmShouCangXinJian({id:ID,ming:m});}catch(err){}window.close();};'
+      + 'document.getElementById("scXinQue").onclick=async function(){var m=String(document.getElementById("scXinMing").value||"").trim();if(!m)return;try{var r=await window.warmy.nmShouCangXinJian({id:ID,ming:m});if(r&&r.ok===false)throw new Error("create-failed");}catch(err){alert("新建收藏夹失败，请重试");return;}window.close();};'
       + 'document.getElementById("scXinMing").addEventListener("keydown",function(e){if(e.key==="Enter"){document.getElementById("scXinQue").click();}});'
       + 'var ting=null;'
       + 'document.body.addEventListener("mouseleave",function(){ting=setTimeout(function(){window.close();},220);});'
@@ -1787,7 +1787,7 @@
     const mo = p.qiDongMoShi === 'kongbai' ? 'kongbai' : 'ziDingYi';
     const url = String(p.qiDongYe || WANG_YE_XIN_MO_REN);
     const html = '<!doctype html><html><head><meta charset="utf-8"><style>' + MO_CSS + nmZhuTiCss() + '</style></head><body>'
-      + '<h3>启动页设置</h3>'
+      + '<h3 title="浏览器首次打开、以及新建标签页时显示的页面。">启动页设置</h3>'
       + '<label><input type="radio" name="qdyMo" value="kongbai"' + (mo === 'kongbai' ? ' checked' : '') + '><span>空白页（停在地址栏）</span></label>'
       + '<label><input type="radio" name="qdyMo" value="ziDingYi"' + (mo === 'ziDingYi' ? ' checked' : '') + '><span>自定义网址</span></label>'
       + '<input id="qdyUrl" type="text" spellcheck="false" placeholder="https://www.numumu.com/">'
@@ -1798,7 +1798,7 @@
       + 'document.getElementById("qdyQuXiao").onclick=function(){window.close();};'
       + 'document.getElementById("qdyBaoCun").onclick=async function(){var z=document.querySelector("input[name=qdyMo]:checked");var m=z&&z.value==="kongbai"?"kongbai":"ziDingYi";var u=String(ru.value||"").trim()||"https://www.numumu.com/";'
       + 'if(m==="ziDingYi"&&!/^https?:\\/\\//i.test(u)){alert("启动页只支持 http/https 网址");return;}'
-      + 'try{await window.warmy.nmWangYePeiZhiShe({qiDongMoShi:m,qiDongYe:u});}catch(e){}window.close();};'
+      + 'try{var r=await window.warmy.nmWangYePeiZhiShe({qiDongMoShi:m,qiDongYe:u});if(r&&r.ok===false)throw new Error("save-failed");}catch(e){alert("保存启动页失败，请重试");return;}window.close();};'
       + '</scr' + 'ipt></body></html>';
     try { window.warmy.nmMoTaiKai?.({ id: chuangKouId, html, width: 440, height: 320 }); } catch { /* noop */ }
     chongDuWangYePeiZhiAnPai();
@@ -1859,7 +1859,7 @@
       + 'function danWei(b){var v=Number(b)||0;if(v<1024)return v+" B";if(v<1048576)return (v/1024).toFixed(1)+" KB";if(v<1073741824)return (v/1048576).toFixed(1)+" MB";return (v/1073741824).toFixed(2)+" GB";}'
       + 'var dang="wangZhan";var lie=document.getElementById("qlLieBiao");'
       + 'function erCi(ming){return new Promise(function(res){var z=document.createElement("div");z.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center";z.innerHTML=\'<div style="background:#2a2d36;border:1px solid #444;border-radius:10px;padding:16px;max-width:360px"><div>确认删除「\'+ming+\'」？此操作不可撤销。</div><div class="hang"><button data-x>取消</button><button data-q class="zhu">确认删除</button></div></div>\';z.querySelector("[data-x]").onclick=function(){z.remove();res(false);};z.querySelector("[data-q]").onclick=function(){z.remove();res(true);};document.body.appendChild(z);});}'
-      + 'async function huiZhi(){document.querySelectorAll("#qlFenLei button").forEach(function(b){b.className=b.getAttribute("data-fen")===dang?"zhu":"";});lie.innerHTML=\'<div class="jingYin">正在统计本机数据…</div>\';var r=null;try{r=await window.warmy.nmWangYeShuJuGaiLan({liuLan:LIULAN});}catch(e){}if(!r||r.ok===false){lie.innerHTML=\'<div class="jingYin">数据清单暂不可用。</div>\';return;}'
+      + 'async function huiZhi(){document.querySelectorAll("#qlFenLei button").forEach(function(b){b.className=b.getAttribute("data-fen")===dang?"zhu":"";});lie.innerHTML=\'<div class="jingYin">正在统计本机数据…</div>\';var r=null;try{r=await window.warmy.nmWangYeShuJuGaiLan({liuLan:LIULAN});}catch(e){r={ok:false};}if(!r||r.ok===false){lie.innerHTML=\'<div class="jingYin">数据清单暂不可用。</div>\';return;}'
       + 'function hang(ming,sm,zj,fn){var b=document.createElement("button");b.className="lie";b.title=sm||"";b.innerHTML=\'<span style="flex:1">\'+ming+\'</span><span class="jingYin">\'+danWei(zj)+\'</span><span class="jingYin">›</span>\';b.onclick=fn;lie.appendChild(b);}'
       + 'lie.innerHTML="";if(dang==="neiRong"){var lei=r.lei||{};["liulan","xiazai","cookie","huancun","biaoDan","quanXian","zhangHao","sheZhi"].forEach(function(k){var it=lei[k]||{};hang(it.ming||k,SHUOMING[k],it.ziJie||0,async function(){if(!(await erCi(it.ming||k)))return;var q=await window.warmy.nmWangYeShuJuQing({mo:"neiRong",id:k,liuLan:LIULAN});huiZhi();});});}'
       + 'else if(dang==="wangZhan"){var zhan=r.zhan||[];if(!zhan.length)lie.innerHTML=\'<div class="jingYin">没有留存数据的网站。</div>\';zhan.forEach(function(z){hang(z.ming||z.host,z.host,z.ziJie||0,async function(){if(!(await erCi(z.host)))return;await window.warmy.nmWangYeShuJuQing({mo:"wangZhan",id:z.host,liuLan:LIULAN});huiZhi();});});}'
@@ -1884,14 +1884,14 @@
 <scr` + `ipt>
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 var lie=document.getElementById("zhLie");
-async function hui(){var r=null;try{r=await window.warmy.nmWangYeZhangHaoLieBiao();}catch(e){}
+async function hui(){var r=null;try{r=await window.warmy.nmWangYeZhangHaoLieBiao();}catch(e){lie.textContent="账号清单暂不可用，请重试";return;}
 var items=(r&&r.items)||[];
 if(!items.length){lie.innerHTML='<div class="jingYin">还没有保存的网站账号。可导入 Chrome / Edge / Firefox 导出的密码包（CSV）。</div>';return;}
 lie.innerHTML=items.map(function(x){return '<div class="zhHang"><span class="zhUrl" title="'+esc(x.url)+'">'+esc(x.url)+'</span><span>'+esc(x.username||"—")+'</span><span class="jingYin zhMi">'+(x.hasPassword?"••••••••":"—")+'</span></div>';}).join("");}
 document.getElementById("zhGuan").onclick=function(){window.close();};
 var wj=document.getElementById("zhWenJian");
 document.getElementById("zhDaoRu").onclick=function(){wj.click();};
-wj.onchange=function(){var f=wj.files&&wj.files[0];if(!f)return;var rd=new FileReader();rd.onload=async function(){var r=null;try{r=await window.warmy.nmWangYeZhangHaoDaoRu({csv:String(rd.result||"")});}catch(e){}
+wj.onchange=function(){var f=wj.files&&wj.files[0];if(!f)return;var rd=new FileReader();rd.onload=async function(){var r=null;try{r=await window.warmy.nmWangYeZhangHaoDaoRu({csv:String(rd.result||"")});}catch(e){r={ok:false,error:"导入接口暂不可用，请重试"};}
 if(r&&r.ok){alert("导入完成：共 "+(r.n||0)+" 条记录。");}else{alert("导入失败："+((r&&r.error)||"无法识别的密码包格式（支持 Chrome/Edge/Firefox 导出的 CSV）。"));}
 wj.value="";hui();};rd.readAsText(f);};
 hui();
@@ -4743,14 +4743,14 @@ function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"
 function dw(n){var v=Math.max(0,Number(n)||0);if(v<1024)return v+" B";if(v<1048576)return (v/1024).toFixed(1)+" KB";if(v<1073741824)return (v/1048576).toFixed(1)+" MB";return (v/1073741824).toFixed(2)+" GB";}
 function zw(x){return x.state==="completed"?"已完成":x.state==="cancelled"?"已取消":x.state==="interrupted"?"中断":"下载中";}
 var lie=document.getElementById("xzLie");
-async function hui(){var r=null;try{r=await window.warmy.nmXiaZaiLieBiao();}catch(e){}
+async function hui(){var r=null;try{r=await window.warmy.nmXiaZaiLieBiao();}catch(e){lie.textContent="下载清单暂不可用，下次自动重试";return;}
 var items=(r&&r.items)||[];
 document.getElementById("xzJi").textContent=String(items.length);
 if(!items.length){lie.innerHTML='<div class="jingYin">还没有下载。网页里点击下载后会出现在这里，并保存到系统下载目录。</div>';return;}
 lie.innerHTML=items.map(function(x){var pct=x.total>0?Math.min(100,Math.round(x.received/x.total*100)):(x.state==="completed"?100:0);var dis=x.state==="completed"?"":" disabled";
 return '<div class="zhHang"><span class="zhUrl" title="'+esc(x.path||"")+'">'+esc(x.name||"")+'</span><span class="jingYin">'+zw(x)+" · "+dw(x.received)+(x.total?" / "+dw(x.total):"")+'</span><span class="xzTiao"><span style="width:'+pct+'%"></span></span><button data-kai="'+esc(x.id)+'"'+dis+'>打开</button><button data-wei="'+esc(x.id)+'"'+dis+'>定位</button></div>';}).join("");}
-lie.addEventListener("click",async function(e){var k=e.target&&e.target.closest?e.target.closest("[data-kai]"):null;if(k){try{var r=await window.warmy.nmXiaZaiDaKai(Number(k.getAttribute("data-kai")));if(!r||!r.ok)alert((r&&r.error)||"打开失败");}catch(err){}return;}var w=e.target&&e.target.closest?e.target.closest("[data-wei]"):null;if(w){try{await window.warmy.nmXiaZaiXianShi(Number(w.getAttribute("data-wei")));}catch(err){}}});
-document.getElementById("xzQing").onclick=async function(){try{await window.warmy.nmXiaZaiQingKong();}catch(e){}hui();};
+lie.addEventListener("click",async function(e){var k=e.target&&e.target.closest?e.target.closest("[data-kai]"):null;if(k){try{var r=await window.warmy.nmXiaZaiDaKai(Number(k.getAttribute("data-kai")));if(!r||!r.ok)alert((r&&r.error)||"打开失败");}catch(err){alert("打开下载文件失败，请重试");}return;}var w=e.target&&e.target.closest?e.target.closest("[data-wei]"):null;if(w){try{await window.warmy.nmXiaZaiXianShi(Number(w.getAttribute("data-wei")));}catch(err){alert("定位下载文件失败，请重试");}}});
+document.getElementById("xzQing").onclick=async function(){try{await window.warmy.nmXiaZaiQingKong();}catch(e){alert("清空下载记录失败，请重试");return;}hui();};
 document.getElementById("xzGuan").onclick=function(){window.close();};
 setInterval(hui,1000);hui();
 </scr` + `ipt></body></html>`;
@@ -5398,7 +5398,6 @@ setInterval(hui,1000);hui();
       if (chatEditor) { try { el('wenBen')?.focus(); } catch { /* noop */ } }
     });
   })();
-})();
 
   /* 第 123/124 轮＋R264：源码/开发者工具双栏。网站模式会重绘 DOM⇒一次性绑定丢失，
      改文档级委托（mousedown/dblclick/keydown/click 都按 closest 判定），拖动/DevTools 始终有效。 */
@@ -5462,7 +5461,7 @@ setInterval(hui,1000);hui();
     const an = el('anNiuOfficeBianJi');
     if (!an) return;
     an.addEventListener('click', async () => {
-      const real = String(lu || '').split(' › ')[0];
+      const real = String(zt.luJing || '').split(' › ')[0];
       if (!real) { zhuangTaiWen('没有可编辑的文件路径'); return; }
       try {
         const r = await window.warmy.nmOfficeBianJi?.({ path: real });
@@ -5544,3 +5543,4 @@ setInterval(hui,1000);hui();
     /* 与聊天框同快捷键：F6 / Ctrl+Space */
     document.addEventListener('keydown', (e) => { if (e.key === 'F6' || (e.ctrlKey && e.code === 'Space')) { e.preventDefault(); mic.click(); } });
   })();
+})();

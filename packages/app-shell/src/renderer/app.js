@@ -804,7 +804,8 @@
     try {
       new MutationObserver(() => {
         if (root.classList.contains('yinCang')) {
-          root.classList.remove('youGuanCha');
+          // 无变化的classList.remove也会发class属性变更；观察自身属性时先判存在，否则闭窗后微任务无限自触发、页面卡死。
+          if (root.classList.contains('youGuanCha')) root.classList.remove('youGuanCha');
           try { root.querySelector('.niuMaSheZhiClose')?.remove(); } catch { /* noop */ }
         }
       }).observe(root, { attributes: true, attributeFilter: ['class'] });
@@ -4743,6 +4744,7 @@ async function langDuWenBen(text, btnEl) {
    */
   async function refreshEntityView(id) {
     const sid = String(id || '');
+    try { window.__syncKai?.(); } catch { /* noop */ }
     const cur = state.selectedChat && state.selectedChat.id;
     const shiDangQian = !!cur && String(cur) === sid;
     if (shiDangQian) {
@@ -9804,14 +9806,7 @@ async function langDuWenBen(text, btnEl) {
     const LieBiao = state.dingShiRenWu || [];
     if (!LieBiao.length) {
       he.innerHTML = '<div class="jingYin">' + escapeHtml(tOr('panel.schedule.empty', '暂无定时任务')) + '</div>';
-      return;
-    }
-    /**
-     * 产品要求的字段：创建时间 / 执行内容（含用到的工具、文件、说明）/ 下次执行时间 /
-     * 间隔多久 / 循环几次 / 启用 / 停止 / 删除。
-     * 「执行内容」就是登记时那句 prompt —— 工具、文件、说明本来就写在里面，所以**原样全文给出来**，
-     * 不再截断成 60 字（截断过就看不出到底要干什么）。
-     */
+    } else {
     he.innerHTML = LieBiao.map((r) => {
       const qiYong = r.enabled !== false && (r.status ?? 'active') !== 'stopped';
       const yiTing = !qiYong;
@@ -9833,6 +9828,14 @@ async function langDuWenBen(text, btnEl) {
           (r.replacedBy ? ' · ' + escapeHtml(tOr('panel.schedule.replacedBy', '接替者')) + ' ' + escapeHtml(String(r.replacedBy).slice(0, 12)) : '') +
         '</div>' +
         '<div class="jingYin" style="font-size:11px;white-space:pre-wrap;word-break:break-word">' + escapeHtml(String(r.prompt || '')) + '</div>' +
+        (r.v2 ? '<div class="jingYin" style="font-size:11px">' + escapeHtml(
+          String((r.v2.action && r.v2.action.kind) || '') +
+          ' · ' + tOr('panel.schedule.counters', '触发/尝试/成功/错过') + ' ' + [r.v2.counters.chuFa, r.v2.counters.changShi, r.v2.counters.chengGong, r.v2.counters.cuoGuo].join('/') +
+          ' · ' + (r.v2.zaiFei ? tOr('panel.schedule.running', '运行中') : r.v2.paiDui ? tOr('panel.schedule.waiting', '等待') : r.v2.zuiJin === 'unknown' ? tOr('panel.schedule.unknown', '结果不确定') : r.v2.zuiJin === 'failed' ? tOr('panel.schedule.failed', '上次失败') : tOr('panel.schedule.idle', '空闲')) +
+          (r.v2.shouQuan && r.v2.shouQuan.scope && r.v2.shouQuan.scope.length ? ' · ' + tOr('panel.schedule.scope', '授权') + ': ' + r.v2.shouQuan.scope.join('; ').slice(0, 120) : '') +
+          (r.v2.planRef ? ' · ' + tOr('panel.schedule.planRef', '关联计划') + ' ' + String(r.v2.planRef.stepId || '') : '') +
+          (r.v2.liShiCiShu ? ' · ' + tOr('panel.schedule.legacyCount', '历史执行') + ' ' + r.v2.liShiCiShu : '')
+        ) + '</div>' : '') +
         '<div class="shiLiHang" style="margin-top:4px">' +
           '<button class="anNiuXiao" data-sch-on="' + escapeHtml(r.id) + '"' + (qiYong ? ' disabled' : '') + '>' + escapeHtml(tOr('panel.schedule.enable', '启用')) + '</button>' +
           '<button class="anNiuXiao" data-sch-off="' + escapeHtml(r.id) + '"' + (qiYong ? '' : ' disabled') + '>' + escapeHtml(tOr('panel.schedule.stop', '停止')) + '</button>' +
@@ -9867,6 +9870,198 @@ async function langDuWenBen(text, btnEl) {
         renderDingShiKa();
       };
     });
+    }
+    /* R298：新建入口 + 错过未决区（独立台账，不受消息上限淘汰；已读≠决定） */
+    he.insertAdjacentHTML('beforeend',
+      '<div class="shiLiHang" style="margin-top:6px"><button class="anNiuXiao" id="dingShiXinJianAn">' + escapeHtml(tOr('panel.schedule.create', '新建定时任务')) + '</button></div>' +
+      '<div id="dingShiXinJianQu"></div><div id="dingShiCuoGuoQu" style="margin-top:6px"></div>');
+    const xinJianAn = document.getElementById('dingShiXinJianAn');
+    if (xinJianAn) xinJianAn.onclick = () => dingShiXinJianBiaoDan();
+    void shuaDingShiCuoGuo();
+  }
+
+  /** R298：响铃（WebAudio 短音，窗口级 autoplay 已放行）；真实回执回主进程 */
+  function dingShiXiangLingBoFang(times) {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return false;
+      const ctx = new Ctx();
+      let n = 0;
+      const bo = () => {
+        if (n >= times) { try { void ctx.close(); } catch { /* noop */ } return; }
+        try {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.frequency.value = 880;
+          g.gain.setValueAtTime(0.18, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+          o.start(); o.stop(ctx.currentTime + 0.36);
+        } catch { /* noop */ }
+        n += 1;
+        setTimeout(bo, 450);
+      };
+      bo();
+      return true;
+    } catch { return false; }
+  }
+
+  /** R298：错过未决列表（补执行/不补/自行输入；逐项独立决定与版本） */
+  async function shuaDingShiCuoGuo() {
+    const qu = document.getElementById('dingShiCuoGuoQu');
+    if (!qu) return;
+    let r = null;
+    try { r = await window.warmy.dingShiCuoGuoLieBiao?.({ limit: 50 }); } catch { /* noop */ }
+    const items = (r && r.items) || [];
+    if (!items.length) { qu.innerHTML = ''; return; }
+    qu.innerHTML = '<div class="jingYin" style="font-size:12px;font-weight:600">' + escapeHtml(tOr('panel.schedule.missedTitle', '错过未决') + '（' + items.length + '）') + '</div>' +
+      items.map((d) => '<div class="dingShiHang" data-cg-row="' + escapeHtml(d.id) + '" style="margin-top:4px">' +
+        '<div style="font-size:12px">' + escapeHtml(d.taskName || '') + ' · ' + escapeHtml(yueRiShiFen(d.scheduledAt)) + ' · ' + escapeHtml(String(d.reason || '')) + '</div>' +
+        '<div class="shiLiHang" style="margin-top:2px">' +
+          '<button class="anNiuXiao" data-cg-bu="' + escapeHtml(d.id) + '" data-cg-ver="' + Number(d.version) + '">' + escapeHtml(tOr('panel.schedule.catchUp', '补执行')) + '</button>' +
+          '<button class="anNiuXiao" data-cg-bubu="' + escapeHtml(d.id) + '" data-cg-ver="' + Number(d.version) + '">' + escapeHtml(tOr('panel.schedule.skip', '不补')) + '</button>' +
+          '<button class="anNiuXiao" data-cg-custom="' + escapeHtml(d.id) + '" data-cg-ver="' + Number(d.version) + '">' + escapeHtml(tOr('panel.schedule.custom', '自行输入')) + '</button>' +
+        '</div><div data-cg-extra="' + escapeHtml(d.id) + '"></div></div>').join('');
+    const jue = async (id, ver, choice, text) => {
+      try {
+        const rr = await window.warmy.dingShiJueDing?.({ decisionId: id, version: ver, choice, customText: text });
+        if (rr && rr.ok === false) showToast(String(rr.error || ''));
+        return rr;
+      } catch { return null; }
+    };
+    qu.querySelectorAll('[data-cg-bu]').forEach((b) => { b.onclick = async () => { await jue(b.getAttribute('data-cg-bu'), Number(b.getAttribute('data-cg-ver')), 'bu'); void shuaDingShiCuoGuo(); }; });
+    qu.querySelectorAll('[data-cg-bubu]').forEach((b) => { b.onclick = async () => { await jue(b.getAttribute('data-cg-bubu'), Number(b.getAttribute('data-cg-ver')), 'buBu'); void shuaDingShiCuoGuo(); }; });
+    qu.querySelectorAll('[data-cg-custom]').forEach((b) => {
+      b.onclick = () => {
+        const id = b.getAttribute('data-cg-custom'), ver = Number(b.getAttribute('data-cg-ver'));
+        const extra = qu.querySelector('[data-cg-extra="' + id + '"]');
+        if (!extra) return;
+        extra.innerHTML = '<input type="text" data-cg-text style="width:100%;margin-top:2px" placeholder="' + escapeHtml(tOr('panel.schedule.customHint', '说明你想怎么处理，模型会解析成提案再让你确认')) + '">' +
+          '<div class="shiLiHang"><button class="anNiuXiao" data-cg-ok>' + escapeHtml(tOr('common.confirm', '确认')) + '</button><button class="anNiuXiao" data-cg-no>' + escapeHtml(tOr('common.cancel', '取消')) + '</button></div>';
+        extra.querySelector('[data-cg-no]').onclick = () => { extra.innerHTML = ''; };
+        extra.querySelector('[data-cg-ok]').onclick = async () => {
+          const wen = String(extra.querySelector('[data-cg-text]').value || '').trim();
+          if (!wen) return;
+          const rr = await jue(id, ver, 'custom', wen);
+          if (!rr || rr.ok === false) { void shuaDingShiCuoGuo(); return; }
+          const ver2 = (rr.decision && rr.decision.version) || ver + 1;
+          extra.innerHTML = '<div class="jingYin" style="font-size:11px">' + escapeHtml(tOr('panel.schedule.parsing', '模型解析中…')) + '</div>';
+          let jie = null;
+          try { jie = await window.warmy.dingShiZiDingYiJieXi?.({ decisionId: id }); } catch { /* noop */ }
+          if (!jie || jie.ok === false) {
+            extra.innerHTML = '<div class="jingYin" style="font-size:11px">' + escapeHtml(String((jie && jie.error) || tOr('panel.schedule.parseFail', '解析失败'))) + '</div>' +
+              '<div class="shiLiHang"><button class="anNiuXiao" data-cg-fangqi>' + escapeHtml(tOr('panel.schedule.giveUp', '放弃（不补）')) + '</button></div>';
+            extra.querySelector('[data-cg-fangqi]').onclick = async () => { try { await window.warmy.dingShiZiDingYiQueRen?.({ decisionId: id, version: ver2, accepted: false }); } catch { /* noop */ } void shuaDingShiCuoGuo(); };
+            return;
+          }
+          const ti = jie.proposal || {};
+          extra.innerHTML = '<div style="font-size:11px;white-space:pre-wrap">' + escapeHtml(String(ti.explanation || '')) +
+            (ti.scopeChange ? '\n⚠ ' + escapeHtml(tOr('panel.schedule.scopeChange', '超出原授权范围，确认即重新授权')) : '') + '</div>' +
+            '<div class="shiLiHang"><button class="anNiuXiao" data-cg-zhi>' + escapeHtml(tOr('panel.schedule.doIt', '确认执行')) + '</button><button class="anNiuXiao" data-cg-fangqi>' + escapeHtml(tOr('panel.schedule.giveUp', '放弃（不补）')) + '</button></div>';
+          extra.querySelector('[data-cg-zhi]').onclick = async () => { try { await window.warmy.dingShiZiDingYiQueRen?.({ decisionId: id, version: ver2, accepted: true, action: ti.action }); } catch { /* noop */ } void shuaDingShiCuoGuo(); };
+          extra.querySelector('[data-cg-fangqi]').onclick = async () => { try { await window.warmy.dingShiZiDingYiQueRen?.({ decisionId: id, version: ver2, accepted: false }); } catch { /* noop */ } void shuaDingShiCuoGuo(); };
+        };
+      };
+    });
+  }
+
+  /** R298：新建定时任务表单（触发类型/动作/固定范围授权由主进程生成） */
+  function dingShiXinJianBiaoDan() {
+    const qu = document.getElementById('dingShiXinJianQu');
+    if (!qu) return;
+    if (qu.innerHTML) { qu.innerHTML = ''; return; }
+    const sid = String((state.selectedChat && state.selectedChat.id) || (state.selectedInstance && state.selectedInstance.id) || '');
+    qu.innerHTML =
+      '<div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">' +
+      '<input type="text" id="dsXjMing" placeholder="' + escapeHtml(tOr('panel.schedule.nameHint', '任务名')) + '">' +
+      '<select id="dsXjChuFa">' +
+        '<option value="interval">' + escapeHtml(tOr('panel.schedule.trInterval', '固定间隔（分钟）')) + '</option>' +
+        '<option value="daily">' + escapeHtml(tOr('panel.schedule.trDaily', '每天 HH:MM')) + '</option>' +
+        '<option value="once">' + escapeHtml(tOr('panel.schedule.trOnce', '一次性（日期时间）')) + '</option>' +
+        '<option value="delay">' + escapeHtml(tOr('panel.schedule.trDelay', '延时（分钟后）')) + '</option>' +
+        '<option value="randomDaily">' + escapeHtml(tOr('panel.schedule.trRandomDaily', '每天随机窗口（分钟 0-1439）')) + '</option>' +
+        '<option value="randomInterval">' + escapeHtml(tOr('panel.schedule.trRandomInterval', '随机间隔（分钟）')) + '</option>' +
+        '<option value="condition">' + escapeHtml(tOr('panel.schedule.trCondition', '等待文件出现（会话工作区）')) + '</option>' +
+      '</select>' +
+      '<input type="text" id="dsXjZhi" placeholder="' + escapeHtml(tOr('panel.schedule.valueHint', '值：如 30 / 09:30 / 2026-12-01T10:00 / 540-600 / 文件名')) + '">' +
+      '<select id="dsXjDongZuo">' +
+        '<option value="model">' + escapeHtml(tOr('panel.schedule.acModel', '模型任务')) + '</option>' +
+        '<option value="script">' + escapeHtml(tOr('panel.schedule.acScript', '机械脚本（参数数组）')) + '</option>' +
+        '<option value="ring">' + escapeHtml(tOr('panel.schedule.acRing', '响铃')) + '</option>' +
+        '<option value="mail">' + escapeHtml(tOr('panel.schedule.acMail', '邮件（需先配置账号）')) + '</option>' +
+      '</select>' +
+      '<textarea id="dsXjPrompt" rows="2" placeholder="' + escapeHtml(tOr('panel.schedule.promptHint', '模型任务内容 / 脚本命令（如 node a.mjs）/ 邮件正文')) + '"></textarea>' +
+      '<input type="text" id="dsXjCwd" placeholder="' + escapeHtml(tOr('panel.schedule.cwdHint', '脚本工作目录（绝对路径，脚本必填）')) + '">' +
+      '<div id="dsXjYouJianQu" style="display:none;flex-direction:column;gap:4px">' +
+        '<select id="dsXjZhangHao"></select>' +
+        '<input type="text" id="dsXjShouJian" placeholder="' + escapeHtml(tOr('panel.schedule.mailTo', '收件人（多个用逗号）')) + '">' +
+        '<input type="text" id="dsXjZhuTi" placeholder="' + escapeHtml(tOr('panel.schedule.mailSubject', '主题（固定模板，执行前复核）')) + '">' +
+      '</div>' +
+      '<input type="number" id="dsXjRepeat" min="0" value="0" placeholder="' + escapeHtml(tOr('panel.schedule.repeatHint', '循环次数 0=无限')) + '">' +
+      '<div class="shiLiHang"><button class="anNiuXiao" id="dsXjTiJiao">' + escapeHtml(tOr('panel.schedule.submit', '登记')) + '</button><button class="anNiuXiao" id="dsXjQuXiao">' + escapeHtml(tOr('common.cancel', '取消')) + '</button></div>' +
+      '<div class="jingYin" style="font-size:11px">' + escapeHtml(tOr('panel.schedule.createHint', '脚本按创建时确认的命令/参数/目录固定授权，执行前复核；离线错过不自动补跑，会发系统消息由你决定。')) + '</div>' +
+      '</div>';
+    document.getElementById('dsXjQuXiao').onclick = () => { qu.innerHTML = ''; };
+    /* 邮件字段：选邮件时显示并拉账号列表（没有账号引导去设置，不猜邮箱） */
+    const dongXuan = document.getElementById('dsXjDongZuo');
+    const youJianQu = document.getElementById('dsXjYouJianQu');
+    dongXuan.onchange = async () => {
+      const shiYou = dongXuan.value === 'mail';
+      youJianQu.style.display = shiYou ? 'flex' : 'none';
+      if (shiYou) {
+        const zhangHao = document.getElementById('dsXjZhangHao');
+        zhangHao.innerHTML = '';
+        try {
+          const r = await window.warmy.smtpList?.();
+          const lie = (r && r.accounts) || [];
+          if (!lie.length) { zhangHao.innerHTML = '<option value="">' + escapeHtml(tOr('panel.schedule.noMailAccount', '暂无账号：请先到 设置→SMTP 添加')) + '</option>'; }
+          else { for (const a of lie) { const o = document.createElement('option'); o.value = String(a.id || ''); o.textContent = String(a.biaoQian || a.user || a.id || ''); zhangHao.appendChild(o); } }
+        } catch { zhangHao.innerHTML = '<option value="">' + escapeHtml(tOr('panel.schedule.noMailAccount', '暂无账号：请先到 设置→SMTP 添加')) + '</option>'; }
+      }
+    };
+    document.getElementById('dsXjTiJiao').onclick = async () => {
+      const ming = String(document.getElementById('dsXjMing').value || '').trim() || tOr('panel.schedule.title', '定时任务');
+      const kind = String(document.getElementById('dsXjChuFa').value || 'interval');
+      const zhi = String(document.getElementById('dsXjZhi').value || '').trim();
+      const dong = String(document.getElementById('dsXjDongZuo').value || 'model');
+      const prompt = String(document.getElementById('dsXjPrompt').value || '').trim();
+      const cwd = String(document.getElementById('dsXjCwd').value || '').trim();
+      const repeat = Math.max(0, Number(document.getElementById('dsXjRepeat').value) || 0);
+      let trigger = null;
+      if (kind === 'interval') trigger = { kind: 'interval', everyMs: Math.max(1, Number(zhi) || 30) * 60000 };
+      else if (kind === 'daily') trigger = { kind: 'daily', hhmm: zhi };
+      else if (kind === 'once') trigger = { kind: 'once', at: new Date(zhi).getTime() };
+      else if (kind === 'delay') trigger = { kind: 'delay', ms: Math.max(0, Number(zhi) || 1) * 60000 };
+      else if (kind === 'randomDaily') { const m = /^(\d+)\s*-\s*(\d+)$/.exec(zhi); trigger = m ? { kind: 'randomDaily', fromMin: Number(m[1]), toMin: Number(m[2]) } : null; }
+      else if (kind === 'randomInterval') { const m = /^(\d+)\s*-\s*(\d+)$/.exec(zhi); trigger = m ? { kind: 'randomInterval', minMs: Number(m[1]) * 60000, maxMs: Number(m[2]) * 60000 } : null; }
+      else if (kind === 'condition') trigger = zhi ? { kind: 'condition', predicate: { op: 'fileExists', path: zhi } } : null;
+      if (!trigger || (kind === 'once' && !Number.isFinite(trigger.at))) { showToast(tOr('panel.schedule.badValue', '触发值不合法')); return; }
+      let action = null;
+      let shouQuan = undefined;
+      if (dong === 'model') action = { kind: 'model', prompt };
+      else if (dong === 'ring') action = { kind: 'ring', times: Math.max(1, Math.min(10, Number(zhi) || 1)) };
+      else if (dong === 'mail') {
+        const zhangHao = String((document.getElementById('dsXjZhangHao') || {}).value || '');
+        const shouJian = String((document.getElementById('dsXjShouJian') || {}).value || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+        const zhuTi = String((document.getElementById('dsXjZhuTi') || {}).value || '').trim();
+        if (!zhangHao) { showToast(tOr('panel.schedule.noMailAccount', '暂无账号：请先到 设置→SMTP 添加')); return; }
+        if (!shouJian.length || !zhuTi || !prompt) { showToast(tOr('panel.schedule.mailNeed', '邮件需要收件人、主题与正文')); return; }
+        action = { kind: 'mail', accountId: zhangHao, to: shouJian, subject: zhuTi, bodySource: 'fixed', body: prompt };
+        shouQuan = { version: 1, grantedAt: Date.now(), scope: ['定时邮件：账号 ' + zhangHao + '，收件人 ' + shouJian.join('/') + '，主题「' + zhuTi + '」（创建时确认）'], mail: { accountId: zhangHao, to: shouJian, subjectMoBan: zhuTi, attachmentsFanWei: [] } };
+      }
+      else if (dong === 'script') {
+        const parts = prompt.split(/\s+/).filter(Boolean);
+        if (!parts.length || !cwd) { showToast(tOr('panel.schedule.scriptNeed', '脚本需要命令与绝对工作目录')); return; }
+        action = { kind: 'script', command: parts[0], args: parts.slice(1), cwd };
+      }
+      if (!action || (dong === 'model' && !prompt)) { showToast(tOr('panel.schedule.badAction', '动作内容不合法')); return; }
+      if (!sid) { showToast(tOr('panel.schedule.needSession', '请先选中一个会话')); return; }
+      try {
+        const r = await window.warmy.dingShiV2ChuangJian?.({ sessionId: sid, name: ming, trigger, action, repeat, prompt: dong === 'model' ? prompt : '', ...(shouQuan ? { shouQuan } : {}) });
+        if (r && r.ok) { showToast(tOr('panel.schedule.created', '已登记')); qu.innerHTML = ''; }
+        else showToast(String((r && r.error) || tOr('panel.schedule.createFail', '登记失败')));
+      } catch { showToast(tOr('panel.schedule.createFail', '登记失败')); }
+      try { const lb = await window.warmy.dingShiRenWuLieBiao?.(); if (lb && lb.tasks) { state.dingShiRenWu = lb.tasks; renderDingShiKa(); } } catch { /* noop */ }
+    };
   }
 
 
@@ -11011,17 +11206,14 @@ window.__keYiLiaoTian = keYiLiaoTian;
     } catch { /* 默认开 */ }
   }
 
-  /** 空闲自动摘要：每 10 分钟检查一次；有新消息且空闲才生成 */
-  setInterval(() => {
-    if (!autoSummaryOn || !state.selectedChat) return;
-    const qunId = state.selectedChat.id;
-    const xiaoXi = (window.__msgs && window.__msgs[qunId]) || [];
-    if (!xiaoXi.length) return;
-    const lastTs = xiaoXi[xiaoXi.length - 1] && xiaoXi[xiaoXi.length - 1].ts || 0;
-    const kongxian = Date.now() - lastTs > 3 * 60 * 1000;
-    const since = Date.now() - lastSummaryAt > 10 * 60 * 1000;
-    if (kongxian && since) void genSessionSummary(true);
-  }, 60 * 1000);
+  // 自动总结统一由主进程稳定巡查；输入活动只传会话ID，避免输入中的会话被误判静默。
+  let lastSummaryActivity = 0;
+  document.addEventListener('input', () => {
+    const now = Date.now(); if (now - lastSummaryActivity < 5000) return;
+    const sid = String(state.selectedChat?.id || ''); if (!sid) return;
+    lastSummaryActivity = now;
+    void window.warmy.zongJieHuoDong?.({ sessionId: sid }).catch(() => {});
+  });
 
   // ── 聊天滚动：下箭头 / 新消息气泡 / 自动滚动 ──
   (function bindScrollUx() {
@@ -11145,6 +11337,98 @@ window.__keYiLiaoTian = keYiLiaoTian;
     }
     syncJian();
     window.__syncJian = syncJian;
+    /* R298 开发模式：每会话独立开关，默认不勾；切换不中断在飞任务；分身继承所属会话。
+       主进程按 sid 合并持久化（专用 IPC，不整 map 覆盖）；多窗口广播同步。 */
+    const miKai = $('caiDanTuBiaoKaiFa');
+    const markKai = $('caiDanTuBiaoKaiFaMark');
+    const miKaiZan = $('caiDanTuBiaoKaiFaZan');
+    const markKaiZan = $('caiDanTuBiaoKaiFaZanMark');
+    let kaiLastSid = '';
+    const kaiSid = () => String((state.selectedChat && state.selectedChat.id) || (state.selectedInstance && state.selectedInstance.id) || '');
+    const syncKai = async (force) => {
+      const sid = kaiSid();
+      if (!force && sid === kaiLastSid) return;
+      kaiLastSid = sid;
+      let on = false, zan = false;
+      if (sid) { try { const r = await window.warmy.kaiFaMoShiZhuangTai?.({ sid }); on = !!(r && r.state && r.state.enabled); zan = !!(r && r.state && r.state.autoOptPaused); } catch { /* noop */ } }
+      if (markKai) markKai.style.visibility = on ? 'visible' : 'hidden';
+      if (miKai) {
+        miKai.setAttribute('aria-checked', on ? 'true' : 'false');
+        miKai.title = tOr('chat.devModeTip', '开发模式：当前会话适用机械低成本快响应约束与可验证软规则自改进；硬安全边界不可关闭。可能增加检查时间与模型费用。');
+      }
+      /* 暂停自动优化：仅开发模式开启时可见；勾选=暂停候选生成与验证（监测退化仍跑） */
+      if (miKaiZan) {
+        miKaiZan.hidden = !on;
+        miKaiZan.setAttribute('aria-checked', zan ? 'true' : 'false');
+        miKaiZan.title = tOr('chat.devModePauseOptTip', '暂停自动优化：不再后台生成/验证软规则候选；已生效规则仍监测退化并可回滚。硬边界与开发模式本身不受影响。');
+      }
+      if (markKaiZan) markKaiZan.style.visibility = zan ? 'visible' : 'hidden';
+    };
+    if (miKai && !miKai.dataset.bound) {
+      miKai.dataset.bound = '1';
+      miKai.addEventListener('click', async () => {
+        const sid = kaiSid();
+        if (!sid) { showToast(tOr('chat.devModeNeedSession', '请先选中一个会话')); return; }
+        try {
+          const r0 = await window.warmy.kaiFaMoShiZhuangTai?.({ sid });
+          const st = (r0 && r0.state) || { enabled: false, version: 0 };
+          const r = await window.warmy.kaiFaMoShiQieHuan?.({ sid, enabled: !st.enabled, version: st.version });
+          if (r && r.ok === false) showToast(String(r.error || ''));
+        } catch { /* noop */ }
+        kaiLastSid = '';
+        void syncKai(true);
+      });
+    }
+    if (miKaiZan && !miKaiZan.dataset.bound) {
+      miKaiZan.dataset.bound = '1';
+      miKaiZan.addEventListener('click', async () => {
+        const sid = kaiSid();
+        if (!sid) return;
+        try {
+          const r0 = await window.warmy.kaiFaMoShiZhuangTai?.({ sid });
+          const st = (r0 && r0.state) || { autoOptPaused: false };
+          await window.warmy.kaiFaZanTingYouHua?.({ sid, paused: !st.autoOptPaused });
+        } catch { /* noop */ }
+        kaiLastSid = '';
+        void syncKai(true);
+      });
+    }
+    void syncKai(true);
+    window.__syncKai = syncKai;
+    try { window.warmy.onKaiFaMoShiBianHua?.((d) => { if (String((d && d.sid) || '') === kaiSid()) { kaiLastSid = ''; void syncKai(true); } }); } catch { /* noop */ }
+        /* R298：自驱连续 3 次未获回复→宿主已自动取消勾选；界面同步取消＋提示，用户重勾才恢复 */
+        try {
+          window.warmy.onZiQuAutoOff?.((d) => {
+            const sid = String((d && d.sid) || '');
+            if (!sid) return;
+            let gai = false;
+            for (const lie of [state.chats, state.instances, state.groups]) {
+              const it = (lie || []).find((x) => String(x && x.id || '') === sid);
+              if (it && it.autoDrive !== false) { it.autoDrive = false; gai = true; }
+            }
+            if (gai) { try { window.__saveState?.(); } catch { /* noop */ } try { renderList(); } catch { /* noop */ } }
+            showToast(tOr('ctx.autoDrivePaused', '自驱已连续 3 次未获回复，已暂停；右键重新勾选可恢复'));
+          });
+        } catch { /* noop */ }
+    /* R298 自我改进审批：软门禁提案须用户批准；硬门禁提案已被宿主静默丢弃，不会到这里 */
+    async function jinHuaShenPiYiGe(p) {
+      const xuan = await kaiFaDuiHuaKuang(
+        tOr('chat.jinHuaShenPiTitle', '自我改进申请（需你批准）'),
+        String(p.neiRong || p.xiangMuId || '') + '\n' + tOr('chat.jinHuaRuanMen', '触及软门禁') + ': ' + (p.ruan || []).join(' / ') + '\n' + tOr('chat.jinHuaShenPiBody', '同意后才执行；拒绝即丢弃。安全性硬门禁不可被任何提案越过。'),
+        [{ label: tOr('chat.jinHuaAgree', '同意'), value: 'yes' }, { label: tOr('chat.jinHuaDecline', '拒绝'), value: 'no' }]);
+      try { await window.warmy.jinHuaPiZhun?.({ id: p.id, agreed: xuan === 'yes' }); } catch { /* noop */ }
+    }
+    async function openJinHuaShenPi() {
+      try {
+        const r = await window.warmy.jinHuaQingDan?.();
+        const lie = (r && r.piZhun) || [];
+        if (!lie.length) { showToast(tOr('chat.jinHuaNone', '暂无待批准的自我改进申请') + '（' + tOr('chat.jinHuaQingDanN', '可改进清单') + ' ' + ((r && r.qingDan) || []).length + ' ' + tOr('chat.jinHuaXiang', '项') + '）'); return; }
+        for (const p of lie) await jinHuaShenPiYiGe(p);
+      } catch { /* noop */ }
+    }
+    const miJinHua = $('caiDanTuBiaoJinHua');
+    if (miJinHua && !miJinHua.dataset.bound) { miJinHua.dataset.bound = '1'; miJinHua.addEventListener('click', () => { void openJinHuaShenPi(); }); }
+    try { window.warmy.onJinHuaPiZhunQingQiu?.((d) => { if (d && d.id) void jinHuaShenPiYiGe(d); }); } catch { /* noop */ }
     // 输入字数
     const input = $('shuRu');
     const counter = $('shuRuCounter');
@@ -12891,7 +13175,64 @@ window.__keYiLiaoTian = keYiLiaoTian;
    * 直接路径（P0·P1，见 faSong()）与「待执行队列」的冲刷走的是**同一个**实现 ——
    * 修前排队项只被本地回显、从不派发，根因就是没有这一份共用的"派发"。
    */
-  async function deliver(chatId, text, u, fuJian) {
+    /** R298：开发模式建议/重构询问对话框（只建议不自启；未经同意零实际重构） */
+  function kaiFaDuiHuaKuang(biaoTi, zhengWen, anNiu) {
+    return new Promise((resolve) => {
+      const bei = document.createElement('div');
+      bei.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center';
+      const ka = document.createElement('div');
+      ka.style.cssText = 'background:var(--bg,#1e1e1e);color:var(--fg,#eee);max-width:520px;max-height:70vh;overflow:auto;border-radius:10px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,.5)';
+      ka.innerHTML = '<div style="font-weight:600;margin-bottom:8px">' + escapeHtml(biaoTi) + '</div><div style="font-size:12px;white-space:pre-wrap;margin-bottom:12px">' + escapeHtml(zhengWen) + '</div>';
+      const hang = document.createElement('div');
+      hang.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+      for (const a of anNiu) {
+        const b = document.createElement('button');
+        b.className = 'anNiuXiao';
+        b.textContent = a.label;
+        b.onclick = () => { try { bei.remove(); } catch { /* noop */ } resolve(a.value); };
+        hang.appendChild(b);
+      }
+      ka.appendChild(hang); bei.appendChild(ka); document.body.appendChild(bei);
+    });
+  }
+  /** 检测到可能创建程序（启发式关键词，只建议）；拒绝后同任务不反复提示（主进程去重） */
+  async function kaiFaJianYiJianCe(sid, wen) {
+    try {
+      if (!sid || !wen) return;
+      if (!/写(一个|个)?(程序|软件|工具|脚本|app|应用|网站|插件)|创建(一个)?(项目|程序)|开发(一个)?(程序|软件|应用|项目)|做个(软件|程序|网站|app)|build (an? )?(app|program|software)|create (a )?project/i.test(wen)) return;
+      const r = await window.warmy.kaiFaJianYi?.({ sid, taskId: 'dev-' + sid });
+      if (!r || !r.suggest) return;
+      const xuan = await kaiFaDuiHuaKuang(tOr('chat.devModeSuggestTitle', '是否开启开发模式？'),
+        tOr('chat.devModeSuggestBody', '检测到你可能想创建程序。\n收益：代码核验、返工减少、机械低成本约束。\n成本：额外检查时间与模型费用。\n风险：可能误拦正常任务。\n建议：确定性开发任务开启；可随时在聊天框上方三点菜单关闭。'),
+        [{ label: tOr('chat.devModeEnable', '开启'), value: 'on' }, { label: tOr('chat.devModeLater', '暂不'), value: 'off' }]);
+      if (xuan === 'on') {
+        const r0 = await window.warmy.kaiFaMoShiZhuangTai?.({ sid });
+        const st = (r0 && r0.state) || { enabled: false, version: 0 };
+        await window.warmy.kaiFaMoShiQieHuan?.({ sid, enabled: true, version: st.version });
+        if (window.__syncKai) { void window.__syncKai(true); }
+      } else {
+        await window.warmy.kaiFaJuJue?.({ sid, taskId: 'dev-' + sid });
+      }
+    } catch { /* 建议失败不影响发送 */ }
+  }
+  /** 重构询问：下次对话说明优缺点/风险/范围/验证/回滚；同意前零实际重构 */
+  async function kaiFaChongGouXunWen(sid) {
+    try {
+      if (!sid) return;
+      const r = await window.warmy.kaiFaRuanGuiZeCha?.({ sid });
+      const lie = (r && r.chongGouDaiXunWen) || [];
+      if (!lie.length) return;
+      const j = lie[0];
+      const xuan = await kaiFaDuiHuaKuang(tOr('chat.refactorTitle', '结构重构建议（需你同意）'),
+        String(j.wenTi || '') + '\n' + tOr('chat.refactorPros', '优点') + ': ' + String(j.youDian || '') + '\n' + tOr('chat.refactorCons', '缺点') + ': ' + String(j.queDian || '') + '\n' + tOr('chat.refactorRisk', '风险') + ': ' + String(j.fengXian || '') + '\n' + tOr('chat.refactorScope', '影响范围') + ': ' + String(j.fanWei || '') + '\n' + tOr('chat.refactorVerify', '验证') + ': ' + String(j.yanZheng || '') + '\n' + tOr('chat.refactorRollback', '回滚') + ': ' + String(j.huiGun || ''),
+        [{ label: tOr('chat.refactorAgree', '同意重构'), value: 'agreed' }, { label: tOr('chat.refactorDefer', '暂缓'), value: 'deferred' }, { label: tOr('chat.refactorDecline', '不需要'), value: 'declined' }]);
+      await window.warmy.kaiFaChongGouJueDing?.({ sid, id: j.id, jue: xuan });
+    } catch { /* noop */ }
+  }
+
+async function deliver(chatId, text, u, fuJian) {
+    /* R298：开发模式建议 + 重构询问（非阻塞；只建议不自启，不中断正常发送） */
+    try { void kaiFaJianYiJianCe(String(chatId || ''), String(text || '')); void kaiFaChongGouXunWen(String(chatId || '')); } catch { /* noop */ }
     const kind = chatKindOf(chatId);
     /** 附件随本轮一起交给主进程（图片走多模态）；发送前已从 state 摘下，这里才是真正送达的那份 */
     const fuJianJi = Array.isArray(fuJian) ? fuJian : [];
@@ -14693,6 +15034,13 @@ async function renderDashboard(host) {
           </div>
         </div>
 
+        <!-- R298 修复：R267/R276 弹窗重构时丢失的状态徽章与启动/停止/删除按钮补回（轮询与单飞处理器一直在引用它们） -->
+        <div class="shiLiHang" style="margin-top:10px;align-items:center;gap:10px">
+          <span class="huiZhang ${inst.status === 'running' ? '' : 'off'}">${escapeHtml(inst.status === 'running' ? t('instances.running') : t('instances.stopped'))}</span>
+          <button class="anNiuXiao" id="iQiDongTingZhi" type="button">${escapeHtml(inst.status === 'running' ? t('instances.stop') : t('instances.start'))}</button>
+          <button class="anNiuDanger" id="iDel" type="button">${escapeHtml(t('instances.delete'))}</button>
+        </div>
+
         <!-- 运行环境：与项目创建同一套 host|container 语义；容器模式需要先选一个运行时 -->
         <div class="shiLiHang" style="margin-top:10px;align-items:center;gap:10px;flex-wrap:wrap" title="${escapeHtml(tOr('instances.devEnvHint', '默认本机。选「容器中」需要先在 设置 → 功能 → 容器 里装好并启动容器，再选一个容器。'))}">
           <span class="jingYin">${escapeHtml(tOr('instances.devEnv', '运行环境'))}</span>
@@ -16004,7 +16352,8 @@ async function renderDashboard(host) {
        * 默认模型只有上面那一处写入口。 */
     })();
 
-    $('iDel').onclick = async () => {
+    const iDelAn = $('iDel');
+    if (iDelAn) iDelAn.onclick = async () => {
       /* R219：拟态在 设置→拟态 管理，不从牛马设置删除（目录保留，工作区不动） */
       if (shiNiTaiBenTi(inst)) { uiAlert(tOr('mimic.noDelete', '拟态在 设置 → 拟态 里管理，不从这里删除。')); return; }
       // 这里原本漏了 await：`!uiConfirm(...)` 永远是 false（Promise 恒真），于是**确认框形同虚设**
@@ -17559,8 +17908,7 @@ async function renderDashboard(host) {
           <div class="field" style="margin-top:8px">
             <label>${escapeHtml(tOr('archive.when', '什么时候总结'))}</label>
             <div id="guiDangShiJi" style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
-              <label><input type="radio" name="guiDangShiJi" value="idle"/> ${escapeHtml(tOr('archive.whenIdle', '空闲时自动触发（连续 3 分钟没有操作就总结一次）'))}</label>
-              <label><input type="radio" name="guiDangShiJi" value="daily"/> ${escapeHtml(tOr('archive.whenDaily', '每天的固定时段内进行'))}</label>
+              <label>${escapeHtml(tOr('archive.whenIdle', '有新增内容且15分钟未变化后自动总结'))}</label>
             </div>
             <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
               <span class="jingYin">${escapeHtml(tOr('archive.from', '从'))}</span>
@@ -21611,8 +21959,9 @@ async function renderDashboard(host) {
               '<div><b>' + escapeHtml(a.biaoQian) + '</b> <span class="jingYin">' + escapeHtml(a.user) + '@' + escapeHtml(a.host) + ':' + escapeHtml(String(a.port)) + '</span></div>' +
               '<span class="huiZhang ' + (a.yiYanZheng ? '' : 'off') + '">' + (a.yiYanZheng ? t('smtp.verified') : t('smtp.unverified')) + '</span>' +
               '<button class="anNiuXiao" data-v="' + escapeHtml(a.id) + '">' + escapeHtml(t('smtp.verify')) + '</button>' +
+              '<button class="anNiuXiao" data-t="' + escapeHtml(a.id) + '">' + escapeHtml(tOr('smtp.testSend', '测试发件')) + '</button>' +
               '<button class="anNiuXiao" data-x="' + escapeHtml(a.id) + '">' + escapeHtml(t('smtp.remove')) + '</button>' +
-              '</div></div>'
+              '</div><div data-tq="' + escapeHtml(a.id) + '"></div></div>'
           )
           .join('');
         heZi.querySelectorAll('[data-x]').forEach((b) => {
@@ -21633,6 +21982,29 @@ async function renderDashboard(host) {
             const vr = await window.warmy.smtpVerify({ ...Quan, id });
             $('smtpXiaoXi').textContent = vr?.ok ? t('smtp.ok') : t('smtp.fail') + ': ' + (vr?.message || '');
             renderSmtpList();
+          };
+        });
+        /* R298：测试发件——明确真实收件人并确认效果后才发；不向真实联系人擅自发信 */
+        heZi.querySelectorAll('[data-t]').forEach((b) => {
+          b.onclick = () => {
+            const id = b.dataset.t;
+            const qu = heZi.querySelector('[data-tq="' + id + '"]');
+            if (!qu) return;
+            if (qu.innerHTML) { qu.innerHTML = ''; return; }
+            qu.innerHTML = '<div class="shiLiHang" style="margin-top:4px">' +
+              '<input type="text" data-t-to placeholder="' + escapeHtml(tOr('smtp.testTo', '真实收件邮箱（会真实投递）')) + '" style="flex:1">' +
+              '<button class="anNiuXiao" data-t-ok>' + escapeHtml(tOr('smtp.testConfirm', '确认发送')) + '</button>' +
+              '</div>';
+            qu.querySelector('[data-t-ok]').onclick = async () => {
+              const to = String(qu.querySelector('[data-t-to]').value || '').trim();
+              if (!to) return;
+              $('smtpXiaoXi').textContent = t('common.loading');
+              try {
+                const r = await window.warmy.smtpCeShiFaSong?.({ id, to, confirm: true });
+                $('smtpXiaoXi').textContent = r?.ok ? tOr('smtp.testOk', '服务器已接受（不保证最终送达）') : (t('smtp.fail') + ': ' + String(r?.receipt || r?.error || ''));
+              } catch { $('smtpXiaoXi').textContent = t('smtp.fail'); }
+              qu.innerHTML = '';
+            };
           };
         });
       }
@@ -32974,6 +33346,8 @@ async function renderDashboard(host) {
       } catch { return '—'; }
     };
     /** 一行文件：图标 + 文件名（title = 完整路径）+ 类型/时间等副信息 */
+    /** R298：最近改动文件标记（主题色＝最新一轮对话中改动；字体色＝最近一次改动在更早轮次且之后无改动）；chan 构建后赋值 */
+    let zuiJinMark = () => null;
     /**
      * 第 30 轮 项 5/6：最近改动 / 其他文件 行样式
      *  · 第一行：图标 + 时间 + 文件名（过长中间截断）+ **操作**放行末
@@ -32993,10 +33367,12 @@ async function renderDashboard(host) {
         + (daXiaoWen ? '\n' + tOr('usage.size', '大小') + '：' + daXiaoWen : '');
       const tipHtml = escapeHtml(tip);
       const ming = jianMing(f.path);
+      const mark = zuiJinMark(f);
+      const markIco = mark ? '<span class="pfZuiJinBianJi pfZuiJin-' + mark + '" title="' + escapeHtml(tOr(mark === 'theme' ? 'projectFiles.latestRoundEdit' : 'projectFiles.latestEdit', mark === 'theme' ? '最新一轮对话中改动' : '最近一次改动')) + '"></span>' : '';
       return '<div class="ctgHang pfHang" data-path="' + escapeHtml(f.path) + '" data-kind="' + escapeHtml(f.kind) + '"' +
       (f.op ? ' data-op="' + escapeHtml(f.op) + '"' : '') +
       (f.source ? ' data-source="' + escapeHtml(f.source) + '"' : '') + ' data-open="' + escapeHtml(f.path) + '" title="' + tipHtml + '">' +
-      '<div class="ctgHangHead">' +
+      '<div class="ctgHangHead">' + markIco +
       '<span class="pfIcoJi" title="' + tipHtml + '">' + wenJianIco(f.path) + '</span>' +
       (heShi ? '<span class="pfShiJian" title="' + tipHtml + '">' + escapeHtml(heShi) + '</span>' : '') +
       '<span class="pfMing" title="' + tipHtml + '">' + escapeHtml(ming) + '</span>' +
@@ -33090,6 +33466,27 @@ async function renderDashboard(host) {
         chan.push({ path: p, ts: Number(g.ts) || Date.now(), kind: 'created', scope: 'project', source: 'work-file', bytes: Number(g.bytes) || 0 });
       }
       chan.sort((a, b) => (Number(b.ts) || 0) - (Number(a.ts) || 0));
+      /* R298：计算“最近一次改动”标记集：
+       *  · 最新一轮（最后一条用户消息之后）有改动 ⇒ 该轮改动的文件都标主题色；
+       *  · 否则取最近一次改动所在轮次（≤maxTs 的最后一条用户消息之后）标字体色；
+       *  · 无用户消息时只标 maxTs 那一批（字体色）。查看/读取不进 chan（主进程已排除）。 */
+      zuiJinMark = (() => {
+        const gai = chan.filter((f) => Number(f.ts) > 0);
+        if (!gai.length) return () => null;
+        const maxTs = Math.max(...gai.map((f) => Number(f.ts)));
+        const msgs = (window.__msgs && window.__msgs[sid]) || [];
+        const userTs = msgs.filter((m) => m && (m.role === 'user' || m.role === 'wo')).map((m) => Number(m.ts) || 0).filter((x) => x > 0).sort((a, b) => a - b);
+        const lastUser = userTs.length ? userTs[userTs.length - 1] : 0;
+        let roundStart, lei;
+        if (lastUser > 0 && maxTs >= lastUser) { roundStart = lastUser; lei = 'theme'; }
+        else {
+          const qian = userTs.filter((x) => x <= maxTs);
+          roundStart = qian.length ? qian[qian.length - 1] : 0;
+          lei = 'font';
+        }
+        const biaoJi = new Set(gai.filter((f) => roundStart > 0 ? Number(f.ts) >= roundStart : Number(f.ts) === maxTs).map((f) => String(f.path || '').toLowerCase()));
+        return (f) => biaoJi.has(String(f.path || '').toLowerCase()) ? lei : null;
+      })();
       // 第 30 轮 项 5：不再显示「AI 生成」等来源标签
       html.push(chan.length
         ? shuOf(chan.slice(0, 40), () => '')
@@ -35621,31 +36018,10 @@ try {
     $('anNiuGuiDangLiJi')?.addEventListener('click', () => void pao(false));
     $('anNiuGuiDangQuanLiang')?.addEventListener('click', () => void pao(true));
 
-    /**
-     * 自动触发：**空闲** = 连续 3 分钟没有任何操作；**每天某时段** = 落在起止时刻之间。
-     * 触发也走增量，所以空闲时反复扫是廉价的（游标挡住后不会真的写）。
-     */
-    let zuiJinCaoZuo = Date.now();
-    ['pointerdown', 'keydown'].forEach((ev) => {
-      document.addEventListener(ev, () => { zuiJinCaoZuo = Date.now(); }, { passive: true });
-    });
-    setInterval(() => {
-      try {
-        // 总开关关闭时不执行自动总结
-        const kg = $('guiDangZongKaiGuan');
-        if (kg && !kg.checked) return;
-        const mode = (document.querySelector('input[name="guiDangShiJi"]:checked') || {}).value || 'idle';
-        if (!keYiHuiHuaJi().length) return;
-        if (mode === 'idle') {
-          if (Date.now() - zuiJinCaoZuo >= 180000) void pao(false);
-          return;
-        }
-        const hhmm = TZ.hm(Date.now());
-        const a = $('guiDangMeiTianQi')?.value || '02:00';
-        const b = $('guiDangMeiTianZhi')?.value || '04:00';
-        if (hhmm >= a && hhmm <= b) void pao(false);
-      } catch { /* 定时器出错不能影响别的 */ }
-    }, 60000);
+    // 自动入口只有主进程心跳巡查。设置页反复打开不能重复注册总结计时器。
+    for (const id of ['guiDangMeiTianQi', 'guiDangMeiTianZhi']) {
+      const input = $(id); if (input) { input.disabled = true; input.closest('div').style.display = 'none'; }
+    }
   }
 
   /**
@@ -38834,15 +39210,15 @@ try {
     /**
      * **定时任务汇报直接进聊天框**（第 42 轮，T6）：不向牛马汇报、也不额外开一个"通知"，
      * 和牛马回复一样显示（开头【XX定时任务汇报】），悬停时同样显示模型/时间信息。
+     * R298：主进程 paoDingShiRenWu 已经 zhuiJiaLiaoTianRiZhi 落账（唯一事实来源），
+     * 这里不再向 __msgs 推第二份（旧推法 role/content 字段与去重签名对不上，必留重复气泡），
+     * 只按主进程那份回读刷新。
      */
     window.warmy.onDingShiHuiBao?.((d) => {
       try {
         const sid = String((d && d.sessionId) || '');
         if (!sid) return;
-        const neirong = String((d && d.content) || '');
-        window.__msgs = window.__msgs || {};
-        window.__msgs[sid] = window.__msgs[sid] || [];
-        window.__msgs[sid].push({ role: 'assistant', content: neirong, ts: Date.now() });
+        void loadSessionMessages(sid);
         const dangQian = String((state.selectedChat && state.selectedChat.id) || state.selectedInstance?.id || '');
         if (dangQian === sid) { try { renderChat(); } catch { /* noop */ } }
       } catch { /* 汇报失败不许影响界面 */ }
@@ -38851,12 +39227,18 @@ try {
       state.dingShiRenWu = (d && d.tasks) || [];
       try { queBaoKaPian('mianBanDingShiKuai'); renderDingShiKa(); } catch { /* noop */ }
     });
+    /* R298：定时响铃——真实播放后回执（主进程据此记成功/失败，不假装响过） */
+    window.warmy.onDingShiXiangLing?.((d) => {
+      const ok = dingShiXiangLingBoFang(Math.max(1, Math.min(10, Number(d && d.times) || 1)));
+      try { void window.warmy.dingShiXiangLingHuiZhi?.({ ackId: String((d && d.ackId) || ''), ok }); } catch { /* noop */ }
+    });
     window.warmy.onDingShiDaoDian?.((d) => {
       try { queBaoKaPian('mianBanDingShiKuai'); renderDingShiKa(); } catch { /* noop */ }
-      // 到点：替用户发这一轮（走与手动发送同一条派发路径）
-      try {
-        if (d && d.sessionId && d.prompt) void deliver(String(d.sessionId), String(d.prompt), 'P2');
-      } catch { /* noop */ }
+      /**
+       * R298 双派发修复：到点执行唯一 owner = 主进程 chunKaoDingShiRenWu → paoDingShiRenWu（分身真跑）。
+       * 这里原来还替用户 deliver 一轮 ⇒ 同一 prompt 跑两遍、多窗口各跑一遍。
+       * 现在只刷新卡片；结果由 dingShiHuiBao/liaoTianUpdated 按主进程日志回读。
+       */
     });
     // 计划任务更新（AI 列/改计划）：卡片自动出现并刷新（被关掉也会补回）
     window.warmy.onJiHuaGengXin?.((d) => {

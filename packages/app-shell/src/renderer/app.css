@@ -556,11 +556,14 @@ body.liaoTianChuangKou .liaoTianBuJu {
   .lieBiaoTiaoMu .avKuang { width: 44px; height: 44px; }
   .lieBiaoTiaoMu .avTuPian { width: 44px; height: 44px; }
 }
-/* 无障碍：系统开了「减少动态效果」时三层都退成**静态可见**，不是退成没有 */
+/* 无障碍：系统开了「减少动态效果」时三层都退成**静态可见**，不是退成没有。
+   R298：现行机制是 background-position 扫掠（非角度变量），必须真停 animation，
+   旧 --yunXingJiao 静态值对 background-position 动画无效（残留缺陷）。 */
 @media (prefers-reduced-motion: reduce) {
-  .lieBiaoTiaoMu .avKuang.yunXingZhong::before { --yunXingJiao: 135deg; }
-  .lieBiaoTiaoMu .avKuang.yunXingZhong::after { --yunXingJiao2: 200deg; filter: blur(3px); }
+  .lieBiaoTiaoMu .avKuang.yunXingZhong::before { animation: none; background-position: 50% 50%; }
+  .lieBiaoTiaoMu .avKuang.yunXingZhong::after { animation: none; background-position: 50% 50%; filter: blur(3px); }
   .lieBiaoTiaoMu .avKuang.yunXingZhong {
+    animation: none;
     box-shadow: 0 0 0 2px var(--yunXing-yun-qiang, rgba(168,118,84,.52));
   }
 }
@@ -4339,6 +4342,10 @@ html { font-weight: var(--fw-ui, 400); }
   width: 100%;
 }
 .pfHang .pfIcoJi { flex: 0 0 auto; display: inline-flex; align-items: center; }
+/* R298：最近改动文件标记（用户提供的时钟图标，mask 随色）：主题色＝最新一轮改动；字体色＝更早轮次的最近改动 */
+.pfZuiJinBianJi { flex: 0 0 auto; width: 12px; height: 12px; margin-right: 2px; background-color: currentColor; -webkit-mask: url('zuiJinBianJi.svg') center / contain no-repeat; mask: url('zuiJinBianJi.svg') center / contain no-repeat; }
+.pfZuiJin-theme { color: var(--accent); }
+.pfZuiJin-font { color: var(--ink); }
 .pfHang .pfMing,
 .pfHang .pfHideXiao {
   flex: 0 1 auto;

@@ -18,8 +18,7 @@ export interface ZiDongGuiDangYiLai {
   jingCuoWu: (e: unknown) => string;
 }
 
-/** 每攒够这么多条新日志才自动归一次 */
-const GUI_DANG_MEI_LUN = 30;
+/** 自动入口只登记新增来源；真正的15分钟稳定性由统一巡查owner判断。 */
 
 export function chuangJianZiDongGuiDang(yiLai: ZiDongGuiDangYiLai) {
   /** 自动归档水位：sessionId → 上次触发时的末 seq（在途跳过须退回） */
@@ -30,19 +29,18 @@ export function chuangJianZiDongGuiDang(yiLai: ZiDongGuiDangYiLai) {
       if (!k) return;
       if ((yiLai.duSheZhi() as { autoSummary?: boolean } | undefined)?.autoSummary === false) return;
       const rizhi = yiLai.duRiZhi(k) || [];
-      if (rizhi.length < GUI_DANG_MEI_LUN + 10) return;
+      if (!rizhi.length) return;
       const zuiHou = Number(rizhi[rizhi.length - 1]?.seq || 0) || yiLai.zuiHouSeq();
       const shangCi = guiDangZuiHouXu.get(k) || 0;
-      if (zuiHou - shangCi < GUI_DANG_MEI_LUN) return;
-      guiDangZuiHouXu.set(k, zuiHou);
+      if (zuiHou <= shangCi) return;
       /** 自动总结 = 立即总结的同一管线（用户定稿）：自动入口只调归档管线，它内部再调摘要核心。 */
       const r = await yiLai.guiDang(k, { auto: true });
       /* R272 项9：总结调用链均不可用⇒系统消息（不弹窗）；模型异常不影响程序本身 */
-      if (r && r.ok === false && r.skipped !== 'in-flight') {
+      if (r && r.ok === false && r.skipped !== 'in-flight' && r.skipped !== 'scheduled') {
         try { yiLai.xiTongXiaoXi('system', '自动总结', '自动总结未能完成（总结模型调用链均不可用或返回空）。可在 设置→功能→总结 调整调用链。'); } catch { /* noop */ }
       }
       /** 跳过时不许推进水位（第 52 轮）：会话正在生成⇒本轮跳过，水位照推进则被跳过的那几十条永远不会被总结。 */
-      if (r && r.skipped === 'in-flight') guiDangZuiHouXu.set(k, shangCi);
+      if (r && (r.ok || r.skipped === 'scheduled')) guiDangZuiHouXu.set(k, zuiHou);
       yiLai.auditLog('chat.auto-archive', { sessionId: k, ok: !!r.ok, seq: zuiHou, at: Math.max(0, zuiHou - shangCi), jiangJi: !!r.jiangJi, guiDangHeXin: !!r.guiDangHeXin, tiaoguo: r.skipped === 'in-flight' ? 'in-flight' : '' });
     } catch (e) {
       try { yiLai.auditLog('chat.auto-archive-fail', { sessionId, error: yiLai.jingCuoWu(e).slice(0, 140) }); } catch { /* noop */ }

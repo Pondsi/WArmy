@@ -17,6 +17,9 @@
  * 这样不会因为值班者模型幻觉而绕开牛马自己的模型设置。
  */
 import type { Jinji, CuoHuaFangShi, ZhiXingFenPei, SiKaoDangWei } from '@warmy/contracts';
+import { LU_YOU_MO_REN, jianYanLuYouCanShu, type LuYouCanShu } from './ji-chu/lu-you-yu-ce-gui-ze.js';
+let duPaiFaYuCe: () => LuYouCanShu = () => LU_YOU_MO_REN;
+export function sheZhiPaiFaYuCe(du: typeof duPaiFaYuCe): void { duPaiFaYuCe = du; }
 import { guSuanMoXingQiangDu, guSuanMoXingSuDu, zuiQiangMoXing, zuiKuaiMoXing } from './mo-xing-qiang-du.js';
 
 export type { CuoHuaFangShi, ZhiXingFenPei };
@@ -144,8 +147,9 @@ export function chaHuaCongJi(ji: number, stopIntent = false, urgeCount = 0): Cuo
     if (j >= 5 || urgeCount >= 2) return 'stop';
     if (j >= 4) return 'urgent';
   }
-  if (j >= 4) return 'urgent';
-  if (j === 3) return 'insert';
+  const params = jianYanLuYouCanShu(duPaiFaYuCe()) || LU_YOU_MO_REN;
+  if (j >= params.urgentAt) return 'urgent';
+  if (j >= params.insertAt) return 'insert';
   return 'queue';
 }
 
@@ -154,6 +158,7 @@ export function chaHuaCongJi(ji: number, stopIntent = false, urgeCount = 0): Cuo
  * 任何输入都不抛错；没有候选时返回空 assignments（由调用方让值班者自己答）。
  */
 export function paiFaZhiXingZhe(q: PaiFaQingQiu): PaiFaJiHua {
+  const params = jianYanLuYouCanShu(duPaiFaYuCe()) || LU_YOU_MO_REN;
   const urgency: Jinji = q.urgency || 'P2';
   const du = q.difficulty || { nan: 3, za: 3, ji: 3, importance: 3, thinkLevel: 'l4' };
   const nan = qie(du.nan);
@@ -186,7 +191,7 @@ export function paiFaZhiXingZhe(q: PaiFaQingQiu): PaiFaJiHua {
     const qiang = Number(c.modelQiang) || (models.length ? guSuanMoXingQiangDu(zuiQiangMoXing(models)) : 3);
     const kuai = Number(c.modelKuai) || (models.length ? guSuanMoXingSuDu(zuiKuaiMoXing(models)) : 3);
     if (qiang >= nan) score += 18;
-    else score -= (nan - qiang) * 35;
+    else score -= (nan - qiang) * params.under;
     if (ji >= 4) {
       score += (kuai - 3) * 12;
       if (!c.benDi) score += 8;
@@ -303,5 +308,5 @@ export function yongHuYaoQiuZhiBanZiZuo(content: string): boolean {
 /** 用户是否明确**禁止**值班者自己执行（避免兜底越过用户意图） */
 export function yongHuJinZhiZhiBanZiZuo(content: string): boolean {
   const s = String(content || '');
-  return /(?:(?:不要|别|不需要|无需|不用|不必|禁止|不允许|不能)[^，。！？\n]{0,16}(?:值班者|你)[^，。！？\n]{0,12}(?:自己|亲自|来)?[^，。！？\n]{0,8}(?:执行|做|完成|处理|接手|兜底))|(?:(?:值班者|你)[^，。！？\n]{0,12}(?:不要|别|不能|禁止|不允许|无需|不需要|不用|不必)[^，。！？\n]{0,12}(?:自己|亲自|来)?[^，。！？\n]{0,8}(?:执行|做|完成|处理|接手|兜底))/i.test(s);
+  return /(?:(?:不要|别|不需要|无需|不用|不必|禁止|不允许|不能)[^，。！？\x0a]{0,16}(?:值班者|你)[^，。！？\x0a]{0,12}(?:自己|亲自|来)?[^，。！？\x0a]{0,8}(?:执行|做|完成|处理|接手|兜底))|(?:(?:值班者|你)[^，。！？\x0a]{0,12}(?:不要|别|不能|禁止|不允许|无需|不需要|不用|不必)[^，。！？\x0a]{0,12}(?:自己|亲自|来)?[^，。！？\x0a]{0,8}(?:执行|做|完成|处理|接手|兜底))/i.test(s);
 }

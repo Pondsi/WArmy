@@ -16,7 +16,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { daMa, lieQuanPanGen, type SousuoMingzhong } from './local-search.js';
+import { daMa, lieQuanPanGenYiBu, type SousuoMingzhong } from './local-search.js';
 
 const WEN_BEN = new Set([
   '.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.tsv', '.log', '.ini', '.cfg', '.conf',
@@ -88,6 +88,8 @@ export class QuanPanSuoYin {
   private contentDone = 0;
   private fileCount = 0;
   private lastCheckpoint = 0;
+  private startVersion = 0;
+  private rootProbe: AbortController | null = null;
   readonly dbPath: string;
 
   constructor(dbPath: string) {
@@ -160,17 +162,27 @@ export class QuanPanSuoYin {
     if (!this.enabled || this.running) return;
     this.running = true;
     this.stopping = false;
-    if (!this.roots.length) this.roots = lieQuanPanGen();
-    if (!this.seeded) {
-      this.seeded = true;
-      for (const r of this.roots) this.queue.push({ p: r, prio: youXian(r), depth: 0 });
-    }
-    this.tick();
+    const version = ++this.startVersion;
+    const probe = new AbortController(); this.rootProbe = probe;
+    // 系统盘符枚举只做异步，不把离线映射盘的系统超时阻塞到窗口启动/聊天线程。
+    void (async () => {
+      let roots = this.roots;
+      try { if (!roots.length) roots = await lieQuanPanGenYiBu(probe.signal); }
+      catch { this.errors++; roots = [os.homedir()]; }
+      if (version !== this.startVersion || !this.running || this.stopping || probe.signal.aborted) return;
+      this.roots = roots; this.rootProbe = null;
+      if (!this.seeded) {
+        this.seeded = true;
+        for (const r of this.roots) this.queue.push({ p: r, prio: youXian(r), depth: 0 });
+      }
+      this.tick();
+    })();
   }
 
   stop(): void {
     this.stopping = true;
     this.running = false;
+    ++this.startVersion; this.rootProbe?.abort(); this.rootProbe = null;
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
   }
 

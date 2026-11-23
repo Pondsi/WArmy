@@ -99,7 +99,10 @@ export function zhuanJiKeHu(base: string, shenFen: () => ShenFen, credential = '
     },
     async touDi(to: string, xinFeng: XinFeng) {
       const s = shenFen();
-      const r = await post('/api/relay', { from: s.edPub, to, envelope: JSON.stringify(xinFeng) });
+      const envelope = JSON.stringify(xinFeng);
+      // 重试同一个已签名信封沿用消息身份；不为每次投递随机造新ID绕过服务端去重。
+      const msgId = 'warmy-' + crypto.createHash('sha256').update(s.edPub + '|' + to + '|' + envelope).digest('hex');
+      const r = await post('/api/relay', { msgId, from: s.edPub, to, envelope });
       return { ok: !!(r.j && r.j.ok), offline: !!(r.j && r.j.offline), error: String((r.j && r.j.error) || '') };
     },
     /** 在线心跳：每 N 秒调一次；服务器只记 lastSeen，不记内容。带时间戳+私钥签名，防止别人替你"上线" */

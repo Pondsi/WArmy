@@ -60,8 +60,10 @@ export function fouDingJiShu(t: string): Record<string, number> {
 }
 
 /** 中文规则遍：填充词/紧邻重复/口吃/标点规范化；返回清理稿＋编辑留痕＋保护集 */
-export function zhongWenYuChuLi(text: string): YuChuLiJieGuo {
+export function zhongWenYuChuLi(text: string, extraDieCi?: string[]): YuChuLiJieGuo {
   const yuan = String(text || '');
+  /* R285-3：总结自维护的合法叠词白名单并入（不改动内置白名单）。 */
+  const dieCi = extraDieCi && extraDieCi.length ? new Set([...DIE_CI_BAI, ...extraDieCi]) : DIE_CI_BAI;
   const edits: Array<{ type: string; from: string; to: string }> = [];
   let t = yuan;
   // 1) 纯话语标记：前后边界即可删（后接内容词也删，口述填充词常直接粘内容）
@@ -73,7 +75,7 @@ export function zhongWenYuChuLi(text: string): YuChuLiJieGuo {
   // 2) 紧邻重复/口吃折叠（跳过合法叠词；**纯数字重复不折**：2026-11-22 / 3000 里的 11/22/000 是事实）
   t = t.replace(/([一-龥A-Za-z0-9]{1,4})\1+/g, (m, dan) => {
     if (/^\d+$/.test(dan) || /^\d+$/.test(m)) return m;
-    if (DIE_CI_BAI.has(dan) || DIE_CI_BAI.has(m)) return m;
+    if (dieCi.has(dan) || dieCi.has(m)) return m;
     edits.push({ type: 'repetition', from: m, to: dan });
     return dan;
   });

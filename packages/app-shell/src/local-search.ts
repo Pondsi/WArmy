@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
 
 export type SousuoFenQu = 'session' | 'ui' | 'otherSessions' | 'knowledge' | 'workspace' | 'disk' | 'otherWorkspace' | 'contacts' | 'sessionNames' | 'prompts' | 'schedules';
 
@@ -240,6 +241,32 @@ export function lieQuanPanGen(): string[] {
   return out.length ? out : liePanFu();
 }
 
+/**
+ * 后台枚举盘符不能逐个 existsSync：断开连接的映射盘会在主线程等系统超时（本机实测约21秒）。
+ * .NET GetLogicalDrives 只读系统登记，不接触每个磁盘/网络目标；进程异步且有界，无用户输入拼进命令。
+ */
+export async function lieQuanPanGenYiBu(signal?: AbortSignal): Promise<string[]> {
+  if (signal?.aborted) return [];
+  const home = os.homedir();
+  if (process.platform !== 'win32') return [...new Set([home, '/'].filter(Boolean))];
+  const drives = await new Promise<string[]>((resolve, reject) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '[System.Environment]::GetLogicalDrives() | ConvertTo-Json -Compress'],
+      { windowsHide: true, timeout: 5000, maxBuffer: 16384, signal }, (error, stdout) => {
+        if (error) { if (signal?.aborted) resolve([]); else reject(new Error('drive-enumeration-unavailable')); return; }
+        try {
+          const j: unknown = JSON.parse(stdout);
+          const valid = (Array.isArray(j) ? j : [j]).filter((x): x is string => typeof x === 'string' && /^[A-Za-z]:\\$/.test(x));
+          if (!valid.length) { reject(new Error('drive-enumeration-invalid')); return; }
+          resolve(valid);
+        } catch { reject(new Error('drive-enumeration-invalid')); }
+      });
+  });
+  if (signal?.aborted) return [];
+  const out = home ? [home] : [];
+  for (const r of drives) if (!out.some((x) => path.resolve(x).toLowerCase() === path.resolve(r).toLowerCase())) out.push(r);
+  return out;
+}
+
 export interface QuanPanXuanXiang {
   roots?: string[];
   maxMs?: number;
@@ -271,11 +298,13 @@ export async function saoMiaoQuanPan(query: string, opts: QuanPanXuanXiang = {})
   const maxFiles = Math.max(1, Math.min(500000, Number(opts.maxFiles) || 80000));
   const maxDepth = Math.max(1, Math.min(30, Number(opts.maxDepth) || 12));
   const maxBytes = Math.max(1024, Math.min(8 * 1024 * 1024, Number(opts.maxBytes) || 2 * 1024 * 1024));
-  const roots = (Array.isArray(opts.roots) && opts.roots.length ? opts.roots : lieQuanPanGen()).map((x) => path.resolve(String(x)));
+  let enumerationFailed = false;
+  const rootList = Array.isArray(opts.roots) && opts.roots.length ? opts.roots : q ? await lieQuanPanGenYiBu(opts.signal).catch(() => { enumerationFailed = true; return [os.homedir()]; }) : [];
+  const roots = rootList.map((x) => path.resolve(String(x)));
   const items: SousuoMingzhong[] = [];
   let files = 0;
-  let errors = 0;
-  let truncated = false;
+  let errors = enumerationFailed ? 1 : 0;
+  let truncated = enumerationFailed;
   const yiJian = new Set<string>();
   if (!q) return { items, roots, files, errors, truncated, ms: 0 };
 

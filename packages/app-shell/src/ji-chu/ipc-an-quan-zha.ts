@@ -114,10 +114,13 @@ export function chuangJianIpcAnQuanZha(yiLai: IpcAnQuanZhaYiLai) {
         clean.hash = '';
         clean.search = '';
         if (clean.protocol !== 'file:') return false;
-        const actual = path.resolve(fileURLToPath(clean));
+        // Windows 的 file URL 会规范化盘符大小写；同文件比较也必须按 Windows 路径语义。
+        // 仅规范比较键，不放宽主 frame、BrowserWindow 或具体页面白名单。
+        const wenJianJian = (p: string) => process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p);
+        const actual = wenJianJian(fileURLToPath(clean));
         const rendererDir = path.resolve(path.join(yiLai.genMuLu, 'renderer'));
-        if (actual === path.join(rendererDir, 'index.html') || actual === path.join(rendererDir, 'nm-viewer.html')) return true;
-        return extraRenderers.some((x) => actual === path.join(rendererDir, x));
+        if (actual === wenJianJian(path.join(rendererDir, 'index.html')) || actual === wenJianJian(path.join(rendererDir, 'nm-viewer.html'))) return true;
+        return extraRenderers.some((x) => actual === wenJianJian(path.join(rendererDir, x)));
       } catch { return false; }
     };
     const guaGou = async (event: any, ...args: any[]) => {

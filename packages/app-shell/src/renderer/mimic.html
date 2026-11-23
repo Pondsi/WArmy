@@ -231,8 +231,10 @@
         const jie = (v) => { if (!yiJie) { yiJie = true; resolve(v); } };
         window.__mimSheBeiDeng[device] = jie;
         window.warmyMimic?.sheBeiShenQing?.({ device, sid: '' }).then((r) => {
-          if (r && r.granted) { delete window.__mimSheBeiDeng[device]; jie(false); }
-        }).catch(() => { delete window.__mimSheBeiDeng[device]; jie(false); /* 仲裁不可用不挡拟态 */ });
+          /* R298 修复 R275 反接：立即授予⇒应播放（true）；旧代码 jie(false) 把获授的播报错误排队，
+             卡片永远不读（探针超时根因）。被拒⇒等 grant 事件（ev.resume）再决。 */
+          if (r && r.granted) { delete window.__mimSheBeiDeng[device]; jie(true); }
+        }).catch(() => { delete window.__mimSheBeiDeng[device]; jie(true); /* 仲裁不可用不挡拟态 */ });
       });
     }
     function mimSheBeiFang(device) {
@@ -243,7 +245,9 @@
       if (!ev || !d) return;
       if (ev.type === 'grant') {
         const r = window.__mimSheBeiDeng[d];
-        if (r) { delete window.__mimSheBeiDeng[d]; r(!!ev.resume); }
+        /* R298 修复 R275：grant＝设备已获授⇒应继续（true）。旧代码 r(!!ev.resume) 在新授予（resume=false）时
+           与 invoke 响应竞态把 Promise 决成 false，播报/录音被错误排队永不执行。resume 只表“恢复被抢的使用”，不决定能否用。 */
+        if (r) { delete window.__mimSheBeiDeng[d]; r(true); }
         if (d === 'mic') { try { tongBuYuYinMoShi(); } catch { /* noop */ } }
         if (d === 'speaker') {
           if (mimDaiBo) { const dd = mimDaiBo; mimDaiBo = null; void boKa(dd); }

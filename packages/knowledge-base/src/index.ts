@@ -139,6 +139,8 @@ export class KnowledgeBase {
   private lastSaveError = '';
   private useSaveTimer: NodeJS.Timeout | null = null;
   readonly ceng: ZhishiCeng;
+  /** 宿主观察变更，只传层级通知；不得在此钩子读写知识正文。 */
+  onContentChange?: () => void;
 
   constructor(private CangLu: string, ceng: ZhishiCeng = 'session') {
     this.ceng = ZHISHI_CENG.includes(ceng) ? ceng : 'session';
@@ -208,6 +210,7 @@ export class KnowledgeBase {
    * 现在一个同步变更 bursts 只在 800ms 空闲窗口写一次；退出/总结收尾/删除用 flush() 立即落。
    */
   private scheduleUseSave(): void {
+    try { this.onContentChange?.(); } catch { /* 观察者不能阻断知识写入 */ }
     if (this.useSaveTimer) return;
     this.useSaveTimer = setTimeout(() => {
       this.useSaveTimer = null;

@@ -51,11 +51,14 @@ importers:
         specifier: workspace:*
         version: link:../sync-protocol
       diwen:
-        specifier: 6.6.1
-        version: 6.6.1
+        specifier: https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz
+        version: https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz
       hash-wasm:
         specifier: 4.12.0
         version: 4.12.0
+      pinyin-pro:
+        specifier: 3.29.5
+        version: 3.29.5
       three:
         specifier: 0.187.0
         version: 0.187.0
@@ -199,21 +202,25 @@ packages:
     resolution: {integrity: sha512-AAmQa/uI4LDfyY7zldUwU0Qnpv+yjQPxr0k2uJQylo0tyXWzQ1O0bBWfnDmN0ulym124gFRwr+fzlHyvxCt1FA==}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   '@duckdb/node-bindings-linux-arm64@2.0.0-r.1':
     resolution: {integrity: sha512-V+oOWVY8qq7t5Uh+j8Hf+iwb4pLx2GsxAso1oGBP7ubf38QN1FGoPclJ8ByZob+ZcLdSDgwlS7QUbMB9pnCi2A==}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   '@duckdb/node-bindings-linux-x64-musl@2.0.0-r.1':
     resolution: {integrity: sha512-8GCE/ye+w5GJsCgAk2owUyQA55rtoiBRe2T8A42CaqGbNNZm9hOj3C96d6flT82p7YhQVA8AzA40k9Pn30kJDg==}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   '@duckdb/node-bindings-linux-x64@2.0.0-r.1':
     resolution: {integrity: sha512-0VdXZQlCnD6oWwJABkp3ihZGBic/6Ora4PQekHv9jwa4Fe2OVcgm0hGtn6yyNGhURVDzZllMITEF98zdo6ussQ==}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@duckdb/node-bindings-win32-arm64@2.0.0-r.1':
     resolution: {integrity: sha512-k47ASHylCPfUe7H+MvaNqsSwXGv8fjxixMF0vqJghp/wUUdAERMi1WNkPIjOj31cJ+O0x+Srdlfe4N0Diofm7Q==}
@@ -471,24 +478,28 @@ packages:
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   '@node-rs/jieba-linux-arm64-musl@2.0.4':
     resolution: {integrity: sha512-PyIXG7eyScZ1jN7ZqMS7XE2qei1PVQd3AnvdYwgTaUawkQxNQGeCOGARuzXYxqpYV+ipg5zju+VJ23j3ucE0RQ==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   '@node-rs/jieba-linux-x64-gnu@2.0.4':
     resolution: {integrity: sha512-VjetEm7IoerpyhIaASJg2HcADFZ+mTEBc18ciKqCt15Wdu1Tmv44vF0XUHKYBH0Q7U3LhoXXswTgjb/pcH3K+Q==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@node-rs/jieba-linux-x64-musl@2.0.4':
     resolution: {integrity: sha512-WK9gU+lMq0wAuaDcFaqbr03Rv4/tNb9hFwfG3mYI96uG5TdVK2DBuRKzoPHP7XVz6iEmOu98lfhmL2/1Y0/DAw==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   '@node-rs/jieba-win32-arm64-msvc@2.0.4':
     resolution: {integrity: sha512-tcRW2cMHjYFfDPqG/St59ZoaR34CyLQJ5I4NGhZIfVhbYftJWnjvGPZBFdbudjgRCJ1in6rOZalDNGDex9+DHA==}
@@ -927,8 +938,9 @@ packages:
   dir-compare@4.2.0:
     resolution: {integrity: sha512-2xMCmOoMrdQIPHdsTawECdNPwlVFB9zGcz3kuhmBO6U3oU+UQjsue0i8ayLKpgBcm+hcXPMVSGUN9d+pvJ6+VQ==}
 
-  diwen@6.6.1:
-    resolution: {integrity: sha512-XvNn31e4ZVxFOZlML7BBUhrx/EPh+v/50EBq/1vw89ah6JGb9O+bPd1pwAE5nyKHglcMTrzkaZ9pRY4enPe/Mw==}
+  diwen@https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz:
+    resolution: {tarball: https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz}
+    version: 6.15.2
 
   dmg-builder@25.1.8:
     resolution: {integrity: sha512-NoXo6Liy2heSklTI5OIZbCgXC1RzrDQsZkeEwXhdOro3FT1VBOvbubvscdPnjVuQ4AMwwv61oaH96AbiYg9EnQ==}
@@ -1473,6 +1485,9 @@ packages:
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
+
+  pinyin-pro@3.29.5:
+    resolution: {integrity: sha512-Fk5YoRmtdHqJWqAuzYVG/NzvzeCbaG+ZEwbY6Nbps3QAIrvQQEtcm49frcyCM8i2b5najnzPDtYqrHRYTTiuwQ==}
 
   platform@1.3.6:
     resolution: {integrity: sha512-fnWVljUchTro6RiCFvCXBbNhJc2NijN7oIQxbwsyL0buWJPG85v81ehlHI9fXrJsMNgTofEoWIQeClKpgxFLrg==}
@@ -2525,7 +2540,7 @@ snapshots:
       minimatch: 3.1.5
       p-limit: 3.1.0
 
-  diwen@6.6.1:
+  diwen@https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz:
     dependencies:
       '@node-rs/jieba': 2.0.4
 
@@ -3167,6 +3182,8 @@ snapshots:
   pe-library@0.4.1: {}
 
   picocolors@1.1.1: {}
+
+  pinyin-pro@3.29.5: {}
 
   platform@1.3.6: {}
 

@@ -61,6 +61,9 @@ export interface HarnessZiJinHuaYiLai {
   cun: (j: { guards: ShouWei[]; ledger: HarnessShiJian[]; fenJuQi: FenJuQiPeiZhi; lastCaiJueTs: number }) => void;
   jiXiTongXiaoXi: (kind: 'system', title: string, body: string) => void;
   auditLog: (op: string, detail: unknown) => void;
+  onFeedback?: () => void;
+  /** R298：守卫名称的迪文确定渲染（sidecar 命中且 hash 配⇒预算渲染；否则原文）。禁用/不可用恒原文。 */
+  moXingWenBen?: (id: string, text: string) => string;
   shiZhong?: () => number;
   /** 一次被省下的模型请求估算词元（保守默认 1200；可由总结裁决调整） */
   shengCiJunZhi?: number;
@@ -143,6 +146,7 @@ export function chuangJianHarnessZiJinHua(yiLai: HarnessZiJinHuaYiLai) {
     duHui();
     const shiJian: HarnessShiJian = { ...e, ts: shiZhong() };
     ledger.push(shiJian);
+    yiLai.onFeedback?.();
     if (ledger.length > LEDGER_SHANG) ledger = ledger.slice(-LEDGER_SHANG);
     const g = zhao(e.guardId);
     if (g) {
@@ -166,7 +170,7 @@ export function chuangJianHarnessZiJinHua(yiLai: HarnessZiJinHuaYiLai) {
   /** 总结提示词段：守卫表＋近期台账＋分句器参数＋裁决格式（模型判断是否正确/允许/更换/不用守卫更好/改进分句器） */
   function zongJieDuan(): string {
     duHui();
-    const biao = guards.map((g) => `- ${g.id}｜${g.ming}｜${g.enabled ? '启用' : (g.autoDisabled ? '自动停用' : '停用')}｜触发 ${g.stats.fires} 省 ${g.stats.saves} 败 ${g.stats.fails}｜净 ${g.netTokens}`).join('\n');
+    const biao = guards.map((g) => `- ${g.id}｜${yiLai.moXingWenBen ? yiLai.moXingWenBen(g.id, g.ming) : g.ming}｜${g.enabled ? '启用' : (g.autoDisabled ? '自动停用' : '停用')}｜触发 ${g.stats.fires} 省 ${g.stats.saves} 败 ${g.stats.fails}｜净 ${g.netTokens}`).join('\n');
     const shi = ledger.filter((e) => e.ts > lastCaiJueTs).slice(-20).map((e) => `- ${new Date(e.ts).toISOString().slice(0, 16)} ${e.guardId} ${e.kind}${e.detail ? ' ' + e.detail.slice(0, 60) : ''}`).join('\n');
     const ziTing = guards.filter((g) => g.autoDisabled && !g.enabled).map((g) => g.id);
     const fen = `maxJu=${fenJuQi.maxJu} 短文阈值=${fenJuQi.duanWen} 话语标记=[${fenJuQi.huaYuBiaoJi.join('/')}] leadBias=[${fenJuQi.leadBias.join(',')}] 密度权=${fenJuQi.miDuQuan} 长度惩罚分母=${fenJuQi.changFa}`;

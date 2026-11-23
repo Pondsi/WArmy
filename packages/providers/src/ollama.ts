@@ -133,6 +133,8 @@ export class OllamaGongYing extends JichuGongYing {
       }
       return ji;
     });
+    /** extra.options 与基础 options 合并：整体覆盖会丢掉 num_predict，生成长度失去上限。 */
+    const { options: extraOptions, ...extraRest } = (Qiu.extra || {}) as { options?: Record<string, unknown> } & Record<string, unknown>;
     const ji: Record<string, unknown> = {
       model: Qiu.model,
       messages: this.zhengXingXiaoXi(xiaoXiJi),
@@ -142,8 +144,9 @@ export class OllamaGongYing extends JichuGongYing {
         temperature: Qiu.temperature,
         top_p: Qiu.topP,
         stop: Qiu.stop,
+        ...(extraOptions && typeof extraOptions === 'object' ? extraOptions : {}),
       },
-      ...Qiu.extra,
+      ...extraRest,
     };
     // 透传工具表（不支持的模型会忽略它；报错由外层降级）
     if (Qiu.tools?.length) {

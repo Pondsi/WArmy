@@ -24,6 +24,30 @@ export interface GuiDangTiaoMu {
 
 export class ZhiShiGuiDangQi {
   private file: string;
+  private idIndex: Map<string, GuiDangTiaoMu> | undefined;
+  private indexing: Promise<void> | undefined;
+  private addedWhileIndexing = new Map<string, GuiDangTiaoMu>();
+
+  /** 自动总结幂等索引：异步读盘，按小批解析，不在生成后的提交段扫全部档案。 */
+  async prepareIndex(): Promise<void> {
+    if (this.idIndex) return;
+    if (this.indexing) return this.indexing;
+    this.indexing = (async () => {
+      const index = new Map<string, GuiDangTiaoMu>();
+      let text = '';
+      try { text = await fs.promises.readFile(this.file, 'utf8'); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
+      const lines = text.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        try { const x = JSON.parse(lines[i]!) as GuiDangTiaoMu; if (x && typeof x.id === 'string') index.set(x.id, x); } catch { /* 坏行不作为幂等凭据 */ }
+        if (i % 128 === 127) await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+      for (const [id, entry] of this.addedWhileIndexing) index.set(id, entry);
+      this.addedWhileIndexing.clear();
+      this.idIndex = index;
+    })();
+    try { await this.indexing; } finally { this.indexing = undefined; }
+  }
+  indexedEntry(id: string): GuiDangTiaoMu | undefined { return this.idIndex?.get(id); }
 
   constructor(userData: string) {
     const dir = path.join(userData, 'archive');
@@ -32,9 +56,13 @@ export class ZhiShiGuiDangQi {
   }
 
   archive(entry: Omit<GuiDangTiaoMu, 'ts'>): GuiDangTiaoMu {
+    const old = this.idIndex?.get(entry.id);
+    if (old) return old;
     const Quan: GuiDangTiaoMu = { ...entry, ts: Date.now() };
     if (!Quan.structured) delete Quan.structured;
     fs.appendFileSync(this.file, JSON.stringify(Quan) + '\n', 'utf8');
+    if (this.idIndex) this.idIndex.set(Quan.id, Quan);
+    else if (this.indexing) this.addedWhileIndexing.set(Quan.id, Quan);
     return Quan;
   }
 

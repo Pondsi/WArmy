@@ -466,8 +466,92 @@ export function yunXingMingLing(cmd: string, opts: { cwd?: string; timeoutMs?: n
   });
 }
 
-/* ─────────────────────── Office 读 ─────────────────────── */
+/** R298：最小环境变量白名单（与交互命令同一口径；凭据不传普通工具进程） */
+export function gouJianBaiMingDanHuanJing(): Record<string, string> {
+  const env: Record<string, string> = {};
+  const allow = ['PATH', 'SystemRoot', 'SystemDrive', 'windir', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP',
+    'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'LANG', 'LC_ALL', 'TZ',
+    'APPDATA', 'LOCALAPPDATA', 'ProgramData', 'ALLUSERSPROFILE', 'PUBLIC',
+    'ProgramFiles', 'ProgramFiles(x86)', 'CommonProgramFiles', 'CommonProgramFiles(x86)',
+    'PSModulePath', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_IDENTIFIER', 'OS'];
+  const biaoZhunMoRen: Record<string, string> = {
+    ProgramFiles: 'C:\\Program Files',
+    'ProgramFiles(x86)': 'C:\\Program Files (x86)',
+    CommonProgramFiles: 'C:\\Program Files\\Common Files',
+    'CommonProgramFiles(x86)': 'C:\\Program Files (x86)\\Common Files',
+    ProgramData: 'C:\\ProgramData',
+    ALLUSERSPROFILE: 'C:\\ProgramData',
+    PUBLIC: 'C:\\Users\\Public',
+    SystemRoot: 'C:\\WINDOWS',
+  };
+  for (const k of allow) {
+    const v = process.env[k];
+    if (typeof v === 'string' && v) env[k] = v;
+    else if (biaoZhunMoRen[k]) env[k] = biaoZhunMoRen[k]!;
+  }
+  return env;
+}
 
+/**
+ * R298：定时脚本专用受控执行器 —— **参数数组、不过 shell**。
+ * 与交互命令（yunXingMingLing）的区别：
+ *  · cwd 无效 ⇒ 如实失败（不回退家目录；授权范围由调用方复核）；
+ *  · 真 AbortSignal 取消 + 超时，只杀本任务 PID 树（taskkill /T）；
+ *  · 不做内联转临时脚本（参数数组无转义问题）；默认不下载/安装/提权由创建层授权范围保证。
+ */
+export function yunXingJiaoBenCanShu(command: string, args: string[], opts: { cwd: string; timeoutMs?: number; maxOut?: number; signal?: AbortSignal }): Promise<MingLingJieGuo> {
+  const timeoutMs = Math.max(1000, Math.min(Number(opts.timeoutMs) || 60000, 600000));
+  const maxOut = Math.max(200, Math.min(Number(opts.maxOut) || 8000, 40000));
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const cwd = String(opts.cwd || '');
+    let cwdOk = false;
+    try { cwdOk = fs.statSync(cwd).isDirectory(); } catch { cwdOk = false; }
+    if (!cwdOk) { resolve({ ok: false, code: 1, stdout: '', stderr: `工作目录不存在或不是目录：${cwd}`, ms: Date.now() - t0, risk: 'low' }); return; }
+    const env = gouJianBaiMingDanHuanJing();
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(command, args, { cwd, env, windowsHide: true, shell: false, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (e) {
+      resolve({ ok: false, code: 1, stdout: '', stderr: String((e as Error)?.message || e), ms: Date.now() - t0, risk: 'low' });
+      return;
+    }
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    let aborted = false;
+    const shou = (s: string) => s.slice(0, maxOut);
+    child.stdout?.on('data', (d) => { stdout = shou(stdout + String(d)); });
+    child.stderr?.on('data', (d) => { stderr = shou(stderr + String(d)); });
+    const sha = () => {
+      try {
+        if (process.platform === 'win32') {
+          spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: 10000 });
+        } else if (child.pid) {
+          try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* noop */ } }
+        }
+      } catch { /* noop */ }
+    };
+    const timer = setTimeout(() => { timedOut = true; sha(); }, timeoutMs);
+    const onAbort = () => { aborted = true; sha(); };
+    if (opts.signal) {
+      if (opts.signal.aborted) onAbort();
+      else opts.signal.addEventListener('abort', onAbort, { once: true });
+    }
+    const qingLi = () => { clearTimeout(timer); opts.signal?.removeEventListener('abort', onAbort); };
+    child.once('error', (e) => {
+      qingLi();
+      resolve({ ok: false, code: 1, stdout: shou(stdout), stderr: shou([stderr, String((e as Error)?.message || e)].filter(Boolean).join('\n')), ms: Date.now() - t0, risk: 'low' });
+    });
+    child.once('close', (code, signal) => {
+      qingLi();
+      const c = timedOut ? 124 : aborted ? 137 : (typeof code === 'number' ? code : (signal ? 1 : 0));
+      resolve({ ok: !timedOut && !aborted && c === 0, code: c, stdout: shou(stdout), stderr: shou(stderr), ms: Date.now() - t0, risk: 'low' });
+    });
+  });
+}
+
+/* ─────────────────────── Office 读 ─────────────────────── */
 function duZipMing(buf: Buffer): Map<string, Buffer> {
   // 轻量解包：只取需要的 xml（store/deflate）
   const out = new Map<string, Buffer>();

@@ -144,7 +144,9 @@ registerTask('chat-engine', async (p, c) => {
      *  用引擎内置的上下文压缩（shouQiZhongDuan）与预算逻辑，不再异步代理回宿主。 */
   };
   try {
-    return await liaoTianDaiGongJu(provider as never, p?.qiu as never, execute as never, opts as never);
+    const r = await liaoTianDaiGongJu(provider as never, p?.qiu as never, execute as never, opts as never);
+    /** R298：宿主传入的开发模式版本快照原样回显（跨 PID 继承可核验；子进程不自行改写） */
+    return { ...(r as object), kaiFa: p?.kaiFa ?? null };
   } finally { dangQianKongZhi = null; }
 });
 

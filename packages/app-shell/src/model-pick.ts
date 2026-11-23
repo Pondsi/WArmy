@@ -18,6 +18,9 @@
  * 不变量：**永不返回被禁用的模型**；任何输入不抛错；返回的 model 一定是纯模型 id。
  */
 import { guSuanMoXingQiangDu, guSuanMoXingSuDu } from './mo-xing-qiang-du.js';
+import { LU_YOU_MO_REN, jianYanLuYouCanShu, luYouMoXingPingFen, type LuYouCanShu } from './ji-chu/lu-you-yu-ce-gui-ze.js';
+let luYouDu: () => { params: LuYouCanShu; historyScores: Record<string, number> } = () => ({ params: LU_YOU_MO_REN, historyScores: {} });
+export function sheZhiLuYouYuCe(du: typeof luYouDu): void { luYouDu = du; }
 
 export type JinjiduJibie = 'P0' | 'P1' | 'P2' | 'P3' | 'P4';
 
@@ -96,22 +99,23 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
   const fallback = jieMoXingMing(shuRu.fallback || 'deepseek-chat') || 'deepseek-chat';
   const tiaoGuo = new Set((shuRu.tiaoGuo || []).map((m) => jieMoXingMing(m)));
   const explicit = String(shuRu.explicit || '').trim();
-  if (explicit && !tiaoGuo.has(jieMoXingMing(explicit))) {
+  const qualifiedMatch = (entry: string, candidate: string) => entry.includes(' · ') ? entry === candidate : jieMoXingMing(entry) === jieMoXingMing(candidate);
+  if (explicit && !tiaoGuo.has(jieMoXingMing(explicit)) && !(shuRu.chainDisabled || []).some((d) => qualifiedMatch(d, explicit))) {
     return { model: jieMoXingMing(explicit), modelQuan: explicit, why: 'explicit', chainIndex: -1 };
   }
 
   const disabled = (shuRu.chainDisabled || []).map((s) => String(s));
   /** 禁用名单里存的可能是复合展示标签，判“是否被禁用”一律按纯模型 id 比对 */
-  const beiJinYong = (m: string) => disabled.some((d) => jieMoXingMing(d) === jieMoXingMing(m));
+  const beiJinYong = (m: string) => disabled.some((d) => qualifiedMatch(d, m));
   /** 只允许挑“供应商里真有的模型” */
   const keYong = (shuRu.keYongMoXing || []).map((m) => jieMoXingMing(m)).filter(Boolean);
   const zaiQingDan = (m: string) => {
     const s = jieMoXingMing(m);
-    return !s ? false : (keYong.length === 0 || keYong.includes(s));
+    return !s ? false : (keYong.length === 0 || (shuRu.keYongMoXing || []).some((available) => qualifiedMatch(available, m)));
   };
   const keYongQie = (m: string) => {
     const s = jieMoXingMing(m);
-    return !!s && zaiQingDan(s) && !beiJinYong(s) && !tiaoGuo.has(s);
+    return !!s && zaiQingDan(m) && !beiJinYong(m) && !tiaoGuo.has(s);
   };
 
   const dm = String(shuRu.defaultModel || '');
@@ -121,11 +125,13 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
 
   // 1) 智能模式：在调用链内综合“难易 + 急缓”打分挑链位
   if (zhiNeng) {
+    const prediction = luYouDu();
+    const params = jianYanLuYouCanShu(prediction.params) || LU_YOU_MO_REN;
     const di = new Set((shuRu.benDiMoXing || []).map((m) => jieMoXingMing(m)).filter(Boolean));
     const shiBenDi = (m: string) => di.has(jieMoXingMing(m));
     const keLian = lian
       .map((m, i) => ({ m: jieMoXingMing(m), i, raw: m }))
-      .filter((x) => x.m && !tiaoGuo.has(x.m) && !beiJinYong(x.m));
+      .filter((x) => x.m && !tiaoGuo.has(x.m) && !beiJinYong(x.raw));
     if (keLian.length) {
       const nan = Number(shuRu.nan);
       const needQ = Number.isFinite(nan) && nan >= 1 && nan <= 5
@@ -135,29 +141,16 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
       const ji = Number.isFinite(jiRaw) && jiRaw >= 1 && jiRaw <= 5
         ? Math.round(jiRaw)
         : (shuRu.urgency === 'P0' ? 5 : shuRu.urgency === 'P1' ? 4 : shuRu.urgency === 'P3' ? 2 : shuRu.urgency === 'P4' ? 1 : 3);
-      const daFen = keLian.map((x) => {
+      // 存在满足难度的候选时不让速度/历史奖励压过能力底线；否则如实选最强可用候选。
+      const enough = keLian.filter((x) => guSuanMoXingQiangDu(x.m) >= needQ);
+      const maxQuality = Math.max(...keLian.map((x) => guSuanMoXingQiangDu(x.m)));
+      const pool = enough.length ? enough : keLian.filter((x) => guSuanMoXingQiangDu(x.m) === maxQuality);
+      const daFen = pool.map((x) => {
         const q = guSuanMoXingQiangDu(x.m);
         const su = guSuanMoXingSuDu(x.m);
         const ben = shiBenDi(x.m);
-        /** 难易优先：低于需求的模型重罚，高于需求的轻奖（避免盲目堆最强） */
-        let score = q < needQ ? -(needQ - q) * 40 : (q - needQ) * 5;
-        if (needQ >= 5 && q >= 5) score += 30;
-        /** 难任务仍优先云端强模型；易任务优先本地/免费（智能模式的历史口径） */
-        if (needQ >= 4 && !ben) score += 10;
-        if (needQ <= 2 && ben) score += 15;
-        if (ji >= 4) {
-          score += (su - 3) * 15;
-          score += ben ? -8 : 12;
-          if (ji >= 5) {
-            score += su >= 4 ? 10 : 0;
-            /** 很急时**明确点名** flash/turbo/instant 这类快模型（用户口径：优先云端、带 flash、token 快） */
-            if (/flash|turbo|instant|fast|haiku/i.test(x.m)) score += 12;
-          }
-        } else if (ji <= 2) {
-          score += (q - 3) * 10;
-        } else {
-          score += (q - 3) * 4 + (su - 3) * 4;
-        }
+        const learned = prediction.historyScores[x.raw];
+        const score = luYouMoXingPingFen({ model: x.m, qualityTier: q, speedTier: su, local: ben }, { nan: needQ, ji }, params, typeof learned === 'number' ? learned : 0);
         /** 同分时链位靠前者优先（稳定、可解释） */
         return { ...x, score, q, su, ben };
       });
@@ -171,7 +164,7 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
   // 2) 非智能：默认模型优先；默认不行后再严格按调用链顺序
   if (!zhiNeng) {
     const d = jieMoXingMing(dm);
-    if (d && keYongQie(d)) return { model: d, modelQuan: dm, why: 'default', chainIndex: -1 };
+    if (d && keYongQie(dm)) return { model: d, modelQuan: dm, why: 'default', chainIndex: -1 };
     // 默认不可用/已失败/被禁用 ⇒ 继续严格按调用链往下试
     for (let i = 0; i < lian.length; i++) {
       const m = jieMoXingMing(lian[i]);
@@ -188,7 +181,7 @@ export function jueCeMoXing(shuRu: MoXingJueCeShuRu = {}): MoXingJueCeJieGuo {
   ];
   for (const r of roles) {
     const m = jieMoXingMing(r.m);
-    if (m && keYongQie(m)) return { model: m, modelQuan: r.m, why: r.why, chainIndex: -1 };
+    if (m && keYongQie(String(r.m))) return { model: m, modelQuan: r.m, why: r.why, chainIndex: -1 };
   }
 
   // 4) 任意真实可用模型（仍按清单顺序，不跳着挑）

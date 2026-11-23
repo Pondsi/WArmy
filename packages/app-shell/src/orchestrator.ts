@@ -100,6 +100,8 @@ export interface XietiaoqiYilai {
   isStopped?: (groupId: string) => boolean;
   onExecutorStart?: (groupId: string, instanceId: string) => void;
   onExecutorEnd?: (groupId: string, instanceId: string) => void;
+  resourceLease?: (cfg: ZhibanGongyingshangPeizhi) => () => void;
+  routingFeedback?: (f: { key: string; nan: number; ji: number; ms: number; tokens: number; failed: boolean; preempted: boolean; quality?: number }) => void;
   /**
    * **执行者的干活工具**（write_file / open_path / run_shell / make_pptx …）。
    * 与 `toolSpecs`（值班者的记忆工具）分开：值班者负责编排，执行者负责真的动手。
@@ -467,14 +469,18 @@ async function paiFaZhiXingZheLun(
     };
     let jg: zhixingqiJieguo;
     deps.onExecutorStart?.(p.groupId, zxId);
+    const attempt = async () => {
+      const release = deps.resourceLease?.(usedCfg);
+      try { return await yunxingDuanCunhuoZhixingqi({ ...renwu, thinkExtra: thinkExtraOf(usedCfg) }, usedCfg); } finally { release?.(); }
+    };
     try {
-      jg = await yunxingDuanCunhuoZhixingqi({ ...renwu, thinkExtra: thinkExtraOf(usedCfg) }, usedCfg);
+      jg = await attempt();
       while (jg.error && attempts < cands.length) {
         /** 停止后不再换模型重试（与单聊同一条口径） */
         if (deps.isStopped?.(p.groupId)) break;
         usedCfg = cands[attempts]!;
         attempts += 1;
-        jg = await yunxingDuanCunhuoZhixingqi({ ...renwu, thinkExtra: thinkExtraOf(usedCfg) }, usedCfg);
+        jg = await attempt();
       }
     } finally {
       deps.onExecutorEnd?.(p.groupId, zxId);
@@ -487,6 +493,9 @@ async function paiFaZhiXingZheLun(
         artifacts: jg.artifacts.length, unverified: (jg.unverifiedArtifacts || []).length,
       });
     } catch { /* 留痕失败不影响结果 */ }
+    try { deps.routingFeedback?.({ key: String(usedCfg.presetId || '') + ' · ' + String(usedCfg.model || ''), nan: p.nanYi?.nan || 3, ji: p.nanYi?.ji || 3,
+      ms: Date.now() - qiShi, tokens: jg.stats.promptTokens + jg.stats.completionTokens, failed: !!jg.error, preempted: deps.isStopped?.(p.groupId) === true,
+      ...(jg.error ? { quality: 0 } : {}) }); } catch { /* 反馈失败不影响已经执行的任务 */ }
     return { zxId, ming, jg };
   };
   const jieGuo = paiFa.fangShi === 'serial'
