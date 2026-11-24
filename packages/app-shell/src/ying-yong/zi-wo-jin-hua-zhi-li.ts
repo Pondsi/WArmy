@@ -28,6 +28,7 @@ export const JIN_HUA_QING_DAN: JinHuaXiangMu[] = [
   { id: 'kai-fa-ruan-gui-ze', ming: '开发模式会话软规则', zhongLei: 'policy', zhengFangXiang: { zhiBiao: '验证效率', fangXiang: 'max', dingYi: '质量不恶化+效率≥3%+成本≤5%；无隔离证据⇒仅建议' }, cengJi: 1 },
   { id: 'gong-zuo-liang-aimd', ming: '总结工作量判断（AIMD）', zhongLei: 'policy', zhengFangXiang: { zhiBiao: '前台影响', fangXiang: 'min', dingYi: '前台 p95 影响≤5% 且批量吞吐不塌' }, cengJi: 1 },
   { id: 'diwen-fen-pi', ming: '迪文确定性内容分批改造', zhongLei: 'transform', zhengFangXiang: { zhiBiao: '改造覆盖率', fangXiang: 'max', dingYi: '覆盖率提升且零信息丢失（原文永在）不变量' }, cengJi: 1 },
+  { id: 'ni-tai-zi-gai', ming: '拟态频率/动作/回复与设备使用自改进', zhongLei: 'evolution', zhengFangXiang: { zhiBiao: '有反馈帮助质量', fangXiang: 'max', dingYi: '减少无价值打扰、失败不增；设备权限与仲裁不可学习覆盖' }, cengJi: 1 },
   { id: 'jin-hua-zhi-li', ming: '自我改进治理方法本身（元进化）', zhongLei: 'meta', zhengFangXiang: { zhiBiao: '治理有效性', fangXiang: 'max', dingYi: '验收通过率升/回归数降；嵌套≤3 层' }, cengJi: 1 },
 ];
 
@@ -130,7 +131,7 @@ export function chuangJianJinHuaZhiLi(yiLai: JinHuaYiLai) {
     const j = yiLai.du() as Partial<JinHuaZhuangTai> | undefined;
     if (j && typeof j === 'object') {
       st = {
-        qingDan: Array.isArray(j.qingDan) && j.qingDan.length ? j.qingDan.filter((x) => x && x.id && x.zhengFangXiang) : st.qingDan,
+        qingDan: Array.isArray(j.qingDan) ? j.qingDan.filter((x) => x && x.id && x.zhengFangXiang) : st.qingDan,
         jiLu: Array.isArray(j.jiLu) ? j.jiLu.slice(-JI_LU_SHANG) : [],
         piZhun: Array.isArray(j.piZhun) ? j.piZhun.slice(-50) : [],
       };
@@ -190,10 +191,18 @@ export function chuangJianJinHuaZhiLi(yiLai: JinHuaYiLai) {
   function piZhun(id: string, agreed: boolean): { ok: boolean; jiLuId?: string } {
     const p = st.piZhun.find((x) => x.id === id);
     if (!p || p.zhuangTai !== 'pending') return { ok: false };
-    p.zhuangTai = agreed ? 'agreed' : 'declined';
     let jiLuId: string | undefined;
-    if (agreed) jiLuId = yingYong(p.tiAn);
-    else st.jiLu = [...st.jiLu, { id: idOf('jh'), xiangMuId: p.tiAn.xiangMuId, leiXing: p.tiAn.leiXing, cengJi: 1, ts: now(), zhuangTai: 'declined' as const }].slice(-JI_LU_SHANG);
+    if (agreed) {
+      /* 批准时重验当前清单与硬门禁；期间环境/规则变化不能让旧申请绕过安全。 */
+      const caiJue = pingGuJinHua(p.tiAn, st.qingDan, cengJiOf(st.jiLu, p.tiAn.fuId));
+      if (!caiJue.ok) {
+        p.zhuangTai = 'declined';
+        yiLai.audit?.('jinHua.approval-hard-rejected', { id, ying: caiJue.ying });
+      } else jiLuId = yingYong(p.tiAn);
+    } else {
+      p.zhuangTai = 'declined';
+      st.jiLu = [...st.jiLu, { id: idOf('jh'), xiangMuId: p.tiAn.xiangMuId, leiXing: p.tiAn.leiXing, cengJi: 1, ts: now(), zhuangTai: 'declined' as const }].slice(-JI_LU_SHANG);
+    }
     luoPan();
     yiLai.audit?.('jinHua.approval-decided', { id, agreed });
     return { ok: true, jiLuId };

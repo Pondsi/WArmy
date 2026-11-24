@@ -316,12 +316,8 @@ export interface YingYongPeizhi {
    * 只有设置→功能里点「安装 nm 查看器」才清除。与 `chaJianJi` 分开存，避免列表被同步覆盖后“复活”。
    */
   nmFileRemoved?: boolean;
-  /**
-   * **回复内容加强**（默认关）：允许牛马按内容性质自选表达方式 ——
-   * 纯文字 / SVG 示意图 / 图表 / 可交互页面 / 语音讲解。
-   * 开启后更慢、更费 token，所以必须由用户显式勾选。
-   */
-  enhanceReply?: boolean;
+  /** R300：原生 A2UI 互动回复（默认关）；普通正文不变，稳定后附加互动层。 */
+  a2uiReplyEnabled?: boolean;
   /**
    * **简洁输出**（R295，默认关）：勾选后长回复显示抽取式简洁视图（原文完整保留可展开）。
    * ① 纯工程压缩零模型成本默认；② 结构化简洁对支持结构化模型可选；分句器参数与守卫由 harness 自我改进裁决。
@@ -842,6 +838,7 @@ function defaults(): YingYongPeizhi {
     nmKaiWenJian: true,
     nmDownloadDirs: {},
     commandGrants: [],
+    a2uiReplyEnabled: false,
     contextBudgetPercent: 60,
     autoSummary: true,
     modelContextTokens: 128000,

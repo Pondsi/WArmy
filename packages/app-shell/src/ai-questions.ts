@@ -26,6 +26,9 @@ export interface AiWenTi {
   id: string;
   /** 由宿主创建入口指定，不能根据回复里的“允许”等字眼猜授权类型。 */
   kind?: 'authorization' | 'choice';
+  /** R300：一次性授权卡不可去重、不可重放，回答必须携带 nonce。 */
+  oneTime?: boolean;
+  nonce?: string;
   groupId: string;
   sessionId?: string;
   biaoTi: string;
@@ -52,13 +55,18 @@ export class AiWenTiZhongXin {
     ti?: string;
     options: Array<{ id?: string; biaoQian: string; description?: string; tuiJian?: boolean; keXinDu?: number; confidence?: number }>;
     dedupe?: boolean;
+    oneTime?: boolean;
+    nonce?: string;
   }): AiWenTi {
     const groupId = String(shuRu.groupId || '');
     const biaoTi = String(shuRu.biaoTi || '').trim();
-    if (shuRu.dedupe !== false) {
+    const oneTime = shuRu.oneTime === true;
+    const nonce = String(shuRu.nonce || '').trim();
+    if (oneTime && !nonce) throw new Error('one-time-nonce-required');
+    if (!oneTime && shuRu.dedupe !== false) {
       const shiShouQuan = (shuRu.kind || 'choice') === 'authorization';
       for (const q of this.items.values()) {
-        if (q.groupId !== groupId || q.status !== 'pending' || q.biaoTi !== biaoTi) continue;
+        if (q.groupId !== groupId || q.status !== 'pending' || q.biaoTi !== biaoTi || q.oneTime) continue;
         if (!shiShouQuan) return q; // 选择卡：同标题未答只留一张（避免刷屏，产品原契约）
         /** 授权卡必须严格匹配：同标题不同操作对象/选项绝不能复用旧授权（R232 安全口径） */
         if (q.kind === 'authorization' && q.ti === String(shuRu.ti || '')
@@ -80,6 +88,7 @@ export class AiWenTiZhongXin {
       id: 'q' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'),
       groupId,
       kind: shuRu.kind || 'choice',
+      ...(oneTime ? { oneTime: true, nonce } : {}),
       sessionId: shuRu.sessionId,
       biaoTi,
       ti: shuRu.ti ? String(shuRu.ti) : '',
@@ -93,13 +102,15 @@ export class AiWenTiZhongXin {
     return q;
   }
 
-  answer(id: string, optionId: string, customText?: string): { ok: boolean; question?: AiWenTi; inject?: string; error?: string } {
+  answer(id: string, optionId: string, customText?: string, expectedNonce?: string): { ok: boolean; question?: AiWenTi; inject?: string; error?: string } {
     const q = this.items.get(String(id || ''));
     if (!q) return { ok: false, error: 'not-found' };
     if (q.status === 'answered') {
+      if (q.oneTime) return { ok: false, error: 'card-already-answered' };
       return { ok: true, question: q, inject: this.injectLine(q) };
     }
     if (q.status !== 'pending') return { ok: false, error: 'card-not-pending' };
+    if (q.oneTime && (!expectedNonce || q.nonce !== expectedNonce)) return { ok: false, error: 'nonce-mismatch' };
     if (optionId === AI_QUESTION_CUSTOM || optionId === 'custom' || optionId === 'other') {
       const text = String(customText || '').trim();
       if (!text) return { ok: false, error: 'custom-text-required' };

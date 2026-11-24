@@ -1173,6 +1173,14 @@ body.tuoYaSuoFenGe { cursor: col-resize; user-select: none; }
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--card));
 }
+#wangYeUrlZu { position: relative; display: flex; align-items: center; flex: 1 1 auto; min-width: 60px; }
+#wangYeUrlZu #wangYeUrl { width: 100%; min-width: 0; padding-right: 30px; }
+.wangYeJiaZaiZhuangTai { position: absolute; right: 7px; width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); pointer-events: none; }
+.wangYeJiaZaiZhuangTai { background: currentColor; mask: url('./icons/jia-zai.svg') center / contain no-repeat; -webkit-mask: url('./icons/jia-zai.svg') center / contain no-repeat; }
+.wangYeJiaZaiZhuangTai.jiaZai { animation: wangYeZhuan .8s linear infinite; }
+.wangYeJiaZaiZhuangTai.wanCheng { color: var(--ink); mask-image: url('./icons/wan-cheng.svg'); -webkit-mask-image: url('./icons/wan-cheng.svg'); }
+@keyframes wangYeZhuan { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .wangYeJiaZaiZhuangTai.jiaZai { animation: none; } }
 #wangYeUrl {
   flex: 1 1 auto;
   min-width: 60px;
@@ -1269,8 +1277,9 @@ body.tuoYaSuoFenGe { cursor: col-resize; user-select: none; }
   color: var(--muted);
 }
 #wangYeGongJu button.tabJia:hover { color: var(--ink); }
-/* R264：收藏夹按钮主题色；标签拖拽悬停高亮 */
-#wangYeGongJu #anNiuWangYeShouCang { color: var(--accent); }
+/* 未收藏=字体色；仅当前网页已收藏=主题色。 */
+#wangYeGongJu #anNiuWangYeShouCang { color: var(--ink); }
+#wangYeGongJu #anNiuWangYeShouCang.yiShouCang { color: var(--accent); }
 .wangYeTab.dragOver { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* 网站模式正文：4 态分栏（0 只网页 / 1 网页左源码右 / 2 源码左网页右 / 3 网页上源码下）

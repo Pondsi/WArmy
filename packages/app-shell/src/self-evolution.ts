@@ -19,7 +19,26 @@ export interface YanShouGuiZe {
   primary?: boolean;
 }
 export interface ChaYiJian { checkId: string; arm: ZhiXian; outcome: 'pass' | 'fail' | 'unknown'; ts: number }
-export interface ZhiXianZhuangTai { turns: number; files: string[]; reply: string; overlay?: string; history?: Array<{ role: 'user' | 'them' | 'tool' | 'system'; kind?: string; content: string; ts?: number; live?: boolean }>; /** R268④：用户停止时该臂还没有任何正文 ⇒ 整次进化算「未开始」 */ emptyStopped?: boolean }
+export interface ZhiXianLiShi {
+  role: 'user' | 'them' | 'tool' | 'system';
+  kind?: string;
+  content: string;
+  ts?: number;
+  live?: boolean;
+  /** 稳定消息身份：跨重绘、选支与合并保持不变。 */
+  id?: string;
+  sessionId?: string;
+  expId?: string;
+  arm?: ZhiXian;
+  turn?: number;
+  moXing?: string;
+  provider?: string;
+  startedAt?: number;
+  endedAt?: number;
+  status?: 'running' | 'complete' | 'stopped' | 'failed';
+  usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number; cacheHitTokens?: number; cacheMissTokens?: number; source?: 'native' | 'estimated' | 'none' };
+}
+export interface ZhiXianZhuangTai { turns: number; files: string[]; reply: string; overlay?: string; history?: ZhiXianLiShi[]; /** R268④：用户停止时该臂还没有任何正文 ⇒ 整次进化算「未开始」 */ emptyStopped?: boolean }
 export interface ZiJinHuaShiYan {
   id: string; sessionId: string; projectId?: string; createdAt: number; forkSeq: number;
   status: 'running' | 'split' | 'staged' | 'merged' | 'cancelled';

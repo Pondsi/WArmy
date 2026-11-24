@@ -11,6 +11,16 @@ function chaiXiTong(xiaoXiJi: LiaoTianXiaoXi[]): { system?: string; qiYu: LiaoTi
 }
 
 /** tool_call.arguments 是字符串（OpenAI 形状）；脏参数不能让整个请求 400 */
+function gongJuNeiRong(content: LiaoTianXiaoXi['content']): unknown {
+  if (!Array.isArray(content)) return content;
+  return content.map((b) => {
+    if (b.type === 'text') return { type: 'text', text: String(b.text || '') };
+    const m = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i.exec(String(b.image_url?.url || ''));
+    if (m) return { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } };
+    return { type: 'text', text: '[工具返回了不受支持的图片块]' };
+  });
+}
+
 function anQuanJson(s: string | undefined): unknown {
   try {
     const v = JSON.parse(s || '{}');
@@ -65,7 +75,7 @@ export class AnthropicGongYing extends JichuGongYing {
         const kuai = {
           type: 'tool_result',
           tool_use_id: m.toolCallId,
-          content: m.content,
+          content: gongJuNeiRong(m.content),
         };
         const prev = neiRongJi[neiRongJi.length - 1];
         const qianYiKuai = prev?.role === 'user' ? (prev.content as Array<{ type?: string }>) : null;

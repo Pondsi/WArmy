@@ -457,9 +457,10 @@ export class McpBridge {
   }
 
   /** Call by qualified name. Returns a normalized, model-friendly envelope. */
-  async callTool(qualifiedName, args, { timeoutMs } = {}) {
+  async callTool(qualifiedName, args, { timeoutMs, server } = {}) {
     const entry = this.tools.find((t) => t.qualifiedName === qualifiedName)
-      || this.tools.find((t) => t.tool === qualifiedName);
+      || this.tools.find((t) => t.server === server && t.tool === qualifiedName)
+      || (!server ? this.tools.find((t) => t.tool === qualifiedName) : undefined);
     if (!entry) {
       return { ok: false, error: `unknown tool: ${qualifiedName}`, code: -32602, known: this.tools.map((t) => t.qualifiedName) };
     }

@@ -63,7 +63,7 @@ const IPC_LOGIN_REQUIRED = new Set([
 /** R278 项8：nm 辅助窗（模态/收藏夹弹窗/下载弹窗，data: URL）允许调用的受限通道 */
 const NM_FU_ZHU_IPC = new Set([
   'warmy:nmWangYePeiZhiShe', 'warmy:nmWangYePeiZhiDu',
-  'warmy:nmShouCangTianJia', 'warmy:nmShouCangDaKai', 'warmy:nmShouCangXinJian',
+  'warmy:nmShouCangTianJia', 'warmy:nmShouCangDaKai',
   'warmy:nmWangYeShuJuGaiLan', 'warmy:nmWangYeShuJuQing',
   'warmy:nmWangYeZhangHaoLieBiao', 'warmy:nmWangYeZhangHaoBaoCun', 'warmy:nmWangYeZhangHaoDaoRu',
   'warmy:nmXiaZaiLieBiao', 'warmy:nmXiaZaiQingKong', 'warmy:nmXiaZaiDaKai', 'warmy:nmXiaZaiXianShi',

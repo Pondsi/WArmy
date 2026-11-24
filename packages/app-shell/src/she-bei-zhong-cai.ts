@@ -21,7 +21,7 @@ export interface SheBeiZhu {
 }
 export interface SheBeiShiJian {
   device: SheBeiLei;
-  type: 'grant' | 'revoke' | 'wait';
+  type: 'grant' | 'revoke' | 'wait' | 'release';
   winId: number;
   /** grant 且此前被抢过 ⇒ true（拟态恢复录音/补播、会话继续等待的动作） */
   resume: boolean;
@@ -101,6 +101,7 @@ export class SheBeiZhongCai {
   release(device: SheBeiLei, winId: number, kind: 'session' | 'mimic'): SheBeiZhuangTai {
     const g = this.ge(device);
     if (g.holder && g.holder.winId === winId && g.holder.kind === kind) {
+      this.fa(device, 'release', g.holder, false, g.holder);
       this.beiQiang.delete(this.keyOf(g.holder));
       g.holder = null;
       this.chongPai(device);
@@ -121,7 +122,7 @@ export class SheBeiZhongCai {
       const g = this.ge(d);
       const youGuan = (g.holder && g.holder.winId === winId) || g.deng.some((x) => x.winId === winId);
       if (!youGuan) continue;
-      if (g.holder && g.holder.winId === winId) { this.beiQiang.delete(this.keyOf(g.holder)); g.holder = null; }
+      if (g.holder && g.holder.winId === winId) { this.fa(d, 'release', g.holder, false, g.holder); this.beiQiang.delete(this.keyOf(g.holder)); g.holder = null; }
       g.deng = g.deng.filter((x) => x.winId !== winId);
       this.chongPai(d);
     }

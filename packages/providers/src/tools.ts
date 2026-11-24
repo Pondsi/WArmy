@@ -20,6 +20,7 @@ import { jieWeiAnQuan } from './util.js';
 import { neiRongWenBen } from './types.js';
 import type {
   LiaoTianXiaoXi,
+  LiaoTianNeiRongBu,
   LiaoTianQingQiu,
   LiaoTianXiangYing,
   MoxingGongYing,
@@ -72,11 +73,23 @@ export interface YuSuanKuaiZhao {
   zongYuSuan: number;
 }
 
-/** 工具执行器：入参是模型的 tool_call，返回值是回给模型的文本（不许抛错，抛了也会被兜住） */
+/** R300：工具可同时回传文本与受信图片（例如外部 Computer Use 的窗口截图）。 */
+export interface GongJuZhiXingJieGuo {
+  text: string;
+  images?: LiaoTianNeiRongBu[];
+}
+
+/** 工具执行器：入参是模型的 tool_call，返回值是回给模型的文本或图文结果。 */
 export type GongJuZhiXing = (
   call: GongJuDiaoYong,
   ctx: { round: number; zuiDaJieGuoZiShu: number }
-) => Promise<string> | string;
+) => Promise<string | GongJuZhiXingJieGuo> | string | GongJuZhiXingJieGuo;
+
+function guiYiGongJuJieGuo(out: string | GongJuZhiXingJieGuo | null | undefined): GongJuZhiXingJieGuo {
+  if (typeof out === 'string') return { text: out };
+  if (out && typeof out === 'object') return { text: String(out.text || ''), images: Array.isArray(out.images) ? out.images : [] };
+  return { text: '' };
+}
 
 export interface GongJuXunHuanShi {
   kind: 'round' | 'tool' | 'degraded' | 'final' | 'retry' | 'budget' | 'shrink';
@@ -628,10 +641,10 @@ export async function liaoTianDaiGongJu(
         if (shengYu0 <= 0) return { budget: true, ok: false, text: yuSuanWanWen(ming0), detail: 'budget' };
         const shangXian0 = Math.min(zuiDaJieGuoZiShu, shengYu0);
         try {
-          const out = await execute(call, { round: lunShu, zuiDaJieGuoZiShu: shangXian0 });
-          let t = out === undefined || out === null ? '' : String(out);
+          const out = guiYiGongJuJieGuo(await execute(call, { round: lunShu, zuiDaJieGuoZiShu: shangXian0 }));
+          let t = out.text;
           if (t.length > shangXian0) t = jieWeiAnQuan(t, shangXian0) + `\n…[结果被截断：原 ${t.length} 字符，本次上限 ${shangXian0}]`;
-          return { budget: false, ok: true, text: t, detail: '' };
+          return { budget: false, ok: true, text: t, images: out.images, detail: '' };
         } catch (e) {
           const yy = String((e as Error)?.message || e).slice(0, 200);
           return { budget: false, ok: false, text: `工具 ${ming0} 执行失败：${yy}`, detail: yy };
@@ -642,9 +655,11 @@ export async function liaoTianDaiGongJu(
         const ming = call.function?.name || 'unknown';
         const shengYu = zongYuSuan - jieGuoZiShu;
         let text = '';
+        let images: LiaoTianNeiRongBu[] = [];
         const yu = bingXingJieGuo ? bingXingJieGuo[idx] : null;
         if (yu) {
           text = yu.text;
+          images = yu.images || [];
           if (yu.budget) {
             emit({ kind: 'tool', round: lunShu, tool: ming, ok: false, chars: text.length, detail: 'budget' });
           } else {
@@ -658,8 +673,9 @@ export async function liaoTianDaiGongJu(
         } else {
           const shangXian = Math.min(zuiDaJieGuoZiShu, shengYu);
           try {
-            const out = await execute(call, { round: lunShu, zuiDaJieGuoZiShu: shangXian });
-            text = out === undefined || out === null ? '' : String(out);
+            const out = guiYiGongJuJieGuo(await execute(call, { round: lunShu, zuiDaJieGuoZiShu: shangXian }));
+            text = out.text;
+            images = out.images || [];
           } catch (e) {
             // 工具执行失败不是致命错误：把失败原因作为工具结果回给模型，让它自己纠偏
             const yuanYin = String((e as Error)?.message || e).slice(0, 200);
@@ -677,7 +693,7 @@ export async function liaoTianDaiGongJu(
           role: 'tool',
           toolCallId: call.id,
           ming,
-          content: text,
+          content: images.length ? [{ type: 'text', text }, ...images] : text,
         });
       }
     }

@@ -99,6 +99,8 @@ packages/app-shell/scripts/verify-local-search.mjs
 !/docs/screenshots/7793065c86f38ed042bd59e3fca62e1a.png
 !/docs/screenshots/ae29c0d6a4ded1e289fbe9987d4c5f9f.png
 /dev/
+# 本地研究、故障实录、隔离安装配置及发布工作树都不进入公开源码。
+/research/
 /references/
 /spikes/
 /preview/

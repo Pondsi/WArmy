@@ -16,8 +16,19 @@
       "cwd": ".",
       "env": {},
       "timeoutMs": 20000,
-      "enabled": true,
-      "description": "R264 方案A：桌面自动化可选 MCP，默认开。需本机安装 agent-desktop MCP server（不在 PATH 时桥接如实报不可用，不伪造工具）。"
+      "enabled": false,
+      "description": "R300 external Computer Use, disabled by default. Install a compatible stdio MCP server and map its real tool names. WArmy exposes six logical capabilities only; shell, file and process management are not exposed.",
+      "computerUse": {
+        "windowTtlMs": 60000,
+        "toolMap": {
+          "list_windows": "list_windows",
+          "screenshot": "screenshot",
+          "click": "click",
+          "type_text": "type_text",
+          "drag": "drag",
+          "scroll": "scroll"
+        }
+      }
     }
   }
 }

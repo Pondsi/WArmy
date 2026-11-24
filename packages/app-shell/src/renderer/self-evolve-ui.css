@@ -68,6 +68,12 @@
 .zjhFinal { display: flex; gap: 6px; align-items: flex-start; min-width: 0; }
 .zjhMaTou { flex-shrink: 0; font-size: 14px; line-height: 1.4; }
 .zjhFinal .bubble { flex: 1; min-width: 0; }
+/* 每条最终回复独立悬停操作栏，避免悬停一列点亮全部历史。 */
+.zjhHuiFu { min-width: 0; }
+.zjhHuiFu .xiaoXiMoXing { opacity: 0; }
+.zjhHuiFu .xiaoXiJiao { visibility: hidden; }
+.zjhHuiFu:hover .xiaoXiMoXing, .zjhHuiFu:focus-within .xiaoXiMoXing { opacity: 1; }
+.zjhHuiFu:hover .xiaoXiJiao, .zjhHuiFu:focus-within .xiaoXiJiao { visibility: visible; }
 .zjhChoose { align-self: stretch; margin-top: 2px; }
 .zjhChoose:disabled { opacity: .6; cursor: default; filter: none; }
 .zjhBiaoQian { align-self: stretch; text-align: center; font-size: 12px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line, #ddd); color: var(--muted); }

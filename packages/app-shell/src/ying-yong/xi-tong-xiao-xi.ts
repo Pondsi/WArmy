@@ -11,7 +11,7 @@ import { qingLiGuoQiXiaoXi } from '../fan-chan-mei.js';
 export interface XiTongXiaoXi {
   id: string;
   ts: number;
-  kind: 'update' | 'remote' | 'ssh' | 'system' | 'anti-sycophancy' | 'briefing' | 'schedule-missed';
+  kind: 'update' | 'remote' | 'ssh' | 'system' | 'anti-sycophancy' | 'briefing' | 'schedule-missed' | 'governance-approval';
   title: string;
   body: string;
   read: boolean;
@@ -35,13 +35,20 @@ export function chuangJianXiTongXiaoXi(yiLai: XiTongXiaoXiYiLai) {
       xiTongXiaoXiJi = (Array.isArray(j?.items) ? j.items : [])
         .filter((x: Partial<XiTongXiaoXi>) => x && typeof x.id === 'string' && typeof x.ts === 'number')
         .map((x: Partial<XiTongXiaoXi>) => ({
-          id: String(x.id), ts: Number(x.ts), kind: (x.kind === 'update' || x.kind === 'remote' || x.kind === 'ssh' || x.kind === 'anti-sycophancy' || x.kind === 'briefing' || x.kind === 'schedule-missed' ? x.kind : 'system'),
-          title: String(x.title || '').slice(0, 120), body: String(x.body || '').slice(0, x.kind === 'briefing' || x.kind === 'schedule-missed' ? 4000 : 400), read: !!x.read,
+          id: String(x.id), ts: Number(x.ts), kind: (x.kind === 'update' || x.kind === 'remote' || x.kind === 'ssh' || x.kind === 'anti-sycophancy' || x.kind === 'briefing' || x.kind === 'schedule-missed' || x.kind === 'governance-approval' ? x.kind : 'system'),
+          title: String(x.title || '').slice(0, 120), body: String(x.body || '').slice(0, x.kind === 'briefing' || x.kind === 'schedule-missed' || x.kind === 'governance-approval' ? 4000 : 400), read: !!x.read,
         }))
         .slice(-200);
       /* R260 项30：反谄媚系统消息时效清理——早于最新 10 条且超 30 天的删除（按模型观点处理）。 */
       xiTongXiaoXiJi = qingLiGuoQiXiaoXi(xiTongXiaoXiJi, Date.now()).messages;
-      /* R298：恢复时整理历史重复未读错过通知——全局最多一条未读，多条立即合并 */
+      /* R298：恢复时整理历史重复未读通知——错过与自我改进各自全局最多一条。 */
+      const piZhun = xiTongXiaoXiJi.filter((x) => x.kind === 'governance-approval' && !x.read);
+      if (piZhun.length > 1) {
+        const ti = piZhun.map((x) => x.body).filter(Boolean).join('\n──\n').slice(0, 4000);
+        const zui = piZhun[piZhun.length - 1]!;
+        xiTongXiaoXiJi = xiTongXiaoXiJi.filter((x) => !(x.kind === 'governance-approval' && !x.read));
+        xiTongXiaoXiJi.push({ ...zui, body: ti });
+      }
       const cuoWei = xiTongXiaoXiJi.filter((x) => x.kind === 'schedule-missed' && !x.read);
       if (cuoWei.length > 1) {
         const heTi = cuoWei.map((x) => x.body).filter(Boolean).join('\n──\n').slice(0, 4000);
@@ -51,12 +58,14 @@ export function chuangJianXiTongXiaoXi(yiLai: XiTongXiaoXiYiLai) {
       }
     } catch { xiTongXiaoXiJi = []; }
   }
-  /** 200 条上限不得淘汰未读错过通知（未决业务不靠消息淘汰清除） */
+  /** 200 条上限不得淘汰未读错过通知与治理申请（未决业务不靠消息淘汰清除） */
   function youJieQu200(lie: XiTongXiaoXi[]): XiTongXiaoXi[] {
     if (lie.length <= 200) return lie;
-    const bao = lie.filter((x) => x.kind === 'schedule-missed' && !x.read);
-    const qiTa = lie.filter((x) => !(x.kind === 'schedule-missed' && !x.read));
-    return [...qiTa.slice(-(200 - bao.length)), ...bao];
+    const weiJue = (x: XiTongXiaoXi) => !x.read
+      && (x.kind === 'schedule-missed' || x.kind === 'governance-approval');
+    const bao = lie.filter(weiJue);
+    const qiTa = lie.filter((x) => !weiJue(x));
+    return [...qiTa.slice(-Math.max(0, 200 - bao.length)), ...bao];
   }
   function cunXiTongXiaoXi(): void {
     try {
@@ -112,6 +121,28 @@ export function chuangJianXiTongXiaoXi(yiLai: XiTongXiaoXiYiLai) {
       yiLai.guangBo('warmy:xiTongXiaoXiXin', { count: xiTongXiaoXiJi.filter((x) => !x.read).length });
     } catch { /* 通知失败绝不影响业务 */ }
   }
+  /** 自我改进待批准：全局最多一条未读；逐项批准仍由治理 owner 独立裁决。 */
+  function jiJinHuaShenPi(body: string): void {
+    try {
+      const weiDu = xiTongXiaoXiJi.filter((x) => x.kind === 'governance-approval' && !x.read);
+      const yiDu = xiTongXiaoXiJi.filter((x) => x.kind === 'governance-approval' && x.read);
+      const heBing = [...weiDu.map((x) => x.body), String(body || '')].filter(Boolean).join('\n──\n').slice(0, 4000);
+      xiTongXiaoXiJi = xiTongXiaoXiJi.filter((x) => x.kind !== 'governance-approval');
+      xiTongXiaoXiJi.push(...yiDu.slice(-5));
+      xiTongXiaoXiJi.push({ id: 'jinpi-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6), ts: Date.now(), kind: 'governance-approval', title: '自我改进申请（需你批准）', body: heBing, read: false });
+      xiTongXiaoXiJi = youJieQu200(xiTongXiaoXiJi);
+      cunXiTongXiaoXi();
+      yiLai.guangBo('warmy:xiTongXiaoXiXin', { count: xiTongXiaoXiJi.filter((x) => !x.read).length });
+    } catch { /* 通知失败不影响提案 */ }
+  }
+  /** 全部决定后收起未读提示；已读不等于批准，决定仍以治理 owner 为准。 */
+  function qingLiJinHuaShenPi(): void {
+    let gai = false;
+    for (const m of xiTongXiaoXiJi) if (m.kind === 'governance-approval' && !m.read) { m.read = true; gai = true; }
+    if (!gai) return;
+    cunXiTongXiaoXi();
+    yiLai.guangBo('warmy:xiTongXiaoXiXin', { count: xiTongXiaoXiJi.filter((x) => !x.read).length });
+  }
   /** IPC 适配：注册顺序与原实现一致；安全闸仍由宿主 chuliIpc 承担。 */
   function zhuCeIpc(zhuCe: (channel: string, fn: (event: any, ...args: any[]) => any) => void): void {
     zhuCe('warmy:zongJieJianBao', (_e, p0?: { title?: string; body?: string }) => {
@@ -138,5 +169,5 @@ export function chuangJianXiTongXiaoXi(yiLai: XiTongXiaoXiYiLai) {
       return { ok: true, unread: 0 };
     });
   }
-  return { duXiTongXiaoXi, jiXiTongXiaoXi, jiZongJieJianBao, jiDingShiCuoGuo, zhuCeIpc };
+  return { duXiTongXiaoXi, jiXiTongXiaoXi, jiZongJieJianBao, jiDingShiCuoGuo, jiJinHuaShenPi, qingLiJinHuaShenPi, zhuCeIpc };
 }

@@ -1,8 +1,8 @@
 # WArmy Privacy Policy
 
-**Version**: 2.0
-**Effective date**: 2026-10-24
-**Previous version**: 1.0 (2026-10-18)
+**Version**: 2.1
+**Effective date**: 2026-11-24
+**Previous version**: 2.0 (2026-10-24)
 **Applicable product**: WArmy / Workhorse Army (Windows desktop app; in-repository preview page)
 **Maintainer**: Pondsi (an individual open-source project maintainer, not a company)
 **Also applies**: [Terms of Use](./TERMS.md) · [LICENSE](../LICENSE)
@@ -18,12 +18,12 @@
 1. **There is no server-side account system**, and the maintainer **operates no backend of their own that could receive your data**.
 2. Sessions, projects, memory, the knowledge base and the audit log are by default **stored only on your computer**; apart from what you yourself send to GitHub or by email, the maintainer holds none of your personal data.
 3. The data files this app manages (sessions and messages, projects/groups/board, the knowledge base and archives, the audit log, settings and network configuration, checkpoints and the recycle bin) are **always stored as ciphertext on disk**: a runtime at-rest encryption layer seals and opens them with a data key derived from the account key (AES-256-GCM, with JSONL sealed per record). **Outside** this layer: the `workspace/` directory, external project directories outside `userData`, `auth/`, `identity/` and `secure/` (each has its own key or OS protection and must stay readable before sign-in), the Chromium cache, fonts, screenshots, boot and diagnostic logs, `node_modules`, `vault.bin` and `memory.db`. This is application-side encryption, not filesystem-level enforcement: an administrator process under the same OS account, and memory dumps, are outside the threat model.
-4. The software goes online only when **you act or configure it yourself**; every network scenario is listed item by item in Section 3.
+4. DHT discovery is **enabled by default** and publishes connection metadata. Update checks and configured integrations can also contact external services; network scenarios and their triggers are listed in Section 3.
 5. Models and API keys are your own (BYO). A cloud model receives whatever you choose to send and processes it under **that provider's** policies.
 6. FWArmy is an **optional, standalone, self-hostable** relay program that the maintainer does not operate; it only forwards ciphertext and does not write messages to disk, but it can see metadata.
 7. Messages over third-party IM platforms such as WeChat iLink, WeCom, Telegram and Feishu pass through those platforms.
 8. **If the mnemonic is lost, nobody can recover it for you — including the maintainer**; there is no "account recovery" and no support backdoor.
-9. Contact details are in Section 18 at the end (two email addresses + the GitHub repository URL).
+9. Contact details are in Section 18 at the end (a public contact email and the GitHub repository URL).
 
 ---
 
@@ -49,13 +49,15 @@ Default user-data directory (can be overridden at launch with `--user-data-dir=`
 
 | System | Default path |
 |------|----------|
-| Windows | `%APPDATA%\@warmy\app-shell` |
+| Windows (installed or unpacked build) | `WArmyData` inside the installation or unpacked application folder |
+| Windows (development build) | `%APPDATA%\@warmy\app-shell` |
 | macOS | `~/Library/Application Support/@warmy/app-shell` |
 | Linux | `${XDG_CONFIG_HOME:-~/.config}/@warmy/app-shell` |
 
 | Data | Typical location | Contents | Does it leave the device automatically? | Encrypted by default? |
 |------|----------|------|------------------|--------------|
 | Sessions and messages | `memory/` (the JSONL is the single source of truth) | What you said, model replies, attachment references, timestamps and session IDs | No (unless that turn calls a cloud model) | **Yes**: runtime at-rest encryption layer (AES-256-GCM; JSONL sealed per record) |
+| A2UI interactive-reply artifacts | `workspace/<session>/a2ui/` | Declarative interaction data, generated HTML/runtime, manifest and workspace index | No automatic upload; the second model request sends the user question and normal reply to the same provider used for that reply | **No, plaintext** (inside the workspace, like other project files) |
 | Memory index | `memory/`, `memory-runtime/` (SQLite / vectors) | Retrieval projections generated from the logs; rebuildable from the JSONL | No | **No, plaintext** (outside the runtime encryption layer) |
 | Projects / groups / members / board | `groups.json`, `board/`, `plans.json` | Group and project ledgers, members, task cards, project MEMORY | No (when mesh networking is on, sent to peers according to your choices) | **Yes**: runtime at-rest encryption layer (AES-256-GCM; JSONL sealed per record) |
 | Knowledge base and archives | `knowledge/`, `archive/archives.jsonl` | Entities, events, evidence anchors (three tiers: session / internal / private), archive summaries and anchors | No (may be sent to the archive model when archive summaries are generated; may be sent to a model as context after a retrieval hit) | **Yes**: runtime at-rest encryption layer (AES-256-GCM; JSONL sealed per record) |
@@ -93,6 +95,8 @@ About encryption, this must be stated clearly:
 | 9 | WeChat iLink / WeCom / Telegram / Feishu | You scan a QR code or enter credentials and connect | Tencent, Telegram, Feishu and other platform servers | Messages, contact/session identifiers, bot tokens | Decided by the platform; the platform may rate-limit, apply risk control and retain records |
 | 10 | External links / built-in browsing | You click a link | The target website | An ordinary HTTP request (IP, User-Agent, etc.) | Decided by the target website |
 | 11 | GitHub issues / email | You submit them yourself | GitHub, your email provider | What you write and attach | Public (issues) or retained in both parties' mailboxes |
+| 12 | External MCP tools, including optional Computer Use | You enable the server and authorize a tool call | The stdio process you configured; it may contact its own services | Tool arguments, window IDs, screenshots returned by the server and tool results | Controlled by that external server and any service it contacts; WArmy does not bundle or audit the server |
+| 13 | DHT discovery | Enabled by default; can be disabled in Settings → Network & Host | DHT bootstrap nodes and peer devices | Address, port, identity fingerprint and online-time metadata; not chat content | Peers can observe or retain connection metadata |
 
 **What does not happen:**
 
@@ -113,6 +117,13 @@ About encryption, this must be stated clearly:
 - **The costs and quotas are yours.** Arrears, rate limits, account bans and regional restrictions are handled by the provider; deleting a key locally does not automatically revoke it on the provider side — revoke/rotate it in the provider's console.
 - **What gets sent can be broad.** Besides the conversation it may include attachments, images, tool execution results, knowledge-base/memory excerpts and the system prompt. Do not put mnemonics, private keys, ID numbers or other people's personal information in there.
 - **Local Ollama does not leave the machine by default.** If you change the address to a LAN or public-network machine, the data leaves this machine and is handled under that machine's rules.
+
+### Interactive replies and Computer Use
+
+- **A2UI is off by default.** When enabled, WArmy makes a second request to the same provider used for the normal reply, after that reply settles. That request contains the user's question and the normal reply so the interactive layer can stay consistent with it. The generated artifacts are stored in the current session workspace and are not added to normal reply copy, export, speech or model history.
+- **The A2UI runtime is local and network-restricted.** It uses a fixed component catalog, accepts only validated declarative data and local image data, and does not execute model-provided HTML, JavaScript or CSS. Workspace artifacts remain plaintext files under your operating-system account's protection.
+- **Computer Use is off by default and uses an external MCP server you install.** WArmy exposes only window listing, screenshots, clicks, typing, dragging and scrolling. Shell, file-management and process-management tools from that server are not exposed to WArmy models. The external server itself is untrusted code running with your privileges and may have its own network or storage behaviour.
+- **Screenshots can contain private desktop content.** Observation needs session or one-time authorization; clicks, typing, dragging and scrolling require one-time authorization every time, including in Full permission mode. Typed text is hidden from authorization cards and audit. Window IDs must come from a fresh host-verified list.
 
 ---
 
@@ -227,9 +238,10 @@ Within the scope of applicable law (GDPR, UK GDPR, CCPA/CPRA, PIPL, etc.), you h
 | Data | Retained for | Deleted by |
 |------|----------|----------|
 | Sessions, projects, memory, knowledge base, archives | Until you delete them | You |
+| A2UI artifacts in `workspace/<session>/a2ui/` | Until you delete the workspace or the files | You |
 | Recently deleted (`trash.json`) | Permanently cleaned up automatically after 48 hours, or emptied immediately by you | The app / you |
-| Audit log | Until you clear it or delete the file; **no automatic expiry** | **Yes**: runtime at-rest encryption layer (AES-256-GCM; JSONL sealed per record) |
-| Boot log, checkpoints, work-in-progress files | Until you delete them | **No, plaintext** (outside the runtime encryption layer) |
+| Audit log | Until you clear it or delete the file; **no automatic expiry** | You |
+| Boot log, checkpoints, work-in-progress files | Until you delete them | You |
 | Identity, mnemonic, API keys, social-platform credentials | Until you delete the corresponding files/entries | You |
 | FWArmy message queue | At most 30 seconds in memory; deleted on pickup | The server process |
 | FWArmy credential hashes, statistics, operational logs | Until the operator deletes `data/`; logs rotate at 5MB | The relay operator |
@@ -269,6 +281,8 @@ Within the scope of applicable law (GDPR, UK GDPR, CCPA/CPRA, PIPL, etc.), you h
 - Model API keys and social-platform passwords prefer the OS secure storage; without protection, silent plaintext is refused (social passwords are explicitly marked `plain`).
 - FWArmy messages are end-to-end encrypted (X25519 + HKDF + AES-256-GCM + Ed25519 signatures); the server stores no messages.
 - Update packages are verified with SHA-256 + size; tool/script invocation uses tiered authorisation, and writes outside the workspace require authorisation.
+- A2UI uses a fixed safe component catalog with size/component limits, local-only images and a network-restricted local runtime.
+- Computer Use uses an independent authorization path, a six-capability allowlist, fresh window identity checks and one-time nonce authorization for sensitive actions.
 - The audit log is kept locally so that you can review it yourself.
 
 **What it cannot do (please be sure to understand this):**
@@ -288,7 +302,7 @@ Within the scope of applicable law (GDPR, UK GDPR, CCPA/CPRA, PIPL, etc.), you h
 
 1. **Quit the app** (tray "Sign off" / quit) so that no process holds the files.
 2. **Delete the user-data directory**:
-   - Windows: `%APPDATA%\@warmy\app-shell`
+   - Windows installed/unpacked builds: `WArmyData` inside the application folder. Development builds: `%APPDATA%\@warmy\app-shell`.
    - macOS: `~/Library/Application Support/@warmy/app-shell`
    - Linux: `${XDG_CONFIG_HOME:-~/.config}/@warmy/app-shell`
    - If you launched with `--user-data-dir=`, delete that directory.
@@ -318,7 +332,7 @@ Deletion is **irreversible**. We have no server copy to "delete again" and no ba
 
 `Public@numumu.com · Repository and issues: https://github.com/Pondsi/WArmy`
 
-- For privacy questions, data-deletion requests and requests concerning minors, use the email addresses above and put `PRIVACY` in the subject line.
+- For privacy questions, data-deletion requests and requests concerning minors, use the contact email above and put `PRIVACY` in the subject line.
 - **Do not send** mnemonics, private keys, API keys, ID numbers, raw chat content or other people's personal information **by email or in a public issue**; if you must provide them, redact them first or ask us for a safe way to provide them.
 - For security vulnerabilities, contact us privately first; do not publish working exploit details directly.
 
@@ -336,6 +350,8 @@ Deletion is **irreversible**. We have no server copy to "delete again" and no ba
 | WeCom / Telegram / Feishu | Other IM channels | After you configure the connection | The respective platform | The respective platform's policies |
 | FWArmy relay | Forwarding end-to-end-encrypted messages | When you add and select a relay | The relay operator (possibly you) | Provided by the operator |
 | Your email provider | Contacting us | When you send email | The email provider | Its policies |
+| External MCP servers you configure | Additional tools, including optional Computer Use | After you enable the server and authorize a call | You or the server operator | The server operator's policies |
+| DHT discovery nodes and peers | Finding reachable devices | Enabled by default; can be switched off in network settings | Each node or peer operator | That operator's policies, if provided |
 
 ## Appendix B: Glossary
 

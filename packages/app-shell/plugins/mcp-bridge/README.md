@@ -138,9 +138,35 @@ const out = await bridge.callTool('mcp__echo__echo', { message: 'hi' });
 bridge.stop();
 ```
 
-To wire it into the agent loop proper, the host needs one hook that merges `bridge.toolSpecs()`
-into its tool list and routes `mcp__*` calls to `bridge.callTool()`. That hook is deliberately
-**not** added here: this plugin ships as pure new files, no existing source is edited.
+WArmy's host gateway merges allowed specs into the agent tool list and routes every `mcp__*` call
+through `McpGuanWang`. That gateway adds allow/deny rules, rate limits, authorization, audit,
+timeout handling, result truncation and prompt-injection warnings.
+
+## Computer Use (external MCP, default off)
+
+`agent-desktop` in `mcp-servers.json.example` is a placeholder for a compatible stdio MCP server.
+Install the server yourself, set `enabled: true`, and map its real tool names:
+
+```json
+"computerUse": {
+  "windowTtlMs": 60000,
+  "toolMap": {
+    "list_windows": "list_windows",
+    "screenshot": "screenshot",
+    "click": "click",
+    "type_text": "type_text",
+    "drag": "drag",
+    "scroll": "scroll"
+  }
+}
+```
+
+WArmy exposes only the six `computer_use_*` logical tools. Raw tools from that server are hidden,
+including shell/file/process tools. `list_windows` must return JSON with `windows[].id` and an
+optional `title`; later actions accept only an ID from that list, and the list expires after
+`windowTtlMs`. Observation needs session or one-time authorization. Click, type, drag and scroll
+ask for one-time authorization every time, even in Full permission mode. Typed text is hidden
+from authorization cards and audit. Screenshot images are accepted only as PNG/JPEG/WebP data.
 
 ## Errors, timeouts, protocol
 

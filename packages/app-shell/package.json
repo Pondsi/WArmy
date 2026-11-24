@@ -1,6 +1,6 @@
 {
   "name": "@warmy/app-shell",
-  "version": "0.4.48",
+  "version": "0.4.49",
   "private": true,
   "description": "Electron main/renderer shell (no native modules)",
   "main": "./dist/electron-main.js",
@@ -20,6 +20,9 @@
     "dev": "node scripts/dev-restart.mjs"
   },
   "dependencies": {
+    "@a2ui/agent": "0.2.1",
+    "@a2ui/lit": "0.16.0",
+    "@a2ui/web_core": "0.16.1",
     "@duckdb/node-api": "2.0.0-r.1",
     "@pixiv/three-vrm": "3.5.5",
     "@warmy/asset-governance": "workspace:*",
@@ -33,8 +36,8 @@
     "@warmy/providers": "workspace:*",
     "@warmy/sync-protocol": "workspace:*",
     "diwen": "https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz",
-    "pinyin-pro": "3.29.5",
     "hash-wasm": "4.12.0",
+    "pinyin-pro": "3.29.5",
     "three": "0.187.0"
   },
   "optionalDependencies": {

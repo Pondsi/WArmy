@@ -21,6 +21,8 @@
 import { compress as ccrCompress } from '@warmy/ccr-compressor';
 
 export interface LogEntry {
+  /** 稳定消息 ID：互动回复状态只绑定消息，不依赖数组下标。 */
+  id?: string;
   /** 日志内的单调序号（决定裁剪顺序） */
   seq: number;
   role: 'system' | 'user' | 'assistant';

@@ -135,7 +135,7 @@ function copyPlugin(target, { dryRun, force }) {
     if (!dryRun) fs.copyFileSync(example, config);
     copied.push('mcp-servers.json (from .example)');
   } else if (fs.existsSync(example) && fs.existsSync(config)) {
-    /* R264 方案A：已存在的配置合并 agent-desktop 可选 MCP（默认开），不覆盖用户已有条目/开关 */
+    /* R300：已存在的配置只补默认关闭的 Computer Use 条目，不覆盖用户已有配置。 */
     try {
       const ex = JSON.parse(fs.readFileSync(example, 'utf8').replace(/^\uFEFF/, ''));
       const cur = JSON.parse(fs.readFileSync(config, 'utf8').replace(/^\uFEFF/, ''));
@@ -144,7 +144,7 @@ function copyPlugin(target, { dryRun, force }) {
       for (const [k, v] of Object.entries(ex.servers || {})) {
         if (k === 'agent-desktop' && !(k in cur.servers)) { cur.servers[k] = v; merged = true; }
       }
-      if (merged && !dryRun) { fs.writeFileSync(config, JSON.stringify(cur, null, 2)); copied.push('mcp-servers.json (+agent-desktop default-on)'); }
+      if (merged && !dryRun) { fs.writeFileSync(config, JSON.stringify(cur, null, 2)); copied.push('mcp-servers.json (+agent-desktop default-off)'); }
     } catch { /* 合并失败不挡安装 */ }
   }
   return { dest, copied, existed: false };

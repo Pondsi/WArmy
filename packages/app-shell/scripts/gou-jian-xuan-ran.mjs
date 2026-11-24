@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { Script } from 'node:vm';
 
 const baoGen = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ruKou = ['app.js', 'nm-viewer.js'];
+const ruKou = ['app.js', 'nm-viewer.js', 'a2ui-view.js'];
 
 export async function gouJianXuanRan(gen = baoGen) {
   const shuChu = path.join(gen, 'dist', 'renderer');

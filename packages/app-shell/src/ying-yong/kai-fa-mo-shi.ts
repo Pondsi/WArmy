@@ -40,8 +40,6 @@ export interface KaiFaHuiHuaZhuangTai {
   suggestedTaskIds: string[];
   refusedTaskIds: string[];
   ruanGuiZe: RuanGuiZe[];
-  /** 暂停自动优化（用户可随时停；暂停期间总结巡查不生成/不验证候选，已生效规则仍监测退化） */
-  autoOptPaused?: boolean;
   liuChu?: { training: string[]; holdout: string[]; at: number };
   /** 结构重构建议（只存证据，下次对话询问） */
   chongGouJianYi?: Array<{ id: string; wenTi: string; zhengJu: string; youDian: string; queDian: string; fengXian: string; fanWei: string; yanZheng: string; huiGun: string; zhuangTai: 'pending' | 'asked' | 'agreed' | 'declined' | 'deferred'; version: number; createdAt: number }>;
@@ -73,7 +71,9 @@ export function chuangJianKaiFaMoShi(yiLai: KaiFaMoShiYiLai) {
       map = {};
       for (const [sid, st] of Object.entries(j)) {
         if (!st || typeof st !== 'object') continue;
-        map[sid] = { ...kong(sid), ...st, suggestedTaskIds: (st.suggestedTaskIds || []).slice(-BAO_LIU), refusedTaskIds: (st.refusedTaskIds || []).slice(-BAO_LIU), ruanGuiZe: (st.ruanGuiZe || []).slice(-RUAN_GUI_ZE_XIAN_ZHI.xiangMax * 2) };
+        /* 旧手动暂停字段迁移丢弃：自动优化由资源准入/失败冷却/回滚控制，不提供总停止入口。 */
+        const { autoOptPaused: _jiuZanTing, ...xianZhuang } = st as KaiFaHuiHuaZhuangTai & { autoOptPaused?: boolean };
+        map[sid] = { ...kong(sid), ...xianZhuang, suggestedTaskIds: (st.suggestedTaskIds || []).slice(-BAO_LIU), refusedTaskIds: (st.refusedTaskIds || []).slice(-BAO_LIU), ruanGuiZe: (st.ruanGuiZe || []).slice(-RUAN_GUI_ZE_XIAN_ZHI.xiangMax * 2) };
       }
       return true;
     }
@@ -110,13 +110,6 @@ export function chuangJianKaiFaMoShi(yiLai: KaiFaMoShiYiLai) {
     const st = zhuangTai(sid);
     if (taskId && !st.refusedTaskIds.includes(taskId)) st.refusedTaskIds = [...st.refusedTaskIds, taskId].slice(-BAO_LIU);
     cunSid(sid);
-  }
-  /** 暂停/恢复自动优化：只影响候选生成与验证，不关闭开发模式本身，不影响硬边界 */
-  function zanTingZiGaiJin(sid: string, paused: boolean): { ok: boolean; state?: KaiFaHuiHuaZhuangTai } {
-    const st = zhuangTai(sid);
-    st.autoOptPaused = !!paused;
-    if (!cunSid(sid)) { st.autoOptPaused = !paused; return { ok: false }; }
-    return { ok: true, state: { ...st } };
   }
   /** 分身/值班/支线继承所属会话（只读快照；不继承别的会话） */
   function jiCheng(fuSid: string): { enabled: boolean; modeVersion: number; ruanGuiZe: RuanGuiZe[] } {
@@ -266,7 +259,7 @@ export function chuangJianKaiFaMoShi(yiLai: KaiFaMoShiYiLai) {
   }
 
   return {
-    du, zhuangTai, qieHuan, jianYiKaiQi, juJue, zanTingZiGaiJin, jiCheng,
+    du, zhuangTai, qieHuan, jianYiKaiQi, juJue, jiCheng,
     liuChuHuaFen, jianYanHouXuan, tiAn, yanZheng, shengXiao, huiGun, jianCeTuiHua,
     baoCunChongGouJianYi, chongGouJueDing, daiXunWen, biaoJiYiXunWen,
     yingBianJie: KAI_FA_BU_KE_GUAN,

@@ -2,6 +2,7 @@
 (() => {
   'use strict';
   window.__kaiMimicHuiTu = async (labels) => {
+    const xingTai = labels.xingTai === '3d' ? '3d' : '2d';
     const existing = document.getElementById('mimicHuiTu');
     if (existing) { existing.focus(); return; }
     const dlg = document.createElement('dialog'); dlg.id = 'mimicHuiTu'; dlg.className = 'mimicHuiTu';
@@ -29,11 +30,11 @@
     const status = document.createElement('div'); status.setAttribute('role', 'status'); status.className = 'jingYin';
     const actions = document.createElement('div'); actions.className = 'mimicHuiTuActions';
     const button = (text, action) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'anNiuXiao'; b.textContent = text; b.onclick = action; actions.appendChild(b); return b; };
-    let scene = { version: 1, parts: [] }, hash = '', selected = [], busy = false, seq = 0;
+    let scene = { version: 1, parts: [] }, hash = '', selected = [], busy = false, seq = 0, sanDName = '', sanDSaved = false;
     const history = [];
     const invoke = (p) => window.warmy.mimicHuiTu(p);
-    /** R260 项10：3D 形态判定（读设置里的形态单选）；3D 走 LLM→SVG→栅格化→TripoSR→glb。 */
-    const shi3D = () => { try { return String(document.querySelector('input[name="mimicXingTai"]:checked')?.value || '2d') === '3d'; } catch { return false; } };
+    /** 操作快照固定本次形态，生成/保存期间切换设置不得改变执行语义。 */
+    const shi3D = () => xingTai === '3d';
     const svgToPng = (svgEl) => new Promise((resolve, reject) => {
       try {
         const xml = new XMLSerializer().serializeToString(svgEl);
@@ -53,8 +54,10 @@
     });
     const update = (r) => {
       if (!r?.ok) throw new Error(r?.error || 'generation-failed');
+      if (sanDName && !sanDSaved) void invoke({ action: 'discard3d', name: sanDName, scene, xingTai });
+      sanDName = ''; sanDSaved = false;
       scene = r.scene; hash = r.hash; picture.innerHTML = r.svg; selected = []; selectionText.textContent = '';
-      save.disabled = !scene.parts.length || busy;
+      save.disabled = !scene.parts.length || busy || (shi3D() && !sanDName);
     };
     const mark = () => {
       picture.querySelectorAll('[data-part]').forEach((g) => g.classList.toggle('xuan', selected.includes(g.dataset.part)));
@@ -64,6 +67,8 @@
     };
     const generate = button(labels.generate, async () => {
       if (busy || !prompt.value.trim() || wu.hidden === false) return;
+      if (sanDName && !sanDSaved) void invoke({ action: 'discard3d', name: sanDName, scene, xingTai });
+      sanDName = ''; sanDSaved = false;
       busy = true; generate.disabled = true; save.disabled = true;
       undoBtn.disabled = true; clearBtn.disabled = true;
       const ticket = ++seq, before = structuredClone(scene), baseHash = hash;
@@ -74,14 +79,14 @@
       const dongJi = setInterval(() => { dongWen.textContent = '生成中… ' + Math.round((Date.now() - t0) / 1000) + 's'; }, 500);
       const watch = setTimeout(() => {
         if (busy && ticket === seq) {
-          busy = false; dong.hidden = true; clearInterval(dongJi);
-          generate.disabled = false; save.disabled = !scene.parts.length;
+          seq++; busy = false; dong.hidden = true; clearInterval(dongJi);
+          generate.disabled = false; save.disabled = !scene.parts.length || (shi3D() && !sanDName);
           status.textContent = '生成超时，已解锁界面（可重试或关闭）';
-          void invoke({ action: 'cancel' });
+          void invoke({ action: 'cancel', xingTai });
         }
       }, 130000);
       try {
-        const r = await invoke({ action: 'generate', prompt: prompt.value, scene: before, selection: [...selected], model: moSel.value || undefined });
+        const r = await invoke({ action: 'generate', prompt: prompt.value, scene: before, selection: [...selected], model: moSel.value || undefined, xingTai });
         if (!dlg.open || ticket !== seq || hash !== baseHash) return;
         if (!r?.ok) throw new Error(r?.error || 'generation-failed');
         history.push(before); if (history.length > 16) history.shift();
@@ -93,19 +98,28 @@
           if (!svgEl) throw new Error('no-svg');
           const png = await svgToPng(svgEl);
           const g = await window.warmy.sanDShengCheng?.({ png, name: 'sculpt-' + String(hash || '').slice(0, 12) });
-          if (!dlg.open || ticket !== seq) return;
+          if (!dlg.open || ticket !== seq) { if (g?.ok && g.name) void invoke({ action: 'discard3d', name: g.name, scene, xingTai }); return; }
           if (!g?.ok) throw new Error(g?.hint || g?.error || '3d-generation-failed');
-          status.textContent = labels.saved + ' (3D)';
+          sanDName = String(g.name || ''); sanDSaved = false;
+          status.textContent = labels.generated3d || (labels.save + ' · 3D');
         }
       } catch (e) { if (ticket === seq) status.textContent = e.message; }
-      finally { clearInterval(dongJi); clearTimeout(watch); if (ticket === seq) { busy = false; dong.hidden = true; generate.disabled = false; save.disabled = !scene.parts.length; undoBtn.disabled = false; clearBtn.disabled = false; } }
+      finally { clearInterval(dongJi); clearTimeout(watch); if (ticket === seq) { busy = false; dong.hidden = true; generate.disabled = false; save.disabled = !scene.parts.length || (shi3D() && !sanDName); undoBtn.disabled = false; clearBtn.disabled = false; } }
     });
     const save = button(labels.save, async () => {
       if (busy) return;
       busy = true; save.disabled = true; generate.disabled = true;
-      try { const r = await invoke({ action: 'save', scene }); if (!r?.ok) throw new Error(r?.error || 'save-failed'); status.textContent = labels.saved; }
+      try {
+        if (shi3D() && !sanDName) throw new Error('3d-not-generated');
+        const r = shi3D()
+          ? await invoke({ action: 'save3d', name: sanDName, scene, xingTai })
+          : await invoke({ action: 'save', scene, xingTai });
+        if (!r?.ok) throw new Error(r?.error || 'save-failed');
+        if (shi3D()) sanDSaved = true;
+        status.textContent = labels.saved;
+      }
       catch (e) { status.textContent = e.message; }
-      finally { busy = false; generate.disabled = false; save.disabled = !scene.parts.length; }
+      finally { busy = false; generate.disabled = false; save.disabled = !scene.parts.length || (shi3D() && !sanDName); }
     });
     const undoBtn = button(labels.undo, async () => {
       if (busy || !history.length) return;
@@ -121,7 +135,7 @@
       moSel.innerHTML = models.map((m) => '<option value="' + String(m).replace(/"/g, '&quot;') + '">' + String(m).replace(/</g, '&lt;') + '</option>').join('');
       const you = models.length > 0;
       wu.hidden = you;
-      moSel.disabled = !you; prompt.disabled = !you; generate.disabled = !you; save.disabled = !you || !scene.parts.length;
+      moSel.disabled = !you; prompt.disabled = !you; generate.disabled = !you; save.disabled = !you || !scene.parts.length || (shi3D() && !sanDName);
       if (you) { moSel.value = models[0]; status.textContent = ''; }
       else status.textContent = '';
       return you;
@@ -130,7 +144,7 @@
     dlg.append(header, moRow, stage, selectionText, prompt, status, actions, dong, wu); document.body.appendChild(dlg); dlg.showModal();
     void jianCe();
     dlg.addEventListener('click', (e) => { if (e.target === dlg) { const r = dlg.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close(); } });
-    dlg.addEventListener('close', () => { seq++; void invoke({ action: 'cancel' }); dlg.remove(); });
+    dlg.addEventListener('close', () => { seq++; void invoke({ action: 'cancel', xingTai }); if (sanDName && !sanDSaved) void invoke({ action: 'discard3d', name: sanDName, scene, xingTai }); dlg.remove(); });
     let start = null;
     stage.onpointerdown = (e) => {
       if (busy || e.button !== 0) return;

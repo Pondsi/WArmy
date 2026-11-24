@@ -112,6 +112,10 @@ export interface WorkToolResult {
     appended?: boolean;
     /** write_file：这次调用本身写了多少字符（chars 是文件当前总字数） */
     wroteChars?: number;
+    /** 文件内容/存在性是否真实改变；同内容重写与 touch 不算最近改动。 */
+    changed?: boolean;
+    /** move_file：移动前的真实源路径。 */
+    sourceAbs?: string;
     /** R294-4 ACI：写/改后语法检查结果（建议性，供台账与自我改进统计） */
     yuFa?: { checked: boolean; ok: boolean; fangShi: string; cuoWu: number; quanJiao: number };
     /** R294-5 软门禁：模型请求越出工作区（带理由）⇒ 主进程转用户审批卡 */
@@ -515,11 +519,12 @@ export function workEditFile(baseDir: string, args: { path?: string; oldText?: s
     if (!count) return fail(tool, new Error('oldText-not-found'), relOf(baseDir, file));
     if (!args.replaceAll && count !== 1) return fail(tool, new Error(`oldText-not-unique (${count} matches); provide more context or set replaceAll=true`), relOf(baseDir, file));
     const next = args.replaceAll ? text.split(oldText).join(newText) : text.replace(oldText, newText);
+    const changed = next !== text;
     fs.writeFileSync(file, next, 'utf8');
     /* R294-4 ACI：改后语法自动检查（建议性，绝不阻止写入；中文错误＋行/列＋全角标点提示）。
        BOM/EOL 由精确替换天然保留；检查结果进 meta.yuFa 供总结自我改进统计。守卫停用则不检（自我改进裁决）。 */
     const yuFa = yuFaShouWeiKai() ? jianChaYuFa(file, next) : { checked: false, ok: true, errors: [], quanJiao: [], fangShi: 'none' as const };
-    return { ok: true, content: `[edit_file] 已修改 ${relOf(baseDir, file)}（替换 ${args.replaceAll ? count : 1} 处）` + yuFaJianYiWen(yuFa), meta: { tool, ok: true, bytes: Buffer.byteLength(next), chars: [...next].length, path: relOf(baseDir, file), abs: file, exists: true, yuFa: { checked: yuFa.checked, ok: yuFa.ok, fangShi: yuFa.fangShi, cuoWu: yuFa.errors.length, quanJiao: yuFa.quanJiao.length } } };
+    return { ok: true, content: `[edit_file] 已修改 ${relOf(baseDir, file)}（替换 ${args.replaceAll ? count : 1} 处）` + yuFaJianYiWen(yuFa), meta: { tool, ok: true, bytes: Buffer.byteLength(next), chars: [...next].length, path: relOf(baseDir, file), abs: file, exists: true, changed, yuFa: { checked: yuFa.checked, ok: yuFa.ok, fangShi: yuFa.fangShi, cuoWu: yuFa.errors.length, quanJiao: yuFa.quanJiao.length } } };
   } catch (e) { const rq = ruanMenJinQingQiu(tool, e, args); if (rq) return rq; return fail(tool, e); }
 }
 
@@ -532,9 +537,10 @@ export function workCopyFile(baseDir: string, args: { path?: string; destination
     const dst = resolveInside(baseDir, args.destination, kuaiQuan, 'write');
     if (!fs.existsSync(src) || !fs.statSync(src).isFile()) return fail(tool, new Error('source-not-a-file'), relOf(baseDir, src));
     if (fs.existsSync(dst) && !args.overwrite) return fail(tool, new Error('destination-exists'), relOf(baseDir, dst));
+    const changed = !fs.existsSync(dst) || !fs.readFileSync(src).equals(fs.readFileSync(dst));
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.copyFileSync(src, dst);
-    return { ok: true, content: `[copy_file] 已复制到 ${dst}`, meta: { tool, ok: true, bytes: fs.statSync(dst).size, path: relOf(baseDir, dst), abs: dst, exists: true } };
+    return { ok: true, content: `[copy_file] 已复制到 ${dst}`, meta: { tool, ok: true, bytes: fs.statSync(dst).size, path: relOf(baseDir, dst), abs: dst, exists: true, changed } };
   } catch (e) { return fail(tool, e); }
 }
 
@@ -552,7 +558,7 @@ export function workMoveFile(baseDir: string, args: { path?: string; destination
     }
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.renameSync(src, dst);
-    return { ok: true, content: `[move_file] 已移动到 ${dst}`, meta: { tool, ok: true, bytes: fs.statSync(dst).size, path: relOf(baseDir, dst), abs: dst, exists: true } };
+    return { ok: true, content: `[move_file] 已移动到 ${dst}`, meta: { tool, ok: true, bytes: fs.statSync(dst).size, path: relOf(baseDir, dst), abs: dst, exists: true, changed: true, sourceAbs: src } };
   } catch (e) { return fail(tool, e); }
 }
 
@@ -575,7 +581,7 @@ export function workDeleteFile(baseDir: string, args: { path?: string; recursive
     const recursive = args.recursive === true;
     if (st.isDirectory() && !recursive) return fail(tool, new Error('directory-needs-recursive：删除目录必须显式传 recursive:true（防误删整棵）'), relOf(baseDir, abs));
     fs.rmSync(abs, { recursive: st.isDirectory() && recursive, force: false });
-    return { ok: true, content: `[delete_file] 已永久删除 ${relOf(baseDir, abs)}${st.isDirectory() ? '（目录，recursive）' : ''}。不可恢复；如需可恢复删除请用 desktop_file_op op=delete（回收站）。`, meta: { tool, ok: true, bytes: 0, path: relOf(baseDir, abs), abs, exists: false } };
+    return { ok: true, content: `[delete_file] 已永久删除 ${relOf(baseDir, abs)}${st.isDirectory() ? '（目录，recursive）' : ''}。不可恢复；如需可恢复删除请用 desktop_file_op op=delete（回收站）。`, meta: { tool, ok: true, bytes: 0, path: relOf(baseDir, abs), abs, exists: false, changed: true } };
   } catch (e) { return fail(tool, e); }
 }
 
@@ -812,6 +818,7 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
      * 每次只写一段（几百到一千字），写完一段再写下一段。
      */
     const zhuiJia = shiZhuiJia(args) && fs.existsSync(file);
+    const changed = zhuiJia ? content.length > 0 : !fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== content;
     if (zhuiJia) fs.appendFileSync(file, content, 'utf8');
     else fs.writeFileSync(file, content, 'utf8');
     /**
@@ -864,7 +871,7 @@ export function workWriteFile(baseDir: string, args: { path?: string; content?: 
       ok: cun,
       content: `${zhuiJia ? '已追加写入' : '已写入'} ${file}（本次 ${bytes} 字节 / ${[...content].length} 字符；文件当前共 ${zongBytes} 字节 / ${zongZi} 字符${yuFaTiShi}）${cun ? '，文件已自检存在' : '，⚠️ 自检未找到文件（异常）'}${daDanCi}${yuFaJianYi}\n`
         + `【请在给用户的最终回复里**原样引用这个绝对路径**】${file}`,
-      meta: { tool, ok: cun, bytes: zongBytes, chars: zongZi, path: relOf(baseDir, file), abs: file, exists: cun, appended: zhuiJia, wroteChars: [...content].length, yuFa: yuFaMeta },
+      meta: { tool, ok: cun, bytes: zongBytes, chars: zongZi, path: relOf(baseDir, file), abs: file, exists: cun, appended: zhuiJia, changed, wroteChars: [...content].length, yuFa: yuFaMeta },
     };
   } catch (e) {
     const rq = ruanMenJinQingQiu(tool, e, args); if (rq) return rq;
@@ -1707,7 +1714,7 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'plan_update',
-        description: '计划任务（只给多步任务用）：用户这次要做的事包含 3 个及以上不同步骤时，先调用它列计划，再逐步完成；单一步骤、纯问答、闲聊不要建计划，直接做。宿主强制的门禁：新计划至少 2 步、最多 10 步；标题相同的步骤只留一条；同一时刻只能有 1 步 doing；verified 只能由 plan_verify 给。每步写成一个可验证的动作（动词开头，如「生成桌面 txt」「打开两个文件」），不要逐句照抄用户原话，不要把附件名或路径当步骤。每次提交全量步骤表（id/title/status/note）；计划建好后只更新状态，不要重建。status: pending|doing|done|blocked。计划卡显示在界面右侧第四列。',
+        description: '计划任务（只给多步任务用）：用户这次要做的事包含 3 个及以上不同步骤时，先调用它列计划，再逐步完成；单一步骤、纯问答、闲聊不要建计划，直接做。宿主强制的门禁：新计划至少 2 步、最多 10 步；标题相同的步骤只留一条；同一时刻只能有 1 步 doing；verified 只能由 plan_verify 给。新建步骤时可写 title/acceptance；已有步骤的 title/acceptance 对模型只读，模型只能改 status/note/evidence。每步写成一个可验证的动作（动词开头），不要逐句照抄用户原话。每次提交全量步骤表；计划建好后只更新状态，不要重建。status: pending|doing|done|blocked。',
         parameters: {
           type: 'object',
           properties: {
@@ -1718,10 +1725,13 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
                 type: 'object',
                 properties: {
                   id: { type: 'string', description: '如 T1 / T1.1' },
-                  title: { type: 'string' },
+                  title: { type: 'string', description: '仅新建时可定义；已有步骤必须原样回传，宿主拒绝改写。' },
+                  acceptance: { type: 'string', maxLength: 500, description: '仅新建时可定义的验收标准；已有步骤只读。' },
                   status: { type: 'string', description: 'pending|doing|done|blocked（verified 用 plan_verify）' },
-                  note: { type: 'string', description: '进展/证据（可选）' },
+                  note: { type: 'string', description: '进展说明（可选）' },
+                  evidence: { type: 'string', maxLength: 500, description: '证据指针：tool:工具名 或 path:工作区内相对路径；宿主会核实。' },
                 },
+                additionalProperties: false,
                 required: ['id', 'title', 'status'],
               },
             },
@@ -1734,13 +1744,15 @@ export function hostToolSpecs(): Array<{ type: 'function'; function: { name: str
       type: 'function',
       function: {
         name: 'plan_verify',
-        description: '计划任务：确认某一步真的做完了 —— 标为 verified，并在 note 里写证据（调用了哪个工具、生成的文件路径、看到的结果）。宿主会核对本次任务的工具记录：看不到证据时退回一次并说明缺什么，所以先把事做完再验证。',
+        description: '计划任务：确认某一步真的做完了 —— 标为 verified。优先给 evidence 证据指针（tool:工具名 或 path:工作区内相对路径）；宿主会核实本次任务工具记录与文件。没有宿主证据时必须给可核实指针，不能只靠模型自述。',
         parameters: {
           type: 'object',
           properties: {
             id: { type: 'string', description: '步骤 id，如 T1.2' },
-            note: { type: 'string', description: '验证证据（做了什么、看到什么）' },
+            note: { type: 'string', description: '验证说明（做了什么、看到什么）' },
+            evidence: { type: 'string', maxLength: 500, description: 'tool:工具名 或 path:工作区内相对路径' },
           },
+          additionalProperties: false,
           required: ['id'],
         },
       },

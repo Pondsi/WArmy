@@ -43,6 +43,41 @@ extraResources:
       - "!**/*.map"
       - "!**/tests/**"
       - "!**/test/**"
+  # R300：A2UI 官方协议/渲染依赖；主 files 排除 node_modules，必须平铺到运行时可解析链。
+  - from: node_modules/@a2ui/agent
+    to: node_modules/@a2ui/agent
+  - from: node_modules/@a2ui/lit
+    to: node_modules/@a2ui/lit
+  - from: node_modules/@a2ui/web_core
+    to: node_modules/@a2ui/web_core
+  - from: ../../node_modules/.pnpm/antlr4ng@3.0.16/node_modules/antlr4ng
+    to: node_modules/antlr4ng
+  - from: ../../node_modules/.pnpm/@lit-labs+signals@0.3.0/node_modules/@lit-labs/signals
+    to: node_modules/@lit-labs/signals
+  - from: ../../node_modules/.pnpm/@lit-labs+ssr-dom-shim@1.6.0/node_modules/@lit-labs/ssr-dom-shim
+    to: node_modules/@lit-labs/ssr-dom-shim
+  - from: ../../node_modules/.pnpm/@lit+context@1.1.6/node_modules/@lit/context
+    to: node_modules/@lit/context
+  - from: ../../node_modules/.pnpm/@lit+reactive-element@2.1.2/node_modules/@lit/reactive-element
+    to: node_modules/@lit/reactive-element
+  - from: ../../node_modules/.pnpm/@preact+signals-core@1.14.5/node_modules/@preact/signals-core
+    to: node_modules/@preact/signals-core
+  - from: ../../node_modules/.pnpm/lit@3.3.3/node_modules/lit
+    to: node_modules/lit
+  - from: ../../node_modules/.pnpm/lit-element@4.2.2/node_modules/lit-element
+    to: node_modules/lit-element
+  - from: ../../node_modules/.pnpm/lit-html@3.3.3/node_modules/lit-html
+    to: node_modules/lit-html
+  - from: ../../node_modules/.pnpm/signal-polyfill@0.2.3/node_modules/signal-polyfill
+    to: node_modules/signal-polyfill
+  - from: ../../node_modules/.pnpm/signal-utils@0.21.1_signal-polyfill@0.2.3/node_modules/signal-utils
+    to: node_modules/signal-utils
+  - from: ../../node_modules/.pnpm/validate-color@2.2.4/node_modules/validate-color
+    to: node_modules/validate-color
+  - from: ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod
+    to: node_modules/zod
+  - from: ../../node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@3.25.76/node_modules/zod-to-json-schema
+    to: node_modules/zod-to-json-schema
   # R259：DuckDB（native 只活在 duckdb-worker 子进程）——平铺三个包保证解析链。
   - from: ../../node_modules/.pnpm/@duckdb+node-api@2.0.0-r.1/node_modules/@duckdb/node-api
     to: node_modules/@duckdb/node-api

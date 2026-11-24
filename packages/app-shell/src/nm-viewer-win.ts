@@ -1693,14 +1693,17 @@ function wangYeJianPan(Z: NmZhuangTai, e: { preventDefault(): void }, input: {
   const shortcut = nmWangYeJianPanDongZuo(input, !!Z.wangYeChaZhaoKai);
   if (!shortcut) return;
   e.preventDefault();
-  /** 第 98 轮：缩放直接改视图 zoom level，不绕渲染层 */
+  /** 缩放按当前标签的真实倍率同步给宿主，按钮与快捷键共用同一事实。 */
   if (shortcut === 'zoom-in' || shortcut === 'zoom-out' || shortcut === 'zoom-reset') {
     try {
       const v = Z.wangYeView;
       if (v && !v.webContents.isDestroyed()) {
         const wc = v.webContents;
-        const lv = shortcut === 'zoom-reset' ? 0 : (wc.getZoomLevel() || 0) + (shortcut === 'zoom-in' ? 0.5 : -0.5);
-        wc.setZoomLevel(lv);
+        const cur = wc.getZoomFactor() || 1;
+        const factor = shortcut === 'zoom-reset' ? 1 : Math.min(5, Math.max(0.25, Math.round((cur + (shortcut === 'zoom-in' ? 0.1 : -0.1)) * 100) / 100));
+        wc.setZoomFactor(factor);
+        const tabKey = [...(Z.wangYeViews || new Map()).entries()].find(([, view]) => view === v)?.[0] || '';
+        wangYeZhuangTai(Z, { tabKey, zoomFactor: factor });
       }
     } catch { /* noop */ }
     return;
@@ -1781,12 +1784,15 @@ function jianWangYeView(Z: NmZhuangTai, tabKey: string, yinSi = false): WebConte
   wc.on('page-title-updated', (_e, title) => wangYeZhuangTai(Z, { tabKey, title }));
   wc.on('did-navigate', (_e, url) => {
     Z.wangYeChaZhaoKai = false;
-    wangYeZhuangTai(Z, { tabKey, url, loading: false, found: { matches: 0, active: 0, query: '' } });
+    /* 导航提交只表示 URL 已确定；完成图标仍等 did-stop-loading。 */
+    wangYeZhuangTai(Z, { tabKey, url, loading: wc.isLoading(), found: { matches: 0, active: 0, query: '' } });
     wangYeDaoHangZhuangTai(Z, tabKey);
   });
   wc.on('did-navigate-in-page', (_e, url, isMain) => { if (isMain) { wangYeZhuangTai(Z, { tabKey, url }); wangYeDaoHangZhuangTai(Z, tabKey); } });
   wc.on('did-start-loading', () => { wangYeZhuangTai(Z, { tabKey, loading: true }); wangYeDaoHangZhuangTai(Z, tabKey); });
-  wc.on('did-stop-loading', () => { wangYeZhuangTai(Z, { tabKey, loading: false }); wangYeDaoHangZhuangTai(Z, tabKey); });
+  wc.on('did-stop-loading', () => { wangYeZhuangTai(Z, { tabKey, loading: false, loadFailed: false }); wangYeDaoHangZhuangTai(Z, tabKey); });
+  wc.on('did-fail-load', (_e, code, desc, url, isMain) => { if (isMain) wangYeZhuangTai(Z, { tabKey, loading: false, loadFailed: true, loadError: code + ' ' + desc, blocked: /^https?:/i.test(url) ? '' : url }); });
+  wc.on('zoom-changed', () => wangYeZhuangTai(Z, { tabKey, zoomFactor: wc.getZoomFactor() }));
   wc.on('render-process-gone', (_e, d) => wangYeZhuangTai(Z, { tabKey, crashed: true, reason: d?.reason || '' }));
   wc.on('found-in-page', (_e, r) => wangYeZhuangTai(Z, { tabKey, found: { matches: r.matches, active: r.activeMatchOrdinal } }));
   wc.on('before-input-event', (e, input) => wangYeJianPan(Z, e, input));
@@ -1961,7 +1967,10 @@ export function nmWangYeKai(p0: { id?: number; tabKey?: string; url?: string; ku
     nmWangYeXianShi(Z, tabKey);
     const cur = v.webContents.getURL();
     /** 视图已在这个 url 上就不重载（切换标签回来 = 直接显示原页面） */
-    if (cur !== url) void v.webContents.loadURL(url).catch(() => { /* 错误由 did-fail-load / 状态事件如实回报 */ });
+    if (cur !== url) {
+      wangYeZhuangTai(Z, { tabKey, loading: true, loadFailed: false });
+      void v.webContents.loadURL(url).catch(() => { /* 错误由 did-fail-load / 状态事件如实回报 */ });
+    }
     wangYeDaoHangZhuangTai(Z, tabKey);
     return { ok: true };
   } catch (e) { return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 200) }; }
@@ -2704,6 +2713,76 @@ export async function nmBrowserTool(act: string, args: Record<string, unknown> =
     }
   } catch (e) {
     return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 300) };
+  }
+}
+
+/** R300：A2UI 专用 nm 宿主。普通 HTML 预览仍保持禁脚本，这里只加载宿主校验过的固定 runtime。 */
+const NM_A2UI_WINS = new Map<string, BrowserWindow>();
+let nmA2uiHuiHe: ReturnType<typeof session.fromPartition> | null = null;
+function nmA2uiSession(): ReturnType<typeof session.fromPartition> {
+  if (!nmA2uiHuiHe) {
+    nmA2uiHuiHe = session.fromPartition('warmy-a2ui-nm', { cache: false });
+    nmA2uiHuiHe.webRequest.onBeforeRequest(
+      { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
+      (_details, callback) => callback({ cancel: true }),
+    );
+  }
+  return nmA2uiHuiHe;
+}
+
+export function nmA2uiKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yiCunZai?: boolean; cuo?: string } {
+  try {
+    const abs = path.resolve(String(xuan?.luJing || '').trim());
+    if (!abs || path.basename(abs) !== 'index.html' || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+      return { ok: false, cuo: 'A2UI 产物不存在' };
+    }
+    const old = NM_A2UI_WINS.get(abs);
+    if (old && !old.isDestroyed()) {
+      old.show();
+      old.focus();
+      return { ok: true, id: old.id, yiCunZai: true };
+    }
+    const zhuTi = xuan?.zhuTi || { mode: 'light' as const, accent: '#A87654' };
+    const luo = nmXinChuangLuoDian(1000, 760);
+    const isMac = process.platform === 'darwin';
+    const w = new BrowserWindow({
+      x: luo.x,
+      y: luo.y,
+      width: luo.kuan,
+      height: luo.gao,
+      minWidth: 420,
+      minHeight: 300,
+      title: 'WArmy 互动回复 · nm 查看器',
+      /* 专用宿主无 preload/自定义窗口控制，保留原生边框供拖动、缩放和关闭。 */
+      frame: true,
+      titleBarStyle: isMac ? 'hiddenInset' : 'default',
+      backgroundColor: zhuTi.mode === 'dark' ? '#1d1c1b' : '#f7f5f2',
+      autoHideMenuBar: true,
+      show: false,
+      ...(xuan?.tuBiao ? { icon: xuan.tuBiao } : {}),
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        webSecurity: true,
+        session: nmA2uiSession(),
+        spellcheck: false,
+        backgroundThrottling: false,
+      },
+    });
+    try { w.setMenuBarVisibility(false); } catch { /* 某些平台没有菜单栏 */ }
+    NM_A2UI_WINS.set(abs, w);
+    w.once('ready-to-show', () => { if (!w.isDestroyed()) w.show(); });
+    w.on('closed', () => { if (NM_A2UI_WINS.get(abs) === w) NM_A2UI_WINS.delete(abs); });
+    w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    w.webContents.on('will-navigate', (e, u) => {
+      if (String(u) !== pathToFileURL(abs).href) e.preventDefault();
+    });
+    w.webContents.on('will-attach-webview', (e) => e.preventDefault());
+    void w.loadFile(abs).catch(() => { if (!w.isDestroyed()) w.destroy(); });
+    return { ok: true, id: w.id };
+  } catch (e) {
+    return { ok: false, cuo: String((e as Error)?.message || e).slice(0, 200) };
   }
 }
 
