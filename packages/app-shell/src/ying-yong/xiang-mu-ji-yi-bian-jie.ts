@@ -18,6 +18,7 @@ export interface ShouQuanFanWei {
 
 export const CENG_SESSION = (id: string) => 'session:' + id;
 export const CENG_PROJECT = (id: string) => 'project:' + id;
+export const CENG_PRIVATE = (id: string) => 'private:' + id;
 export const CENG_GLOBAL = 'global';
 
 /** 宿主确定范围。settings 仅沿用既有 kbDuiWaiKaiFang/kbPerms 等规定，不新增用户选择。 */
@@ -25,7 +26,7 @@ export function zhuJiShouQuanFanWei(o: {
   groupStore: QunCang | null;
   sessionId: string;
   instanceId?: string;
-  settings?: { kbDuiWaiKaiFang?: boolean } | null;
+  settings?: { kbDuiWaiKaiFang?: boolean; instances?: Array<{ id?: string }> } | null;
 }): ShouQuanFanWei {
   const sid = String(o.sessionId || '');
   const gs = o.groupStore;
@@ -42,10 +43,34 @@ export function zhuJiShouQuanFanWei(o: {
     const role = String(me?.role || '');
     if (!o.instanceId || role === 'owner' || role === 'admin' || role === 'creator') xie.add(CENG_PROJECT(projectId));
   } else if (!g) {
-    legacy = true;
+    /* 我的牛马（个人实例）：三层都可读写；其余无群记录＝legacy 收窄。 */
+    const shiWoDe = (o.settings?.instances || []).some((x) => String(x?.id || '') === sid);
+    if (shiWoDe) { du.add(CENG_PROJECT(projectId)); du.add(CENG_PRIVATE(sid)); xie.add(CENG_PROJECT(projectId)); xie.add(CENG_PRIVATE(sid)); }
+    else legacy = true;
   }
   if (o.settings?.kbDuiWaiKaiFang === true) du.add(CENG_GLOBAL);
   return { projectId, sessionId: sid, du, xie, legacy };
+}
+
+/** 宿主范围 → 知识库三层令牌（与 kbHardReadLayers 同口径，供显式交集）。 */
+export function kbCengFanWei(fw: ShouQuanFanWei): Array<'session' | 'internal' | 'private'> {
+  const out: Array<'session' | 'internal' | 'private'> = ['session'];
+  if (fw.du.has(CENG_PROJECT(fw.projectId))) out.push('internal');
+  if (fw.du.has(CENG_PRIVATE(fw.sessionId))) out.push('private');
+  return out;
+}
+
+/** 旧数据 session→project 回填投影：只读群存储派生映射，不改 JSONL 原文；无法确定来源保持 legacy。 */
+export function huiTianXiangMuYingShe(groupStore: QunCang | null, sessionIds: readonly string[]): Map<string, { projectId: string; legacy: boolean }> {
+  const out = new Map<string, { projectId: string; legacy: boolean }>();
+  for (const sid of sessionIds) {
+    const id = String(sid || '');
+    if (!id) continue;
+    const g = groupStore?.getGroup?.(id);
+    if (g) out.set(id, { projectId: groupStore?.projectIdOf?.(id) || id, legacy: false });
+    else out.set(id, { projectId: id, legacy: true });
+  }
+  return out;
 }
 
 /** 模型侧参数不得指定范围：剥掉 projectId/uri/bank/scope 等控制键，只留业务查询字段。 */

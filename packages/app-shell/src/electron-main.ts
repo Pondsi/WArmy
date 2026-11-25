@@ -294,7 +294,7 @@ import { jiHuaBiaoTiGuiYi, jiHuaBuKeBian, yanZhengJiHuaZhengJu } from './ying-yo
 import { chuangJianA2uiHuiFu } from './ying-yong/a2ui-hui-fu.js';
 import { chuangJianA2uiLiuLanQi } from './ying-yong/a2ui-liu-lan-qi.js';
 import { jieXiAiYuYan, aiYuYanTiShi, chuangJianYuYanJianCe, baoZhuangYuYan, yuYanLunYuJing, type YuYanLun, type YuYanCeJi } from './ying-yong/ai-yu-yan-yue-shu.js';
-import { qingChuModelFanWei } from './ying-yong/xiang-mu-ji-yi-bian-jie.js';
+import { qingChuModelFanWei, zhuJiShouQuanFanWei, kbCengFanWei, guoLuJieGuo, CENG_SESSION, huiTianXiangMuYingShe } from './ying-yong/xiang-mu-ji-yi-bian-jie.js';
 import { jianJinZhaoHui, muLuSanJi, type ZhaoHuiGuiJi } from './ying-yong/ji-yi-zhao-hui.js';
 import { paiShengGaiLan, gaiLanShiXiao } from './ying-yong/ji-yi-gai-lan.js';
 import { shengChengHouXuan, yingMenJin, type HouXuan } from './ying-yong/ai-yu-yan-zhi-li.js';
@@ -2754,8 +2754,12 @@ function kbPermOf(sessionId: string): { read?: string[]; write?: string[]; archi
 const kbJiao = (xs: readonly string[]): ZhishiCeng[] => [...new Set(xs)].filter((x): x is ZhishiCeng => (ZHISHI_CENG as readonly string[]).includes(x));
 function kbLayersFor(sessionId: string): ZhishiCeng[] {
   const hard = kbHardReadLayers(sessionId);
+  /* R301：显式套用宿主统一授权边界（与硬层同口径交集，不放宽）。 */
+  const fw = zhuJiShouQuanFanWei({ groupStore, sessionId, settings: settingsStore?.load() as { kbDuiWaiKaiFang?: boolean; instances?: Array<{ id?: string }> } | undefined });
+  const bianJie = kbCengFanWei(fw);
+  const jiaoJi = hard.filter((c) => bianJie.includes(c));
   const p = kbPermOf(sessionId).read;
-  return p === undefined ? hard : hard.filter((c) => p.includes(c));
+  return p === undefined ? jiaoJi : jiaoJi.filter((c) => p.includes(c));
 }
 /**
  * **写入作用域与读取分开**（用户："总结可以写入私密/内部，与读权限不冲突"）：
@@ -33223,6 +33227,7 @@ const guiDangHuiHuaMo = chuangJianGuiDangHuiHua({
   guiDangYouBiaoQu, guiDangYouBiaoCun, jieMoXingGongYingShang,
   congYuSheChuangJian: (pid, cfg, proto) => { const p = congYuSheChuangJian(pid, cfg as never, proto as never); return { chat: (req) => p.chat(req as never) }; },
   yuYanEnter: (sid) => { enterYuYanRenWu(sid, ''); },
+  gaiLanShiXiao: (sid) => { gaiLanShiXiao(sid); },
   duYaoQiu, duGuiFan, zhuCeLiaoTianZiChan: (x) => { zhuCeLiaoTianZiChan({ ...x, scope: x.scope as never }); }, guiNaDuanJiYi, shengChengHuiHuaZhaiYao,
   ziLiJingYanLu, huaTiFanKuiLu, duHuaTiFanKuiCi,
   luoDianDiwenHua: (kind, x) => luoDianDiwenHua(kind, x as never) as unknown as Promise<void>,
@@ -38251,7 +38256,10 @@ async function sousuoHuiHuaJiYi(q: string, limit: number, scope?: { sessionId?: 
       },
       trace: jiLuZhaoHuiGuiJi,
     }, { sessionId: String(scope?.sessionId || scope?.groupId || ''), query: q, scope, limit });
-    return cards.map((c) => {
+    /* R301：召回结果显式过宿主边界（未知层收窄丢弃）。 */
+    const fwZhao = zhuJiShouQuanFanWei({ groupStore, sessionId: String(scope?.sessionId || scope?.groupId || ''), settings: settingsStore?.load() as { kbDuiWaiKaiFang?: boolean; instances?: Array<{ id?: string }> } | undefined });
+    const cards2 = guoLuJieGuo(cards, fwZhao, (c) => CENG_SESSION(String((c as { sessionId?: string }).sessionId || scope?.sessionId || scope?.groupId || '')));
+    return cards2.map((c) => {
       const cc = c as { seq?: number; snippet?: string; sessionId?: string };
       return {
         title: cc.sessionId ? sessionMingOf(cc.sessionId) : String(cc.snippet || '').slice(0, 80),
@@ -38526,7 +38534,9 @@ chuliIpc('warmy:jiYiGaiLan', (_e, p0?: { projectId?: string }) => {
     if (!pid) return { ok: false, error: 'projectId required' };
     const yuan = { memory: readProjectMemory(groupStore, pid), plans: [], evidence: [] as Array<{ id: string; note?: string }> };
     const ye = paiShengGaiLan(pid, yuan, { authRev: 1, policy: 'default', lang: String((settingsStore?.load() as { yuYan?: string })?.yuYan || 'zh-CN'), level: 'L1' });
-    return { ok: true, gaiLan: ye };
+    /* R301：旧数据 session→project 回填投影（只读派生，不改原文）。 */
+    const yingShe = huiTianXiangMuYingShe(groupStore, [pid]);
+    return { ok: true, gaiLan: ye, xiangMuYingShe: Object.fromEntries(yingShe) };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 /** R301：虚拟目录三级展开（L0 摘要/L1 要点与来源；L2 原文走 retrieve）。URI 不暴露真实路径。 */

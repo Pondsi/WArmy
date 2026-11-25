@@ -62,6 +62,8 @@ export interface GuiDangHuiHuaYiLai {
   congYuSheChuangJian: (presetId: string, cfg: unknown, protocol: string) => { chat: (req: unknown) => Promise<unknown> };
   /** R301：可见总结进入语言任务额度（ALS）；未提供则不装饰。 */
   yuYanEnter?: (sid: string) => void;
+  /** R301：总结写库后失效派生概览缓存（源变化即陈旧）。 */
+  gaiLanShiXiao?: (sid: string) => void;
   duYaoQiu: (sid: string) => string;
   duGuiFan: (sid: string) => string;
   zhuCeLiaoTianZiChan: (x: { id: string; biaoTi: string; ti: string; scope: string }) => void;
@@ -84,6 +86,7 @@ export function chuangJianGuiDangHuiHua(yiLai: GuiDangHuiHuaYiLai) {
       const sid = String(sessionId || '');
       if (!sid) return { ok: false, error: 'bad-session' };
       yiLai.yuYanEnter?.(sid);
+      yiLai.gaiLanShiXiao?.(sid);
       if (yiLai.zaiTuLiao.has(sid)) {
         try {
           yiLai.audit?.log('chat.archive-skipped-inflight', {
