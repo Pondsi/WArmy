@@ -64,6 +64,8 @@ export interface GuiDangHuiHuaYiLai {
   yuYanEnter?: (sid: string) => void;
   /** R301：总结写库后失效派生概览缓存（源变化即陈旧）。 */
   gaiLanShiXiao?: (sid: string) => void;
+  /** R301：总结巡查增量复核：重建项目概览＋程序经验到期复核。 */
+  jiYiFuHe?: (sid: string) => void;
   duYaoQiu: (sid: string) => string;
   duGuiFan: (sid: string) => string;
   zhuCeLiaoTianZiChan: (x: { id: string; biaoTi: string; ti: string; scope: string }) => void;
@@ -87,6 +89,7 @@ export function chuangJianGuiDangHuiHua(yiLai: GuiDangHuiHuaYiLai) {
       if (!sid) return { ok: false, error: 'bad-session' };
       yiLai.yuYanEnter?.(sid);
       yiLai.gaiLanShiXiao?.(sid);
+      yiLai.jiYiFuHe?.(sid);
       if (yiLai.zaiTuLiao.has(sid)) {
         try {
           yiLai.audit?.log('chat.archive-skipped-inflight', {

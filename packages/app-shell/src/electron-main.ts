@@ -33228,6 +33228,16 @@ const guiDangHuiHuaMo = chuangJianGuiDangHuiHua({
   congYuSheChuangJian: (pid, cfg, proto) => { const p = congYuSheChuangJian(pid, cfg as never, proto as never); return { chat: (req) => p.chat(req as never) }; },
   yuYanEnter: (sid) => { enterYuYanRenWu(sid, ''); },
   gaiLanShiXiao: (sid) => { gaiLanShiXiao(sid); },
+  jiYiFuHe: (sid) => {
+    /* R301：巡查增量复核——重建项目概览（不覆盖用户手写 MEMORY）＋程序经验到期复核。 */
+    try {
+      const pid = groupStore?.projectIdOf?.(sid) || sid;
+      paiShengGaiLan(pid, { memory: readProjectMemory(groupStore, sid), plans: [], evidence: [] }, { authRev: 1, policy: 'default', lang: String((settingsStore?.load() as { yuYan?: string })?.yuYan || 'zh-CN'), level: 'L1' });
+    } catch { /* 概览重建失败不影响总结 */ }
+    try {
+      if (knowledge) for (const c of ['session', 'internal', 'private'] as const) knowledge.allow(c).fuHeChengXu();
+    } catch { /* 经验复核失败不影响总结 */ }
+  },
   duYaoQiu, duGuiFan, zhuCeLiaoTianZiChan: (x) => { zhuCeLiaoTianZiChan({ ...x, scope: x.scope as never }); }, guiNaDuanJiYi, shengChengHuiHuaZhaiYao,
   ziLiJingYanLu, huaTiFanKuiLu, duHuaTiFanKuiCi,
   luoDianDiwenHua: (kind, x) => luoDianDiwenHua(kind, x as never) as unknown as Promise<void>,

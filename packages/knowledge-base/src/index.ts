@@ -343,6 +343,25 @@ export class KnowledgeBase {
   muBeiOf(id: string): JiuCuoMuBei | undefined { return this.muBei.get(id); }
   listMuBei(): JiuCuoMuBei[] { return [...this.muBei.values()]; }
 
+  /** R301：只读访问某事件的程序经验（供巡查复核断言；召回仍走准入谓词）。 */
+  duChengXu(id: string): ChengXuJingYan | undefined { return this.events.get(id)?.procedure; }
+
+  /** R301：总结巡查对程序经验做到期复核：过期的 provisional/validated 降为 deprecated（能力检查仍在召回准入谓词）。 */
+  fuHeChengXu(now = Date.now()): number {
+    let n = 0;
+    for (const [id, e] of this.events) {
+      const p = e.procedure;
+      if (!p) continue;
+      const daoQi = p.expiresAt !== undefined && p.expiresAt < now;
+      if (daoQi && (p.state === 'provisional' || p.state === 'validated')) {
+        const xin = zhuanYiChengXu(p, 'deprecated');
+        if (xin) { this.events.set(id, { ...e, procedure: xin }); n++; }
+      }
+    }
+    if (n) { this.dirty = true; this.scheduleUseSave(); }
+    return n;
+  }
+
   /** 只取仍在生效的事件（被取代的默认不进上下文）；R231：带 procedure 的事件默认隔离（§9.4） */
   activeEvents(): ZhishiShijian[] {
     return [...this.events.values()].filter((e) => !e.shiXiaoTs && !e.procedure);
