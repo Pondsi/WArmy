@@ -293,7 +293,7 @@ import { chuangJianJinHuaZhiLi, type JinHuaTiAn } from './ying-yong/zi-wo-jin-hu
 import { jiHuaBiaoTiGuiYi, jiHuaBuKeBian, yanZhengJiHuaZhengJu } from './ying-yong/ji-hua-zhi-zhen.js';
 import { chuangJianA2uiHuiFu } from './ying-yong/a2ui-hui-fu.js';
 import { chuangJianA2uiLiuLanQi } from './ying-yong/a2ui-liu-lan-qi.js';
-import { jieXiAiYuYan, aiYuYanTiShi, chuangJianYuYanJianCe, baoZhuangYuYan, type YuYanLun, type YuYanCeJi } from './ying-yong/ai-yu-yan-yue-shu.js';
+import { jieXiAiYuYan, aiYuYanTiShi, chuangJianYuYanJianCe, baoZhuangYuYan, yuYanLunYuJing, type YuYanLun, type YuYanCeJi } from './ying-yong/ai-yu-yan-yue-shu.js';
 import { qingChuModelFanWei } from './ying-yong/xiang-mu-ji-yi-bian-jie.js';
 import { jianJinZhaoHui, muLuSanJi, type ZhaoHuiGuiJi } from './ying-yong/ji-yi-zhao-hui.js';
 import { paiShengGaiLan, gaiLanShiXiao } from './ying-yong/ji-yi-gai-lan.js';
@@ -677,7 +677,24 @@ function jiZongJieYuanBianHua(id: string): void { zongJieXunCha?.bianHua(id); }
 const zongJieZiYuan = chuangJianZongJieZiYuan({ tanCe: tanCeZongJieZiYuan, xuQiu: ollamaZongJieXuQiu, audit: (reason) => { audit?.log('summary.resource', { reason }); } });
 function congYuSheChuangJian(...args: Parameters<typeof yuanCongYuSheChuangJian>): ReturnType<typeof yuanCongYuSheChuangJian> {
   // 资源装饰统一在Provider构造钩子，不只包主进程的预设入口；群编排/执行者也必须参与前台抢占。
-  return yuanCongYuSheChuangJian(...args);
+  // R301：语言装饰统一挂 ALS 任务额度；未 enterWith 的调用（内部/分类/嵌入）原样透传。
+  return baoZhuangYuYan(yuanCongYuSheChuangJian(...args), {
+    ctxOf: () => yuYanLunYuJing.getStore(),
+    check: (t, tg) => yuYanJianCe.check(t, tg, duYuYanZhiLi().policy),
+    readText: neiRongWenBen,
+  });
+}
+/** R301：为当前异步上下文设置语言任务额度（拟态/可见总结/语言整理/群编排共用）。 */
+function enterYuYanRenWu(sessionId: string, userText: string, signal?: AbortSignal): YuYanLun {
+  const pei = (settingsStore?.load() ?? {}) as { strictAiLanguage?: boolean; yuYan?: string };
+  const ctx: YuYanLun = {
+    target: jieXiAiYuYan(String(userText || ''), pei.yuYan || app.getLocale()),
+    enabled: pei.strictAiLanguage === true, sends: 0, policyVersion: 1,
+    aborted: () => !!signal?.aborted, signal,
+  };
+  yuYanLunYuJing.enterWith(ctx);
+  yuYanRenWu.set(String(sessionId || ''), ctx);
+  return ctx;
 }
 const luYouYuCe = chuangJianLuYouYuCe({
   du: () => { try { return JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'lu-you-yu-ce.json'), 'utf8')); } catch { return undefined; } },
@@ -33205,6 +33222,7 @@ const guiDangHuiHuaMo = chuangJianGuiDangHuiHua({
   moXingGuiNaYinXiang: (sid, hua, zan) => moXingGuiNaYinXiang(sid, hua, zan as never) as unknown as Promise<void>,
   guiDangYouBiaoQu, guiDangYouBiaoCun, jieMoXingGongYingShang,
   congYuSheChuangJian: (pid, cfg, proto) => { const p = congYuSheChuangJian(pid, cfg as never, proto as never); return { chat: (req) => p.chat(req as never) }; },
+  yuYanEnter: (sid) => { enterYuYanRenWu(sid, ''); },
   duYaoQiu, duGuiFan, zhuCeLiaoTianZiChan: (x) => { zhuCeLiaoTianZiChan({ ...x, scope: x.scope as never }); }, guiNaDuanJiYi, shengChengHuiHuaZhaiYao,
   ziLiJingYanLu, huaTiFanKuiLu, duHuaTiFanKuiCi,
   luoDianDiwenHua: (kind, x) => luoDianDiwenHua(kind, x as never) as unknown as Promise<void>,
@@ -33369,6 +33387,8 @@ chuliIpc('warmy:qunXieTiao', async (_e, xiaoXi: { groupId: string; content: stri
     };
   });
 
+  /* R301：群编排生成进入语言任务额度（ALS），与主聊天同口径。 */
+  enterYuYanRenWu(String(xiaoXi.groupId || ''), String(xiaoXi.content || ''));
   const result = await xietiaoQunXiaoxi(
     {
       router,

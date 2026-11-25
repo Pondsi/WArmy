@@ -145,19 +145,22 @@ export interface YuYanCeJi {
  * 流式路径用 keepalive 空片维持外层看门狗，检查完成后一次性交付。
  */
 export function baoZhuangYuYan(yuan: MoxingGongYing, o: {
-  ctx: YuYanLun;
+  ctx?: YuYanLun;
+  /** 调用时动态解析任务额度（ALS）；未设置则原样透传，内部/分类/嵌入调用零影响。 */
+  ctxOf?: () => YuYanLun | undefined;
   check: (t: readonly string[], target: YuYanMuBiao) => Promise<YuYanJianCe[]>;
   readText: (r: unknown) => string;
   usage?: (r: unknown, ms: number) => void;
   deadline?: number;
 }): MoxingGongYing {
-  const { ctx } = o;
-  const active = () => ctx.enabled && ctx.target.source !== 'mixed' && !ctx.aborted();
+  const cur = (): YuYanLun | undefined => o.ctx || o.ctxOf?.();
+  const active = () => { const c = cur(); return !!c && c.enabled && c.target.source !== 'mixed' && !c.aborted(); };
   async function jiaoZheng(content: string, model: string): Promise<{ text: string; mismatch: boolean; corrected: boolean }> {
-    if (!active() || !content.trim()) return { text: content, mismatch: false, corrected: false };
-    const r = await jiuZhengYuYan({ texts: [content], ctx, provider: yuan, model, check: o.check, readText: o.readText, usage: o.usage, deadline: o.deadline });
-    ctx.corrected = ctx.corrected || r.corrected;
-    ctx.mismatch = ctx.mismatch || r.mismatch;
+    const c = cur();
+    if (!c || !active() || !content.trim()) return { text: content, mismatch: false, corrected: false };
+    const r = await jiuZhengYuYan({ texts: [content], ctx: c, provider: yuan, model, check: o.check, readText: o.readText, usage: o.usage, deadline: o.deadline });
+    c.corrected = c.corrected || r.corrected;
+    c.mismatch = c.mismatch || r.mismatch;
     return { text: r.text[0] ?? content, mismatch: r.mismatch, corrected: r.corrected };
   }
   return {
