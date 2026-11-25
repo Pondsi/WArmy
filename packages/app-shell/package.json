@@ -1,6 +1,6 @@
 {
   "name": "@warmy/app-shell",
-  "version": "0.4.49",
+  "version": "0.4.50",
   "private": true,
   "description": "Electron main/renderer shell (no native modules)",
   "main": "./dist/electron-main.js",
@@ -36,6 +36,7 @@
     "@warmy/providers": "workspace:*",
     "@warmy/sync-protocol": "workspace:*",
     "diwen": "https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz",
+    "franc-all": "7.2.0",
     "hash-wasm": "4.12.0",
     "pinyin-pro": "3.29.5",
     "three": "0.187.0"

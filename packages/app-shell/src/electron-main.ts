@@ -292,6 +292,12 @@ import { GZ_MO_REN, guiFanGzLiang, panDuanGongZuoLiang, fuPanGongZuoLiang, type 
 import { chuangJianJinHuaZhiLi, type JinHuaTiAn } from './ying-yong/zi-wo-jin-hua-zhi-li.js';
 import { jiHuaBiaoTiGuiYi, jiHuaBuKeBian, yanZhengJiHuaZhengJu } from './ying-yong/ji-hua-zhi-zhen.js';
 import { chuangJianA2uiHuiFu } from './ying-yong/a2ui-hui-fu.js';
+import { chuangJianA2uiLiuLanQi } from './ying-yong/a2ui-liu-lan-qi.js';
+import { jieXiAiYuYan, aiYuYanTiShi, chuangJianYuYanJianCe, baoZhuangYuYan, type YuYanLun, type YuYanCeJi } from './ying-yong/ai-yu-yan-yue-shu.js';
+import { qingChuModelFanWei } from './ying-yong/xiang-mu-ji-yi-bian-jie.js';
+import { jianJinZhaoHui, muLuSanJi, type ZhaoHuiGuiJi } from './ying-yong/ji-yi-zhao-hui.js';
+import { paiShengGaiLan, gaiLanShiXiao } from './ying-yong/ji-yi-gai-lan.js';
+import { shengChengHouXuan, yingMenJin, type HouXuan } from './ying-yong/ai-yu-yan-zhi-li.js';
 import { ChaJianYunXingShi, type ChaJianMoKuai } from './plugin-runtime.js';
 import { VmAdapterManager } from './vm-adapter.js';
 import { scanChaJianMuLu, installViaPnpm, chaJianRuKou, installFromMarket } from './plugin-installer.js';
@@ -5615,7 +5621,8 @@ async function yunXingLiaoTianXunHuan(
         } catch { /* noop */ }
         // 容错解析：截断/手写的 JSON 尽量修出来；修不出如实回参数错误，**不把裸解析器报错当回复**
         const jieH = jieXiGongJuCanShu(rawArgsH);
-        const argsH: Record<string, unknown> = jieH.args;
+        /* R301：范围由宿主确定——模型传入的 projectId/uri/bank/scope 一律剥离，不得改变权限。 */
+        const argsH: Record<string, unknown> = qingChuModelFanWei(jieH.args);
         const quanQuan = () => {
           try { return String(p1?.security.getMode() || (settingsStore?.load() as { globalSecurity?: string } | undefined)?.globalSecurity || 'normal') === 'full'; }
           catch { return false; }
@@ -16767,11 +16774,20 @@ async function zhenZhengFaSongBen(
     for (let shi = 0; shi < zuiDaLun; shi++) {
     shuaXinDiaoYongLian();
     try {
-      const provider = congYuSheChuangJian(zhu.presetId, {
+      const rawProvider = congYuSheChuangJian(zhu.presetId, {
         apiKey: zhu.apiKey,
         baseURL: zhu.baseURL || undefined,
         protocol: zhu.protocol,
       } as never, zhu.protocol);
+      /* R301：每用户任务一个语言额度（续派/分身不重置）；开关关闭时装饰器原样透传。 */
+      const yuYanPei = (settingsStore?.load() ?? {}) as { strictAiLanguage?: boolean; yuYan?: string };
+      const yuYanCtx: YuYanLun = {
+        target: jieXiAiYuYan(String(xiaoXi.content || ''), yuYanPei.yuYan || app.getLocale()),
+        enabled: yuYanPei.strictAiLanguage === true, sends: 0, policyVersion: 1,
+        aborted: () => !!gongJuXunHuanQuXiao.get(String(sessionId || ''))?.signal.aborted,
+      };
+      yuYanRenWu.set(String(sessionId || ''), yuYanCtx);
+      const provider = baoZhuangYuYan(rawProvider, { ctx: yuYanCtx, check: (t, tg) => yuYanJianCe.check(t, tg, duYuYanZhiLi().policy), readText: neiRongWenBen });
       try { huiHuaMoXing.set(String(sessionId || ''), String(modelId || '')); } catch { /* noop */ }
       audit?.log('chat.model-picked', { sessionId, model: modelId, why: jueCe.why, chainIndex: jueCe.chainIndex, urgency: (xiaoXi.moXingJueCe && xiaoXi.moXingJueCe.urgency) || '', provider: zhu.presetId, protocol: zhu.protocol });
       /**
@@ -17079,10 +17095,10 @@ async function zhenZhengFaSongBen(
            * T18-4：约束句收口到 `yuYanYueShuJu()`（子代理链也用同一句），这里只管注入与审计。
            */
           try {
-            const yueGeJu = yuYanYueShuJu();
+            const yueGeJu = yuYanCtx.enabled ? aiYuYanTiShi(yuYanCtx.target) : yuYanYueShuJu();
             if (yueGeJu) {
               ju.push(yueGeJu);
-              const muBiaoYuYan = (settingsStore?.load() as { yuYan?: string } | undefined)?.yuYan || app.getLocale();
+              const muBiaoYuYan = yuYanCtx.enabled ? yuYanCtx.target.code : ((settingsStore?.load() as { yuYan?: string } | undefined)?.yuYan || app.getLocale());
               /**
                * 审计留痕（"这个勾到底有没有生效"必须可查 —— 真机反馈里用户就是这么问的）。
                * 只记"开没开 + 目标语言 + 注入了几字符"，不记正文。
@@ -19039,6 +19055,13 @@ async function zhenZhengFaSongBen(
         });
         a2ui = { messageId: a2uiMessageId, status: a2uiHuiFu.cha(sessionId, a2uiMessageId)?.status || 'generating' };
       }
+      /* R301：语言侧记——开关开启或用户明确语言要求/抱怨都留素材；不进正文/复制/导出。 */
+      try {
+        const ce = yuYanRenWu.get(String(sessionId || ''));
+        if (ce && a2uiMessageId && (ce.enabled || ce.target.source !== 'settings' || ce.target.complaint)) {
+          jiLuYuYanCeJi({ sessionId: String(sessionId || ''), messageId: a2uiMessageId, target: ce.target.code, source: ce.target.source, ruleVersion: ce.policyVersion, sends: ce.sends, corrected: !!ce.corrected, mismatch: !!ce.mismatch, fallback: ce.sends >= 2 && !ce.corrected, complaint: ce.target.complaint, ts: Date.now() });
+        }
+      } catch { /* 侧记失败不影响回复 */ }
       return {
         ok: true,
         planPending,
@@ -22641,8 +22664,8 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
         cachedTokens: (e as { cachedTokens?: number }).cachedTokens || 0,
         /** 第 35 轮 项 8：这一轮跑了几轮（工具循环）—— 悬停词元时要显示 */
         turnCount: Number((e as { turnCount?: number }).turnCount || 0) || 0,
-        /* R261 项6：进化双支线并排块（聊天记录的一部分）必须原样带回渲染层 */
-        evolvePair: (e as { evolvePair?: unknown }).evolvePair || null,
+        /* R261 项6：进化双支线并排块（聊天记录的一部分）必须原样带回渲染层；R301 补互动状态。 */
+        evolvePair: a2uiPairZhuangTai(sessionId, (e as { evolvePair?: unknown }).evolvePair),
         /* R300：互动层状态从工作区 manifest 回读，普通正文与模型历史不包含它。 */
         a2ui: e.id ? a2uiHuiFu.cha(sessionId, String(e.id)) : null,
       })),
@@ -23537,6 +23560,60 @@ chuliIpc('warmy:fanChanMeiXiTongXiaoXi', async (_e, p0?: { sessionId?: string; t
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 /** R300：A2UI 互动回复 owner；普通正文不变，二次模型调用只生成声明式互动数据。 */
+const a2uiLiuLanQi = chuangJianA2uiLiuLanQi();
+app.on('will-quit', () => a2uiLiuLanQi.guanBi());
+/** R301：语种检测 worker（隔离 Node）与每任务纠偏额度；侧记只落本地旁路文件。 */
+const yuYanJianCe = chuangJianYuYanJianCe();
+app.on('will-quit', () => yuYanJianCe.close());
+const yuYanRenWu = new Map<string, YuYanLun>();
+/** R301：进化实验级语言额度（按实验 ID，不挂在可广播/落盘的实验对象上，避免 structured-clone 函数失败）。 */
+const yuYanJinHua = new Map<string, YuYanLun>();
+function jiLuYuYanCeJi(rec: YuYanCeJi): void {
+  try {
+    const f = path.join(app.getPath('userData'), 'ai-yu-yan-ceji.jsonl');
+    fs.appendFileSync(f, JSON.stringify(rec) + '\n');
+    zongJieXunCha?.bianHua('language');
+  } catch { /* 侧记失败不影响回复 */ }
+}
+/** R301：语言治理状态（pending/approved/rejected/rolledback）与已批准检测策略。 */
+const yuYanZhiLiWenJian = () => path.join(app.getPath('userData'), 'ai-yu-yan-zhi-li.json');
+function duYuYanZhiLi(): { candidates: Array<{ id: string; houXuan: HouXuan; zhuangTai: string }>; policy?: { latinMin?: number; scriptMin?: number; margin?: number } } {
+  try { return JSON.parse(fs.readFileSync(yuYanZhiLiWenJian(), 'utf8')); } catch { return { candidates: [] }; }
+}
+function cunYuYanZhiLi(j: unknown): void { try { fs.writeFileSync(yuYanZhiLiWenJian(), JSON.stringify(j, null, 2)); } catch { /* 治理状态丢不影响回复 */ }
+}
+/** 总结巡查审核：侧记→有界候选→硬门禁拒绝/软门禁第一列系统消息申请（批准前不生效）。 */
+function shenHeYuYanZhiLi(): { ok: boolean; pending: number; rejected: number } {
+  let records: YuYanCeJi[] = [];
+  try {
+    records = fs.readFileSync(path.join(app.getPath('userData'), 'ai-yu-yan-ceji.jsonl'), 'utf8').split('\n').filter(Boolean).slice(-500).map((l) => { try { return JSON.parse(l) as YuYanCeJi; } catch { return null; } }).filter((x): x is YuYanCeJi => !!x);
+  } catch { /* 无侧记只观察 */ }
+  const state = duYuYanZhiLi();
+  const yiYou = new Set(state.candidates.map((c) => c.id));
+  let pending = 0, rejected = 0;
+  for (const h of shengChengHouXuan(records)) {
+    if (yiYou.has(h.id)) continue;
+    const men = yingMenJin(h);
+    if (!men.allow) { rejected++; try { audit?.log('language.governance.hard-denied', { id: h.id, reason: men.reason }); } catch { /* noop */ } continue; }
+    state.candidates.push({ id: h.id, houXuan: h, zhuangTai: 'pending' });
+    pending++;
+    try { xiTongXiaoXiMoKuai.jiJinHuaShenPi('语言约束改进候选「' + h.id + '」（' + h.fenLei + '）：' + JSON.stringify(h.payload).slice(0, 300) + '。依据：' + h.basis + '。触及软门禁，同意后才生效；原文保护/权限/隐私/两次限额不可学习覆盖。'); } catch { /* noop */ }
+  }
+  cunYuYanZhiLi(state);
+  return { ok: true, pending, rejected };
+}
+chuliIpc('warmy:yuYanZhiLiShenHe', () => { try { return shenHeYuYanZhiLi(); } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; } });
+chuliIpc('warmy:yuYanZhiLiPiZhun', (_e, p0?: { id?: string; agreed?: boolean }) => {
+  try {
+    const state = duYuYanZhiLi();
+    const c = state.candidates.find((x) => x.id === String(p0?.id || ''));
+    if (!c || c.zhuangTai !== 'pending') return { ok: false, error: 'not-pending' };
+    c.zhuangTai = p0?.agreed ? 'approved' : 'rejected';
+    if (p0?.agreed && c.houXuan.kind === 'param') state.policy = { ...(state.policy || {}), ...(c.houXuan.payload as { latinMin?: number; scriptMin?: number; margin?: number }) };
+    cunYuYanZhiLi(state);
+    return { ok: true, zhuangTai: c.zhuangTai };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 const a2uiHuiFu = chuangJianA2uiHuiFu({
   workspaceDir: (sid) => workspaceDirOf(app.getPath('userData'), sid),
   peizhi: () => (settingsStore?.load() as { a2uiReplyEnabled?: boolean; nmKaiWenJian?: boolean } | undefined) || {},
@@ -23547,13 +23624,36 @@ const a2uiHuiFu = chuangJianA2uiHuiFu({
     const apiModel = jieMoXingMing(model);
     if (!apiModel) throw new Error('a2ui-model-missing');
     const p = congYuSheChuangJian(cfg.presetId, { apiKey: cfg.apiKey, baseURL: cfg.baseURL, protocol: cfg.protocol } as never, cfg.protocol);
-    const r = await p.chat({ model: apiModel, maxTokens: 5000, xiaoXiJi: [{ role: 'system', content: system }, { role: 'user', content: user }] }, signal);
-    return neiRongWenBen(r.choices?.[0]?.message?.content || '');
+    let sends = 0;
+    const r = await p.chat({ model: apiModel, maxTokens: 5000,
+      shiYanGuanCha: { yunXu: () => sends++ === 0 },
+      xiaoXiJi: [{ role: 'system', content: system }, { role: 'user', content: user }] }, signal);
+    return { text: neiRongWenBen(r.choices?.[0]?.message?.content || ''), finishReason: String(r.choices?.[0]?.finishReason || '') };
   },
   guangBo: (channel, data) => broadcastToWindows(channel, data),
-  nmKeYong: () => nmKaiWenJianKai() && nmChaJianQiYong(),
+  nmKeYong: () => nmChaJianQiYong(),
   duMoBan: () => fs.readFileSync(path.join(__dirname, 'renderer', 'a2ui-view.html'), 'utf8'),
   duRuntime: () => fs.readFileSync(path.join(__dirname, 'renderer', 'a2ui-view.js'), 'utf8'),
+  /* R301：互动文案语言校验与协议修复共用 owner 的两次重生成额度。 */
+  yanZhengYuYan: async (messages) => {
+    try {
+      const pei = (settingsStore?.load() ?? {}) as { strictAiLanguage?: boolean; yuYan?: string };
+      if (pei.strictAiLanguage !== true) return true;
+      const muBiao = jieXiAiYuYan('', pei.yuYan || app.getLocale());
+      const wen: string[] = [];
+      const walk = (v: unknown): void => {
+        if (!v || typeof v !== 'object') return;
+        if (Array.isArray(v)) { for (const x of v) walk(x); return; }
+        const o = v as Record<string, unknown>;
+        for (const k of ['text', 'label', 'placeholder', 'title']) if (typeof o[k] === 'string') wen.push(o[k] as string);
+        for (const x of Object.values(o)) walk(x);
+      };
+      walk(messages);
+      if (!wen.length) return true;
+      const flags = await yuYanJianCe.check([wen.join('\n')], muBiao, duYuYanZhiLi().policy);
+      return flags[0] !== 'mismatch';
+    } catch { return true; }
+  },
   auditLog: (op, data) => { try { audit?.log(op, data); } catch { /* noop */ } },
 });
 chuliIpc('warmy:a2uiZhuangTaiCha', (_e, p0?: { sessionId?: string; messageId?: string }) => ({ ok: true, state: a2uiHuiFu.cha(String(p0?.sessionId || ''), String(p0?.messageId || '')) }));
@@ -23562,8 +23662,73 @@ chuliIpc('warmy:a2uiNmKai', (_e, p0?: { sessionId?: string; messageId?: string }
   const sid = String(p0?.sessionId || ''), mid = String(p0?.messageId || '');
   const checked = a2uiHuiFu.daKai(sid, mid);
   if (!checked.ok || !checked.path) return checked;
-  if (!nmKaiWenJianKai() || !nmChaJianQiYong()) return { ok: false, error: 'nm-disabled' };
+  if (!nmChaJianQiYong()) return { ok: false, error: 'nm-disabled' };
   return nmA2uiKai({ luJing: checked.path, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi() });
+});
+chuliIpc('warmy:a2uiBrowserKai', async (_e, p0?: { sessionId?: string; messageId?: string }) => {
+  const checked = a2uiHuiFu.duKuaiZhao(String(p0?.sessionId || ''), String(p0?.messageId || ''));
+  if (!checked.ok || !checked.html || !checked.runtime) return { ok: false, error: checked.error || 'a2ui-invalid' };
+  try {
+    const url = await a2uiLiuLanQi.faBu({ html: checked.html, runtime: checked.runtime });
+    await shell.openExternal(url);
+    return { ok: true, via: 'browser' };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R301：进化并排块历史最终回复的互动状态随消息回读；浅拷贝附加，不改原文/实验存储。 */
+function a2uiPairZhuangTai(sid: string, pair: unknown): unknown {
+  if (!pair || typeof pair !== 'object') return pair || null;
+  if ((settingsStore?.load() as { a2uiReplyEnabled?: boolean } | undefined)?.a2uiReplyEnabled !== true) return pair;
+  const p = pair as { arms?: Record<string, { history?: Array<Record<string, unknown>> }> };
+  const arms: Record<string, unknown> = {};
+  for (const [k, arm] of Object.entries(p.arms || {})) {
+    const hist = (arm?.history || []).map((h) => {
+      if (String(h?.kind || '') !== 'final' || !h?.id) return h;
+      const s = a2uiHuiFu.cha(sid, String(h.id));
+      return s ? { ...h, a2ui: s } : h;
+    });
+    arms[k] = { ...arm, history: hist };
+  }
+  return { ...p, arms };
+}
+chuliIpc('warmy:a2uiChongShi', async (_e, p0?: { sessionId?: string; messageId?: string }) => {
+  const sid = String(p0?.sessionId || ''), mid = String(p0?.messageId || '');
+  const state = a2uiHuiFu.cha(sid, mid);
+  if (!state || !['failed', 'cancelled', 'interrupted'].includes(state.status)) return { ok: false, error: 'a2ui-not-retryable' };
+  const records = chatLogs.get(sid) || [], at = records.findIndex((x) => x.id === mid);
+  let reply = '', userText = '';
+  if (at >= 0) {
+    reply = String(records[at]?.content || '');
+    userText = String(([...records.slice(0, at)].reverse().find((x) => x.role === 'user'))?.content || '');
+  } else {
+    /* R301：进化支线最终回复的重试——从并排块历史取同 ID 正文与本臂用户消息。 */
+    let zhaoDao = false;
+    for (const rec of records) {
+      if (zhaoDao) break;
+      const pair = (rec as { evolvePair?: { arms?: Record<string, { history?: Array<{ id?: string; role?: string; content?: string }> }> } }).evolvePair;
+      for (const arm of Object.values(pair?.arms || {})) {
+        const hist = arm?.history || [];
+        const i = hist.findIndex((h) => String(h.id || '') === mid);
+        if (i < 0) continue;
+        reply = String(hist[i]?.content || '');
+        userText = String(([...hist.slice(0, i)].reverse().find((h) => h.role === 'user'))?.content || '');
+        zhaoDao = true;
+        break;
+      }
+    }
+    if (!reply) return { ok: false, error: 'a2ui-message-missing' };
+  }
+  const settings = settingsStore?.load();
+  const id = String(state.provider || '');
+  const configured = settings?.providers?.find((x) => x.id === id);
+  const current = id && providerCfg.presetId === id ? providerCfg : undefined;
+  if (!id || (!configured && !current)) return { ok: false, error: 'a2ui-provider-missing' };
+  const protocol = configured?.protocol || current!.protocol;
+  const snapshot = { presetId: id, baseURL: configured?.baseURL || current?.baseURL || '', protocol,
+    apiKey: protocol === 'ollama' ? '' : await jiexiGongyingshangMiyao(id, current?.apiKey) };
+  if (protocol !== 'ollama' && !snapshot.apiKey) return { ok: false, error: 'a2ui-provider-missing' };
+  void a2uiHuiFu.kaiShi({ sessionId: sid, messageId: mid, reply, userText,
+    model: String(state.model || ''), provider: id, providerConfig: snapshot });
+  return { ok: true, state: a2uiHuiFu.cha(sid, mid) };
 });
 chuliIpc('warmy:a2uiQuXiao', (_e, p0?: { sessionId?: string }) => { a2uiHuiFu.quXiao(String(p0?.sessionId || '')); return { ok: true }; });
 
@@ -35973,8 +36138,11 @@ async function paoXiaoDiRenWu(zhi: {
       + (xiaoDiYueGeJu ? '\n\n' + xiaoDiYueGeJu : '');
     const subBase = workspaceDirOf(app.getPath('userData'), sid);
     try { fs.mkdirSync(subBase, { recursive: true }); } catch { /* noop */ }
+    /* R301：子代理复用父任务语言额度（不重置）；无父 ctx 时才按设置新建。 */
+    const xiaoDiYuYan = yuYanRenWu.get(sid) || { target: jieXiAiYuYan(String(lu.task || ''), (settingsStore?.load() as { yuYan?: string })?.yuYan || app.getLocale()), enabled: (settingsStore?.load() as { strictAiLanguage?: boolean })?.strictAiLanguage === true, sends: 0, policyVersion: 1, aborted: () => kong.signal.aborted };
+    const xiaoDiProvider = baoZhuangYuYan(zhi.provider, { ctx: xiaoDiYuYan, check: (t, tg) => yuYanJianCe.check(t, tg, duYuYanZhiLi().policy), readText: neiRongWenBen });
     const subLoop = await liaoTianDaiGongJu(
-      zhi.provider,
+      xiaoDiProvider,
       {
         model: String(zhi.moXing || ''),
         xiaoXiJi: [{ role: 'user', content: ziRenWu }],
@@ -38040,17 +38208,39 @@ function anQuanHuaMingzhong(items: SousuoMingzhong[], query = ''): SousuoMingzho
   });
 }
 
+/** R301：召回轨迹有界本地保存（随 userData 封存）；只记 ID/hash/计数，不记查询正文/密钥。 */
+function jiLuZhaoHuiGuiJi(rec: ZhaoHuiGuiJi): void {
+  try {
+    const f = path.join(app.getPath('userData'), 'recall-trace.jsonl');
+    fs.appendFileSync(f, JSON.stringify(rec) + '\n');
+    const st = fs.statSync(f);
+    if (st.size > 2 * 1024 * 1024) {
+      const lines = fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).slice(-2000);
+      fs.writeFileSync(f, lines.join('\n') + '\n');
+    }
+  } catch { /* 轨迹失败不影响召回 */ }
+}
 async function sousuoHuiHuaJiYi(q: string, limit: number, scope?: { sessionId?: string; groupId?: string }): Promise<Array<{ title?: string; snippet?: string; meta?: string; ts?: number; sessionId?: string; seq?: number }>> {
   try {
-    const r = await memory?.recallScoped(q, limit, scope);
-    const cards = (r?.cards || []) as Array<{ seq?: number; recordId?: string; snippet?: string; sessionId?: string }>;
-    return cards.map((c) => ({
-      title: c.sessionId ? sessionMingOf(c.sessionId) : String(c.snippet || '').slice(0, 80),
-      snippet: String(c.snippet || ''),
-      meta: `记录 #${c.seq ?? ''}${c.sessionId ? ' · ' + sessionMingOf(c.sessionId) : ''}`,
-      sessionId: c.sessionId,
-      seq: Number(c.seq) || 0,
-    }));
+    /* R301：渐进召回编排（授权前置/变体/上限/一跳/轨迹）包装 memory-os 检索。 */
+    const { cards } = await jianJinZhaoHui({
+      recall: async (query, opts) => {
+        const r = await memory?.recallScoped(query, opts.limit || limit, scope);
+        const raw = (r?.cards || []) as Array<{ id?: string; recordId?: string; seq?: number; snippet?: string; sessionId?: string; ts?: number }>;
+        return { cards: raw.map((c) => ({ ...c, id: String(c.recordId || c.id || c.seq || '') })), scopeStats: (r as { scopeStats?: { authorizedRecords: number; deniedRecords: number } })?.scopeStats, channels: (r as { channels?: Array<{ channel: string; used: boolean; hits: number }> })?.channels };
+      },
+      trace: jiLuZhaoHuiGuiJi,
+    }, { sessionId: String(scope?.sessionId || scope?.groupId || ''), query: q, scope, limit });
+    return cards.map((c) => {
+      const cc = c as { seq?: number; snippet?: string; sessionId?: string };
+      return {
+        title: cc.sessionId ? sessionMingOf(cc.sessionId) : String(cc.snippet || '').slice(0, 80),
+        snippet: String(cc.snippet || ''),
+        meta: `记录 #${cc.seq ?? ''}${cc.sessionId ? ' · ' + sessionMingOf(cc.sessionId) : ''}`,
+        sessionId: cc.sessionId,
+        seq: Number(cc.seq) || 0,
+      };
+    });
   } catch {
     return [];
   }
@@ -38307,6 +38497,36 @@ chuliIpc('warmy:souSuoXiaoXiJi', async (_e, q: string) => {
   } catch (e) {
     return { ok: false, hits: [], error: xiJingCuoWu(e) };
   }
+});
+
+/** R301：动态项目概览（派生页面，读取不触发模型；不覆盖用户手写 MEMORY）。 */
+chuliIpc('warmy:jiYiGaiLan', (_e, p0?: { projectId?: string }) => {
+  try {
+    const pid = String(p0?.projectId || '');
+    if (!pid) return { ok: false, error: 'projectId required' };
+    const yuan = { memory: readProjectMemory(groupStore, pid), plans: [], evidence: [] as Array<{ id: string; note?: string }> };
+    const ye = paiShengGaiLan(pid, yuan, { authRev: 1, policy: 'default', lang: String((settingsStore?.load() as { yuYan?: string })?.yuYan || 'zh-CN'), level: 'L1' });
+    return { ok: true, gaiLan: ye };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R301：虚拟目录三级展开（L0 摘要/L1 要点与来源；L2 原文走 retrieve）。URI 不暴露真实路径。 */
+chuliIpc('warmy:jiYiMuLu', (_e, p0?: { sessionId?: string }) => {
+  try {
+    const sid = String(p0?.sessionId || '');
+    if (!knowledge || !sid) return { ok: true, nodes: [] };
+    const events = knowledge.activeEventsIn(kbLayersFor(sid));
+    const nodes = muLuSanJi(events.slice(0, 200).map((e) => ({ id: e.id, ceng: String(e._ceng || 'session'), summary: String(e.biaoTi || ''), source: e.laiYuan })));
+    return { ok: true, nodes };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R301：同源误读确证纠错（宿主校验证据后原子删除错误派生＋墓碑；立即失效概览缓存）。 */
+chuliIpc('warmy:jiYiJiuCuo', (_e, p0?: { ceng?: 'session' | 'internal' | 'private'; id?: string; reason?: string; yuanWenHash?: string; zhengJu?: string; xinShiJian?: unknown }) => {
+  try {
+    if (!knowledge || !p0?.id || !p0?.ceng) return { ok: false, error: 'bad-request' };
+    const r = knowledge.allow(p0.ceng).queZhengJiuCuo(String(p0.id), { reason: String(p0.reason || ''), yuanWenHash: p0.yuanWenHash, zhengJu: p0.zhengJu, xinShiJian: p0.xinShiJian as never });
+    if (r.ok) gaiLanShiXiao();
+    return r;
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 
 
@@ -39820,7 +40040,11 @@ const xiTongXiaoXiMoKuai = chuangJianXiTongXiaoXi({
   jingHuaCuoWu: xiJingCuoWu,
 });
 const jiXiTongXiaoXi = xiTongXiaoXiMoKuai.jiXiTongXiaoXi;
-const jiZongJieJianBao = xiTongXiaoXiMoKuai.jiZongJieJianBao;
+/* R301：总结简报时同步审核语言侧记（复用脏源/水位巡查）；硬门禁拒绝、软门禁第一列申请。 */
+const jiZongJieJianBao = (title: string, body: string): void => {
+  xiTongXiaoXiMoKuai.jiZongJieJianBao(title, body);
+  try { shenHeYuYanZhiLi(); } catch { /* 治理审核失败不影响简报 */ }
+};
 xiTongXiaoXiMoKuai.duXiTongXiaoXi();
 xiTongXiaoXiMoKuai.zhuCeIpc(chuliIpc);
 /** 加入记录全量：只回展示所需字段，剔除 token/公钥/主机/端口/指纹 */
@@ -39926,7 +40150,15 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
     zt.turns++;
     return;
   }
-  const provider0 = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL }, an.protocol);
+  const rawProvider0 = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL }, an.protocol);
+  /* R301：进化双臂共享同一用户任务语言额度（不每臂重置）；ctx 存独立 Map，不进实验广播/落盘对象。 */
+  let jinHuaCtx = yuYanJinHua.get(e.id);
+  if (!jinHuaCtx) {
+    const pei = (settingsStore?.load() ?? {}) as { strictAiLanguage?: boolean; yuYan?: string };
+    jinHuaCtx = { target: jieXiAiYuYan(String(content || ''), pei.yuYan || app.getLocale()), enabled: pei.strictAiLanguage === true, sends: 0, policyVersion: 1, aborted: () => kong.signal.aborted };
+    yuYanJinHua.set(e.id, jinHuaCtx);
+  }
+  const provider0 = baoZhuangYuYan(rawProvider0, { ctx: jinHuaCtx, check: (t, tg) => yuYanJianCe.check(t, tg, duYuYanZhiLi().policy), readText: neiRongWenBen });
   /* R267 项8：流式 tee——思考/正文边出边进历史并广播，像正常对话一样实时显示 */
   zt.history = zt.history || [];
   const hist = zt.history;
@@ -40059,10 +40291,19 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
       if (zt.history.some((h) => h.kind === 'zhongjian' && h.content === zw && Math.abs(Number(h.ts || 0) - zts) < 1500)) continue;
       zt.history.push(jiLuYong('zhongjian', zw, { ts: zts, startedAt: zts, endedAt: wan, status: 'complete', usage: { ...yongLiang } }));
     }
+    let finalH: ZhiXianLiShi | undefined;
     if (zt.reply) {
       const existing = zt.history.find((h) => h.kind === 'final' && h.content === zt.reply);
-      if (existing) { existing.endedAt = wan; existing.status = 'complete'; existing.usage = { ...yongLiang }; }
-      else zt.history.push(jiLuYong('final', zt.reply, { ts: finalStartTs || wan, startedAt: finalStartTs || wan, endedAt: wan, status: 'complete', usage: { ...yongLiang } }));
+      if (existing) { existing.endedAt = wan; existing.status = 'complete'; existing.usage = { ...yongLiang }; finalH = existing; }
+      else { finalH = jiLuYong('final', zt.reply, { ts: finalStartTs || wan, startedAt: finalStartTs || wan, endedAt: wan, status: 'complete', usage: { ...yongLiang } }); zt.history.push(finalH); }
+    }
+    /* R301：进化双臂最终回复与普通回复同口径生成互动层；停止/超时不触发，供应商用本臂实际快照。 */
+    if (finalH && kongRec.yuanYin === '' && (settingsStore?.load() as { a2uiReplyEnabled?: boolean } | undefined)?.a2uiReplyEnabled === true) {
+      void a2uiHuiFu.kaiShi({
+        sessionId: e.sessionId, messageId: String(finalH.id || ''), userText: String(content || ''), reply: zt.reply,
+        model: moXing, provider: an.presetId,
+        providerConfig: { presetId: an.presetId, apiKey: an.apiKey, baseURL: an.baseURL, protocol: an.protocol },
+      });
     }
     ziJinHuaGuangBo(e);
   } catch (err) {

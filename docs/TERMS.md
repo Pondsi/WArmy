@@ -18,7 +18,7 @@
 1.1 By clicking `同意并继续` ("Agree and continue"), installing, copying, running or otherwise using the software, you confirm that you have read and agree to:
 - These Terms of Use;
 - The [Privacy Policy](./PRIVACY.md);
-- The [LICENSE](../LICENSE) in the repository root (MIT + mandatory attribution).
+- The [LICENSE](../LICENSE) in the repository root (Pondsi Attribution License).
 
 1.2 If you do not agree, do not use the software, and delete the software and the user data directory.
 
@@ -49,10 +49,9 @@
 
 ## 3. Licence and attribution
 
-3.1 The software is licensed under the **LICENSE (MIT + mandatory attribution)** in the repository root. You may use, copy, modify, merge, publish, distribute, sublicense and/or sell copies of the software, but you must:
+3.1 The original WArmy code is licensed under the **Pondsi Attribution License** in the repository root. You may use, copy, modify, merge, publish, distribute, sublicense and/or sell copies of the software, in whole or in part (original, modified or snippets, personal or distributed), under a single condition:
 
-- Keep the copyright notice and the licence notice;
-- **Always credit Pondsi as the original author**, in a place reasonably visible to the recipient (README, documentation, About page, package metadata or source file headers, etc.), and never remove or obscure that attribution when modifying, renaming or redistributing.
+- **Credit Pondsi as the original author**, in a place reasonably visible to the recipient (README, documentation, About page, package metadata or source file headers, etc.). No repository link, retention of the full licence text, or any specific notice form is required.
 
 3.2 These terms **do not modify the LICENSE**. For use, copying, modification and distribution of the source code, if these terms conflict with the LICENSE, **the LICENSE prevails**.
 

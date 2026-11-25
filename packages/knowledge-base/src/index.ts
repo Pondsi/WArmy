@@ -131,9 +131,22 @@ export interface ZhishiShijian {
   useLog?: number[];
 }
 
+/** R301：同源误读确证纠错的持久化墓碑——防止重建/同步复活错误理解。只记旧ID/hash/来源/原因，不留错误副本。 */
+export interface JiuCuoMuBei {
+  id: string;
+  reason: string;
+  ts: number;
+  /** 旧派生引用的源（yinZi 拼接）或原文 hash，供审计与依赖失效。 */
+  hash?: string;
+  yuanWenHash?: string;
+  /** 纠错后新建的正确派生 ID（如有）。 */
+  xinId?: string;
+}
+
 export class KnowledgeBase {
   private entities = new Map<string, Shiti>();
   private events = new Map<string, ZhishiShijian>();
+  private muBei = new Map<string, JiuCuoMuBei>();
   /** 有未落盘的变更（使用计数合并写）；存储失败时保持 true 以便诊断/重试 */
   private dirty = false;
   private lastSaveError = '';
@@ -156,8 +169,10 @@ export class KnowledgeBase {
   private load(): void {
     try {
       const j = JSON.parse(fs.readFileSync(this.storePath, 'utf8'));
+      for (const m of j.muBei || []) if (m && m.id) this.muBei.set(m.id, m);
       for (const e of j.entities || []) this.entities.set(e.id, e);
-      for (const e of j.events || []) this.events.set(e.id, e);
+      /* 墓碑里的错误理解不得因重建/同步复活。 */
+      for (const e of j.events || []) if (!this.muBei.has(e.id)) this.events.set(e.id, e);
     } catch {
       /* fresh */
     }
@@ -178,7 +193,7 @@ export class KnowledgeBase {
   private save(): boolean {
     const xie = () => fs.writeFileSync(
       this.storePath,
-      JSON.stringify({ entities: [...this.entities.values()], events: [...this.events.values()] }, null, 2),
+      JSON.stringify({ entities: [...this.entities.values()], events: [...this.events.values()], muBei: [...this.muBei.values()] }, null, 2),
       'utf8'
     );
     try {
@@ -269,6 +284,8 @@ export class KnowledgeBase {
   }
 
   addEvent(Shi: ZhishiShijian): ZhishiShijian {
+    /* R301：已确证纠错的错误理解拒绝复活（重建/同步同样受墓碑约束）。 */
+    if (this.muBei.has(Shi.id)) return Shi;
     /**
      * **记录时间写一次就不再改**（第 53 轮项 5）：重新归档、补写、整理都可能带着"现在的时刻"再进来一次，
      * 若让它覆盖旧值，"这条信息什么时候被说出"就退化成"最后一次被机器碰过的时间"，
@@ -299,6 +316,32 @@ export class KnowledgeBase {
     this.dirty = true; this.scheduleUseSave();
     return true;
   }
+
+  /**
+   * R301：同源误读确证纠错（原子版本化）。必须取回同一原文并校验来源/证据；
+   * 仅模型自评/无证据/非派生条目不删。删除错误派生＋墓碑＋失效依赖＋可选写正确派生；不删原文/合法共享实体。
+   */
+  queZhengJiuCuo(id: string, o: { reason: string; yuanWenHash?: string; zhengJu?: string; xinShiJian?: ZhishiShijian }): { ok: boolean; error?: string; muBei?: JiuCuoMuBei } {
+    const e = this.events.get(id);
+    if (!e) return { ok: false, error: 'missing' };
+    const youLaiYuan = (Array.isArray(e.yinZi) && e.yinZi.length > 0) || (Array.isArray(e.anchors) && e.anchors.length > 0) || !!e.laiYuan;
+    if (!youLaiYuan) return { ok: false, error: 'not-derived' };
+    if (!String(o.reason || '').trim() || (!o.zhengJu && !o.yuanWenHash)) return { ok: false, error: 'no-evidence' };
+    if (o.xinShiJian && this.muBei.has(o.xinShiJian.id)) return { ok: false, error: 'replacement-tombstoned' };
+    const mb: JiuCuoMuBei = { id, reason: String(o.reason).slice(0, 400), ts: Date.now(), hash: (e.yinZi || []).join(','), yuanWenHash: o.yuanWenHash, xinId: o.xinShiJian?.id };
+    this.muBei.set(id, mb);
+    this.removeEvent(id);
+    /* 失效依赖：引用了错误派生的下游条目标为被取代，待重算（不级联删除合法事实）。 */
+    for (const x of this.events.values()) {
+      if (Array.isArray(x.yinZi) && x.yinZi.includes(id) && !x.shiXiaoTs) this.supersedeEvent(x.id);
+    }
+    if (o.xinShiJian) this.addEvent(o.xinShiJian);
+    this.dirty = true; this.scheduleUseSave();
+    return { ok: true, muBei: mb };
+  }
+
+  muBeiOf(id: string): JiuCuoMuBei | undefined { return this.muBei.get(id); }
+  listMuBei(): JiuCuoMuBei[] { return [...this.muBei.values()]; }
 
   /** 只取仍在生效的事件（被取代的默认不进上下文）；R231：带 procedure 的事件默认隔离（§9.4） */
   activeEvents(): ZhishiShijian[] {

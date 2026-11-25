@@ -2661,10 +2661,7 @@ details.menJinZheDie > div { padding: 0 12px 12px; }
 [data-open]:hover .pfMing, a.pfLink:hover, .pfHang[data-open]:hover .pfMing {
   filter: brightness(1.15);
 }
-/* R300：A2UI 状态属于最终回复的附加层，不改变普通正文、思考或复制内容。 */
-.a2ui-status { margin: 2px 0 8px; font-size: 13px; line-height: 1.5; color: var(--muted); }
-.a2ui-status.a2ui-failed { color: var(--danger, #b91c1c); }
-.a2ui-status .a2ui-link { display: inline-block; }
+/* 回复增强状态仅绑定马头，不在正文前插入链接或状态行。 */
 /* 「文件产物」里的 📁 按钮**右对齐**，与左边的名称/大小分开，看起来更整齐 */
 .pfHangKeDian .ctgHangHead { display: flex; align-items: center; gap: 6px; width: 100%; }
 .pfHangKeDian .pfMing { flex: 1 1 auto; min-width: 0; }
@@ -4993,11 +4990,30 @@ html { font-weight: var(--fw-ui, 400); }
 .banMaTou {
   position: absolute; left: -26px; top: 4px;
   width: 18px; height: 18px;
-  background: var(--accent); opacity: .9; pointer-events: none;
+  /* R301：未启用回复增强＝字体色；启用后就绪＝主题色；生成中＝自下而上主题色波纹。 */
+  background: var(--ink); opacity: .9; pointer-events: none;
   transform: scaleX(-1);
   -webkit-mask: url('assets/zebra-head.svg') center / contain no-repeat;
   mask: url('assets/zebra-head.svg') center / contain no-repeat;
 }
+.banMaTou.a2ui-ma-tou { pointer-events: auto; cursor: pointer; }
+.banMaTou.a2ui-ma-tou[data-a2ui-status="ready"] { background: var(--accent); }
+.banMaTou.a2ui-ma-tou[data-a2ui-status="generating"] {
+  background-image: linear-gradient(var(--accent), var(--accent)), linear-gradient(var(--ink), var(--ink));
+  background-repeat: no-repeat;
+  background-position: left bottom, left top;
+  background-size: 100% 0%, 100% 100%;
+  animation: a2uiMaTouBoWen 1.8s ease-in-out infinite;
+}
+@keyframes a2uiMaTouBoWen {
+  0% { background-size: 100% 0%, 100% 100%; }
+  70% { background-size: 100% 100%, 100% 100%; }
+  100% { background-size: 100% 100%, 100% 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .banMaTou.a2ui-ma-tou[data-a2ui-status="generating"] { animation: none; background-size: 100% 55%, 100% 100%; }
+}
+.banMaTou.a2ui-ma-tou:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
 
 /* 【项 5】行动行现在长在「思考/执行过程」块里面 —— 去掉左缩进，与思考正文对齐 */
 .siKaoKuai .xingDongZu { margin: 4px 0 3px; }

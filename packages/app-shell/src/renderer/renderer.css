@@ -1015,9 +1015,9 @@ details.ctgShouQi > .ctgShouQiTi {
 .duiLieTiao::-webkit-scrollbar-thumb {
   background: var(--scroll); border-radius: 8px;  border: 2px solid transparent; background-clip: content-box;
 }
-/* R267 项7：鼠标不在聊天记录内时滚动条看不见但占位不变（gutter stable），悬停才显示 */
+/* 滚动条只在槽位悬停/拖动/实际滚动时显现；容器整体悬停不改变显隐。 */
 #xiaoXiJi::-webkit-scrollbar-thumb, .xiaoXiJi::-webkit-scrollbar-thumb { background: transparent; border-color: transparent; }
-#xiaoXiJi:hover::-webkit-scrollbar-thumb, .xiaoXiJi:hover::-webkit-scrollbar-thumb { background: var(--scroll); }
+#xiaoXiJi.gunTiaoKeJian::-webkit-scrollbar-thumb, .xiaoXiJi.gunTiaoKeJian::-webkit-scrollbar-thumb { background: var(--scroll); }
 #xiaoXiJi::-webkit-scrollbar-track, .xiaoXiJi::-webkit-scrollbar-track { background: transparent; }
 
 /* 外部聚合看板（ADR：只读、会话进展、点击跳转） */

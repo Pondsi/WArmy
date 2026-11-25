@@ -241,7 +241,7 @@
   "chat.conciseOutput": "簡潔輸出",
   "chat.conciseOutputTip": "長回覆顯示簡潔視圖（原文完整保留，一鍵展開）；純工程壓縮零模型成本，支援結構化的模型可選結構化簡潔。",
   "chat.emptyReplyWhy": "本輪模型沒有返回文字內容（可能是工具調用後未作說明）。請再問一次，或換個說法。",
-  "chat.enhanceReply": "回覆加強",
+  "chat.enhanceReply": "回覆增強",
   "chat.enhanceReplyTip": "你的牛馬將使用動態的內容讓你更容易理解，這將需要花費更長的時間以及更多的 token",
   "chat.export": "匯出聊天",
   "chat.exportTip": "匯出目前會話的完整聊天記錄（Markdown）",

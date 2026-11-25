@@ -50,6 +50,15 @@ extraResources:
     to: node_modules/@a2ui/lit
   - from: node_modules/@a2ui/web_core
     to: node_modules/@a2ui/web_core
+  # R301：语种检测纯 JS 链（franc-all → trigram-utils → collapse-white-space / n-gram），worker 运行期 import 必须可解析。
+  - from: ../../node_modules/.pnpm/franc-all@7.2.0/node_modules/franc-all
+    to: node_modules/franc-all
+  - from: ../../node_modules/.pnpm/trigram-utils@2.0.1/node_modules/trigram-utils
+    to: node_modules/trigram-utils
+  - from: ../../node_modules/.pnpm/collapse-white-space@2.1.0/node_modules/collapse-white-space
+    to: node_modules/collapse-white-space
+  - from: ../../node_modules/.pnpm/n-gram@2.0.2/node_modules/n-gram
+    to: node_modules/n-gram
   - from: ../../node_modules/.pnpm/antlr4ng@3.0.16/node_modules/antlr4ng
     to: node_modules/antlr4ng
   - from: ../../node_modules/.pnpm/@lit-labs+signals@0.3.0/node_modules/@lit-labs/signals

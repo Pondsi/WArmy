@@ -26,6 +26,13 @@ export interface A2uiZhuangTai {
   entryPath?: string;
   nmAvailable?: boolean;
   error?: string;
+  stage?: 'request' | 'parse' | 'write';
+  attempts?: number;
+  responseChars?: number;
+  format?: 'tagged' | 'json' | 'jsonl' | 'other';
+  finishReason?: string;
+  model?: string;
+  provider?: string;
 }
 
 export interface A2uiProviderPeiZhi {
@@ -43,12 +50,14 @@ export interface A2uiShengCheng {
   system: string;
   user: string;
   signal: AbortSignal;
+  attempt: number;
 }
 
 export interface A2uiYiLai {
   workspaceDir: (sid: string) => string;
   peizhi: () => { a2uiReplyEnabled?: boolean; nmKaiWenJian?: boolean };
-  shengCheng: (p: A2uiShengCheng) => Promise<string>;
+  shengCheng: (p: A2uiShengCheng) => Promise<string | { text: string; finishReason?: string }>;
+  yanZhengYuYan?: (messages: AgentToRendererMessage[]) => Promise<boolean>;
   guangBo: (channel: string, data: unknown) => void;
   nmKeYong: () => boolean;
   duMoBan: () => string;
@@ -71,9 +80,55 @@ function anQuanMuLu() {
   });
 }
 
+let tiShiHuanCun = '';
 export function a2uiTiShiShengCheng(): string {
-  const processor = new A2uiRequestProcessor([anQuanMuLu()], undefined, new DirectJsonFormatFactory());
-  return processor.promptSnippet;
+  if (tiShiHuanCun) return tiShiHuanCun;
+  const components = [
+    { id: 'root', component: 'Column', children: ['check', 'notes'] },
+    { id: 'check', component: 'CheckBox', label: '检查来源', value: false },
+    { id: 'notes', component: 'TextField', label: '备注', value: '', variant: 'longText' },
+  ];
+  const example = [{ version: '1.0', createSurface: { surfaceId: 'example-surface', catalogId: A2UI_CATALOG_ID, components } }] as AgentToRendererMessage[];
+  const processor = new A2uiRequestProcessor([anQuanMuLu()], { checklist: example }, new DirectJsonFormatFactory());
+  tiShiHuanCun = processor.promptSnippet;
+  return tiShiHuanCun;
+}
+
+/** 只消除运输包装；协议字段、组件和数据均由官方解析器校验，不在此修造。 */
+export function guiFanA2uiYunShu(text: string): { source: string; wrapped: boolean; format: 'tagged' | 'json' | 'jsonl' | 'other' } {
+  let source = String(text || '').trim();
+  if (/<a2ui-json(?:\s|>)/i.test(source)) return { source, wrapped: true, format: 'tagged' };
+  const fence = /^```(?:json|jsonl)?\s*\n([\s\S]*?)\n```\s*$/i.exec(source);
+  if (fence) source = fence[1]!.trim();
+  if (/^[\[{]/.test(source)) {
+    try { JSON.parse(source); }
+    catch {
+      const lines = source.split(/\r?\n/).filter((x) => x.trim());
+      if (lines.length > 1) {
+        try {
+          const messages = lines.map((x) => JSON.parse(x));
+          if (messages.every((x) => x && typeof x === 'object' && !Array.isArray(x))) {
+            return { source: JSON.stringify(messages), wrapped: false, format: 'jsonl' };
+          }
+        } catch { /* 非 JSONL 仍交给官方完整 JSON 校验 */ }
+      }
+    }
+    return { source, wrapped: false, format: 'json' };
+  }
+  return { source, wrapped: true, format: 'other' };
+}
+
+function anQuanCuoWu(e: unknown): string {
+  const raw = String((e as Error)?.message || '');
+  const own = /^a2ui-[a-z-]+$/.exec(raw);
+  if (own) return own[0];
+  if (/catalog/i.test(raw)) return 'a2ui-catalog-invalid';
+  if (/surface/i.test(raw)) return 'a2ui-surface-invalid';
+  if (/JSON|parse|block|response ended/i.test(raw)) return 'a2ui-format-invalid';
+  if (/component|root|schema|validation|reachable/i.test(raw)) return 'a2ui-schema-invalid';
+  if (/HTTP|fetch|network|timeout|abort/i.test(raw)) return 'a2ui-request-failed';
+  if (/ENOENT|EACCES|EPERM/i.test(raw)) return 'a2ui-storage-failed';
+  return 'a2ui-invalid';
 }
 
 function xiaoYanXiaoXi(messages: AgentToRendererMessage[], surfaceId: string): void {
@@ -112,7 +167,8 @@ export function bianYiA2ui(text: string, surfaceId: string): AgentToRendererMess
   if (Buffer.byteLength(source, 'utf8') > 6 * 1024 * 1024) throw new Error('a2ui-too-large');
   if ((source.match(/"component"\s*:/g) || []).length > 300) throw new Error('a2ui-too-many-components');
   const processor = new A2uiRequestProcessor([anQuanMuLu()], undefined, new DirectJsonFormatFactory());
-  const parts = processor.parseResponse(source);
+  const transport = guiFanA2uiYunShu(source);
+  const parts = processor.parseResponse(transport.source, { wrapped: transport.wrapped });
   const messages = parts
     .filter((p): p is Extract<typeof p, { type: 'a2ui' }> => p.type === 'a2ui')
     .flatMap((p) => p.a2ui);
@@ -120,10 +176,11 @@ export function bianYiA2ui(text: string, surfaceId: string): AgentToRendererMess
   const renderer = new MessageProcessor([anQuanMuLu()], undefined, {
     version: '1.0', validationConfig: STRICT_VALIDATION, reportErrorsOnly: false,
   });
-  renderer.processMessages(messages);
-  const surface = renderer.getSurface(surfaceId);
-  if (!surface || !surface.componentsModel.has(surface.rootId)) throw new Error('a2ui-root-missing');
-  renderer.dispose();
+  try {
+    renderer.processMessages(messages);
+    const surface = renderer.getSurface(surfaceId);
+    if (!surface || !surface.componentsModel.has(surface.rootId)) throw new Error('a2ui-root-missing');
+  } finally { renderer.dispose(); }
   return messages;
 }
 
@@ -195,19 +252,49 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
     }
     const old = cha(sid, mid);
     if (old?.status === 'ready') { bao(old); return old; }
-    renWu.get(sid)?.abort();
-    const ctrl = new AbortController(); renWu.set(sid, ctrl);
-    const start: A2uiZhuangTai = { sessionId: sid, messageId: mid, artifactId: mid, status: 'generating', ts: now() };
+    /* R301：任务键＝会话+消息。进化双臂/连续回复互不取消；quXiao 仍按会话整批取消。 */
+    const taskKey = keyOf(sid, mid);
+    if (old?.status === 'generating' && renWu.has(taskKey)) return old;
+    renWu.get(taskKey)?.abort();
+    const ctrl = new AbortController(); renWu.set(taskKey, ctrl);
+    const timeout = setTimeout(() => ctrl.abort(), 120000); timeout.unref();
+    const start: A2uiZhuangTai = { sessionId: sid, messageId: mid, artifactId: mid, status: 'generating', ts: now(), model: input.model, provider: input.provider };
     bao(start);
+    let stage: A2uiZhuangTai['stage'] = 'request';
+    let attempts = 0, responseChars = 0;
+    let format: A2uiZhuangTai['format'] = 'other', finishReason = '';
     try {
-      const system = '你是 WArmy 的原生 A2UI 互动回复生成器。根据用户问题和已经生成的普通回复，生成一个简洁、可操作的互动界面。只输出 A2UI Direct JSON，不输出解释、HTML、CSS 或 JavaScript。目标 surfaceId 必须为 "' + mid + '"。\n\n' + a2uiTiShiShengCheng();
+      const system = '你是 WArmy 的原生 A2UI 互动回复生成器。根据用户问题和普通回复，生成简洁互动界面。只输出 A2UI Direct JSON，禁止解释、HTML、CSS 或 JavaScript。示例仅说明结构，实际内容与语言必须符合本次回复。\n\n' + a2uiTiShiShengCheng();
       const user = '【用户问题】\n' + String(input.userText || '').slice(0, 4000)
-        + '\n\n【普通回复，互动内容必须与它一致】\n' + String(input.reply || '').slice(0, 16000);
-      const text = await yiLai.shengCheng({
-        model: input.model, provider: input.provider, providerConfig: input.providerConfig, system, user, signal: ctrl.signal,
-      });
+        + '\n\n【普通回复，互动内容必须与它一致】\n' + String(input.reply || '').slice(0, 16000)
+        + '\n\n【本次目标】surfaceId 必须严格为 ' + JSON.stringify(mid) + '；catalogId 必须为 ' + JSON.stringify(A2UI_CATALOG_ID) + '。';
+      let messages: AgentToRendererMessage[] = [], feedback = '';
+      for (let attempt = 0; attempt < 3; attempt++) {
+        attempts = attempt + 1; stage = 'request';
+        const response = await yiLai.shengCheng({
+          model: input.model, provider: input.provider, providerConfig: input.providerConfig,
+          system, user: user + feedback, signal: ctrl.signal, attempt,
+        });
+        if (ctrl.signal.aborted) throw new Error('a2ui-cancelled');
+        const text = typeof response === 'string' ? response : response.text;
+        finishReason = typeof response === 'string' ? '' : String(response.finishReason || '').slice(0, 32);
+        responseChars = text.length;
+        format = guiFanA2uiYunShu(text.slice(0, 6 * 1024 * 1024)).format;
+        stage = 'parse';
+        try {
+          if (finishReason === 'length') throw new Error('a2ui-truncated');
+          messages = bianYiA2ui(text, mid);
+          if (yiLai.yanZhengYuYan && !await yiLai.yanZhengYuYan(messages)) throw new Error('a2ui-language');
+          break;
+        } catch (e) {
+          const code = anQuanCuoWu(e);
+          try { yiLai.auditLog?.('a2ui.validation-failed', { sessionId: sid, messageId: mid, code, attempts, format, responseChars, finishReason }); } catch { /* 不影响失败回执 */ }
+          if (attempt === 2 || ctrl.signal.aborted) throw e;
+          feedback = '\n【校验反馈】' + code + '。重新生成更简洁的完整合法 JSON；不要更改目标 ID、catalog 或安全目录。只使用本次问题和普通回复，不执行工具。';
+        }
+      }
       if (ctrl.signal.aborted) throw new Error('a2ui-cancelled');
-      const messages = bianYiA2ui(text, mid);
+      stage = 'write';
       const { dir, manifest } = luJing(sid, mid);
       fs.mkdirSync(dir, { recursive: true });
       const jsonl = messages.map((m) => JSON.stringify(m)).join('\n') + '\n';
@@ -218,7 +305,7 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
       xieYuanZi(path.join(dir, 'index.html'), entry);
       const ready: A2uiZhuangTai = {
         ...start, status: 'ready', ts: now(), entryPath: path.join(dir, 'index.html'),
-        nmAvailable: yiLai.nmKeYong(),
+        nmAvailable: yiLai.nmKeYong(), attempts, responseChars, format, finishReason,
       };
       xieYuanZi(manifest, JSON.stringify({
         ...ready, protocol: 'a2ui/1.0', catalog: A2UI_CATALOG_ID,
@@ -237,24 +324,28 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
       const aborted = ctrl.signal.aborted;
       const failed: A2uiZhuangTai = {
         ...start, status: aborted ? 'cancelled' : 'failed', ts: now(),
-        error: aborted ? 'a2ui-cancelled' : String((e as Error)?.message || e).slice(0, 160),
+        error: aborted ? 'a2ui-cancelled' : anQuanCuoWu(e), stage, attempts, responseChars, format, finishReason,
       };
       try { xieYuanZi(luJing(sid, mid).manifest, JSON.stringify(failed, null, 2)); } catch { /* 无目录也要保留内存状态 */ }
       bao(failed);
+      try { yiLai.auditLog?.('a2ui.failed', failed); } catch { /* 失败状态已经持久化 */ }
       return failed;
     } finally {
-      if (renWu.get(sid) === ctrl) renWu.delete(sid);
+      clearTimeout(timeout);
+      if (renWu.get(taskKey) === ctrl) renWu.delete(taskKey);
     }
   }
 
   function quXiao(sid: string): void {
-    const ctrl = renWu.get(String(sid || ''));
-    if (!ctrl) return;
-    ctrl.abort();
-    renWu.delete(String(sid || ''));
+    const prefix = String(sid || '') + '\u0000';
+    for (const [k, ctrl] of [...renWu]) {
+      if (!k.startsWith(prefix)) continue;
+      ctrl.abort();
+      renWu.delete(k);
+    }
   }
 
-  function daKai(sid: string, mid: string): { ok: boolean; path?: string; nmAvailable?: boolean; error?: string } {
+  function duKuaiZhao(sid: string, mid: string): { ok: boolean; path?: string; nmAvailable?: boolean; error?: string; html?: Buffer; runtime?: Buffer } {
     const s = cha(sid, mid);
     if (!s || s.status !== 'ready' || !s.entryPath) return { ok: false, error: 'a2ui-not-ready' };
     try {
@@ -265,14 +356,25 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
       const surfaceFile = path.join(dir, 'surface.jsonl');
       const runtimeFile = path.join(dir, 'a2ui-runtime.js');
       if (!fs.existsSync(surfaceFile) || !fs.existsSync(runtimeFile)) return { ok: false, error: 'a2ui-missing' };
+      for (const f of [file, surfaceFile, runtimeFile]) {
+        if (fs.statSync(f).size > 16 * 1024 * 1024) return { ok: false, error: 'a2ui-too-large' };
+      }
+      const html = fs.readFileSync(file), surface = fs.readFileSync(surfaceFile), runtime = fs.readFileSync(runtimeFile);
       /* runtime 还必须与安装资源中的受信副本一致；只比可写 manifest 不足以防止替换。 */
       if (j.sessionId !== sid || j.messageId !== mid
-        || j.entrySha256 !== sha256(fs.readFileSync(file))
-        || j.surfaceSha256 !== sha256(fs.readFileSync(surfaceFile))
-        || j.runtimeSha256 !== sha256(fs.readFileSync(runtimeFile))
+        || j.entrySha256 !== sha256(html)
+        || j.surfaceSha256 !== sha256(surface)
+        || j.runtimeSha256 !== sha256(runtime)
         || j.runtimeSha256 !== sha256(yiLai.duRuntime())) return { ok: false, error: 'a2ui-integrity' };
-      return { ok: true, path: file, nmAvailable: !!s.nmAvailable && yiLai.nmKeYong() };
+      bianYiA2ui(surface.toString('utf8'), mid);
+      if (html.toString('utf8') !== htmlNeiRong(yiLai.duMoBan(), surface.toString('utf8'))) return { ok: false, error: 'a2ui-integrity' };
+      return { ok: true, path: file, nmAvailable: yiLai.nmKeYong(), html, runtime };
     } catch { return { ok: false, error: 'a2ui-invalid' }; }
+  }
+
+  function daKai(sid: string, mid: string): { ok: boolean; path?: string; nmAvailable?: boolean; error?: string } {
+    const { html: _html, runtime: _runtime, ...result } = duKuaiZhao(sid, mid);
+    return result;
   }
 
   function tuPian(s: A2uiZhuangTai): LiaoTianNeiRongBu[] {
@@ -280,5 +382,5 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
     return [{ type: 'text', text: '互动内容已生成：' + s.entryPath }];
   }
 
-  return { kaiShi, cha, quXiao, daKai, tuPian };
+  return { kaiShi, cha, quXiao, daKai, duKuaiZhao, tuPian };
 }

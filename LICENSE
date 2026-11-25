@@ -1,4 +1,4 @@
-MIT License
+Pondsi Attribution License
 
 Copyright (c) 2026 Pondsi
 
@@ -7,24 +7,16 @@ of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+furnished to do so, subject to the following single condition:
 
-1. The above copyright notice and this permission notice shall be included in
-   all copies or substantial portions of the Software.
-
-2. ATTRIBUTION TO PONDSI AND A LINK TO THE ORIGINAL REPOSITORY ARE MANDATORY.
-   This requirement applies to every use of this source code, in whole or in
-   part: the original version, any modified version (modified code), derivative
-   works, and even individual code snippets — and whether the use is private
-   (for yourself) or public (distributed to others). Within the limits allowed
-   by applicable law, any such use is permitted, but you must always:
-     (a) credit Pondsi as the original author; and
-     (b) include a link to the original repository:
-         https://github.com/Pondsi/WArmy
-   The credit and the repository link must be reasonably visible to the
-   recipients of the work — for example in the README, the documentation, the
-   about screen, the package metadata, or the source file headers — and must not
-   be removed or obscured by modification, renaming, or redistribution.
+1. ATTRIBUTION TO PONDSI. Every use of this source code, in whole or in part
+   — the original version, any modified version, derivative works, and even
+   individual code snippets, whether private (for yourself) or public
+   (distributed to others) — must credit Pondsi as the original author in a
+   manner reasonably visible to recipients (for example in the README, the
+   documentation, the about screen, the package metadata, or source file
+   headers). No other restriction applies: a repository link, retention of
+   this full license text, and any specific form of notice are NOT required.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -34,17 +26,21 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+Third-party dependencies, model weights and bundled assets remain under their
+own licenses and acknowledgments (see README / 说明.md); this license covers
+only the original WArmy code authored by Pondsi.
+
 ---
 
 ## Languages / 语言
 
-- English: see body above.
-- 简体中文：见上方英文正文；无论原版、改版（修改后的代码）还是代码片段，无论自用还是分发，均须署名 Pondsi 并附仓库链接 https://github.com/Pondsi/WArmy；作者完全免责。
-- 繁體中文：見上方英文正文；無論原版、改版（修改後的代碼）還是代碼片段，無論自用還是分發，均須署名 Pondsi 並附倉庫連結 https://github.com/Pondsi/WArmy；作者完全免責。
-- 한국어: 위 영문 본문 참조. Pondsi 저작자 표시 필수, 작성자 무보증.
-- Русский: см. текст выше. Обязательно сохранять указание Pondsi; автор без гарантий.
-- 日本語: 上記英文本文を参照。Pondsi 署名の保持は必須、無保証。
-- Español: consulte el texto en inglés arriba. Debe conservarse la atribución a Pondsi; sin garantías.
-- Français: voir le texte anglais ci-dessus. L'attribution à Pondsi est obligatoire; sans garantie.
-- Português: veja o texto em inglês acima. A atribuição a Pondsi é obrigatória; sem garantias.
-- Esperanto: vidu la anglan tekston supre. Pondsi-atribuo estas deviga; sen garantioj.
+- English: see body above. The only condition is attribution to Pondsi.
+- 简体中文：见上方英文正文。唯一使用条件是署名 **Pondsi**；原版、改版、代码片段，自用或分发均适用。不强制附仓库链接，也不强制保留本许可全文。作者完全免责。第三方依赖/模型权重/素材仍各自适用其原许可。
+- 繁體中文：見上方英文正文。唯一使用條件是署名 **Pondsi**；原版、改版、程式碼片段，自用或分發均適用。不強制附倉庫連結，也不強制保留本許可全文。作者完全免責。第三方依賴/模型權重/素材仍各自適用其原許可。
+- 한국어: 위 영문 본문 참조. 유일한 조건은 Pondsi 저작자 표시입니다. 작성자 무보증.
+- Русский: см. текст выше. Единственное условие — указание автора Pondsi; без гарантий.
+- 日本語: 上記英文本文を参照。唯一の条件は Pondsi の署名表示です。無保証。
+- Español: consulte el texto en inglés arriba. La única condición es la atribución a Pondsi; sin garantías.
+- Français: voir le texte anglais ci-dessus. La seule condition est l'attribution à Pondsi; sans garantie.
+- Português: veja o texto em inglês acima. A única condição é a atribuição a Pondsi; sem garantias.
+- Esperanto: vidu la anglan tekston supre. La sola kondiĉo estas atribuo al Pondsi; sen garantioj.

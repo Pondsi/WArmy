@@ -136,6 +136,11 @@ export interface QunXiangmuJilu {
   gateVerify?: string[];
   /** 门禁上次结果（只读事实，供 UI） */
   gateLast?: { at: number; pass: boolean; summary: string };
+  /**
+   * R301：稳定项目 ID（不可变）。既有项目沿用其稳定 groupId；创建者指纹/目录/仓库地址仅作绑定信息，
+   * 不因身份轮换或同路径/同 remote 而改变/合并项目。缺失时上层以 groupId 派生（不猜、不改写旧文件）。
+   */
+  projectId?: string;
 }
 
 /** 台账操作类型的合法集合（解析外来数据时用；不认识的**丢弃**，不是当成 write） */
@@ -379,6 +384,8 @@ export function guiFanHuaXiangMu(raw: unknown): QunXiangmuJilu | undefined {
       summary: asString(quanJu.summary).slice(0, 400),
     };
   }
+  const pid = asString(jiLu.projectId);
+  if (pid) hang.projectId = pid;
   return hang;
 }
 
@@ -412,6 +419,13 @@ export class QunCang {
     return g && g.project ? g.project : undefined;
   }
 
+  /** R301：稳定项目 ID——有不可变 projectId 用它，否则沿用稳定 groupId（目录/remote 不参与派生）。 */
+  projectIdOf(groupId: string): string {
+    const gid = String(groupId || '');
+    const p = this.projectOf(gid);
+    return (p && p.projectId) || gid;
+  }
+
   /**
    * 写入 / 合并项目属性（**只写传进来的字段**；没传的一律保持原样）。
    *
@@ -431,6 +445,8 @@ export class QunCang {
     if (!g) return { ok: false, error: 'group not found' };
     const cur = g.project || kongXiangmuJilu();
     const next: QunXiangmuJilu = { ...cur, ledger: (cur.ledger || []).slice() };
+    /* R301：projectId 不可变——已存在则任何 patch 都不能改；缺失时只允许首次设定。 */
+    if (typeof patch.projectId === 'string' && patch.projectId && !cur.projectId) next.projectId = patch.projectId;
     if (patch.devEnv === 'container' || patch.devEnv === 'host') next.devEnv = patch.devEnv;
     if (typeof patch.runtimeId === 'string') next.runtimeId = patch.runtimeId;
     if (typeof patch.disabledAt === 'number' && Number.isFinite(patch.disabledAt)) next.disabledAt = Math.max(0, patch.disabledAt);

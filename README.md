@@ -13,7 +13,7 @@ WArmy is a local-first desktop workspace for people carrying a project from brie
 [Download for Windows](https://github.com/Pondsi/WArmy/releases) · [Chinese manual](./说明.md) · [Acknowledgments](#acknowledgments) · [License](#documentation-and-license)
 
 [![Release](https://img.shields.io/github/v/release/Pondsi/WArmy)](https://github.com/Pondsi/WArmy/releases)
-[![License](https://img.shields.io/badge/license-MIT%20%2B%20attribution-blue)](./LICENSE)
+[![License](https://img.shields.io/badge/license-Pondsi%20Attribution-blue)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-informational)](https://github.com/Pondsi/WArmy/releases)
 [![Locales](https://img.shields.io/badge/UI%20locales-27-success)](#install)
 
@@ -111,7 +111,7 @@ The conventional local service port is **59599**. Network reachability and remot
 
 Install WArmy, then connect the model endpoint you want to use.
 
-1. Download `WArmy-Setup-0.4.49.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
+1. Download `WArmy-Setup-0.4.50.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
 2. Run the installer, choose a folder, launch **WArmy / 无限牛马**.
 3. First run: choose a language, create your self-custodied identity, save the 24-word mnemonic, set a PIN; add a model provider and create your first workhorse.
 
@@ -138,6 +138,7 @@ WArmy stands on open-source work. Resolved dependency versions are listed in `pn
 - **SQLite** — Public Domain — <https://www.sqlite.org/>; **better-sqlite3** — MIT — <https://github.com/WiseLibs/better-sqlite3>; **better-sqlite3-multiple-ciphers** — MIT — <https://github.com/m4heshd/better-sqlite3-multiple-ciphers>; **SQLCipher** — BSD-style — <https://github.com/sqlcipher/sqlcipher>; **bindings** — MIT — <https://github.com/TooTallNate/node-bindings>; **file-uri-to-path** — MIT — <https://github.com/TooTallNate/file-uri-to-path> — the memory store (FTS5 + optional encryption, subprocess only).
 - **Diwen** — own license — <https://github.com/Pondsi/dsh-diwen> — separate open-source structured fact layer (also on npm as `diwen`).
 - **hash-wasm** — MIT — <https://github.com/Daninet/hash-wasm> — argon2id/hashing in pure WASM (identity & keys).
+- **franc-all** — MIT — <https://github.com/wooorm/franc> — language detection for the AI output-language guard (with **trigram-utils**, **collapse-white-space**, **n-gram**, all MIT).
 - **three.js** — MIT — <https://github.com/mrdoob/three.js>; **@pixiv/three-vrm** — MIT — <https://github.com/pixiv/three-vrm> — 3D/VRM rendering for the mimic (license text bundled beside the vendor bundle).
 - **ONNX Runtime Web** — MIT — <https://github.com/microsoft/onnxruntime> — local embeddings via WASM SIMD/WebGPU.
 - **sherpa-onnx / sherpa-onnx-node** — Apache-2.0 — <https://github.com/k2-fsa/sherpa-onnx> — local speech (subprocess only).
@@ -167,6 +168,6 @@ WArmy stands on open-source work. Resolved dependency versions are listed in `pn
 ## Documentation and license
 
 - [说明.md](./说明.md): full Chinese manual.
-- [LICENSE](./LICENSE): MIT with mandatory attribution to **Pondsi** and a link to <https://github.com/Pondsi/WArmy> — required for original code, modified versions and snippets, personal or distributed.
+- [LICENSE](./LICENSE): Pondsi Attribution License — any use (original, modified, snippets, personal or distributed) is allowed with a single condition: credit **Pondsi**. No repository link or full-license retention is required. Third-party dependencies, model weights and assets keep their own licenses.
 - [SPONSORS.md](./SPONSORS.md): support the project.
 - [Issues](https://github.com/Pondsi/WArmy/issues): bug reports and feature requests.
