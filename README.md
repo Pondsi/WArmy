@@ -111,7 +111,7 @@ The conventional local service port is **59599**. Network reachability and remot
 
 Install WArmy, then connect the model endpoint you want to use.
 
-1. Download `WArmy-Setup-0.4.53.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
+1. Download `WArmy-Setup-0.4.54.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
 2. Run the installer, choose a folder, launch **WArmy / 无限牛马**.
 3. First run: choose a language, create your self-custodied identity, save the 24-word mnemonic, set a PIN; add a model provider and create your first workhorse.
 
@@ -136,7 +136,7 @@ WArmy stands on open-source work. Resolved dependency versions are listed in `pn
 - **DeepSeek Harness (dsh)** — MIT — <https://github.com/deepseek-ai/deepseek-harness> — the agent harness WArmy builds on: bundled runtime + plugin-first compatibility. Companions: **@nanmicoder/dsh-agent-teams** — <https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams>; **node-pty** — MIT — <https://github.com/microsoft/node-pty>; **koffi** — MIT — <https://github.com/Koromix/koffi>; **protobufjs** — BSD-3-Clause — <https://github.com/protobufjs/protobuf.js>; **@google/genai** — Apache-2.0 — <https://github.com/googleapis/js-genai>.
 - **Electron** — MIT — <https://github.com/electron/electron>; **Chromium** — BSD-3-Clause — <https://github.com/chromium/chromium>; **Node.js** — MIT — <https://github.com/nodejs/node> — the desktop shell and runtime (a bundled `node.exe` runs the memory service in its own process).
 - **SQLite** — Public Domain — <https://www.sqlite.org/>; **better-sqlite3** — MIT — <https://github.com/WiseLibs/better-sqlite3>; **better-sqlite3-multiple-ciphers** — MIT — <https://github.com/m4heshd/better-sqlite3-multiple-ciphers>; **SQLCipher** — BSD-style — <https://github.com/sqlcipher/sqlcipher>; **bindings** — MIT — <https://github.com/TooTallNate/node-bindings>; **file-uri-to-path** — MIT — <https://github.com/TooTallNate/file-uri-to-path> — the memory store (FTS5 + optional encryption, subprocess only).
-- **Diwen** — own license — <https://github.com/Pondsi/dsh-diwen> — separate open-source structured fact layer (also on npm as `diwen`).
+- **Diwen** — [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — by **Pondsi**, <https://github.com/Pondsi/Diwen> — concept-coordinate layer, integrated as pinned npm `diwen@6.16.3`. The upstream LICENSE and NOTICE are included unchanged. Mechanical mapping is not semantic approval; uncertain content stays as the original text.
 - **hash-wasm** — MIT — <https://github.com/Daninet/hash-wasm> — argon2id/hashing in pure WASM (identity & keys).
 - **franc-all** — MIT — <https://github.com/wooorm/franc> — language detection for the AI output-language guard (with **trigram-utils**, **collapse-white-space**, **n-gram**, all MIT).
 - **three.js** — MIT — <https://github.com/mrdoob/three.js>; **@pixiv/three-vrm** — MIT — <https://github.com/pixiv/three-vrm> — 3D/VRM rendering for the mimic (license text bundled beside the vendor bundle).

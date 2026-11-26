@@ -60,8 +60,8 @@ importers:
         specifier: workspace:*
         version: link:../sync-protocol
       diwen:
-        specifier: https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz
-        version: https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz
+        specifier: https://registry.npmjs.org/diwen/-/diwen-6.16.3.tgz
+        version: 6.16.3
       franc-all:
         specifier: 7.2.0
         version: 7.2.0
@@ -228,25 +228,21 @@ packages:
     resolution: {integrity: sha512-AAmQa/uI4LDfyY7zldUwU0Qnpv+yjQPxr0k2uJQylo0tyXWzQ1O0bBWfnDmN0ulym124gFRwr+fzlHyvxCt1FA==}
     cpu: [arm64]
     os: [linux]
-    libc: [musl]
 
   '@duckdb/node-bindings-linux-arm64@2.0.0-r.1':
     resolution: {integrity: sha512-V+oOWVY8qq7t5Uh+j8Hf+iwb4pLx2GsxAso1oGBP7ubf38QN1FGoPclJ8ByZob+ZcLdSDgwlS7QUbMB9pnCi2A==}
     cpu: [arm64]
     os: [linux]
-    libc: [glibc]
 
   '@duckdb/node-bindings-linux-x64-musl@2.0.0-r.1':
     resolution: {integrity: sha512-8GCE/ye+w5GJsCgAk2owUyQA55rtoiBRe2T8A42CaqGbNNZm9hOj3C96d6flT82p7YhQVA8AzA40k9Pn30kJDg==}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
 
   '@duckdb/node-bindings-linux-x64@2.0.0-r.1':
     resolution: {integrity: sha512-0VdXZQlCnD6oWwJABkp3ihZGBic/6Ora4PQekHv9jwa4Fe2OVcgm0hGtn6yyNGhURVDzZllMITEF98zdo6ussQ==}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
 
   '@duckdb/node-bindings-win32-arm64@2.0.0-r.1':
     resolution: {integrity: sha512-k47ASHylCPfUe7H+MvaNqsSwXGv8fjxixMF0vqJghp/wUUdAERMi1WNkPIjOj31cJ+O0x+Srdlfe4N0Diofm7Q==}
@@ -516,28 +512,24 @@ packages:
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
-    libc: [glibc]
 
   '@node-rs/jieba-linux-arm64-musl@2.0.4':
     resolution: {integrity: sha512-PyIXG7eyScZ1jN7ZqMS7XE2qei1PVQd3AnvdYwgTaUawkQxNQGeCOGARuzXYxqpYV+ipg5zju+VJ23j3ucE0RQ==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
-    libc: [musl]
 
   '@node-rs/jieba-linux-x64-gnu@2.0.4':
     resolution: {integrity: sha512-VjetEm7IoerpyhIaASJg2HcADFZ+mTEBc18ciKqCt15Wdu1Tmv44vF0XUHKYBH0Q7U3LhoXXswTgjb/pcH3K+Q==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
 
   '@node-rs/jieba-linux-x64-musl@2.0.4':
     resolution: {integrity: sha512-WK9gU+lMq0wAuaDcFaqbr03Rv4/tNb9hFwfG3mYI96uG5TdVK2DBuRKzoPHP7XVz6iEmOu98lfhmL2/1Y0/DAw==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
 
   '@node-rs/jieba-win32-arm64-msvc@2.0.4':
     resolution: {integrity: sha512-tcRW2cMHjYFfDPqG/St59ZoaR34CyLQJ5I4NGhZIfVhbYftJWnjvGPZBFdbudjgRCJ1in6rOZalDNGDex9+DHA==}
@@ -988,9 +980,8 @@ packages:
   dir-compare@4.2.0:
     resolution: {integrity: sha512-2xMCmOoMrdQIPHdsTawECdNPwlVFB9zGcz3kuhmBO6U3oU+UQjsue0i8ayLKpgBcm+hcXPMVSGUN9d+pvJ6+VQ==}
 
-  diwen@https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz:
-    resolution: {tarball: https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz}
-    version: 6.15.2
+  diwen@6.16.3:
+    resolution: {integrity: sha512-sbuQekOnxCV2MTNbAUZTY/u36wQQiL50HXl5b2ZRUWsn3ywu+xSs1J8w72Z6UtRKQ+6jm+etWHbAiv/HY7VZ6A==}
 
   dmg-builder@25.1.8:
     resolution: {integrity: sha512-NoXo6Liy2heSklTI5OIZbCgXC1RzrDQsZkeEwXhdOro3FT1VBOvbubvscdPnjVuQ4AMwwv61oaH96AbiYg9EnQ==}
@@ -1162,12 +1153,12 @@ packages:
 
   glob@7.2.3:
     resolution: {integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   glob@8.1.0:
     resolution: {integrity: sha512-r8hpEjiQEYlF2QU0df3dS+nxxSIreXQS1qRhMJM0Q5NDdR386C7jb7Hwwod8Fgiuex+k0GFjgft18yvxm5XoCQ==}
     engines: {node: '>=12'}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   gopd@1.2.0:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
@@ -2675,7 +2666,7 @@ snapshots:
       minimatch: 3.1.5
       p-limit: 3.1.0
 
-  diwen@https://registry.npmjs.org/diwen/-/diwen-6.15.2.tgz:
+  diwen@6.16.3:
     dependencies:
       '@node-rs/jieba': 2.0.4
 

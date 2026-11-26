@@ -19,6 +19,33 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** npm 包入口与版本共用一份解析：主进程只读元数据，核心仍只在独立 Node 加载。 */
+export interface DiwenBao { dir: string; entry: string; version: string }
+export function duDiwenBao(dir: string): DiwenBao | null {
+  try {
+    const base = path.resolve(dir);
+    const j = JSON.parse(fs.readFileSync(path.join(base, 'package.json'), 'utf8'));
+    if (j.name !== 'diwen' || !/^\d+\.\d+\.\d+$/.test(String(j.version || ''))) return null;
+    const entry = path.resolve(base, String(j.main || 'index.mjs'));
+    if (!entry.startsWith(base + path.sep) || !fs.statSync(entry).isFile()) return null;
+    return { dir: base, entry, version: String(j.version) };
+  } catch { return null; }
+}
+export function biJiaoDiwenBanBen(a: string, b: string): number {
+  const x = a.split('.').map(Number), y = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; }
+  return 0;
+}
+/** 选择最高的完整版本；旧更新目录不能覆盖较新的随包版，同版优先随包。 */
+export function diwenBaoHouXuan(dirs: readonly string[]): DiwenBao[] {
+  const seen = new Set<string>();
+  return dirs.filter((d) => !!d).map(duDiwenBao).filter((b): b is DiwenBao => {
+    if (!b || seen.has(b.dir)) return false;
+    seen.add(b.dir); return true;
+  }).sort((a, b) => biJiaoDiwenBanBen(b.version, a.version));
+}
+
 let qiYong = false; // 主进程按 settings.diwenEnabled 注入；首启落定前默认关
 let siYouPath = '';
 let siYouBaoDir = ''; // R263：私有包目录（~/.diwen/private 同口径，DIWEN_PRIVATE_DIR 注入）
@@ -35,6 +62,8 @@ export function diwenQiYong(): boolean { return qiYong; }
 export function sheZhiDiwenUpdateDir(d: string): void { updateDir = String(d || ''); }
 export function chongQiDiwenWorker(): void {
   if (worker) { try { worker.kill(); } catch { /* noop */ } worker = null; }
+  for (const [, p] of pending) { clearTimeout(p.timer); p.resolve(null); }
+  pending.clear();
   workerFailed = false;
 }
 /** 私有迪文文件初始化（userData 目录）；不存在则建空数组。 */
@@ -89,13 +118,15 @@ function qiWorker(): Promise<ChildProcessWithoutNullStreams | null> {
       } catch { /* 坏行忽略 */ }
     });
     w.on('exit', () => {
+      /* 被替换的旧 worker 退出不能清掉新世代 worker 和它的待响应 RPC。 */
+      if (worker !== w) return;
       worker = null;
       workerFailed = true;
       for (const [, p] of pending) { clearTimeout(p.timer); p.resolve(null); }
       pending.clear();
       if (errBuf) { try { console.error('[diwen-worker]', errBuf.slice(-800)); } catch { /* noop */ } }
     });
-    w.on('error', () => { worker = null; workerFailed = true; });
+    w.on('error', () => { if (worker === w) { worker = null; workerFailed = true; } });
     return Promise.resolve(w);
   } catch { workerFailed = true; return Promise.resolve(null); }
 }
@@ -139,7 +170,7 @@ export async function diwenHua(input: { text?: string; doc?: any }): Promise<Diw
   if (text) {
     const m = await dwCall('call', { fn: 'mapText', args: [text] });
     if (m && m.ok && m.result && m.result.status === 'STRUCTURED' && Array.isArray(m.result.words) && m.result.words.length) {
-      const doc = { reasoning: text, words: m.result.words };
+      const doc = m.result.doc || { reasoning: text, words: m.result.words };
       const v = await dwCall('call', { fn: 'validateDocument', args: [doc] });
       if (v && v.ok && v.result && v.result.valid) {
         const g = await dwCall('call', { fn: 'encode', args: [doc] });
@@ -217,11 +248,11 @@ export async function diwenGeiMoXingWenBen(input: { text?: string; doc?: any }):
 }
 
 /** NL→迪文基线映射（mapText 三态）。 */
-export async function diwenYingShe(text: string): Promise<{ status: string; words: any[]; coverage: number; unavailable?: boolean }> {
+export async function diwenYingShe(text: string): Promise<{ status: string; words: any[]; roots?: number[]; coverage: number; unavailable?: boolean }> {
   const r = await dwCall('call', { fn: 'mapText', args: [String(text || '')] });
   if (!r) return { status: 'REJECT', words: [], coverage: 0, unavailable: true };
   if (!r.ok || !r.result) return { status: 'REJECT', words: [], coverage: 0 };
-  return { status: r.result.status, words: r.result.words || [], coverage: r.result.coverage || 0 };
+  return { status: r.result.status, words: r.result.words || [], roots: r.result.roots || [], coverage: r.result.coverage || 0 };
 }
 
 /** 规范化 + 内容哈希。 */
@@ -247,10 +278,11 @@ export async function diwenXiangDeng(a: any, b: any): Promise<boolean> {
 
 // ── R257：启用状态 / 私有迪文 / 总结完善 ──
 /** 设置页状态（force：未启用也能看版本/词根数）。 */
-export async function diwenZhuangTai(): Promise<{ ok: boolean; available: boolean; enabled: boolean; version?: string; size?: number; privateCount?: number; jieba?: boolean }> {
+export async function diwenZhuangTai(): Promise<{ ok: boolean; available: boolean; enabled: boolean; version?: string; size?: number; privateCount?: number; jieba?: boolean; format?: string; source?: string; dataFormat?: string; semanticApproval?: false }> {
   const r = await dwCall('status', {}, true);
   if (!r || !r.ok || !r.result) return { ok: true, available: false, enabled: qiYong };
-  return { ok: true, available: true, enabled: qiYong, version: r.result.version, size: r.result.size, privateCount: r.result.privateCount, jieba: !!r.result.jieba };
+  return { ok: true, available: true, enabled: qiYong, version: r.result.version, size: r.result.size, privateCount: r.result.privateCount, jieba: !!r.result.jieba,
+    format: r.result.format, source: r.result.source, dataFormat: r.result.dataFormat, semanticApproval: false };
 }
 /** 私有词根变更后刷新子进程词典缓存。 */
 export async function shuaXinDiwenCiDian(): Promise<boolean> {
@@ -283,11 +315,11 @@ export async function shanChuSiYouDiwen(id: number): Promise<{ ok: boolean; coun
   return { ok: true, count: r.result.all.length };
 }
 /** 设置页试探映射（force：未启用也可预览；返回覆盖/未覆盖片段）。 */
-export async function diwenShiTan(text: string): Promise<{ status: string; coverage: number; words: any[]; uncovered: string[]; unavailable?: boolean }> {
+export async function diwenShiTan(text: string): Promise<{ status: string; coverage: number; words: any[]; roots?: number[]; doc?: any; uncovered: string[]; unavailable?: boolean }> {
   const r = await dwCall('call', { fn: 'mapText', args: [String(text || '')] }, true);
   if (!r || !r.ok || !r.result) return { status: 'REJECT', coverage: 0, words: [], uncovered: [], unavailable: true };
   return {
-    status: r.result.status, coverage: r.result.coverage || 0, words: r.result.words || [],
+    status: r.result.status, coverage: r.result.coverage || 0, words: r.result.words || [], roots: r.result.roots || [], doc: r.result.doc,
     uncovered: (r.result.uncovered || []).slice(0, 12).map((s: any) => String(s.surface || '')),
   };
 }

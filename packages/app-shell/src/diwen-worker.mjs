@@ -5,14 +5,19 @@
  * 私有迪文文件由主进程经 DIWEN_PRIVATE_LEXICON 注入；本进程负责校验/合并/挖掘，主进程负责落盘。
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import readline from 'node:readline';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { diwenBaoHouXuan } from './diwen-bridge.js';
 const req = createRequire(import.meta.url);
-/** npm 包版本（DIWEN_VERSION 是格式版本，不是包版本）。 */
-function baoBanBen() {
-  try { return JSON.parse(fs.readFileSync(req.resolve('diwen/package.json'), 'utf8')).version; } catch { return dw ? dw.DIWEN_VERSION : null; }
-}
+const gengXinDir = String(process.env.WARMY_DIWEN_DIR || '');
+let suiBaoDir = '';
+try { suiBaoDir = path.dirname(req.resolve('diwen/package.json')); } catch { /* 无随包版时尝试更新目录 */ }
+const baoHouXuan = diwenBaoHouXuan([suiBaoDir, gengXinDir]);
+let baoDangQian = baoHouXuan[0] || null;
+/** 显示实际加载的包版本；DIWEN_VERSION 单独作为格式版本。 */
+function baoBanBen() { return baoDangQian?.version || null; }
 
 let dw = null;
 /** R259 报障26：原生增强（jieba）要有，且私有词需被分词器认识。
@@ -30,7 +35,7 @@ try {
 const jiebaInstances = new Set();
 let jiebaReady = false;
 try {
-  const reqD = createRequire(req.resolve('diwen/package.json'));
+  const reqD = createRequire(path.join(baoDangQian?.dir || suiBaoDir, 'package.json'));
   const jm = reqD('@node-rs/jieba');
   const OrigJieba = jm.Jieba;
   /** native 类静态方法在 strict 下不可写 ⇒ 替换 exports.Jieba 为子类（迪文分词层解构同一 CJS 缓存）。 */
@@ -56,13 +61,15 @@ function buJiebaCi(words) {
   const buf = Buffer.from(xin.map((w) => w + ' 1000000 n').join('\n') + '\n', 'utf8');
   for (const inst of jiebaInstances) { try { inst.loadDict(buf); } catch { /* skip */ } }
 }
-/* R262：优先加载更新目录（安装更新后的新版），否则回退随包 npm diwen。 */
-const gengXinDir = String(process.env.WARMY_DIWEN_DIR || '');
-if (gengXinDir) { try { dw = await import(pathToFileURL(gengXinDir.replace(/\\/g, '/') + '/src/index.js').href); } catch { dw = null; } }
-if (!dw) { try { dw = await import('diwen'); } catch {
-  const dir = String(process.env.WARMY_DIWEN_DIR || '');
-  if (dir) { try { dw = await import(pathToFileURL(dir.replace(/\\/g, '/') + '/src/index.js').href); } catch { dw = null; } }
-} }
+/* 按 package.main 加载最高的完整版本；支持 npm index.mjs 与历史 src/index.js 布局。 */
+for (const bao of baoHouXuan) {
+  try {
+    dw = await import(pathToFileURL(bao.entry).href);
+    baoDangQian = bao;
+    break;
+  } catch { dw = null; }
+}
+if (!dw) baoDangQian = null;
 
 const siYouPath = () => String(process.env.DIWEN_PRIVATE_LEXICON || '');
 const siYouBaoDir = () => String(process.env.DIWEN_PRIVATE_DIR || '');
@@ -76,9 +83,25 @@ const pinYinOf = (w) => {
 /** worker 自持词典引用：npm loadLexicon(noCache) 不回写模块缓存，刷新后必须换引用。 */
 let lexHuan = null;
 const lex = () => { if (!lexHuan) lexHuan = dw.loadLexicon(); return lexHuan; };
+let indexLex = null, indexHuan = null;
+const ciGenIndex = () => { const l = lex(); if (indexLex !== l) { indexLex = l; indexHuan = dw.rootIndex(l); } return indexHuan; };
 /** 映射契约：确定性词典最长匹配（segmentZh:false）——保证私有词根必中（bundle 经 ESM 引 jieba，CJS 补丁触及不到其分词）。
  *  jieba 原生增强仍加载（jiebaReady 状态供设置页展示/后续 NL 质量增强）。 */
-const yingShe = (text) => dw.mapText(String(text || ''), lex(), { segmentZh: false, warnDegraded: false });
+const yingShe = (text) => {
+  const source = String(text || '');
+  const m = dw.mapText(source, lex(), { segmentZh: false, warnDegraded: false });
+  const contract = dw.wrapAsFillContract(m, source);
+  const doc = dw.fillContractToDoc(contract, source);
+  /* 实际 npm mapText.roots 是概念 ID；用 schema 的合法 ref 保留私有空坐标身份。 */
+  if (Array.isArray(m.roots) && m.roots.length === doc.words.length) {
+    doc.words = doc.words.map((w, i) => {
+      const id = Number(m.roots[i]);
+      return Number.isSafeInteger(id) && ciGenIndex().byId.has(id)
+        ? { ...w, ref: { scheme: 'diwen', id: String(id), type: 'Any' } } : w;
+    });
+  }
+  return { ...m, doc, semanticApproval: false };
+};
 function duSiYou() {
   const p = siYouPath();
   if (!p || !fs.existsSync(p)) return [];
@@ -98,6 +121,20 @@ function renderDiwen(doc) {
   const words = Array.isArray(doc.words) ? doc.words : [];
   for (const w of words) {
     if (!w || typeof w !== 'object') continue;
+    if (!w.surface && !w.lemma_zh && !w.lemma) {
+      const index = ciGenIndex();
+      const id = w.ref?.scheme === 'diwen' ? Number(w.ref.id) : NaN;
+      const root = Number.isSafeInteger(id) ? index.byId.get(id) : index.byCoord.get(`${w.s3a},${w.s3b}`);
+      if (root) {
+        const rendered = dw.renderConcept(root.id, { mode: 'canonical', lex: lex() });
+        const definition = String(root.definitionZh || rendered.definition || '');
+        if (definition) { parts.push(`「${root.lemma_zh}」：${definition}`); continue; }
+        if (rendered.ok && rendered.text) { parts.push(rendered.text); continue; }
+      }
+      /* 没有可验证身份时保留原文，不输出空概念或猜近邻词义。 */
+      if (doc.reasoning) return String(doc.reasoning);
+      continue;
+    }
     const surface = String(w.surface || w.lemma_zh || '');
     const lemma = String(w.lemma_zh || w.lemma || surface);
     const bfo = BFO_ZH[String(w.bfo_type || w.bfo || '')] || String(w.bfo_type || w.bfo || '');
@@ -181,7 +218,7 @@ function waJue(text) {
   return { ok: true, added, all };
 }
 
-function chuLi(req) {
+async function chuLi(req) {
   const { id, fn, args } = req || {};
   const hui = (ok, result, error) => process.stdout.write(JSON.stringify({ id, ok, result, error }) + '\n');
   try {
@@ -189,7 +226,9 @@ function chuLi(req) {
     if (!dw) return hui(false, null, '迪文不可用');
     if (fn === 'status') {
       const l = lex();
-      return hui(true, { version: baoBanBen(), format: dw.DIWEN_VERSION, size: l.size, privateCount: l.privateCount || 0, jieba: jiebaReady });
+      return hui(true, { version: baoBanBen(), format: dw.DIWEN_VERSION, size: l.size, privateCount: l.privateCount || 0, jieba: jiebaReady,
+        source: baoDangQian?.dir === suiBaoDir ? 'bundled' : 'update',
+        dataFormat: fs.existsSync(path.join(baoDangQian.dir, 'dist', 'data.gz')) ? 'gzip' : 'legacy', semanticApproval: false });
     }
     if (fn === 'refresh') {
       lexHuan = dw.loadLexicon(undefined, { noCache: true });
@@ -254,13 +293,14 @@ function chuLi(req) {
       if (args.fn === 'mapText') return hui(true, yingShe(args.args && args.args[0]));
       const f = dw[args.fn];
       if (typeof f !== 'function') return hui(false, null, '未知导出: ' + args.fn);
-      return hui(true, f(...(args.args || [])));
+      /* 最新公共 API 含 Promise 返回值，必须等待再序列化，不能把 Promise 当作 {} 成功回执。 */
+      return hui(true, await f(...(args.args || [])));
     }
     return hui(false, null, '未知方法: ' + fn);
   } catch (e) { return hui(false, null, String((e && e.message) || e).slice(0, 300)); }
 }
 
 const rl = readline.createInterface({ input: process.stdin });
-rl.on('line', (line) => { try { chuLi(JSON.parse(line)); } catch { /* 坏行忽略 */ } });
+rl.on('line', (line) => { try { void chuLi(JSON.parse(line)); } catch { /* 坏行忽略 */ } });
 rl.on('close', () => process.exit(0));
 process.stdout.write(JSON.stringify({ id: 0, ok: true, result: { ready: true, ok: !!dw } }) + '\n');

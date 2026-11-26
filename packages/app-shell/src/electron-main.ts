@@ -286,7 +286,7 @@ import { chuangJianAnQuanGuiDang } from './ying-yong/zong-jie-an-quan-gui-dang.j
 import { taoTtsChatBody, jieXiTtsChatResponse, taoAsrChatBody, jieXiAsrChatResponse, yingGaiHuanChatShi, guiFanAsrGeShi, jieShouGeShi, yanShouGeShi, jianBieGeShi } from '@warmy/providers';
 import { daKaiZhiNengPeiZhi } from './smart-config.js';
 import { luoDianDiwenHua, yongHuKeJianLuoDian, DIWEN_LUO_DIAN, luoDianTongJi, moXingShuRuWenBen } from './diwen-integration.js';
-import { chuShiHuaDiwenSiYou, sheZhiDiwenQiYong, diwenZhuangTai, duSiYouDiwen, tianJiaSiYouDiwen, shanChuSiYouDiwen, diwenShiTan, zongJieGaiJinDiwen, sheZhiDiwenUpdateDir, chongQiDiwenWorker, diwenSiYouBaoLieBiao, diwenSiYouBaoDaoRu, diwenSiYouBaoDaoChu, diwenSiYouBaoShanChu, diwenHua, diwenZhuanZiRanYu, diwenQiYong } from './diwen-bridge.js';
+import { chuShiHuaDiwenSiYou, sheZhiDiwenQiYong, diwenZhuangTai, duSiYouDiwen, tianJiaSiYouDiwen, shanChuSiYouDiwen, diwenShiTan, zongJieGaiJinDiwen, sheZhiDiwenUpdateDir, chongQiDiwenWorker, diwenSiYouBaoLieBiao, diwenSiYouBaoDaoRu, diwenSiYouBaoDaoChu, diwenSiYouBaoShanChu, diwenHua, diwenZhuanZiRanYu, diwenQiYong, duDiwenBao, diwenBaoHouXuan, biJiaoDiwenBanBen } from './diwen-bridge.js';
 import { QUE_DING_CUN, hashWenBen, guiFanSidecar, daiGaiZao, fuJiaGaiZao, moXingWenBen as diwenMoXingWenBen, type Sidecar, type QueDingCunTiaoMu } from './ying-yong/diwen-que-ding-cun.js';
 import { GZ_MO_REN, guiFanGzLiang, panDuanGongZuoLiang, fuPanGongZuoLiang, type GzLiangZhuangTai } from './ying-yong/zong-jie-gong-zuo-liang.js';
 import { chuangJianJinHuaZhiLi, type JinHuaTiAn } from './ying-yong/zi-wo-jin-hua-zhi-li.js';
@@ -31162,52 +31162,66 @@ function diwenYiAnZhuangBanBen(): string | null {
   let suiBao = '';
   try { suiBao = path.dirname(require.resolve('diwen/package.json')); } catch { /* noop */ }
   const hou = [
-    String(s?.diwenUpdateDir || ''),
     suiBao,
+    path.join(process.resourcesPath || '', 'node_modules', 'diwen'),
     path.join(process.resourcesPath || '', 'app', 'node_modules', 'diwen'),
     path.join(app.getAppPath(), 'node_modules', 'diwen'),
     path.join(app.getAppPath(), '..', 'node_modules', 'diwen'),
+    String(s?.diwenUpdateDir || ''),
   ];
-  for (const d of hou) {
-    if (!d) continue;
-    try { const j = JSON.parse(fs.readFileSync(path.join(d, 'package.json'), 'utf8')); if (j.version) return String(j.version); } catch { /* next */ }
-  }
-  return null;
+  return diwenBaoHouXuan(hou)[0]?.version || null;
 }
 chuliIpc('warmy:diwenGengXinJianCha', async () => {
   try {
-    const installed = diwenYiAnZhuangBanBen();
+    const running = await diwenZhuangTai();
+    const installed = running.version || diwenYiAnZhuangBanBen();
     let latest: string | null = null; let err = '';
     try {
       const r = await fetch('https://registry.npmjs.org/diwen', { signal: AbortSignal.timeout(20000) });
+      if (!r.ok) throw new Error('registry-http-' + r.status);
       const j = (await r.json()) as { 'dist-tags'?: { latest?: string } };
-      latest = String(j?.['dist-tags']?.latest || '') || null;
+      latest = /^\d+\.\d+\.\d+$/.test(String(j?.['dist-tags']?.latest || '')) ? String(j['dist-tags']?.latest) : null;
       if (!latest) err = 'registry-empty';
     } catch (e) { err = xiJingCuoWu(e).slice(0, 160); }
-    return { ok: true, installed, latest, hasUpdate: !!(installed && latest && installed !== latest), error: err || undefined };
+    return { ok: true, installed, latest, hasUpdate: !!(latest && (!installed || biJiaoDiwenBanBen(latest, installed) > 0)), error: err || undefined };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+let diwenGengXinZaiTu = false;
 chuliIpc('warmy:diwenGengXinAnZhuang', async () => {
+  if (diwenGengXinZaiTu || zaiTuLiao.size) return { ok: false, error: 'diwen-update-busy' };
+  diwenGengXinZaiTu = true;
+  const oldDir = String((settingsStore?.load() as { diwenUpdateDir?: string })?.diwenUpdateDir || '');
+  let switched = false;
   try {
-    const jc = await (async () => {
-      const r = await fetch('https://registry.npmjs.org/diwen', { signal: AbortSignal.timeout(20000) });
-      const j = (await r.json()) as { 'dist-tags'?: { latest?: string } };
-      return String(j?.['dist-tags']?.latest || '') || null;
-    })();
-    if (!jc) return { ok: false, error: 'registry-empty' };
-    const dir = path.join(app.getPath('userData'), 'diwen-update');
+    const r0 = await fetch('https://registry.npmjs.org/diwen', { signal: AbortSignal.timeout(20000) });
+    if (!r0.ok) throw new Error('registry-http-' + r0.status);
+    const j = (await r0.json()) as { 'dist-tags'?: { latest?: string } };
+    const jc = String(j?.['dist-tags']?.latest || '');
+    if (!/^\d+\.\d+\.\d+$/.test(jc)) return { ok: false, error: 'registry-version-invalid' };
+    const running = await diwenZhuangTai();
+    if (running.available && running.version && biJiaoDiwenBanBen(jc, running.version) <= 0) return { ok: true, version: running.version };
+    /* 按版本安装，下载失败不覆盖现用包；npm 校验 registry 的包完整性，禁止执行安装脚本。 */
+    const dir = path.join(app.getPath('userData'), 'diwen-update', jc);
     fs.mkdirSync(dir, { recursive: true });
     const bj = path.join(dir, 'package.json');
     if (!fs.existsSync(bj)) fs.writeFileSync(bj, JSON.stringify({ name: 'warmy-diwen-update', private: true, dependencies: {} }, null, 2));
-    const r = await npmSpawnSync(['install', 'diwen@' + jc, '--prefix', dir, '--no-audit', '--no-fund'], { timeout: 10 * 60 * 1000 });
-    if (r.status !== 0) return { ok: false, error: String(r.stderr || r.error || 'npm-failed').slice(0, 200) };
+    const r = await npmSpawnSync(['install', 'diwen@' + jc, '--prefix', dir, '--registry=https://registry.npmjs.org', '--save-exact', '--ignore-scripts', '--no-audit', '--no-fund', '--min-release-age=0'], { timeout: 10 * 60 * 1000 });
+    if (r.status !== 0) return { ok: false, error: xiJingCuoWu(r.stderr || r.error || 'npm-failed').slice(0, 200) };
     const mu = path.join(dir, 'node_modules', 'diwen');
-    if (!fs.existsSync(path.join(mu, 'package.json'))) return { ok: false, error: 'install-missing' };
-    settingsStore?.save({ diwenUpdateDir: mu } as never);
+    if (duDiwenBao(mu)?.version !== jc) return { ok: false, error: 'install-version-mismatch' };
+    if (zaiTuLiao.size) return { ok: false, error: 'diwen-update-busy' };
     sheZhiDiwenUpdateDir(mu);
+    switched = true;
     chongQiDiwenWorker();
-    return { ok: true, version: jc, dir: mu };
-  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+    const state = await diwenZhuangTai();
+    const mapped = state.available ? await diwenShiTan('分派执行召回') : null;
+    if (!state.available || state.version !== jc || !mapped?.words.length) throw new Error('diwen-update-health-failed');
+    settingsStore?.save({ diwenUpdateDir: mu } as never);
+    return { ok: true, version: state.version, dir: mu };
+  } catch (e) {
+    if (switched) { sheZhiDiwenUpdateDir(oldDir); chongQiDiwenWorker(); }
+    return { ok: false, error: xiJingCuoWu(e) };
+  } finally { diwenGengXinZaiTu = false; }
 });
 
 /* ══ R262：空闲定时全量更新检查（仅检查不升级不改动・一天最多一次・必须空闲） ══

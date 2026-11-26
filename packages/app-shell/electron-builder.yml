@@ -34,8 +34,8 @@ extraResources:
       - "!**/rollup.config.*"
       - "!**/biome.json"
       - "!src/**"
-  # R257：diwen（迪文 npm 包，纯 ESM 零依赖，运行期入口即 src/）——同 hash-wasm 口径
-  # 拎进 resources/app/node_modules/，打包态 import('diwen') 才有解析目标；不可排除 src。
+  # Diwen npm 6.16：保留 index.mjs/env.cjs/core.mjs/data.gz 与 CC BY 4.0 LICENSE/NOTICE。
+  # extraResources 相对 resources，平铺到 resources/node_modules；核心只由独立 Node worker 加载。
   - from: node_modules/diwen
     to: node_modules/diwen
     filter:
@@ -43,6 +43,11 @@ extraResources:
       - "!**/*.map"
       - "!**/tests/**"
       - "!**/test/**"
+  # Diwen 的原生分词只在 worker 加载；pinyin-pro 用于私有概念的必需拼音字段。
+  - from: ../../node_modules/.pnpm/@node-rs+jieba@2.0.4/node_modules/@node-rs/jieba
+    to: node_modules/@node-rs/jieba
+  - from: node_modules/pinyin-pro
+    to: node_modules/pinyin-pro
   # R300：A2UI 官方协议/渲染依赖；主 files 排除 node_modules，必须平铺到运行时可解析链。
   - from: node_modules/@a2ui/agent
     to: node_modules/@a2ui/agent
@@ -164,6 +169,8 @@ win:
   # 记忆服务必须跑在真正的 Node 上（ADR 不变量 #4），所以把捆绑 Node 一起带上。
   # 只带当前平台，避免把另外 4 个平台的安装包也塞进去。
   extraResources:
+    - from: ../../node_modules/.pnpm/@node-rs+jieba-win32-x64-msvc@2.0.4/node_modules/@node-rs/jieba-win32-x64-msvc
+      to: node_modules/@node-rs/jieba-win32-x64-msvc
     - from: ../../resources/node/win-x64
       to: node/win-x64
       filter:
