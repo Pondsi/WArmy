@@ -297,6 +297,7 @@ import { chuangJianJinHuaZhiLi, type JinHuaTiAn } from './ying-yong/zi-wo-jin-hu
 import { jiHuaBiaoTiGuiYi, jiHuaBuKeBian, yanZhengJiHuaZhengJu } from './ying-yong/ji-hua-zhi-zhen.js';
 import { chuangJianA2uiHuiFu } from './ying-yong/a2ui-hui-fu.js';
 import { chuangJianA2uiLiuLanQi } from './ying-yong/a2ui-liu-lan-qi.js';
+import { chuangJianBeiJingTu } from './ying-yong/bei-jing-tu.js';
 import { jieXiAiYuYan, aiYuYanTiShi, chuangJianYuYanJianCe, baoZhuangYuYan, yuYanLunYuJing, type YuYanLun, type YuYanCeJi } from './ying-yong/ai-yu-yan-yue-shu.js';
 import { qingChuModelFanWei, zhuJiShouQuanFanWei, kbCengFanWei, guoLuJieGuo, CENG_SESSION, huiTianXiangMuYingShe } from './ying-yong/xiang-mu-ji-yi-bian-jie.js';
 import { jianJinZhaoHui, muLuSanJi, type ZhaoHuiGuiJi } from './ying-yong/ji-yi-zhao-hui.js';
@@ -15578,6 +15579,23 @@ chuliIpc('warmy:qunGaiMing', (_e, p0?: { groupId?: string; ming?: string }) =>
     { ok: false, error: 'group store unavailable' }
   )
 );
+/** R309②：牛马改名落盘 settings.instances（头部双击改名；重启不回退）。 */
+chuliIpc('warmy:shiLiGaiMing', (_e, p0?: { id?: string; ming?: string }) => {
+  try {
+    const id = String(p0?.id || '').trim();
+    const ming = String(p0?.ming || '').trim();
+    if (!id || !ming) return { ok: false, error: '参数缺失' };
+    if (ming.length > 60) return { ok: false, error: '名称过长（最多 60 字）' };
+    const s = settingsStore?.load() as { instances?: Array<Record<string, unknown>> } | undefined;
+    const list = Array.isArray(s?.instances) ? [...s!.instances] : [];
+    const i = list.findIndex((x) => String(x?.id || '') === id);
+    if (i < 0) return { ok: false, error: 'instance-not-found' };
+    list[i] = { ...list[i], ming, name: ming };
+    settingsStore?.save({ instances: list } as never);
+    try { audit?.log('instance.rename', { id, ming }); } catch { /* noop */ }
+    return { ok: true, ming };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 
 // ── 群聊/项目停用/启用：写 groups.json 的 stoppedAt（渲染层灰头像 + 圆形灰色停用图标） ──
 chuliIpc('warmy:qunTingYong', (_e, p0?: { groupId?: string; ting?: boolean }) =>
@@ -23800,6 +23818,31 @@ const a2uiHuiFu = chuangJianA2uiHuiFu({
 });
 chuliIpc('warmy:a2uiZhuangTaiCha', (_e, p0?: { sessionId?: string; messageId?: string }) => ({ ok: true, state: a2uiHuiFu.cha(String(p0?.sessionId || ''), String(p0?.messageId || '')) }));
 chuliIpc('warmy:a2uiDaKai', (_e, p0?: { sessionId?: string; messageId?: string }) => a2uiHuiFu.daKai(String(p0?.sessionId || ''), String(p0?.messageId || '')));
+/** R310①：内联互动面只取完整性校验后的 surface.jsonl 快照（不暴露裸路径）。 */
+chuliIpc('warmy:a2uiNeiQian', (_e, p0?: { sessionId?: string; messageId?: string }) => {
+  const r = a2uiHuiFu.duKuaiZhao(String(p0?.sessionId || ''), String(p0?.messageId || ''));
+  if (!r.ok || !r.jsonl) return { ok: false, error: r.error || 'a2ui-invalid' };
+  return { ok: true, jsonl: r.jsonl };
+});
+/** R310②：全窗口背景图（内置5＋本地最近5＋透明度＋四种铺法）。 */
+const beiJingTu = chuangJianBeiJingTu({
+  userData: app.getPath('userData'),
+  neiZhiMuLu: path.join(__dirname, 'renderer', 'assets', 'bg'),
+  duSheZhi: () => (settingsStore?.load() as unknown as Record<string, unknown>) || {},
+  xieSheZhi: (p) => { try { settingsStore?.save(p as never); } catch { /* 落盘失败不挡界面 */ } },
+  suoYouChuangKou: () => BrowserWindow.getAllWindows(),
+  guangBo: (channel, data) => broadcastToWindows(channel, data),
+});
+app.on('browser-window-created', (_e, win) => { try { beiJingTu.guaChuangKou(win); } catch { /* noop */ } });
+chuliIpc('warmy:beiJingTuDu', () => beiJingTu.du());
+chuliIpc('warmy:beiJingTuShe', (_e, p0?: { src?: string; opacity?: number; mode?: string; tileSize?: number }) =>
+  beiJingTu.she({ src: p0?.src, opacity: p0?.opacity, mode: p0?.mode as never, tileSize: p0?.tileSize }));
+chuliIpc('warmy:beiJingTuXuan', () => beiJingTu.xuanBenDi());
+/** 仅测试用（WARMY_TEST_HOOKS=1）：本地图复制＋LRU（与选择弹窗同一逻辑，不弹窗）。 */
+chuliIpc('warmy:testBeiJingTuJia', (_e, p0?: { path?: string }) => {
+  if (process.env.WARMY_TEST_HOOKS !== '1') return { ok: false, error: 'test-hooks-disabled' };
+  return beiJingTu.jiaBenDi(String(p0?.path || ''));
+});
 chuliIpc('warmy:a2uiNmKai', (_e, p0?: { sessionId?: string; messageId?: string }) => {
   const sid = String(p0?.sessionId || ''), mid = String(p0?.messageId || '');
   const checked = a2uiHuiFu.daKai(sid, mid);
@@ -23835,7 +23878,8 @@ function a2uiPairZhuangTai(sid: string, pair: unknown): unknown {
 chuliIpc('warmy:a2uiChongShi', async (_e, p0?: { sessionId?: string; messageId?: string }) => {
   const sid = String(p0?.sessionId || ''), mid = String(p0?.messageId || '');
   const state = a2uiHuiFu.cha(sid, mid);
-  if (!state || !['failed', 'cancelled', 'interrupted'].includes(state.status)) return { ok: false, error: 'a2ui-not-retryable' };
+  /* R310①：无状态＝首次手动生成；ready＝重新生成；failed/cancelled/interrupted＝重试。 */
+  if (state && !['failed', 'cancelled', 'interrupted', 'ready', 'generating'].includes(state.status)) return { ok: false, error: 'a2ui-not-retryable' };
   const records = chatLogs.get(sid) || [], at = records.findIndex((x) => x.id === mid);
   let reply = '', userText = '';
   if (at >= 0) {
@@ -23860,7 +23904,7 @@ chuliIpc('warmy:a2uiChongShi', async (_e, p0?: { sessionId?: string; messageId?:
     if (!reply) return { ok: false, error: 'a2ui-message-missing' };
   }
   const settings = settingsStore?.load();
-  const id = String(state.provider || '');
+  const id = String(state?.provider || providerCfg.presetId || '');
   const configured = settings?.providers?.find((x) => x.id === id);
   const current = id && providerCfg.presetId === id ? providerCfg : undefined;
   if (!id || (!configured && !current)) return { ok: false, error: 'a2ui-provider-missing' };
@@ -23869,7 +23913,7 @@ chuliIpc('warmy:a2uiChongShi', async (_e, p0?: { sessionId?: string; messageId?:
     apiKey: protocol === 'ollama' ? '' : await jiexiGongyingshangMiyao(id, current?.apiKey) };
   if (protocol !== 'ollama' && !snapshot.apiKey) return { ok: false, error: 'a2ui-provider-missing' };
   void a2uiHuiFu.kaiShi({ sessionId: sid, messageId: mid, reply, userText,
-    model: String(state.model || ''), provider: id, providerConfig: snapshot });
+    model: String(state?.model || (at >= 0 ? (records[at] as { moXing?: string })?.moXing : '') || current?.model || ''), provider: id, providerConfig: snapshot, force: true });
   return { ok: true, state: a2uiHuiFu.cha(sid, mid) };
 });
 chuliIpc('warmy:a2uiQuXiao', (_e, p0?: { sessionId?: string }) => { a2uiHuiFu.quXiao(String(p0?.sessionId || '')); return { ok: true }; });

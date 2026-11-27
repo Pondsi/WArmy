@@ -56,6 +56,29 @@
     } catch { /* 监听失败不影响编辑 */ }
   }
 
+  /* R310⑤：Markdown 格式候选触发键（默认 Ctrl+Space，可在设置→快捷改）。
+   * 作用域：聊天编辑器模式 或 nm 打开 markdown 可编辑时，#wenBen 可见即生效。 */
+  const mdFmtMod = /Mac|iPhone|iPad/i.test(String(navigator.platform || '')) ? 'Meta' : 'Ctrl';
+  const mdFmtGuiYi = (s) => String(s || '').replace(/\{mod\}/g, mdFmtMod).replace(/\bCmd\b/g, 'Meta');
+  let mdFmtJian = mdFmtGuiYi('{mod}+Space');
+  try {
+    window.warmy.settingsGet?.().then((r) => {
+      const s = (r && r.settings) || {};
+      if (s.shortcuts && Object.prototype.hasOwnProperty.call(s.shortcuts, 'mdFormat')) mdFmtJian = mdFmtGuiYi(s.shortcuts.mdFormat);
+      if (s.mdNavKeys) window.warmyMdFormat?.setNavKeys(s.mdNavKeys);
+    }).catch(() => { /* 读不到就用默认 */ });
+  } catch { /* noop */ }
+  document.addEventListener('keydown', (e) => {
+    const c = zuHeFromEvent(e);
+    if (!c || c !== mdFmtJian) return;
+    const tb = el('wenBen');
+    if (!tb || tb.offsetParent === null) return;
+    if (!chatEditor && !zt.keBianJi) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.warmyMdFormat?.toggle(tb);
+  }, true);
+
   /* ── 主题 / 强调色 / 字体颜色 ─────────────────────────────
    * 参数优先；缺 theme 时用系统深浅色；再取不到用 CSS 默认值。
    * 这里**故意不监听** prefers-color-scheme 变化：主界面改主题时 nm 不自动刷新，
@@ -2427,7 +2450,8 @@ hui();
       nei.innerHTML = '<iframe sandbox="allow-same-origin" title="效果预览"></iframe>';
       f = nei.querySelector('iframe');
     }
-    const yang = '<style>html,body{margin:0}body{padding:16px;font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-size:14px;line-height:1.65;color:#1b1b1b;background:#fff}img{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:break-word;background:#f6f6f6;padding:10px;border-radius:6px}code{font-family:Consolas,monospace;font-size:13px}table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:4px 8px;text-align:left}blockquote{margin:0 0 1em;padding-left:12px;border-left:3px solid #ddd;color:#555}a{color:#8a5a3c;text-decoration:underline}a.nmLianJie{cursor:pointer}</style>';
+    const yang = '<style>html,body{margin:0}body{padding:16px;font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-size:14px;line-height:1.65;color:#1b1b1b;background:#fff}img{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:break-word;background:#f6f6f6;padding:10px;border-radius:6px}code{font-family:Consolas,monospace;font-size:13px}table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:4px 8px;text-align:left}blockquote{margin:0 0 1em;padding-left:12px;border-left:3px solid #ddd;color:#555}a{color:#8a5a3c;text-decoration:underline}a.nmLianJie{cursor:pointer}'
+      + '/* R310⑤ 扩展显示 */.mdBiao{width:100%;margin:6px 0}.mdBiao th{background:#f2f2f2}.mdTask{list-style:none;display:flex;gap:6px;align-items:flex-start}.mdTask input{margin-top:3px}.mdImg{border-radius:6px}.mdGaoLiang{background:#f3e2c8;padding:0 2px;border-radius:3px}.mdSpoiler{border-bottom:1px dashed #999}.mdMath{font-family:Consolas,monospace}.mdMathKuai,.mdFront,.mdSuoJin{background:#f6f6f6;border-radius:6px;padding:8px;overflow:auto}.mdCallout{border-left:3px solid #a87654;background:#f7efe7;padding:6px 10px;margin:6px 0;border-radius:4px}.mdCallout-warning,.mdCallout-caution{border-left-color:#c05050;background:#f7e7e7}.mdCalloutBiao{display:block;font-weight:600;font-size:12px;margin-bottom:2px}.mdDingYi dt{font-weight:600}.mdDingYi dd{margin:2px 0 6px 16px;color:#666}.mdZhuQu{font-size:12px;color:#666}hr{border:0;border-top:1px solid #ddd;margin:8px 0}</style>';
     f.srcdoc = '<!doctype html><html><head><meta charset="utf-8">' + yang + '</head><body>'
       + (zt.fenLan === 'md' ? markdownToHtml(wen) : linkifyCunWen(wen)) + '</body></html>';
     /** R138：每次重绘后重绑链接点击（Ctrl+开新窗） */
@@ -2462,12 +2486,23 @@ hui();
     anPaiYuLan.ding = setTimeout(gengXinYuLan, 320);
   }
   function markdownToHtml(src) {
-    const lines = String(src || '').split(/\r?\n/);
+    /* R310⑤：行先转义；CommonMark/GFM 扩展走 md-extend.js 共用助手 */
+    const MX = window.warmyMdExtend || null;
+    let work = String(src || '').split(/\r?\n/).map(escapeHtml);
     let out = '';
     let list = '';
     let code = null;
+    let zhuDefs = null;
+    if (MX) {
+      const fm = MX.frontMatterAt(work);
+      if (fm) { out += fm.html; work = work.slice(fm.next); }
+      const zz = MX.chouZhu(work);
+      zhuDefs = zz.defs; work = zz.rest;
+      work = MX.setextGuiBing(work);
+    }
     const inline = (s) => {
-      let x = escapeHtml(s);
+      const bh = MX ? MX.baoHu(s) : null;
+      let x = bh ? bh.x : String(s);
       x = x.replace(/`([^`]+)`/g, '<code>$1</code>');
       x = x.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
       x = x.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
@@ -2478,29 +2513,52 @@ hui();
       const tiShi = '按住 Ctrl 并点击，即可在新窗口打开';
       x = x.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a class="nmLianJie" href="$2" data-nm-lei="web" title="' + tiShi + '" rel="noreferrer">$1</a>');
       x = x.replace(/\[([^\]]+)\]\(((?!https?:)[^)\s]+)\)/g, '<a class="nmLianJie" href="$2" data-nm-lei="file" title="' + tiShi + '">$1</a>');
-      return x;
+      if (MX) x = MX.inlineKuoZhan(x, zhuDefs);
+      return bh ? bh.huan(x) : x;
     };
     const closeList = () => { if (list) { out += '<ul>' + list + '</ul>'; list = ''; } };
-    for (const raw of lines) {
+    for (let i = 0; i < work.length; i++) {
+      const raw = work[i];
       const line = raw.replace(/\s+$/, '');
       if (/^```/.test(line)) {
         if (code === null) { closeList(); code = []; }
-        else { out += '<pre><code>' + escapeHtml(code.join('\n')) + '</code></pre>'; code = null; }
+        else { out += '<pre><code>' + code.join('\n') + '</code></pre>'; code = null; }
         continue;
       }
       if (code !== null) { code.push(raw); continue; }
       if (!line.trim()) { closeList(); continue; }
+      if (MX) {
+        const tb = MX.tableAt(work, i, inline);
+        if (tb) { closeList(); out += tb.html; i = tb.next - 1; continue; }
+        const ind = MX.indentAt(work, i);
+        if (ind) { closeList(); out += ind.html; i = ind.next - 1; continue; }
+        const ma = MX.mathAt(work, i);
+        if (ma) { closeList(); out += ma.html; i = ma.next - 1; continue; }
+        const dl = MX.defAt(work, i, inline);
+        if (dl) { closeList(); out += dl.html; i = dl.next - 1; continue; }
+      }
       const h = /^(#{1,6})\s+(.*)$/.exec(line);
       if (h) { closeList(); out += '<h' + h[1].length + '>' + inline(h[2]) + '</h' + h[1].length + '>'; continue; }
-      if (/^>\s?/.test(line)) { closeList(); out += '<blockquote>' + inline(line.replace(/^>\s?/, '')) + '</blockquote>'; continue; }
-      if (/^\s*[-*+]\s+/.test(line)) { list += '<li>' + inline(line.replace(/^\s*[-*+]\s+/, '')) + '</li>'; continue; }
-      if (/^\s*\d+\.\s+/.test(line)) { list += '<li>' + inline(line.replace(/^\s*\d+\.\s+/, '')) + '</li>'; continue; }
-      if (/^(-{3,}|\*{3,})$/.test(line.trim())) { closeList(); out += '<hr>'; continue; }
+      if (MX) {
+        const co = MX.calloutAt(line);
+        if (co) { closeList(); out += MX.calloutHtml(co, inline(co.rest)); continue; }
+      }
+      if (/^&gt;\s?/.test(line)) { closeList(); out += '<blockquote>' + inline(line.replace(/^&gt;\s?/, '')) + '</blockquote>'; continue; }
+      const ulM = /^\s*[-*+]\s+(.*)$/.exec(line);
+      const olM = /^\s*\d+\.\s+(.*)$/.exec(line);
+      if (ulM || olM) {
+        const rest = (ulM || olM)[1];
+        const tk = MX ? MX.taskMatch(rest) : null;
+        list += tk ? MX.taskHtml(inline(tk.content), tk.checked) : '<li>' + inline(rest) + '</li>';
+        continue;
+      }
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) { closeList(); out += '<hr>'; continue; }
       closeList();
       out += '<p>' + inline(line) + '</p>';
     }
-    if (code !== null) out += '<pre><code>' + escapeHtml(code.join('\n')) + '</code></pre>';
+    if (code !== null) out += '<pre><code>' + code.join('\n') + '</code></pre>';
     closeList();
+    if (MX && zhuDefs) out += MX.zhuHtml(zhuDefs, inline);
     return out;
   }
 

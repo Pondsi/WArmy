@@ -16,6 +16,14 @@ contextBridge.exposeInMainWorld('warmy', {
   a2uiZhuangTaiCha: (p) => ipcRenderer.invoke('warmy:a2uiZhuangTaiCha', p),
   a2uiDaKai: (p) => ipcRenderer.invoke('warmy:a2uiDaKai', p),
   a2uiNmKai: (p) => ipcRenderer.invoke('warmy:a2uiNmKai', p),
+  /** R310①：内联互动面取校验后的 surface.jsonl（只读快照，不落裸路径） */
+  a2uiNeiQian: (p) => ipcRenderer.invoke('warmy:a2uiNeiQian', p),
+  /** R310②：背景图设置读/写/选本地 */
+  beiJingTuDu: () => ipcRenderer.invoke('warmy:beiJingTuDu'),
+  beiJingTuShe: (p) => ipcRenderer.invoke('warmy:beiJingTuShe', p),
+  beiJingTuXuan: () => ipcRenderer.invoke('warmy:beiJingTuXuan'),
+  testBeiJingTuJia: (p) => ipcRenderer.invoke('warmy:testBeiJingTuJia', p),
+  onBeiJingTuBian: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:beiJingTuBian', h); return () => ipcRenderer.removeListener('warmy:beiJingTuBian', h); },
   a2uiBrowserKai: (p) => ipcRenderer.invoke('warmy:a2uiBrowserKai', p),
   a2uiChongShi: (p) => ipcRenderer.invoke('warmy:a2uiChongShi', p),
   a2uiQuXiao: (p) => ipcRenderer.invoke('warmy:a2uiQuXiao', p),
@@ -109,6 +117,8 @@ contextBridge.exposeInMainWorld('warmy', {
   groupList: () => ipcRenderer.invoke('warmy:qunLieBiao'),
   /** 第 128 轮：群聊/项目改名与停用/启用（落盘 groups.json；渲染层弹窗点名称直接改、右键菜单停用） */
   qunGaiMing: (p) => ipcRenderer.invoke('warmy:qunGaiMing', p),
+  /* R309②：牛马改名（头部双击） */
+  shiLiGaiMing: (p) => ipcRenderer.invoke('warmy:shiLiGaiMing', p),
   qunTingYong: (p) => ipcRenderer.invoke('warmy:qunTingYong', p),
   qunChongJian: (payload) => ipcRenderer.invoke('warmy:qunChongJian', payload),
   waiBuBianJi: (payload) => ipcRenderer.invoke('warmy:waiBuBianJi', payload),

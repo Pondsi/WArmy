@@ -249,13 +249,15 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
     model: string;
     provider: string;
     providerConfig?: A2uiProviderPeiZhi;
+    /** R310①：手动生成/重新生成（马头确认框）不受全局开关限制，且 ready 也允许重跑。 */
+    force?: boolean;
   }): Promise<A2uiZhuangTai> {
     const sid = String(input.sessionId || ''), mid = String(input.messageId || '');
-    if (!yiLai.peizhi().a2uiReplyEnabled || !sid || !mid || !String(input.reply || '').trim()) {
+    if ((!yiLai.peizhi().a2uiReplyEnabled && !input.force) || !sid || !mid || !String(input.reply || '').trim()) {
       return { sessionId: sid, messageId: mid, artifactId: mid, status: 'cancelled', ts: now() };
     }
     const old = cha(sid, mid);
-    if (old?.status === 'ready') { bao(old); return old; }
+    if (old?.status === 'ready' && !input.force) { bao(old); return old; }
     /* R301：任务键＝会话+消息。进化双臂/连续回复互不取消；quXiao 仍按会话整批取消。 */
     const taskKey = keyOf(sid, mid);
     if (old?.status === 'generating' && renWu.has(taskKey)) return old;
@@ -349,7 +351,7 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
     }
   }
 
-  function duKuaiZhao(sid: string, mid: string): { ok: boolean; path?: string; nmAvailable?: boolean; error?: string; html?: Buffer; runtime?: Buffer } {
+  function duKuaiZhao(sid: string, mid: string): { ok: boolean; path?: string; nmAvailable?: boolean; error?: string; html?: Buffer; runtime?: Buffer; jsonl?: string } {
     const s = cha(sid, mid);
     if (!s || s.status !== 'ready' || !s.entryPath) return { ok: false, error: 'a2ui-not-ready' };
     try {
@@ -372,12 +374,12 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
         || j.runtimeSha256 !== sha256(yiLai.duRuntime())) return { ok: false, error: 'a2ui-integrity' };
       bianYiA2ui(surface.toString('utf8'), mid);
       if (html.toString('utf8') !== htmlNeiRong(yiLai.duMoBan(), surface.toString('utf8'), sid, mid)) return { ok: false, error: 'a2ui-integrity' };
-      return { ok: true, path: file, nmAvailable: yiLai.nmKeYong(), html, runtime };
+      return { ok: true, path: file, nmAvailable: yiLai.nmKeYong(), html, runtime, jsonl: surface.toString('utf8') };
     } catch { return { ok: false, error: 'a2ui-invalid' }; }
   }
 
   function daKai(sid: string, mid: string): { ok: boolean; path?: string; nmAvailable?: boolean; error?: string } {
-    const { html: _html, runtime: _runtime, ...result } = duKuaiZhao(sid, mid);
+    const { html: _html, runtime: _runtime, jsonl: _jsonl, ...result } = duKuaiZhao(sid, mid);
     return result;
   }
 

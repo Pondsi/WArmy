@@ -47,16 +47,18 @@ Use a local model for work you want to keep on your machine. Add a cloud model w
 
 "Give me a launch checklist I can tick off, with a place for notes."
 
-The normal reply appears first. When **Reply boost** is enabled in the chat's three-dot menu, WArmy adds an interactive layer after the text settles. Click the reply's horse head to generate, retry or regenerate that layer; if generation fails, a brief notice disappears on its own and the plain reply stays readable. Open the interactive result in the nm viewer, or in your system's default app when nm is not enabled. The interactive result stays with that conversation, and its export buttons (for example Excel / PDF archive) produce real files in the session workspace.
+With **Reply boost** enabled, the interactive layer renders inside the conversation itself: once it is ready, the checklist or form replaces the plain text in place, and you can tick, type and click without leaving the chat. Select any text and right-click for copy, quote, translate and translate-selection, plus an Open entry; double-click opens the full result in the nm viewer (or your system browser when nm is not enabled), while right-click Open takes the opposite route. Click the reply's horse head to generate, retry or regenerate the layer; if generation fails, the plain reply stays readable and a brief notice disappears on its own. Export buttons (for example Excel / PDF archive) produce real files in the session workspace.
 
 ## What you get
 
-- **A team you can configure.** Separate roles, instructions and model chains for researchers, builders and reviewers. A duty agent can coordinate project work.
+- **A team you can configure.** Separate roles, instructions and model chains for researchers, builders and reviewers. A duty agent can coordinate project work; project rooms show a dismissible reminder at the top of the chat (it stays put while you scroll) explaining when the duty agent responds and when you must @ it.
 - **A place for work in progress.** Conversations, plans, knowledge and output files stay linked to the session.
 - **Memory you can inspect.** Search earlier work, open source records, and edit the knowledge used by the team. Summaries are navigation aids, not proof that a fact is correct.
 - **A choice of models.** Connect local, self-hosted or cloud endpoints. You control which models are enabled and can select one explicitly.
 - **A desktop companion.** Customize its appearance and interaction. Camera, microphone, speaker and network controls are separate.
-- **Interactive replies.** Keep the readable answer, then add a checklist, form or other interactive content when you want it. The menu entry keeps its familiar name, **Reply boost**.
+- **Interactive replies.** When Reply boost succeeds, the interactive content replaces the plain text right in the chat; you can still select, copy, quote and translate it, open it in the nm viewer or your browser, and regenerate it from the horse head. Failed generation falls back to the readable text with a self-dismissing notice.
+- **A background that follows you.** Choose one of five built-in scenes or add your own images (the five most recent are kept for one-click switching). Set opacity and fit — fill, tile with adjustable size, stretch, or keep-ratio — and the same background applies to the main window, the nm viewer and every separate window.
+- **Markdown formatting within reach.** Press Ctrl+Space in the chat input, the text editor or the nm markdown editor to pick a format from a frequency-sorted list; nested formats can be cancelled one by one or all at once. The trigger and the two navigation key pairs are configurable in Settings → Shortcuts.
 - **Optional desktop control.** Connect an external Computer Use MCP server for window listing, screenshots, clicks, typing, dragging and scrolling. It is off by default; sensitive actions ask again each time.
 
 Model output still needs review. Different models and services support different tools, document formats and media capabilities.
@@ -112,7 +114,7 @@ The conventional local service port is **59599**. Network reachability and remot
 
 Install WArmy, then connect the model endpoint you want to use.
 
-1. Download `WArmy-Setup-0.4.55.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
+1. Download `WArmy-Setup-0.4.57.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
 2. Run the installer, choose a folder, launch **WArmy / 无限牛马**.
 3. First run: choose a language, create your self-custodied identity, save the 24-word mnemonic, set a PIN; add a model provider and create your first workhorse.
 

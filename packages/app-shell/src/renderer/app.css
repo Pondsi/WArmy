@@ -1602,7 +1602,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 /* R163 #4：确认类弹窗（完全授权二次确认等）不该拉到接近满屏。
  * 旧口径 max-height: calc(100vh - 48px) ⇒ 文案稍长就变成一根很长的条。
  * 现在给确认框一个正常上限，超出由内容区滚动；数据范围/名片/头像这类内容型弹窗不受影响。 */
-.duiHuaKuangKa:has(.duiHuaKuangTi):not(:has(.daoChuShu)):not(:has(.woCardBody)):not(:has(.touXiangGrid)):not(:has(.tianJiaLianXiGrid)):not(:has(.erHeYiGrid)):not(.niuMaSheZhi *):not(:has(.shiLiHang)):not(:has(.xinXiKuangNei)) { /* R176：排除设置窗/信息窗等多内容弹窗；R230 项4：信息窗(.xinXiKuangNei)不再被本条压回 360px */
+.duiHuaKuangKa:has(.duiHuaKuangTi):not(:has(.daoChuShu)):not(:has(.woCardBody)):not(:has(.touXiangGrid)):not(:has(.tianJiaLianXiGrid)):not(:has(.erHeYiGrid)):not(:has(#nmGongZuoQu)):not(.niuMaSheZhi *):not(:has(.shiLiHang)):not(:has(.xinXiKuangNei)) { /* R176：排除设置窗/信息窗等多内容弹窗；R230 项4：信息窗(.xinXiKuangNei)不再被本条压回 360px；R309①：创建牛马窗随内容自适应，不提前出滚动条 */
   max-height: min(60vh, 460px);
   /* R170：确认加急这类确认窗左右收窄，不再 420 那么宽 */
   width: min(360px, calc(100vw - 48px));
@@ -2435,7 +2435,8 @@ table.hkMiYaoJi td.hkMiYaoJiMiaoShu { color: var(--ink-dim); font-size: var(--fs
 .duiHuaKuangKa:has(.erHeYiGrid) {
   width: min(880px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
-  overflow-y: auto;
+  /* R309①：卡片不自己滚；内容超出主界面尺寸时才由内容区出唯一滚动条 */
+  overflow: visible;
 }
 .erHeYiGrid {
   display: grid;
@@ -5091,16 +5092,72 @@ html { font-weight: var(--fw-ui, 400); }
   50% { transform: translateX(0); opacity: 1; }
   100% { transform: translateX(4px); opacity: .35; }
 }
+.dutyRuleBannerHost { flex: 0 0 auto; min-height: 0; }
 .dutyRuleBanner {
   display: flex; align-items: flex-start; gap: 8px;
-  margin: 8px 12px; padding: 10px 12px;
-  border: 1px dashed var(--accent); border-radius: 10px;
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  margin: 8px 12px 0; padding: 8px 10px;
+  border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg, #fff));
   font-size: var(--fs-sm); line-height: 1.55;
 }
-.dutyRuleBanner .dutyBannerAv { width: 28px; height: 28px; border-radius: 50%; flex: none; }
-.dutyRuleBanner .dutyBannerWen { flex: 1; min-width: 0; }
-.dutyRuleBanner .dutyBannerGuan { flex: none; }
+.dutyRuleBanner .dutyBannerWen { flex: 1; min-width: 0; color: var(--ink); }
+.dutyRuleBanner .dutyBannerGuan {
+  flex: none; width: 22px; height: 22px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer;
+}
+.dutyRuleBanner .dutyBannerGuan:hover { background: var(--hover); color: var(--ink); }
+.dutyRuleBanner .dutyBannerGuan .ico { width: 14px; height: 14px; }
+
+/* R310①：内联互动面——增强回复直接在气泡内渲染；选中/右键/双击复用聊天区交互链。 */
+.a2uiNeiLianPao { padding: 10px 12px; max-width: 100%; }
+.a2uiNeiLianPao .a2uiNeiLianHost { min-width: 0; }
+.a2uiNeiLianPao a2ui-surface { display: block; max-width: 100%; }
+.a2uiNeiLianPao a2ui-surface :where(input, textarea, select, button) { font: inherit; }
+.a2uiNeiLianPao ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+
+/* R310②：背景图缩略图条（无＋内置5＋本地最近5） */
+.bjtTuLie { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.bjtTu {
+  width: 76px; height: 48px; padding: 0; overflow: hidden;
+  border: 2px solid var(--line); border-radius: 8px; background: var(--card);
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+.bjtTu img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bjtTu .bjtWu { font-size: 11px; color: var(--muted); }
+.bjtTu:hover { border-color: var(--accent); }
+.bjtTu.xuan { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* R310⑤：Markdown 格式候选下拉 */
+#mdGeShiCaiDan {
+  position: fixed; z-index: 99999; width: 272px; max-height: 336px; overflow: auto;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.22); padding: 4px;
+}
+#mdGeShiCaiDan .mdGsx { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--ink); }
+#mdGeShiCaiDan .mdGsx .mdGsxHint { color: var(--muted); font-size: 11px; font-family: var(--font-mono); }
+#mdGeShiCaiDan .mdGsx.xuan { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+#mdGeShiCaiDan .mdGsxQu .mdGsxLabel { color: var(--danger); }
+.mdNavZu { display: inline-flex; gap: 4px; align-items: center; }
+/* R310⑤：Markdown 扩展显示（GFM＋常见扩展） */
+.mdBiao { border-collapse: collapse; margin: 6px 0; width: 100%; font-size: 12.5px; }
+.mdBiao th, .mdBiao td { border: 1px solid var(--line); padding: 4px 8px; }
+.mdBiao th { background: var(--hover); }
+.mdTask { list-style: none; display: flex; gap: 6px; align-items: flex-start; }
+.mdTask input { margin-top: 3px; }
+.mdImg { max-width: 100%; border-radius: 6px; }
+.mdGaoLiang { background: color-mix(in srgb, var(--accent) 35%, transparent); color: inherit; padding: 0 2px; border-radius: 3px; }
+.mdSpoiler { filter: blur(5px); cursor: pointer; border-radius: 3px; transition: filter .15s; }
+.mdSpoiler.kai { filter: none; }
+.mdMath { font-family: var(--font-mono); }
+.mdMathKuai, .mdFront, .mdSuoJin { background: var(--hover); border-radius: 6px; padding: 8px; overflow: auto; }
+.mdCallout { border-left: 3px solid var(--accent); padding: 6px 10px; margin: 6px 0; border-radius: 4px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.mdCallout-warning, .mdCallout-caution { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.mdCalloutBiao { display: block; font-weight: 600; font-size: 12px; margin-bottom: 2px; }
+.mdDingYi dt { font-weight: 600; }
+.mdDingYi dd { margin: 2px 0 6px 16px; color: var(--muted); }
+.mdZhuQu { font-size: 12px; color: var(--muted); }
+.mdHr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
 
 /* 【项 5】行动行现在长在「思考/执行过程」块里面 —— 去掉左缩进，与思考正文对齐 */
 .siKaoKuai .xingDongZu { margin: 4px 0 3px; }

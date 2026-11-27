@@ -1660,3 +1660,30 @@ body.tuoWangYeFenGe.tuoWangYeFenGeShu { cursor: row-resize; }
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 @media (prefers-reduced-motion: reduce) { #wenBen.bjZhengLiZhong { animation: none; } }
+
+/* R310⑤：Markdown 候选下拉＋扩展显示（与主界面同款） */
+#mdGeShiCaiDan {
+  position: fixed; z-index: 99999; width: 272px; max-height: 336px; overflow: auto;
+  background: var(--panel-bg, var(--card, #fff)); border: 1px solid var(--line, #ccc); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.22); padding: 4px;
+}
+#mdGeShiCaiDan .mdGsx { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--ink, #333); }
+#mdGeShiCaiDan .mdGsx .mdGsxHint { color: var(--muted, #888); font-size: 11px; font-family: var(--font-mono, monospace); }
+#mdGeShiCaiDan .mdGsx.xuan { background: color-mix(in srgb, var(--accent, #a87654) 18%, transparent); }
+#mdGeShiCaiDan .mdGsxQu .mdGsxLabel { color: var(--danger, #e06060); }
+#yuLanNei .mdBiao, #yuLanNei table { border-collapse: collapse; margin: 6px 0; width: 100%; font-size: 12.5px; }
+#yuLanNei .mdBiao th, #yuLanNei .mdBiao td { border: 1px solid var(--line, #ccc); padding: 4px 8px; }
+#yuLanNei .mdBiao th { background: var(--hover, #eee); }
+#yuLanNei .mdTask { list-style: none; display: flex; gap: 6px; align-items: flex-start; }
+#yuLanNei .mdImg { max-width: 100%; border-radius: 6px; }
+#yuLanNei .mdGaoLiang { background: color-mix(in srgb, var(--accent, #a87654) 35%, transparent); color: inherit; padding: 0 2px; border-radius: 3px; }
+#yuLanNei .mdSpoiler { filter: blur(5px); cursor: pointer; border-radius: 3px; transition: filter .15s; }
+#yuLanNei .mdSpoiler.kai { filter: none; }
+#yuLanNei .mdMath { font-family: var(--font-mono, monospace); }
+#yuLanNei .mdMathKuai, #yuLanNei .mdFront, #yuLanNei .mdSuoJin { background: var(--hover, #eee); border-radius: 6px; padding: 8px; overflow: auto; }
+#yuLanNei .mdCallout { border-left: 3px solid var(--accent, #a87654); padding: 6px 10px; margin: 6px 0; border-radius: 4px; background: color-mix(in srgb, var(--accent, #a87654) 8%, transparent); }
+#yuLanNei .mdCallout-warning, #yuLanNei .mdCallout-caution { border-left-color: var(--danger, #e06060); background: color-mix(in srgb, var(--danger, #e06060) 8%, transparent); }
+#yuLanNei .mdCalloutBiao { display: block; font-weight: 600; font-size: 12px; margin-bottom: 2px; }
+#yuLanNei .mdDingYi dt { font-weight: 600; }
+#yuLanNei .mdDingYi dd { margin: 2px 0 6px 16px; color: var(--muted, #888); }
+#yuLanNei .mdZhuQu { font-size: 12px; color: var(--muted, #888); }

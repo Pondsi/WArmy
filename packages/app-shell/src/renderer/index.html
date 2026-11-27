@@ -234,6 +234,7 @@
               <button id="anNiuTingZhiAll" class="anNiuTingZhiTuBiao" data-i18n-title="chat.stopAllTip" aria-label="stop"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path fill-rule="evenodd" fill="currentColor" d="M12 21a9 9 0 110-18 9 9 0 010 18zM9 9h6v6H9z"/></svg></button>
             </div>
           </header>
+          <div id="dutyRuleBannerHost" class="dutyRuleBannerHost"></div>
           <div id="xiaoXiJi" class="xiaoXiJi"></div>
           <div id="tongZhiQu" class="tongZhiQu">
             <div id="r307CardHost" class="aiqHost" hidden></div>
@@ -694,6 +695,11 @@
     <!-- R294-2：工程级简洁视图压缩器（单一 owner，与探针共用） -->
     <script src="./jian-jie-ya-suo.js"></script>
   <script src="./self-evolve-ui.js"></script>
+  <!-- R310①：回复增强内联运行时（安全目录渲染，先于 app.js 挂载 window.warmyA2uiInline） -->
+  <script src="./a2ui-inline.js"></script>
+  <!-- R310⑤：Markdown 显示扩展＋格式候选（先于 app.js） -->
+  <script src="./md-extend.js"></script>
+  <script src="./md-ge-shi.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
