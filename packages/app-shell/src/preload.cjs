@@ -896,6 +896,7 @@ contextBridge.exposeInMainWorld('warmy', {
   daKaiBangZhuWenDang: () => ipcRenderer.invoke('warmy:daKaiBangZhuWenDang'),
   nmFanYi: (p) => ipcRenderer.invoke('warmy:nmFanYi', p),
   nmFuZhi: (p) => ipcRenderer.invoke('warmy:nmFuZhi', p),
+  acceptanceObserve: (p) => ipcRenderer.invoke('warmy:acceptanceObserve', p),
   onMdFormatToggle: (cb) => { const h = () => cb(); ipcRenderer.on('warmy:mdFormatToggle', h); return () => ipcRenderer.removeListener('warmy:mdFormatToggle', h); },
   daKaiZhenDuanChuang: () => ipcRenderer.invoke('warmy:daKaiZhenDuanChuang'),
   // R185 中继站 TLS 信任（FWArmy 自签指纹固定 / CA 校验）

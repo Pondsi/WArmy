@@ -67,9 +67,26 @@ try {
   const view = document.createElement('a2ui-surface');
   view.surface = surface;
   document.body.appendChild(view);
+  try { mdEmphSurface(view); } catch { /* noop */ }
 } catch (error) {
   const box = document.createElement('div');
   box.className = 'a2ui-error';
   box.textContent = '互动内容无法显示：' + String(error?.message || error);
   document.body.appendChild(box);
+}
+/* R316：A2UI Text 纯文本中的星号强调转成 strong/em。 */
+function mdEmphSurface(root) {
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const fmt = (s) => esc(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const n of nodes) {
+    const v = n.nodeValue || '';
+    if (!/\*\*[^*]+\*\*|\*[^*]+\*/.test(v)) continue;
+    const p = n.parentElement;
+    if (!p || /^(CODE|PRE)$/.test(p.tagName)) continue;
+    const sp = document.createElement('span');
+    sp.innerHTML = fmt(v);
+    p.replaceChild(sp, n);
+  }
 }

@@ -5171,10 +5171,8 @@ html { font-weight: var(--fw-ui, 400); }
 .gongZuoQuXuan2 .ico { width: 16px; height: 16px; }
 /* R311⑬：进化中间回复合并后同样式 */
 .zhongJianBiao { border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--card)); }
-/* R311⑨：内联增强面适配聊天排版 */
+/* R311⑨/R316：内联增强面与 nm 查看器同一样式（不再覆盖按钮/输入，统一用安全目录默认样式）。 */
 .a2uiNeiLianPao a2ui-surface { display: block; width: 100%; font-size: 13px; line-height: 1.55; }
-.a2uiNeiLianPao a2ui-surface :where(button) { background: var(--accent); color: var(--accent-ink, #fff); border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; }
-.a2uiNeiLianPao a2ui-surface :where(input, textarea) { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
 
 /* 【项 5】行动行现在长在「思考/执行过程」块里面 —— 去掉左缩进，与思考正文对齐 */
 .siKaoKuai .xingDongZu { margin: 4px 0 3px; }

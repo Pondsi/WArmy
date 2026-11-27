@@ -4174,6 +4174,7 @@ async function langDuWenBen(text, btnEl) {
         ]);
       });
       /* 分组拖拽排序（固定分组不动；拖拽时全部折叠） */
+      let hangTuoZhong = false; /* R316：会话拖拽进行中（dragover 时 getData 为空，用状态位放行组内区域） */
       if (!z.fixed) {
         tou.addEventListener('dragstart', (e) => {
           e.dataTransfer.setData('text/plain', 'zu:' + z.id);
@@ -4215,7 +4216,8 @@ async function langDuWenBen(text, btnEl) {
       if (zhe) nei.classList.add('yinCang');
       nei.dataset.zu = z.id;
       /* 会话拖拽放行（拖到本组区域） */
-      nei.addEventListener('dragover', (e) => { if (String((e.dataTransfer.getData('text/plain')) || '').startsWith('hang:')) e.preventDefault(); });
+      nei.addEventListener('dragover', (e) => { if (hangTuoZhong || String((e.dataTransfer.getData('text/plain')) || '').startsWith('hang:')) { e.preventDefault(); nei.classList.add('tuoGuo'); } });
+      nei.addEventListener('dragleave', () => nei.classList.remove('tuoGuo'));
       nei.addEventListener('drop', (e) => {
         e.preventDefault();
         const data = String((e.dataTransfer.getData('text/plain')) || '');
@@ -4259,14 +4261,17 @@ async function langDuWenBen(text, btnEl) {
             hangYuanSu.dataset.sid = String(c.id);
             hangYuanSu.addEventListener('dragstart', (e) => {
               e.dataTransfer.setData('text/plain', 'hang:' + String(c.id));
+              hangTuoZhong = true;
               hangYuanSu.classList.add('dragging');
-              document.querySelectorAll('.lieBiaoFenZuNei:not(.yinCang)').forEach((x) => { if (x !== nei) x.classList.add('zheLinShi'); });
+              /* R316：不折叠分组——组名与组内区域都可作落点；高亮所有非固定分组。 */
+              document.querySelectorAll('.lieBiaoFenZu:not(.guDing)').forEach((x) => x.classList.add('tuoMuBiao'));
               fenZuZheLinShi = Object.assign({}, zheMap);
-              fenZuZheLinShiNav = nav; /* R229：快照归属视图，恢复时校验 */
-              document.querySelectorAll('.lieBiaoFenZu.zhe').forEach((x) => { x.classList.remove('zhe'); zheMap[x.dataset.zu] = undefined; });
+              fenZuZheLinShiNav = nav;
             });
             hangYuanSu.addEventListener('dragend', () => {
+              hangTuoZhong = false;
               hangYuanSu.classList.remove('dragging');
+              document.querySelectorAll('.lieBiaoFenZu').forEach((x) => x.classList.remove('tuoMuBiao', 'tuoGuo'));
               document.querySelectorAll('.lieBiaoFenZuNei.zheLinShi').forEach((x) => x.classList.remove('zheLinShi'));
               /* 恢复折叠原样（不是全部展开） */
               const he = $('lieBiaoTi');
@@ -8799,6 +8804,8 @@ async function langDuWenBen(text, btnEl) {
     const yuanYou = window.__msgs[chatId];
     if (role === 'wo' && !(opts && opts.system)) {
       try { state.planInterruptedPending && state.planInterruptedPending.delete(String(chatId || '')); } catch { /* noop */ }
+      /* R316：行为式验收——用户后续发言写入验收台账（不弹卡）。 */
+      try { void window.warmy.acceptanceObserve?.({ sessionId: String(chatId || ''), text }); } catch { /* noop */ }
       /** R130：用户新回复 = 新回复触发自动滚动（解除生成中暂停；第 97 轮"发消息不解除接管"的口径已被本轮用户规格取代） */
       try { chatGunOf(String(chatId || '')).pause = ''; } catch { /* noop */ }
     }

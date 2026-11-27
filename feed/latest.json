@@ -1,13 +1,13 @@
 {
-  "version": "0.4.63",
-  "notes": "WArmy 0.4.63 — Default user name is now Enri Emmot (安莉·艾默特), localized per first-run language (ja エンリ・エモット, ru Анри Эммот, others English); changing language later won't rename you. New default avatar (Enri) replaces the old one; 'person avatar 3' removed from the picker and the previous default added as selectable. The nm viewer right-click menu now dismisses on outside click / scroll / Esc, Copy uses the system clipboard, Translate/Translate-Whole-Page keep the selection, and Select-All focuses the content. Ctrl+Space is grabbed as a focus-scoped system hotkey so it works even when an IME holds it. Release assets no longer include .blockmap/.warmyblocks.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.63/WArmy-Setup-0.4.63.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.63/WArmy-Setup-0.4.63.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.63/WArmy-Setup-0.4.63.exe.warmyblocks",
-  "sha256": "7c8314e84fbf35ab7426ab06c9d2b76d550772bf10ccffdff2350442f5b2747b",
-  "size": 353979801,
+  "version": "0.4.64",
+  "notes": "WArmy 0.4.64 — Regenerate (text & interactive) now works for evolution replies and after switching providers; session rows can be dropped on a group's name OR its body; interactive cards render bold/italic and use the same button style in chat and the nm viewer; behavior-based acceptance ledger (no user confirmation card) feeds summary improvement; default name Enri Emmot localized; new Enri default avatar; nm right-click menu dismiss/copy/translate/select-all focus; Ctrl+Space focus-scoped hotkey; release assets drop .blockmap/.warmyblocks.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.64/WArmy-Setup-0.4.64.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.64/WArmy-Setup-0.4.64.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.64/WArmy-Setup-0.4.64.exe.warmyblocks",
+  "sha256": "563d791926dc4f3611af988ab95500726fa20d72d3c9c81daaf8c35a9842d063",
+  "size": 353981090,
   "mandatory": false,
-  "publishedAt": "2026-11-27T19:56:23.193Z",
+  "publishedAt": "2026-11-27T20:24:28.631Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.63"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.64"
 }

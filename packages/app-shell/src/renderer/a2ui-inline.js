@@ -102,6 +102,7 @@ function render(host, jsonl, opts = {}) {
   const view = document.createElement('a2ui-surface');
   view.surface = surface;
   host.appendChild(view);
+  try { mdEmphSurface(view); } catch { /* noop */ }
   return {
     dispose() {
       try { processor.dispose(); } catch { /* noop */ }
@@ -111,3 +112,19 @@ function render(host, jsonl, opts = {}) {
 }
 
 window.warmyA2uiInline = { render };
+/* R316：A2UI Text 为纯文本，星号强调会裸显，渲染后转成 strong/em。 */
+function mdEmphSurface(root) {
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const fmt = (s) => esc(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const n of nodes) {
+    const v = n.nodeValue || '';
+    if (!/\*\*[^*]+\*\*|\*[^*]+\*/.test(v)) continue;
+    const p = n.parentElement;
+    if (!p || /^(CODE|PRE)$/.test(p.tagName)) continue;
+    const sp = document.createElement('span');
+    sp.innerHTML = fmt(v);
+    p.replaceChild(sp, n);
+  }
+}
