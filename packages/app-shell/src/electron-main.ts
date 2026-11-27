@@ -24059,18 +24059,14 @@ chuliIpc('warmy:chongShengHuiFu', async (_e, p0?: { sessionId?: string; messageI
     }
     return '';
   })();
-  /* 供应商解析：优先该消息/互动产物快照，回落当前配置（切换供应商后仍可重生成）。 */
-  const st0 = a2uiHuiFu.cha(sid, mid);
-  const id = String(st0?.provider || providerCfg.presetId || '');
-  const configured = (settingsStore?.load() as { providers?: Array<{ id?: string; protocol?: string; baseURL?: string }> } | undefined)?.providers?.find((x) => x.id === id);
-  const current = id && providerCfg.presetId === id ? providerCfg : undefined;
-  const protocol = (configured?.protocol || current?.protocol || providerCfg.protocol) as 'openai-compatible' | 'anthropic' | 'ollama';
-  const apiKey = protocol === 'ollama' ? '' : await jiexiGongyingshangMiyao(id, current?.apiKey);
-  const baseURL = String(configured?.baseURL || current?.baseURL || providerCfg.baseURL || '');
-  const model = jieMoXingMing(String(st0?.model || (rec as { moXing?: string }).moXing || providerCfg.model || ''));
+  /* R317：重生成一律用「当前生效供应商」（用户正在用、密钥有效）——不再用旧消息/产物里的过期供应商（否则 401 / provider-missing）。 */
+  const id = String(providerCfg.presetId || '');
+  const protocol = providerCfg.protocol as 'openai-compatible' | 'anthropic' | 'ollama';
+  const apiKey = protocol === 'ollama' ? '' : await jiexiGongyingshangMiyao(id, providerCfg.apiKey);
+  const baseURL = String(providerCfg.baseURL || '');
+  const model = jieMoXingMing(String(providerCfg.model || ''));
+  if (!id || (protocol !== 'ollama' && !apiKey)) return { ok: false, error: 'a2ui-provider-missing' };
   if (kind === 'a2ui') {
-    if (!id || (!configured && !current)) return { ok: false, error: 'a2ui-provider-missing' };
-    if (protocol !== 'ollama' && !apiKey) return { ok: false, error: 'a2ui-provider-missing' };
     const r = await a2uiHuiFu.kaiShi({ sessionId: sid, messageId: mid, reply: String(rec.content || ''), userText,
       model, provider: id, providerConfig: { presetId: id, apiKey, baseURL, protocol }, force: true });
     return { ok: r.status !== 'cancelled', state: r };
@@ -24083,7 +24079,7 @@ chuliIpc('warmy:chongShengHuiFu', async (_e, p0?: { sessionId?: string; messageI
     const jiuZheng = '【重新生成文字回复】本任务的操作已经执行完毕、结果固定（操作台账：' + caoZuo + '）。' +
       '**不要再调用任何工具、不要重做操作**；基于同样的用户问题与已产生的结果，换一种表述重新写最终回复。' +
       '如有必要可在回复中说明进行了什么操作、产生了什么结果。直接输出新的最终回复正文。';
-    const resp = await p.chat({ model, maxTokens: 4096, xiaoXiJi: [...hist, { role: 'user', content: userText || String(rec.content || '') } as LiaoTianXiaoXi, { role: 'system', content: jiuZheng } as LiaoTianXiaoXi] }, undefined);
+    const resp = await p.chat({ model, maxTokens: 4096, xiaoXiJi: [...hist, { role: 'assistant', content: String(rec.content || '') } as LiaoTianXiaoXi, { role: 'system', content: jiuZheng } as LiaoTianXiaoXi] }, undefined);
     const xin = neiRongWenBen(resp.choices?.[0]?.message?.content);
     if (!xin.trim()) return { ok: false, error: 'empty-regen' };
     setHuiFuNeiRong(sid, mid, xin);

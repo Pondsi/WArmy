@@ -30,8 +30,11 @@ export function guiFanYongLiang(
     // OpenAI: prompt_tokens_details.cached_tokens
     // R308⑤：部分网关（如 MiMo flash）不回报任何缓存明细 ⇒ cacheReported=false，界面显示「未反馈」而非误导的 0。
     const xiangQing = raw?.prompt_tokens_details as { cached_tokens?: number } | undefined;
-    const youMingXi = raw?.prompt_cache_hit_tokens !== undefined || raw?.prompt_cache_miss_tokens !== undefined
-      || raw?.cache_hit_tokens !== undefined || raw?.cached_tokens !== undefined || xiangQing !== undefined;
+    /* R317：必须真的给了数字才算“回报了缓存明细”；空对象 prompt_tokens_details:{} 不得算（否则 MiMo flash 误显 0）。 */
+    const youMingXi = shuZhi(raw?.prompt_cache_hit_tokens) > 0 || (raw?.prompt_cache_hit_tokens !== undefined && shuZhi(raw?.prompt_cache_miss_tokens) >= 0)
+      || (typeof raw?.prompt_cache_miss_tokens === 'number')
+      || (typeof raw?.cache_hit_tokens === 'number') || (typeof raw?.cached_tokens === 'number')
+      || (typeof xiangQing?.cached_tokens === 'number');
     const mingZhong =
       shuZhi(raw?.prompt_cache_hit_tokens) || shuZhi(raw?.cache_hit_tokens) || shuZhi(raw?.cached_tokens) || shuZhi(xiangQing?.cached_tokens);
     const weiMingZhong = shuZhi(raw?.prompt_cache_miss_tokens);

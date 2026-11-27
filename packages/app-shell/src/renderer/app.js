@@ -4690,7 +4690,7 @@ async function langDuWenBen(text, btnEl) {
     return tOr('chat.tokensFmt', '输入{ru}，输出{chu}').replace('{ru}', String(ru - huan)).replace('{chu}', String(chu))
       + tOr('chat.tokensCacheFmt', '，缓存{huan}（命中率{lv}）').replace('{huan}', String(huan)).replace('{lv}', lv);
   }
-  async function loadSessionMessages(id) {
+  async function loadSessionMessages(id, opts) {
     const sid = String(id || '');
     if (!sid) return;
     try {
@@ -4844,7 +4844,7 @@ async function langDuWenBen(text, btnEl) {
        */
       quChong.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
       window.__msgs[sid] = quChong;
-      if (state.selectedChat && state.selectedChat.id === sid) renderChat();
+      if (state.selectedChat && state.selectedChat.id === sid) renderChat({ keepScroll: !!(opts && opts.keepScroll) });
       renderList();
     } catch { /* 读不到就保持本地视图，不清空 */ }
   }
@@ -5647,7 +5647,7 @@ async function langDuWenBen(text, btnEl) {
     /* R301：进化并排块是独立重绘路径，状态到达时同步刷新双臂马头。 */
     try { window.__ziJinHuaChongHua?.(); } catch { /* noop */ }
     /* 状态事件到达时重新拉一次权威消息，兼容流式气泡尚无稳定 ID 的竞态。 */
-    if (s.sessionId) void loadSessionMessages(s.sessionId);
+    if (s.sessionId) void loadSessionMessages(s.sessionId, { keepScroll: true });
   }); } catch { /* noop */ }
   /* R315：交互面「派活」按钮⇒把交互内容作为新消息发给该会话牛马（主进程广播）。 */
   try { window.warmy.onA2uiPaiHuo?.((d) => {

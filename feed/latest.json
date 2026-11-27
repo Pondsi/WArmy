@@ -1,13 +1,13 @@
 {
-  "version": "0.4.64",
-  "notes": "WArmy 0.4.64 — Regenerate (text & interactive) now works for evolution replies and after switching providers; session rows can be dropped on a group's name OR its body; interactive cards render bold/italic and use the same button style in chat and the nm viewer; behavior-based acceptance ledger (no user confirmation card) feeds summary improvement; default name Enri Emmot localized; new Enri default avatar; nm right-click menu dismiss/copy/translate/select-all focus; Ctrl+Space focus-scoped hotkey; release assets drop .blockmap/.warmyblocks.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.64/WArmy-Setup-0.4.64.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.64/WArmy-Setup-0.4.64.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.64/WArmy-Setup-0.4.64.exe.warmyblocks",
-  "sha256": "563d791926dc4f3611af988ab95500726fa20d72d3c9c81daaf8c35a9842d063",
-  "size": 353981090,
+  "version": "0.4.65",
+  "notes": "WArmy 0.4.65 — Confirmed & fixed: MiMo flash empty prompt_tokens_details no longer mis-reported as cache 0 (shows 'not reported by provider'); regenerate (text & interactive) uses the active provider (no stale 401 / provider-missing) and rewrites from the original reply as base; boost reply reload preserves scroll position; Ctrl+Space picker gains a search box, fullwidth ，。 page keys, Space-to-select, re-press to close, and cancel-options only when the format marker still exists.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.65/WArmy-Setup-0.4.65.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.65/WArmy-Setup-0.4.65.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.65/WArmy-Setup-0.4.65.exe.warmyblocks",
+  "sha256": "58c1eab12e7aa3cd8c251ecf77d2156f9b84691e5dc8beb65173e8cb7fc65fb6",
+  "size": 353981995,
   "mandatory": false,
-  "publishedAt": "2026-11-27T20:24:28.631Z",
+  "publishedAt": "2026-11-27T21:40:00.445Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.64"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.65"
 }

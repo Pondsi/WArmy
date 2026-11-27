@@ -93,56 +93,83 @@
     if (caiDan) { caiDan.remove(); caiDan = null; }
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('mousedown', waiDian, true);
-    caiDanEl = null; xiangLie = [];
+    caiDanEl = null; xiangLie = []; lieRong = null; souInput = null; souSuo = '';
   }
   function waiDian(e) { if (caiDan && !caiDan.contains(e.target)) guan(); }
+  let souSuo = '';
+  let lieRong = null;
+  let souInput = null;
   function huaXuan() {
-    if (!caiDan) return;
-    [...caiDan.children].forEach((n, i) => n.classList.toggle('xuan', i === xuanIdx));
-    const n = caiDan.children[xuanIdx];
+    if (!lieRong) return;
+    [...lieRong.children].forEach((n, i) => n.classList.toggle('xuan', i === xuanIdx));
+    const n = lieRong.children[xuanIdx];
     if (n && n.scrollIntoView) n.scrollIntoView({ block: 'nearest' });
   }
-  function kai(el) {
-    guan();
-    caiDanEl = el;
+  /* R317：取消项须校验该格式标记仍在文中（用户可能已编辑/删除），不在则不显示。 */
+  function haiZai(el, entry) {
+    const v = String(el.value || '');
+    const f = entry.f;
+    if (entry.kind === 'wrap') return v.includes(f.open) && (!f.close || v.includes(f.close));
+    if (entry.kind === 'prefix') return v.split('\n').some((ln) => ln.startsWith(f.open));
+    return v.includes(entry.text || f.open);
+  }
+  function jiSuanXiangLie(el) {
     const st = stOf(el);
-    xiangLie = [];
-    if (st.stack.length) {
-      xiangLie.push({ cancel: st.stack[st.stack.length - 1], label: '取消 ' + st.stack[st.stack.length - 1].f.label, hint: '最内层' });
+    const lie = [];
+    const youXiao = st.stack.filter((e) => haiZai(el, e));
+    st.stack = youXiao;
+    if (youXiao.length) lie.push({ cancel: youXiao[youXiao.length - 1], label: '取消 ' + youXiao[youXiao.length - 1].f.label, hint: '最内层' });
+    for (const f of FORMATS) lie.push({ f, label: f.label, hint: f.hint });
+    if (youXiao.length) {
+      for (let i = 0; i < youXiao.length - 1; i++) lie.push({ cancel: youXiao[i], label: '取消 ' + youXiao[i].f.label, hint: i === youXiao.length - 2 ? '次内层' : '外层' });
+      lie.push({ all: true, label: '取消所有格式', hint: '清空格式栈' });
     }
-    for (const f of FORMATS) xiangLie.push({ f, label: f.label, hint: f.hint });
-    if (st.stack.length) {
-      for (let i = 0; i < st.stack.length - 1; i++) xiangLie.push({ cancel: st.stack[i], label: '取消 ' + st.stack[i].f.label, hint: i === st.stack.length - 2 ? '次内层' : '外层' });
-      xiangLie.push({ all: true, label: '取消所有格式', hint: '清空格式栈' });
-    }
-    xuanIdx = 0;
-    caiDan = document.createElement('div');
-    caiDan.id = 'mdGeShiCaiDan';
-    caiDan.setAttribute('role', 'listbox');
-    /* 安全构造：候选文案全为内部常量，仍一律 textContent，不走 innerHTML */
+    const q = souSuo.trim().toLowerCase();
+    if (!q) return lie;
+    return lie.filter((x) => String(x.label).toLowerCase().includes(q) || String(x.hint || '').toLowerCase().includes(q) || String((x.f && x.f.id) || '').toLowerCase().includes(q));
+  }
+  function huaLie() {
+    if (!lieRong || !caiDanEl) return;
+    xiangLie = jiSuanXiangLie(caiDanEl);
+    if (xuanIdx >= xiangLie.length) xuanIdx = 0;
+    lieRong.textContent = '';
     xiangLie.forEach((x, i) => {
       const n = document.createElement('div');
       n.setAttribute('role', 'option');
       n.dataset.i = String(i);
       n.className = 'mdGsx' + (x.cancel || x.all ? ' mdGsxQu' : '');
-      const lab = document.createElement('span');
-      lab.className = 'mdGsxLabel';
-      lab.textContent = String(x.label);
-      const hin = document.createElement('span');
-      hin.className = 'mdGsxHint';
-      hin.textContent = String(x.hint || '');
+      const lab = document.createElement('span'); lab.className = 'mdGsxLabel'; lab.textContent = String(x.label);
+      const hin = document.createElement('span'); hin.className = 'mdGsxHint'; hin.textContent = String(x.hint || '');
       n.append(lab, hin);
-      caiDan.appendChild(n);
+      n.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); };
+      n.onclick = (e) => { e.preventDefault(); e.stopPropagation(); xuanIdx = Number(n.dataset.i); xuanZe(); };
+      lieRong.appendChild(n);
     });
+    huaXuan();
+  }
+  function kai(el) {
+    guan();
+    caiDanEl = el;
+    souSuo = '';
+    xuanIdx = 0;
+    caiDan = document.createElement('div');
+    caiDan.id = 'mdGeShiCaiDan';
+    caiDan.setAttribute('role', 'listbox');
+    /* R317：顶部搜索框（英文 id / 中文 / 输入法）。 */
+    souInput = document.createElement('input');
+    souInput.type = 'text';
+    souInput.placeholder = '搜索格式（英文/中文）…';
+    souInput.style.cssText = 'width:100%;box-sizing:border-box;margin:0 0 4px;padding:4px 6px;border:1px solid var(--line,#ddd);border-radius:5px;background:var(--bg,#fff);color:var(--ink,#222);font:inherit';
+    souInput.addEventListener('input', () => { souSuo = souInput.value; xuanIdx = 0; huaLie(); });
+    souInput.addEventListener('keydown', (e) => { e.stopPropagation(); }, false);
+    caiDan.appendChild(souInput);
+    lieRong = document.createElement('div');
+    caiDan.appendChild(lieRong);
     document.body.appendChild(caiDan);
     const r = el.getBoundingClientRect();
     caiDan.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 280)) + 'px';
     caiDan.style.top = Math.min(r.bottom + 4, window.innerHeight - 340) + 'px';
-    [...caiDan.children].forEach((n) => {
-      n.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); };
-      n.onclick = (e) => { e.preventDefault(); e.stopPropagation(); xuanIdx = Number(n.dataset.i); xuanZe(); };
-    });
-    huaXuan();
+    huaLie();
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('mousedown', waiDian, true);
   }
@@ -162,16 +189,23 @@
   }
   function onKey(e) {
     if (!caiDan) return;
-    const k = e.key;
-    const yi = (d) => { e.preventDefault(); e.stopPropagation(); xuanIdx = (xuanIdx + d + xiangLie.length) % xiangLie.length; huaXuan(); };
+    /* 搜索框聚焦时：只拦导航/确认/关闭，其余交给输入。 */
+    if (e.target === souInput) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Escape') { /* 下方统一处理 */ }
+      else return;
+    }
+    let k = e.key;
+    /* R317：中文全角 ，。 映射为半角 ,. 作翻页键。 */
+    if (k === '，') k = ',';
+    if (k === '。') k = '.';
+    const yi = (d) => { e.preventDefault(); e.stopPropagation(); if (!xiangLie.length) return; xuanIdx = (xuanIdx + d + xiangLie.length) % xiangLie.length; huaXuan(); };
     if (k === 'ArrowDown' || k === 'PageDown' || k === navKeys.down1 || k === navKeys.down2) { yi(1); return; }
     if (k === 'ArrowUp' || k === 'PageUp' || k === navKeys.up1 || k === navKeys.up2) { yi(-1); return; }
-    if (k === 'Enter') { e.preventDefault(); e.stopPropagation(); xuanZe(); return; }
+    if (k === 'Enter' || k === ' ') { e.preventDefault(); e.stopPropagation(); xuanZe(); return; }
     if (k === 'Escape') { e.preventDefault(); e.stopPropagation(); guan(); return; }
     if (k === 'Control' || k === 'Alt' || k === 'Shift' || k === 'Meta') return;
-    /* 带修饰键的组合（如触发键再按）交给外层刷新，不在这里收菜单 */
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    /* 其余键：收起候选，让输入继续（触发键由外层重开刷新） */
+    if (e.target === souInput) return;
     guan();
   }
   window.warmyMdFormat = {
@@ -179,7 +213,7 @@
     isOpen: () => !!caiDan,
     open: kai,
     close: guan,
-    toggle: (el) => { if (caiDan && caiDanEl === el) kai(el); else if (caiDan) guan(); else kai(el); },
+    toggle: (el) => { if (caiDan) guan(); else kai(el); },
     setNavKeys: (p) => { navKeys = Object.assign({}, navKeys, p || {}); },
     getNavKeys: () => Object.assign({}, navKeys),
     stackOf: (el) => stOf(el).stack.slice(),
