@@ -895,6 +895,8 @@ contextBridge.exposeInMainWorld('warmy', {
   onHuiHuaChongSheng: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:huiHuaChongSheng', h); return () => ipcRenderer.removeListener('warmy:huiHuaChongSheng', h); },
   daKaiBangZhuWenDang: () => ipcRenderer.invoke('warmy:daKaiBangZhuWenDang'),
   nmFanYi: (p) => ipcRenderer.invoke('warmy:nmFanYi', p),
+  nmFuZhi: (p) => ipcRenderer.invoke('warmy:nmFuZhi', p),
+  onMdFormatToggle: (cb) => { const h = () => cb(); ipcRenderer.on('warmy:mdFormatToggle', h); return () => ipcRenderer.removeListener('warmy:mdFormatToggle', h); },
   daKaiZhenDuanChuang: () => ipcRenderer.invoke('warmy:daKaiZhenDuanChuang'),
   // R185 中继站 TLS 信任（FWArmy 自签指纹固定 / CA 校验）
   zhongJiTlsTanZhen: (p) => ipcRenderer.invoke('warmy:zhongJiTlsTanZhen', p),

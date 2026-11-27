@@ -2505,16 +2505,30 @@ hui();
   /* R315：只读预览可选中＋右键菜单（复制/全选/翻译/翻译全文）。翻译替换原文＋淡主题色背景。 */
   const FAN_YI_BG = 'rgba(168,118,84,0.14)';
   let yuCaiDan = null;
-  function guanYuCaiDan() { if (yuCaiDan) { yuCaiDan.remove(); yuCaiDan = null; } }
+  function guanYuCaiDan() {
+    if (yuCaiDan) { yuCaiDan.remove(); yuCaiDan = null; }
+    document.removeEventListener('mousedown', guanYuCaiDanWai, true);
+    document.removeEventListener('keydown', guanYuCaiDanEsc, true);
+    window.removeEventListener('blur', guanYuCaiDan);
+  }
+  function guanYuCaiDanWai(e) { if (yuCaiDan && !yuCaiDan.contains(e.target)) guanYuCaiDan(); }
+  function guanYuCaiDanEsc(e) { if (e.key === 'Escape') guanYuCaiDan(); }
   function bangYuLanJiaoHu(f) {
     let doc = null; try { doc = f.contentDocument; } catch { return; }
     if (!doc || !doc.body) return;
     doc.body.style.userSelect = 'text';
     doc.body.style.webkitUserSelect = 'text';
+    if (doc.__nmCaiDanBang) return;
+    doc.__nmCaiDanBang = true;
+    doc.addEventListener('mousedown', () => guanYuCaiDan(), true);
+    doc.addEventListener('scroll', () => guanYuCaiDan(), true);
     doc.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       guanYuCaiDan();
-      const sel = String(doc.getSelection ? doc.getSelection().toString() : '');
+      const s = doc.getSelection ? doc.getSelection() : null;
+      const sel = String(s ? s.toString() : '');
+      let selRange = null;
+      try { if (s && s.rangeCount) selRange = s.getRangeAt(0).cloneRange(); } catch { /* noop */ }
       const r = f.getBoundingClientRect();
       const x = Math.min(r.left + e.clientX, window.innerWidth - 160);
       const y = Math.min(r.top + e.clientY, window.innerHeight - 150);
@@ -2524,32 +2538,31 @@ hui();
         const b = document.createElement('div');
         b.textContent = label;
         b.style.cssText = 'padding:6px 10px;border-radius:5px;cursor:' + (dis ? 'default' : 'pointer') + ';color:' + (dis ? 'var(--muted,#999)' : 'var(--ink,#222)');
-        if (!dis) { b.onmouseenter = () => b.style.background = 'var(--hover,#eee)'; b.onmouseleave = () => b.style.background = ''; b.onclick = (ev) => { ev.stopPropagation(); guanYuCaiDan(); fn(); }; }
+        if (!dis) { b.onmouseenter = () => b.style.background = 'var(--hover,#eee)'; b.onmouseleave = () => b.style.background = ''; b.onmousedown = (ev) => ev.stopPropagation(); b.onclick = (ev) => { ev.stopPropagation(); ev.preventDefault(); guanYuCaiDan(); fn(); }; }
         yuCaiDan.appendChild(b);
       };
-      mk('复制', () => { try { navigator.clipboard.writeText(sel); } catch { /* noop */ } }, !sel);
-      mk('全选', () => { try { const s = doc.getSelection(); const rg = doc.createRange(); rg.selectNodeContents(doc.body); s.removeAllRanges(); s.addRange(rg); } catch { /* noop */ } });
-      mk('翻译', () => { void fanYiXuan(f, doc, sel); }, !sel);
+      /* 复制/翻译用 contextmenu 时捕获的 sel/range（点菜单会丢选区）。复制走主进程剪贴板。 */
+      mk('复制', () => { try { void window.warmy.nmFuZhi?.({ text: sel }); } catch { /* noop */ } }, !sel);
+      mk('全选', () => { try { const rg = doc.createRange(); rg.selectNodeContents(doc.body); const s2 = doc.getSelection(); s2.removeAllRanges(); s2.addRange(rg); f.focus(); doc.body.focus(); } catch { /* noop */ } });
+      mk('翻译', () => { void fanYiXuan(f, doc, sel, selRange); }, !sel);
       mk('翻译全文', () => { void fanYiQuan(f, doc); });
       document.body.appendChild(yuCaiDan);
-      setTimeout(() => document.addEventListener('click', guanYuCaiDan, { once: true }), 0);
+      setTimeout(() => { document.addEventListener('mousedown', guanYuCaiDanWai, true); document.addEventListener('keydown', guanYuCaiDanEsc, true); window.addEventListener('blur', guanYuCaiDan); }, 0);
     });
   }
-  async function fanYiXuan(f, doc, sel) {
+  async function fanYiXuan(f, doc, sel, range) {
     if (!sel) return;
     const r = await window.warmy.nmFanYi?.({ text: sel }).catch(() => null);
     if (!r || !r.ok || !r.text) return;
     try {
-      const s = doc.getSelection();
-      if (!s || !s.rangeCount) return;
-      const rg = s.getRangeAt(0);
+      const rg = range && range.startContainer && range.startContainer.isConnected ? range : null;
+      if (!rg) return;
       rg.deleteContents();
       const sp = doc.createElement('span');
       sp.style.background = FAN_YI_BG;
       sp.style.borderRadius = '3px';
       sp.textContent = r.text;
       rg.insertNode(sp);
-      s.removeAllRanges();
     } catch { /* noop */ }
   }
   async function fanYiQuan(f, doc) {

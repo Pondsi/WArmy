@@ -1160,7 +1160,7 @@
    * 用户要求：把可选列表里的**第 1 个**与**第 15 个**去掉（1 起数）。
    * 第 1 个改作默认头像（见 PERSON_DEFAULT），所以它不必再出现在可选列表里。
    */
-  const PERSON_AVATARS = PERSON_AVATARS_ALL.filter((_, i) => i !== 0 && i !== 14);
+  const PERSON_AVATARS = PERSON_AVATARS_ALL.filter((_, i) => i !== 0 && i !== 2 && i !== 14).concat(['./icons/avatars/user-default.svg']);
   /**
    * **牛马**预设头像：preset-1..10。
    * 真事故（用户反馈「牛马头像里怎么有我最近做的用户头像」）：之前把**用户默认头像**
@@ -1176,7 +1176,7 @@
    *  · 原来的第 9 个（`person-10.svg`）= 另一张抽象人；
    *  · 默认本身 = 这里的 `user-default.svg`。
    */
-  const PERSON_DEFAULT = './icons/avatars/user-default.svg';
+  const PERSON_DEFAULT = './icons/avatars/enri-default.svg';
 
   /**
    * **项目 / 群聊头像**（第 101 轮重做，30+30，已放入项目资源）：
@@ -31270,7 +31270,8 @@ async function renderDashboard(host) {
       try { window.warmyMdFormat?.toggle(t); } catch { /* noop */ }
     }, true);
   } catch { /* noop */ }
-
+  /* R316：焦点限定全球热键（主进程抢注 Ctrl+Space）⇒按当前聊天输入框弹 Markdown 候选。 */
+  try { window.warmy.onMdFormatToggle?.(() => { const el = document.activeElement; if (el && (el.id === 'shuRu' || el.id === 'shuRuB')) { try { window.warmyMdFormat?.toggle(el); } catch { /* noop */ } } }); } catch { /* noop */ }
   function renderShortcuts() {
     const ti = $('hkMiYaoJiTi');
     if (!ti) return;

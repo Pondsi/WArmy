@@ -23872,6 +23872,16 @@ const beiJingTu = chuangJianBeiJingTu({
   guangBo: (channel, data) => broadcastToWindows(channel, data),
 });
 app.on('browser-window-created', (_e, win) => { try { beiJingTu.guaChuangKou(win); } catch { /* noop */ } });
+/* R316：焦点限定抢注 Ctrl+Space —— 主窗聚焦时注册系统级热键（尝试从输入法/其它应用抢回），失焦即注销归还。 */
+app.on('browser-window-focus', () => {
+  try {
+    globalShortcut.register('CommandOrControl+Space', () => {
+      const w = BrowserWindow.getFocusedWindow();
+      if (w && !w.isDestroyed()) { try { w.webContents.send('warmy:mdFormatToggle'); } catch { /* noop */ } }
+    });
+  } catch { /* 被系统/输入法占用时注册失败，按普通键盘事件兜底 */ }
+});
+app.on('browser-window-blur', () => { try { globalShortcut.unregister('CommandOrControl+Space'); } catch { /* noop */ } });
 chuliIpc('warmy:beiJingTuDu', () => beiJingTu.du());
 chuliIpc('warmy:beiJingTuShe', (_e, p0?: { src?: string; opacity?: number; mode?: string; tileSize?: number }) =>
   beiJingTu.she({ src: p0?.src, opacity: p0?.opacity, mode: p0?.mode as never, tileSize: p0?.tileSize }));
@@ -40103,6 +40113,7 @@ chuliIpc('warmy:daKaiZhenDuanChuang', () => {
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
+chuliIpc('warmy:nmFuZhi', (_e, p0?: { text?: string }) => { try { clipboard.writeText(String(p0?.text || '')); return { ok: true }; } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; } });
 /** R315：nm 只读预览翻译（选中/全文）——用当前供应商模型译成界面语言（已是则译英）。 */
 chuliIpc('warmy:nmFanYi', async (_e, p0?: { text?: string }) => {
   try {
