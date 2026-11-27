@@ -300,6 +300,8 @@ export interface NmNeiRong {
   yaSuoBao?: NmYaSuoBaoXinXi;
   /** 当前预览的包内条目（路径以 / 分隔，数组表示嵌套 zip 的层级） */
   tiaoMu?: NmTiaoMuXinXi;
+  /** R313②：.nm 裸内容自动识别出的渲染格式（md/html）——查看器据此只读单列渲染 */
+  nmRender?: 'md' | 'html';
   /** 需要密码（加密 zip）；mimaCuo=true 表示给过密码但不对 */
   needPassword?: boolean;
   mimaCuo?: boolean;
@@ -569,12 +571,21 @@ export function nmDuWenJian(luJing: string): NmNeiRong {
         fs.closeSync(fd);
       }
       const wenBen = jieMaWenBen(buf);
-      const keBianJi = ziJie <= WEN_BEN_KE_BIAN_JI;
+      /* R313①②：.nm 裸内容（非 wamy-nm 信封）自动识别为 markdown/html，只读渲染单列；
+       * 信封 .nm（配置/项目/聊天导出）保持原样，不当裸内容渲染。 */
+      let nmRender: 'md' | 'html' | undefined;
+      if (kuo === 'nm') {
+        let shiFeng = false;
+        try { const j = JSON.parse(wenBen) as { format?: string }; shiFeng = !!(j && j.format === 'wamy-nm'); } catch { /* 非 JSON＝裸 md/html */ }
+        if (!shiFeng) nmRender = /^\s*<(?:!doctype|html|head|body|div|section|article|table|h[1-6]|p|ul|ol)\b/i.test(wenBen) ? 'html' : 'md';
+      }
+      const keBianJi = nmRender ? false : ziJie <= WEN_BEN_KE_BIAN_JI;
       const jieDuan = ziJie > WEN_BEN_DU_SHANG_XIAN;
       return {
         ...jiChu, leiXing: 'text', keBianJi, wenBen,
         huanHang: wenBen.includes('\r\n') ? 'crlf' : 'lf',
-        ...(jieDuan || !keBianJi
+        ...(nmRender ? { nmRender } : {}),
+        ...((jieDuan || !keBianJi) && !nmRender
           ? {
             jieDuan: true,
             tiShi: jieDuan
@@ -1237,6 +1248,8 @@ export interface NmKaiXuanXiang {
   huiHuaId?: string;
   /** R128：打开后立即进入网页模式并加载该 URL（占位文件 + web 参数驱动，见渲染层） */
   kaiWangYe?: string;
+  /** R313①：只读渲染模式（'md'|'html'）——单列效果预览、禁编辑、无源码栏。马头打开聊天回复走这条。 */
+  zhiDuYuLan?: string;
 }
 
 function kongBian(): Record<NmBian, number | null> {
@@ -2090,6 +2103,36 @@ export function nmShiFuZhuChuang(wc: import('electron').WebContents): boolean {
   } catch { /* noop */ }
   return false;
 }
+/** R313③：判定某 WebContents 是否 nm A2UI 专用宿主窗——供 IPC 来源闸只放行 warmy:a2uiAction（按钮回传）。
+ * 产物 index.html 落在会话工作区（不在 renderer 白名单），旧闸一律拒⇒按钮「forbidden sender」。 */
+export function nmShiA2uiChuang(wc: import('electron').WebContents): boolean {
+  try {
+    for (const w of NM_A2UI_WINS.values()) {
+      if (w && !w.isDestroyed() && w.webContents === wc) return true;
+    }
+  } catch { /* noop */ }
+  return false;
+}
+/** R313⑧：按窗口 id 关闭一扇 nm 查看器（含 A2UI 专用宿主）——马头再次点击切换关闭用。
+ * 走 close() 触发各自 'closed' 清理（断吸附/销登记）；主窗口永不从这里关。 */
+export function nmHuiFuGuan(id: number): boolean {
+  const n = Number(id) || 0;
+  if (!n) return false;
+  try {
+    const Z = CHUANG_KOU.get(n);
+    if (Z && Z.id !== NM_ZHU_CHUANG_ID && !Z.win.isDestroyed()) {
+      try { Z.win.close(); } catch { try { Z.win.destroy(); } catch { /* noop */ } }
+      return true;
+    }
+    for (const w of NM_A2UI_WINS.values()) {
+      if (w && w.id === n && !w.isDestroyed()) {
+        try { w.close(); } catch { try { w.destroy(); } catch { /* noop */ } }
+        return true;
+      }
+    }
+  } catch { /* noop */ }
+  return false;
+}
 /** R278 项8：网站账密捕获回调（存储层在 electron-main，本层只负责抓表单 POST） */
 let nmZhangHaoHuiDiao: ((url: string, username: string, password: string) => void) | null = null;
 export function sheNmZhangHaoHuiDiao(fn: (url: string, username: string, password: string) => void): void { nmZhangHaoHuiDiao = fn; }
@@ -2896,6 +2939,7 @@ export function nmShiTuKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yi
         accent: zhuTi.accent,
         ink: zhuTi.ink || '',
         ...(kaiWangYe ? { web: kaiWangYe } : {}),
+        ...(xuan?.zhiDuYuLan ? { zhiDu: '1', render: String(xuan.zhiDuYuLan) } : {}),
       },
     });
     /** 拖文件到普通 nm 窗口：不导航替换当前页，而是**新开一个 nm 窗口**打开该文件 */

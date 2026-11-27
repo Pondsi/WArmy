@@ -21,6 +21,9 @@
   const chuangKouId = Number(canShu.get('id') || '0');
   /** 聊天框临时编辑模式：内容实时回传聊天框，不落盘、不提示保存 */
   const chatEditor = canShu.get('chatEditor') === '1';
+  /** R313①：只读渲染模式（马头打开聊天回复）——单列效果、禁编辑、无源码栏。 */
+  const zhiDuCan = canShu.get('zhiDu') === '1';
+  const zhiDuRenderCan = String(canShu.get('render') || '').toLowerCase();
   /* R147 项3：聊天编辑器里再按一次「文本编辑器」快捷键 ⇒ 关掉窗口回到聊天框。
    * 键位由主窗口打开时带过来（hk=主键|备键），设置里改键后主进程会广播新键位。
    * 归一规则与主窗 comboFromEvent 完全一致：Ctrl/Alt/Shift/Meta 顺序 + 单字符大写。 */
@@ -112,6 +115,7 @@
     suoFangPanX: 0,     // 图片 transform:translate 的平移量（只读查看用）
     suoFangPanY: 0,
     fenLan: null,       // null | 'svg' | 'html' | 'md'
+    zhiDuYuLan: null,   // R313① null | 'md' | 'html'：只读单列渲染（无源码栏）
     fenLanBi: 0.5,
     quanPingEl: null,
     tiHuanKai: false,   // 替换输入是否展开（由结果数按钮切换）
@@ -431,12 +435,23 @@
     el('gaoLiang').scrollTop = 0;
     duiQiGaoLiang();
     const geShi = String(r.kuoZhan || '').toLowerCase();
-    const fenLanLei = opts.svg ? 'svg'
-      : (geShi === 'html' || geShi === 'htm' || geShi === 'xhtml') ? 'html'
-        : (geShi === 'md' || geShi === 'markdown' || geShi === 'mdx') ? 'md'
-          : null;
-    if (fenLanLei) kaiFenLan(fenLanLei);
-    else guanFenLan();
+    /* R313①②：只读渲染（马头打开 zhiDu=1，或 .nm 裸内容自动识别 nmRender）⇒单列效果、禁编辑。 */
+    const zhiDuLei = zhiDuCan
+      ? (zhiDuRenderCan === 'html' ? 'html' : zhiDuRenderCan === 'md' ? 'md' : (r.nmRender || 'md'))
+      : (r.nmRender || '');
+    if (zhiDuLei) {
+      kaiZhiDuYuLan(zhiDuLei);
+    } else {
+      zt.zhiDuYuLan = null;
+      document.body.classList.remove('nmZhiDuMoShi');
+      el('juanCuo').style.display = '';
+      const fenLanLei = opts.svg ? 'svg'
+        : (geShi === 'html' || geShi === 'htm' || geShi === 'xhtml') ? 'html'
+          : (geShi === 'md' || geShi === 'markdown' || geShi === 'mdx') ? 'md'
+            : null;
+      if (fenLanLei) kaiFenLan(fenLanLei);
+      else guanFenLan();
+    }
     gengXinYuLan();
     sheZiDongBaoCun();
     const hang = ta.value ? ta.value.split('\n').length : 0;
@@ -2354,6 +2369,22 @@ hui();
     el('yuLanNei').innerHTML = '';
     gengXinXiTongAnNiu();
   }
+  /** R313①：只读单列渲染——复用预览 iframe 画 md/html 效果，藏源码栏与分隔条，禁编辑。
+   * 内容仍在 #wenBen（隐藏）供 gengXinYuLan 读取；保存/撤销/替换等编辑控件由 body.nmZhiDuMoShi 藏掉。 */
+  function kaiZhiDuYuLan(lei) {
+    const g = lei === 'html' ? 'html' : 'md';
+    zt.zhiDuYuLan = g;
+    zt.keBianJi = false;
+    const ta = el('wenBen'); if (ta) ta.readOnly = true;
+    kaiFenLan(g);
+    el('juanCuo').style.display = 'none';
+    el('fenGeTiao').hidden = true;
+    el('yuLanLie').hidden = false;
+    el('yuLanLie').style.flex = '1 1 0';
+    el('yuLanLei').textContent = g === 'html' ? 'HTML 效果（只读）' : 'Markdown 效果（只读）';
+    document.body.classList.add('nmZhiDuMoShi');
+    gengXinYuLan();
+  }
   function yingYongFenLanBi() {
     if (!zt.fenLan) return;
     const pct = Math.max(20, Math.min(80, zt.fenLanBi * 100));
@@ -2453,7 +2484,7 @@ hui();
     const yang = '<style>html,body{margin:0}body{padding:16px;font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-size:14px;line-height:1.65;color:#1b1b1b;background:#fff}img{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:break-word;background:#f6f6f6;padding:10px;border-radius:6px}code{font-family:Consolas,monospace;font-size:13px}table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:4px 8px;text-align:left}blockquote{margin:0 0 1em;padding-left:12px;border-left:3px solid #ddd;color:#555}a{color:#8a5a3c;text-decoration:underline}a.nmLianJie{cursor:pointer}'
       + '/* R310⑤ 扩展显示 */.mdBiao{width:100%;margin:6px 0}.mdBiao th{background:#f2f2f2}.mdTask{list-style:none;display:flex;gap:6px;align-items:flex-start}.mdTask input{margin-top:3px}.mdImg{border-radius:6px}.mdGaoLiang{background:#f3e2c8;padding:0 2px;border-radius:3px}.mdSpoiler{border-bottom:1px dashed #999}.mdMath{font-family:Consolas,monospace}.mdMathKuai,.mdFront,.mdSuoJin{background:#f6f6f6;border-radius:6px;padding:8px;overflow:auto}.mdCallout{border-left:3px solid #a87654;background:#f7efe7;padding:6px 10px;margin:6px 0;border-radius:4px}.mdCallout-warning,.mdCallout-caution{border-left-color:#c05050;background:#f7e7e7}.mdCalloutBiao{display:block;font-weight:600;font-size:12px;margin-bottom:2px}.mdDingYi dt{font-weight:600}.mdDingYi dd{margin:2px 0 6px 16px;color:#666}.mdZhuQu{font-size:12px;color:#666}hr{border:0;border-top:1px solid #ddd;margin:8px 0}</style>';
     f.srcdoc = '<!doctype html><html><head><meta charset="utf-8">' + yang + '</head><body>'
-      + (zt.fenLan === 'md' ? markdownToHtml(wen) : linkifyCunWen(wen)) + '</body></html>';
+      + (zt.fenLan === 'md' ? markdownToHtml(wen) : (zt.zhiDuYuLan === 'html' ? wen : linkifyCunWen(wen))) + '</body></html>';
     /** R138：每次重绘后重绑链接点击（Ctrl+开新窗） */
     f.onload = () => {
       bangDingYuLanLianJie(f);

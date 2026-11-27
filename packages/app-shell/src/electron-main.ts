@@ -315,7 +315,7 @@ import {
   nmShiTuLieBiao, nmShiTuQiYong, nmShiTuQuanBuGuanBi, nmSheZhiZhuChuangKuang,
   nmJieRuZhuChuang, nmZhuChuangXiFu, nmShiTuQuZiJie, nmSheZhiMianBanKuan, nmSheZhiXuNiWenJian,
   nmZhuZuiDaHuaKai, nmZhuZuiDaHuaGuan, nmZhuZuiDaHuaZhuangTai, nmZhuZuiDaXiFuCe,
-  nmWangYeKai, nmWangYeKuang, nmWangYeSuoFang, nmMoTaiKai, nmMoTaiGuan, nmChuangKouCha, nmTanChuangKai, nmTanChuangGuan, nmXiaZaiChuangKai, nmXiaZaiChuangGuan, nmShiFuZhuChuang, sheNmZhangHaoHuiDiao, nmWangYeGuan, nmWangYeDaoHang, nmWangYeXinKai, nmWangYeYuan, nmWangYeChaZhao, nmWangYeDaYin,
+  nmWangYeKai, nmWangYeKuang, nmWangYeSuoFang, nmMoTaiKai, nmMoTaiGuan, nmChuangKouCha, nmTanChuangKai, nmTanChuangGuan, nmXiaZaiChuangKai, nmXiaZaiChuangGuan, nmShiFuZhuChuang, nmShiA2uiChuang, nmHuiFuGuan, sheNmZhangHaoHuiDiao, nmWangYeGuan, nmWangYeDaoHang, nmWangYeXinKai, nmWangYeYuan, nmWangYeChaZhao, nmWangYeDaYin,
   nmWangYeGuanTing, nmWangYeDaYinXuanZhong, nmWangYeJieTu, nmWangYeXuanZhongGaoLiang, nmWangYeXuanZeQu, nmWangYeCaiDanList,
   nmWangYeYinSiShe, nmWangYeShuJuGaiLan, nmWangYeShuJuQing,
   nmXiaZaiLieBiao, nmXiaZaiQingKong, nmXiaZaiDaKai, nmXiaZaiXianShi, nmSheZhiXiaZaiShenJi, nmSheZhiXiaZaiLuJing,
@@ -12089,6 +12089,7 @@ const { chuliIpc } = chuangJianIpcAnQuanZha({
   ipcMainHandle: (c, h) => ipcMain.handle(c, h),
   chuangFromWc: (wc) => BrowserWindow.fromWebContents(wc),
   nmShiFuZhuChuang,
+  nmShiA2uiChuang,
   authState: () => authService?.state() ?? null,
   auditLog: (op, d) => audit?.log(op, d),
   fachuKongzhitai,
@@ -23873,10 +23874,17 @@ chuliIpc('warmy:testBeiJingTuJia', (_e, p0?: { path?: string }) => {
 });
 chuliIpc('warmy:a2uiNmKai', (_e, p0?: { sessionId?: string; messageId?: string }) => {
   const sid = String(p0?.sessionId || ''), mid = String(p0?.messageId || '');
+  /* R313⑧：马头再次点击＝关闭该回复已开的 nm 查看器（切换）。 */
+  const key = sid + '\u0000' + mid;
+  const jiu = a2uiNmHuiFuChuang.get(key);
+  if (jiu && nmHuiFuGuan(jiu)) { a2uiNmHuiFuChuang.delete(key); return { ok: true, closed: true }; }
+  a2uiNmHuiFuChuang.delete(key);
   const checked = a2uiHuiFu.daKai(sid, mid);
   if (!checked.ok || !checked.path) return checked;
   if (!nmChaJianQiYong()) return { ok: false, error: 'nm-disabled' };
-  return nmA2uiKai({ luJing: checked.path, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi() });
+  const r = nmA2uiKai({ luJing: checked.path, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi() });
+  if (r.ok && r.id) a2uiNmHuiFuChuang.set(key, r.id);
+  return r;
 });
 chuliIpc('warmy:a2uiBrowserKai', async (_e, p0?: { sessionId?: string; messageId?: string }) => {
   const checked = a2uiHuiFu.duKuaiZhao(String(p0?.sessionId || ''), String(p0?.messageId || ''));
@@ -23944,18 +23952,26 @@ chuliIpc('warmy:a2uiChongShi', async (_e, p0?: { sessionId?: string; messageId?:
     model: String(state?.model || (at >= 0 ? (records[at] as { moXing?: string })?.moXing : '') || current?.model || ''), provider: id, providerConfig: snapshot, force: true });
   return { ok: true, state: a2uiHuiFu.cha(sid, mid) };
 });
-/** R311⑪：马头左键打开普通文字回复＝写 md 副本进 nm 查看器。 */
+/** R311⑪：马头左键打开普通文字回复＝写 .nm 副本（内容仍 markdown）进 nm 查看器只读单列渲染。
+ * R313①②⑧：.nm 格式＋只读渲染＋再次点击关闭。 */
+const a2uiNmHuiFuChuang = new Map<string, number>();
 chuliIpc('warmy:a2uiNmWenBen', (_e, p0?: { sessionId?: string; messageId?: string }) => {
   const sid = String(p0?.sessionId || ''), mid = String(p0?.messageId || '');
+  const key = sid + '\u0000' + mid;
+  const jiu = a2uiNmHuiFuChuang.get(key);
+  if (jiu && nmHuiFuGuan(jiu)) { a2uiNmHuiFuChuang.delete(key); return { ok: true, closed: true }; }
+  a2uiNmHuiFuChuang.delete(key);
   const rec = (chatLogs.get(sid) || []).find((x) => String(x.id || '') === mid);
   if (!rec) return { ok: false, error: 'message-missing' };
   try {
     const base = workspaceDirOf(app.getPath('userData'), sid);
     const dir = path.join(base, 'archive');
     fs.mkdirSync(dir, { recursive: true });
-    const lu = path.join(dir, 'huifu-' + mid.replace(/[^A-Za-z0-9._-]/g, '_') + '.md');
+    const lu = path.join(dir, 'huifu-' + mid.replace(/[^A-Za-z0-9._-]/g, '_') + '.nm');
     fs.writeFileSync(lu, String(rec.content || ''), 'utf8');
-    return nmShiTuKai({ luJing: lu, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi(), huiHuaId: sid });
+    const r = nmShiTuKai({ luJing: lu, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi(), huiHuaId: sid, zhiDuYuLan: 'md' });
+    if (r.ok && r.id) a2uiNmHuiFuChuang.set(key, r.id);
+    return r;
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 /** R311⑫：马头右键重生成。text＝只换回复内容（操作已固定、不再调工具）并覆盖历史；a2ui＝重跑互动层。 */
@@ -23985,7 +24001,7 @@ chuliIpc('warmy:chongShengHuiFu', async (_e, p0?: { sessionId?: string; messageI
     const jiuZheng = '【重新生成文字回复】本任务的操作已经执行完毕、结果固定（操作台账：' + caoZuo + '）。' +
       '**不要再调用任何工具、不要重做操作**；基于同样的用户问题与已产生的结果，换一种表述重新写最终回复。' +
       '如有必要可在回复中说明进行了什么操作、产生了什么结果。直接输出新的最终回复正文。';
-    const resp = await p.chat({ model: String((records[at] as { moXing?: string })?.moXing || providerCfg.model || ''), maxTokens: 4096,
+    const resp = await p.chat({ model: jieMoXingMing(String((records[at] as { moXing?: string })?.moXing || providerCfg.model || '')), maxTokens: 4096,
       xiaoXiJi: [...hist, { role: 'system', content: jiuZheng } as LiaoTianXiaoXi] }, undefined);
     const xin = neiRongWenBen(resp.choices?.[0]?.message?.content);
     if (!xin.trim()) return { ok: false, error: 'empty-regen' };

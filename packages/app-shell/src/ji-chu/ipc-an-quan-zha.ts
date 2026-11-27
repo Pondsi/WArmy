@@ -77,6 +77,8 @@ export interface IpcAnQuanZhaYiLai {
   ipcMainHandle: (channel: string, handler: (event: any, ...args: any[]) => any) => void;
   chuangFromWc: (wc: any) => { isDestroyed(): boolean } | null;
   nmShiFuZhuChuang: (wc: any) => boolean;
+  /** R313③：判定是否 nm A2UI 专用宿主窗（产物 index.html 在会话工作区）——只放行 warmy:a2uiAction */
+  nmShiA2uiChuang?: (wc: any) => boolean;
   authState: () => { hasAccount?: boolean; unlocked?: boolean } | null;
   auditLog: (op: string, detail: unknown) => void;
   fachuKongzhitai: (msg: { cat: 'error' | 'model' | 'tool' | 'system' | 'net'; code: string; data?: Record<string, unknown> }) => void;
@@ -107,6 +109,9 @@ export function chuangJianIpcAnQuanZha(yiLai: IpcAnQuanZhaYiLai) {
         /* R278 项8：nm 模态/弹出辅助窗是 data: URL——旧白名单只认 file: 页面，
          * 辅助窗里所有 IPC 被拒⇒保存/新建按钮“点了没反应”。这里仅放行受限通道且必须是本进程登记的辅助窗。 */
         if (u.startsWith('data:')) return NM_FU_ZHU_IPC.has(channel) && yiLai.nmShiFuZhuChuang(wc);
+        /* R313③：A2UI 专用宿主窗的产物页落在会话工作区（不在 renderer 白名单），
+         * 只放行按钮动作回传 warmy:a2uiAction（最小权限）；其余通道一律拒。 */
+        if (channel === 'warmy:a2uiAction' && yiLai.nmShiA2uiChuang && yiLai.nmShiA2uiChuang(wc)) return true;
         if (u.startsWith('devtools://') && process.env.WARMY_ALLOW_DEVTOOLS_IPC === '1') return true;
         const bw = yiLai.chuangFromWc(wc);
         if (!bw || bw.isDestroyed()) return false;

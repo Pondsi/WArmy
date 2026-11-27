@@ -48,8 +48,8 @@
     b.closest('#ziJinHuaDd').style.display = visible ? '' : 'none';
     const active = cur && cur.sessionId === sid && (cur.status === 'running' || cur.status === 'split' || cur.status === 'staged') && !cur.stoppedEmpty;
     const enabled = !!Q().get(sid);
-    /* R261 项5：进化中不可点但保持开启样式（主题色图标+光子），不灰化；R268④：停止且无正文＝未开始⇒可关闭 */
-    b.disabled = !!active;
+    /* R261 项5：进化中保持开启样式（主题色图标+光子）；R313⑦：不再静默禁用，点击时提示先选支线。 */
+    b.disabled = false;
     b.classList.toggle('qiYong', enabled || !!active);
     b.setAttribute('aria-pressed', String(enabled));
     /* R261 项5：悬停比平时多一行「选择支线后才能关闭进化。」 */
@@ -86,6 +86,14 @@
       if (b.disabled) return;
       const sid = Q().sid();
       if (Q().nav() === 'internalGroup' && !(await isAdmin(sid))) return;
+      /* R313⑦：出现分支且未选支（未合并）⇒点进化图标提示先选支线，不关闭。 */
+      const c = cur;
+      const locked = !!(c && c.sessionId === sid && (c.status === 'running' || c.status === 'split' || c.status === 'staged') && !c.stoppedEmpty && !c.winner);
+      if (locked && Q().get(sid)) {
+        const wen = t('evolve.pickFirst', '请先选择一个支线，然后才能关闭进化。');
+        try { if (typeof window.__fuGuangTiShi === 'function') window.__fuGuangTiShi(wen, 4200); else if (typeof window.__showToast === 'function') window.__showToast(wen); } catch { /* noop */ }
+        return;
+      }
       /* R268④：关闭进化＝解散活跃实验（在途支线强制终止） */
       if (Q().get(sid)) { try { await W().ziJinHuaGuanBi(sid); } catch { /* noop */ } }
       Q().set(sid, !Q().get(sid)); refreshToggle();

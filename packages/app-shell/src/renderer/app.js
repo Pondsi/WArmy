@@ -5584,6 +5584,17 @@ async function langDuWenBen(text, btnEl) {
   }
   /** R310①「打开」/双击的 nm 勾选判定（插件启用＋设置勾选）。 */
   function a2uiNmGouXuan() { try { return nmChaJianKai() && state.nmKaiWenJian === true; } catch { return false; } }
+  /** R313⑥：进化并排块内联互动面挂载——逐条最终回复的 pao 复用主线缓存活节点（重绘不重置互动状态）。 */
+  function zjhNeiLianGuaZai(root) {
+    if (!root || !root.querySelectorAll) return;
+    root.querySelectorAll('.a2uiNeiLianPao[data-a2ui-inline]').forEach((pao) => {
+      const mid = pao.getAttribute('data-a2ui-id') || '';
+      const sid = pao.getAttribute('data-a2ui-session') || '';
+      const wen = pao.getAttribute('data-wen') || '';
+      const wrap = pao.closest('.zjhHuiFu') || pao.parentElement;
+      try { a2uiNeiLianGuaZai(wrap, sid, { id: mid, text: wen }); } catch { /* 内联失败不影响并排块 */ }
+    });
+  }
   /** 指定方式打开互动产物；首选失败回落另一条，仍失败才浮光提示。 */
   async function a2uiZhiDingDaKai(sid, mid, way) {
     const q = { sessionId: String(sid || ''), messageId: String(mid || '') };
@@ -7835,6 +7846,7 @@ async function langDuWenBen(text, btnEl) {
         pd.innerHTML = zjhPairHtml(m.evolvePair, { live: false, avatar: themAvatar, canChoose: state.nav !== 'internalGroup' });
         heZi.appendChild(pd);
         lastXiaoXiEl = pd;
+        try { zjhNeiLianGuaZai(pd); } catch { /* noop */ }
         /* R263：回退到选支前的 persisted 块＝可选支；项目角色 gating 异步补 */
         try {
           const curP = window.__ziJinHuaCur && window.__ziJinHuaCur();
@@ -8263,6 +8275,7 @@ async function langDuWenBen(text, btnEl) {
         ld.innerHTML = zjhPairHtml(curE, { live: true, canChoose: state.nav !== 'internalGroup', avatar: themAvatar });
         heZi.appendChild(ld);
         lastXiaoXiEl = ld;
+        try { zjhNeiLianGuaZai(ld); } catch { /* noop */ }
         if (state.nav === 'internalGroup') {
           try {
             window.__ziJinHuaQiao.isAdmin(curE.sessionId).then((ok) => {
@@ -14374,8 +14387,9 @@ async function deliver(chatId, text, u, fuJian) {
       /* R269 项6/11：首条用户消息不入支线（主进程不记）；后续用户消息＝主题色气泡、无头像。
        * R311⑥：悬停信息与未进化同口径（时间 title）。 */
       if (kind === 'user') {
-        const uT = ' title="' + escapeHtml(tOr('chat.tipTime', '时间') + '：' + wanZhengShiJian(Number(h.ts) || Date.now())) + '"';
-        return pairMode ? '<div class="zjhUserRow"><div class="bubble md"' + uT + '>' + mdHtml(wen) + '</div></div>' : '';
+        /* R313⑤：进化用户气泡也要悬停信息条（时间/朗读/引用/复制），与未进化同口径。 */
+        const uJiao = themHuiFuJiaoHtml({ ...h, moXing: '' }, { key: msgKey, text: wen, ts: Number(h.ts) || Date.now() }).jiao;
+        return pairMode ? '<div class="zjhUserRow"><div class="zjhUserNei"><div class="bubble md">' + mdHtml(wen) + '</div>' + uJiao + '</div></div>' : '';
       }
       if (kind === 'sikao') return '<details class="siKaoKuai"' + (notDone ? ' open' : '') + '><summary>' + escapeHtml(tOr('evolve.think', '思考')) + '</summary><pre>' + escapeHtml(wen) + '</pre></details>';
       if (kind === 'tool') return '<details class="siKaoKuai"><summary>' + escapeHtml(tOr('evolve.tool', '执行')) + '</summary><pre>' + escapeHtml(wen) + '</pre></details>';
@@ -14383,12 +14397,19 @@ async function deliver(chatId, text, u, fuJian) {
       if (kind === 'zhongjian') return '<div class="zuiZhongHang"><div class="bubble md zhongJianBiao">' + mdHtml(wen) + '</div></div>';
       if (kind === 'system') return '<div class="jingYin">' + escapeHtml(wen) + '</div>';
       /* R311③⑭：进化最终回复马头恒显且带真实消息 ID（点击/右键与主线同功能）。 */
-      const mt = a2uiMaTouHtml(String(curE?.sessionId || state.selectedChat?.id || ''), h, maTouCls || 'banMaTouJing');
+      const sidMt = String(curE?.sessionId || state.selectedChat?.id || '');
+      const mt = a2uiMaTouHtml(sidMt, h, maTouCls || 'banMaTouJing');
       const jiShi = { ...h, promptTokens: h.usage?.promptTokens || 0, completionTokens: h.usage?.completionTokens || 0, totalTokens: h.usage?.totalTokens || 0, cacheHitTokens: h.usage?.cacheHitTokens || 0 };
       const haoShi = Math.max(0, Number(h.endedAt || h.ts || 0) - Number(h.startedAt || h.ts || 0));
       const haoWen = haoShi ? Math.max(1, Math.round(haoShi / 1000)) + tOr('chat.secShort', '秒') : '';
       const jiao = themHuiFuJiaoHtml(jiShi, { key: msgKey, text: wen, haoWen });
-      return '<div class="zjhHuiFu"><div class="zuiZhongHang">' + mt + '<div class="bubble md">' + mdHtml(wen) + '</div></div>' + jiao.model + jiao.jiao + '</div>';
+      /* R313⑥：勾选增强且互动就绪⇒进化最终回复也内联渲染交互面（与主线同口径），不再只显文字。 */
+      const a2uiS = a2uiZhuangTaiOf({ ...h, id: h.id });
+      const inlineReady = state.a2uiReplyEnabled && a2uiS && String(a2uiS.status || '') === 'ready' && String(h.id || '');
+      const paoHtml = inlineReady
+        ? '<div class="bubble md a2uiNeiLianPao" data-a2ui-inline="1" data-a2ui-session="' + escapeHtml(sidMt) + '" data-a2ui-id="' + escapeHtml(String(h.id)) + '" data-wen="' + escapeHtml(wen) + '"><div class="a2uiNeiLianHost"></div></div>'
+        : '<div class="bubble md">' + mdHtml(wen) + '</div>';
+      return '<div class="zjhHuiFu"><div class="zuiZhongHang">' + mt + paoHtml + '</div>' + jiao.model + jiao.jiao + '</div>';
     };
     const chooseBtn = (k) => '<button type="button" class="anNiuZhuYao zjhChoose" data-arm="' + k + '"' + (((o && o.canChoose) && !notDone) ? '' : ' disabled title="' + escapeHtml(notDone ? tOr('evolve.notDoneTip', '支线还在跑，完成后才能选择。') : tOr('evolve.confirmTip', '只有项目创建者和管理员可以选择合并支线。')) + '"') + '>' + escapeHtml(tOr('evolve.choose', '选此支线')) + '</button>';
     /* R270 项9／R271 项3／R274 项2：思考/工具按序归组；只有「当前运行轮」的过程块展开(进行中)。
@@ -14441,7 +14462,11 @@ async function deliver(chatId, text, u, fuJian) {
     if (decided && !showBoth) {
       const hist = Array.isArray((arms[winner] || {}).history) ? arms[winner].history : [];
       /* R272 项6：单栏态用户回复要显示（有头像、同未分栏样式） */
-      const userFull = (h) => '<div class="zjhUserFull"><img class="touXiangTuPian" src="' + escapeHtml(personAvatarSrc(state.profile)) + '" alt=""/><div class="bubble" title="' + escapeHtml(tOr('chat.tipTime', '时间') + '：' + wanZhengShiJian(Number(h.ts) || Date.now())) + '">' + escapeHtml(String(h.content || '')) + '</div></div>';
+      const userFull = (h) => {
+        const wen = String(h.content || '');
+        const uJiao = themHuiFuJiaoHtml({ ...h, moXing: '' }, { key: String(h.id || ''), text: wen, ts: Number(h.ts) || Date.now() }).jiao;
+        return '<div class="zjhUserFull"><img class="touXiangTuPian" src="' + escapeHtml(personAvatarSrc(state.profile)) + '" alt=""/><div class="zjhUserNei"><div class="bubble md">' + mdHtml(wen) + '</div>' + uJiao + '</div></div>';
+      };
       return '<div class="zjhPair zjhSingle">' + av + '<div class="zjhSingleCol">' + (armBody(hist, false, (h) => kindOf(h) === 'user' ? userFull(h) : msgHtml(h)).join('') || '<div class="jingYin">…</div>') + '</div></div>';
     }
     /* R311⑭：pair 级不再另挂马头（每条最终回复自带）。 */
@@ -14534,6 +14559,7 @@ async function deliver(chatId, text, u, fuJian) {
         const openKeys = [...live.querySelectorAll('details[open]')].map((d) => (d.querySelector('summary') || {}).textContent || '');
         live.innerHTML = html;
         live.querySelectorAll('details').forEach((d) => { const s = (d.querySelector('summary') || {}).textContent || ''; if (openKeys.includes(s)) d.open = true; });
+        try { zjhNeiLianGuaZai(live); } catch { /* noop */ }
         try {
           const st = chatGunOf(c.sessionId);
           const jieGuan = !!st.userControl || !!st.pause;

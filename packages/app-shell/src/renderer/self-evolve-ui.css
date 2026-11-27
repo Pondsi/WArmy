@@ -44,6 +44,14 @@
 .zjhUserFull { display: flex; flex-direction: row-reverse; align-items: flex-start; gap: 8px; margin: 4px 0; }
 .zjhUserFull .touXiangTuPian { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
 .zjhUserFull .bubble { background: var(--me-bubble); color: var(--me-bubble-ink, #111); max-width: 80%; }
+/* R313⑤：进化用户气泡悬停信息条（时间/朗读/引用/复制），与未进化同口径。 */
+.zjhUserNei { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; max-width: 100%; }
+.zjhUserFull .zjhUserNei { max-width: 80%; }
+.zjhUserFull .zjhUserNei .bubble { max-width: 100%; }
+.zjhUserRow .xiaoXiJiao, .zjhUserFull .xiaoXiJiao { visibility: hidden; width: 100%; }
+.zjhUserRow:hover .xiaoXiJiao, .zjhUserFull:hover .xiaoXiJiao,
+.zjhUserRow:focus-within .xiaoXiJiao, .zjhUserFull:focus-within .xiaoXiJiao { visibility: visible; }
+.zjhUserRow .xiaoXiJiaoHang, .zjhUserFull .xiaoXiJiaoHang { justify-content: flex-end; }
 .zjhAvWrap { position: relative; width: 32px; height: 32px; flex-shrink: 0; margin-top: 2px; }
 .zjhAvWrap[data-decided="1"] { cursor: pointer; }
 .zjhAvWrap .zjhAv { width: 32px; height: 32px; border-radius: 6px; display: block; }

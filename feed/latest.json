@@ -1,13 +1,13 @@
 {
-  "version": "0.4.59",
-  "notes": "WArmy 0.4.59 — release round.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.59/WArmy-Setup-0.4.59.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.59/WArmy-Setup-0.4.59.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.59/WArmy-Setup-0.4.59.exe.warmyblocks",
-  "sha256": "07fe5565b5e19dfde0b0cce7c5cc1940ea18b50bbc8dce745085651f10043cde",
-  "size": 344374565,
+  "version": "0.4.60",
+  "notes": "WArmy 0.4.60 — Reading and steering replies got smoother. Clicking the horse-head before a final reply opens it in the nm viewer as a clean read-only page (rendered Markdown, no editor column), saved as a .nm file the viewer recognizes automatically; click the horse-head again to close that viewer. Buttons inside generated interactive replies now work in the nm viewer instead of failing with a sender error. Regenerate text and regenerate interactive from the horse-head right-click menu now succeed reliably. In evolution mode your own messages show the same hover toolbar (time, read-aloud, quote, copy), boosted replies render their interactive content inline, and closing evolution while branches are still unselected prompts you to pick a branch first.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.60/WArmy-Setup-0.4.60.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.60/WArmy-Setup-0.4.60.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.60/WArmy-Setup-0.4.60.exe.warmyblocks",
+  "sha256": "876235d4f63486abd3f1fc9c8d70099ad4178a064d20e73f292e11124a67db7b",
+  "size": 344376650,
   "mandatory": false,
-  "publishedAt": "2026-11-27T14:44:59.342Z",
+  "publishedAt": "2026-11-27T16:44:15.491Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.59"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.60"
 }
