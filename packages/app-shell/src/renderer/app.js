@@ -5299,6 +5299,19 @@ async function langDuWenBen(text, btnEl) {
     return s0;
   }
   window.__mdHtml = mdHtml;
+  /** R312：系统小字只认「通知式」文案；正常回复即使被误标 system 也画气泡（修复“回复样式没了”）。 */
+  function shiXiTongNoticeWen(wen) {
+    const s = String(wen || '').trim();
+    return /^(（|\(|HTTP|⚠|回档|【)/.test(s) || /本轮回复失败|模型调用失败|鉴权失败|请在设置|已到预警点|已停下|没写够|我在这里等你的补充|模型供应商拒绝/.test(s);
+  }
+  /** R312：401/403 等鉴权错误→友好引导（不裸露原始 JSON）。 */
+  function youHaoJianQuanCuo(msg) {
+    const s = String(msg || '');
+    if (/\b401\b|\b403\b|authentication|invalid[ _-]?api[ _-]?key|api[ _-]?key.*invalid|Unauthorized|Forbidden|鉴权失败|HTTP\s*40[13]/i.test(s)) {
+      return tOr('chat.authFailFriendly', '模型供应商拒绝了请求（401/403：API Key 无效或与站点不匹配）。请在 设置 → 模型 填写正确的 Key（或核对 baseURL 站点），然后点回复下方的「继续 / 重试」。');
+    }
+    return '';
+  }
   /* R310⑤：剧透 ||…|| 默认模糊，点击/回车揭示 */
   document.addEventListener('click', (e) => {
     const sp = e.target && e.target.closest && e.target.closest('.mdSpoiler');
@@ -5637,6 +5650,8 @@ async function langDuWenBen(text, btnEl) {
     }
   }
   window.__shuaDutyBanner = shuaDutyBanner;
+  /* R312 探针钩子：重绘聊天（仅测试用）。 */
+  window.__r312Render = () => { try { renderChat({ keepScroll: true }); } catch { /* noop */ } };
   /* R310 定向探针入口（只读查询，不新增产品能力） */
   window.__r310Probe = {
     openRule: () => ({ menu: a2uiNmGouXuan() ? 'browser' : 'nm', dbl: a2uiNmGouXuan() ? 'nm' : 'browser' }),
@@ -7750,6 +7765,8 @@ async function langDuWenBen(text, btnEl) {
     const sidYong = state.selectedChat && state.selectedChat.id;
     const beiDaDuan = !!(sidYong && state.planInterrupted && state.planInterrupted.has(String(sidYong)));
     const yiGuanBi = !!(state.planResumeDisabled && state.planResumeDisabled[String(sidYong)]);
+    /* R312：先纠正被误标 system 的正常回复，再算“最后回复”（马头/继续按钮依赖它）。 */
+    slice.forEach((m) => { if (m && m.role !== 'wo' && m.system && !shiXiTongNoticeWen(m.text)) m.system = false; });
     const zuiHouThem = (function () {
       let z = -1;
       slice.forEach((m, i) => { if (m && !m.system && m.role !== 'wo') z = i; });
@@ -7864,10 +7881,13 @@ async function langDuWenBen(text, btnEl) {
         return tiao.filter(Boolean).join('\n');
       })();
       // 系统小字（如"本轮模型：xxx"）：不画气泡，居中一行浅色小字
+      /* R312：正常回复被误标 system 时纠正回气泡，避免“回复样式没了”。 */
+      if (m && m.role !== 'wo' && m.system && !shiXiTongNoticeWen(m.text)) m.system = false;
       if (m.system) {
         const xi = document.createElement('div');
         xi.className = 'xiTongXiaoZi';
-        xi.textContent = m.text;
+        /* R312：鉴权类原始错误（401/403 JSON）统一友好化，不裸露原始报文。 */
+        xi.textContent = youHaoJianQuanCuo(m.text) || m.text;
         heZi.appendChild(xi);
         return;
       }
@@ -14068,7 +14088,7 @@ async function deliver(chatId, text, u, fuJian) {
            * 不许把"本轮内容装不进模型窗口：固定开销 8123 + 工具 2456…"退化成一句"本轮回复失败：budget-overflow"。
            */
           const juTi = r && typeof r.reply === 'string' && youShiZhiWenBen(r.reply) ? String(r.reply) : '';
-          const cuo = juTi || tOr('chat.failed', '本轮回复失败') + '：' + String(r?.error || t('common.error'));
+          const cuo = juTi || youHaoJianQuanCuo(r?.error) || tOr('chat.failed', '本轮回复失败') + '：' + String(r?.error || t('common.error'));
           /* R264 项8／R270 项4：会话/模型错误＝inline 系统行（无气泡/不弹窗/不播回复音）；仅程序自身错误才弹窗 */
           if (String(chatId || '') === 'mimic-pet') {
             try { void window.warmy.systemMessageAdd?.({ kind: 'system', title: tOr('mimic.errTitle', '拟态异常'), body: cuo }); } catch { /* noop */ }
@@ -14093,7 +14113,7 @@ async function deliver(chatId, text, u, fuJian) {
           } catch { /* noop */ }
         }
       } catch (e) {
-        if (benLunYouXiao()) tuisongXiaoxi(chatId, 'them', tOr('chat.failed', '本轮回复失败') + '：' + String(e && e.message || e), { system: true });
+        if (benLunYouXiao()) tuisongXiaoxi(chatId, 'them', youHaoJianQuanCuo(e && e.message) || tOr('chat.failed', '本轮回复失败') + '：' + String(e && e.message || e), { system: true });
       }
     } finally {
       // 旧请求的 finally 不准关闭该会话的新轮；切会话也不动别人的发送按钮。
@@ -38362,7 +38382,7 @@ try {
     const shiMoXing = /ollama|openai|anthropic|HTTP\s*\d|context|exceeds|token|model|模型|供应商|api[_ ]?key|\b4\d\d\b|\b5\d\d\b|rate|limit|fetch|network|ECONN|timeout/i.test(msg);
     if (shiMoXing) {
       const sid = state.selectedChat && state.selectedChat.id;
-      if (sid) tuisongXiaoxi(sid, 'them', tOr('chat.failed', '本轮回复失败') + '：' + msg, { system: true });
+      if (sid) tuisongXiaoxi(sid, 'them', youHaoJianQuanCuo(msg) || tOr('chat.failed', '本轮回复失败') + '：' + msg, { system: true });
       else { try { void window.warmy.systemMessageAdd?.({ kind: 'system', title: tOr('common.error', '出错了'), body: msg }); } catch { /* noop */ } }
       return;
     }

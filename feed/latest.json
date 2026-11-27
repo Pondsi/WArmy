@@ -1,13 +1,13 @@
 {
-  "version": "0.4.58",
-  "notes": "WArmy 0.4.58 — release round.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.58/WArmy-Setup-0.4.58.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.58/WArmy-Setup-0.4.58.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.58/WArmy-Setup-0.4.58.exe.warmyblocks",
-  "sha256": "c0fa9ca31d54d055478561f3b05c8a3eb869a09d20a7400be9b5aece589c1b00",
-  "size": 344374274,
+  "version": "0.4.59",
+  "notes": "WArmy 0.4.59 — release round.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.59/WArmy-Setup-0.4.59.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.59/WArmy-Setup-0.4.59.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.59/WArmy-Setup-0.4.59.exe.warmyblocks",
+  "sha256": "07fe5565b5e19dfde0b0cce7c5cc1940ea18b50bbc8dce745085651f10043cde",
+  "size": 344374565,
   "mandatory": false,
-  "publishedAt": "2026-11-27T13:22:01.815Z",
+  "publishedAt": "2026-11-27T14:44:59.342Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.58"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.59"
 }
