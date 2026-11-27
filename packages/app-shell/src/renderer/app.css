@@ -5619,6 +5619,10 @@ html { font-weight: var(--fw-ui, 400); }
 .bz-xiaoXiTou { display: flex; align-items: center; gap: 8px; }
 .bz-xiaoXiBiao { flex: 1; min-width: 0; font-weight: 600; font-size: var(--fs-base, 13px); color: var(--ink, #191919); }
 .bz-xiaoXiShi { font-size: 11px; color: var(--muted, #888); flex: 0 0 auto; }
+/* R314②：系统消息默认只显标题＋日期，点标题展开/收起正文 */
+.bz-zhanKai { flex: 0 0 auto; font-size: 11px; color: var(--muted, #888); transition: transform .12s; }
+.bz-xiaoXiTou:hover .bz-xiaoXiBiao { color: var(--accent, #A87654); }
+.bz-xiaoXiNei { margin-top: 4px; }
 .bz-xiaoXiShen { margin-top: 3px; font-size: var(--fs-sm, 12px); color: var(--muted, #888); white-space: pre-wrap; word-break: break-word; }
 .bz-leiBie { flex: 0 0 auto; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--hover, #ececec); color: var(--muted, #888); }
 /* 抽屉内滚动条：细、贴主题 */

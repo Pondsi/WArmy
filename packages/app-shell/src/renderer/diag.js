@@ -7,7 +7,7 @@
   const zhuang = el('zdZhuang');
   const chaInput = el('zdChaZhao');
   const jiShu = el('zdChaJiShu');
-  const nmBtn = el('zdNm');
+  const nmBtn = el('zdFolder');
   const esc = (s) => String(s == null ? '' : s);
   const escHtml = (s) => esc(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   zhuang.title = '只记脱敏事件，绝不上传。';
@@ -61,10 +61,6 @@
       const on = !!(r && r.enabled);
       el('zdToggle').textContent = on ? '记录：开' : '记录：关';
       zhuang.textContent = '共 ' + ((r && r.entries) || []).length + ' 条';
-      /* R223 项2：nm 未启用 ⇒ 按钮灰不可用 */
-      const nmOn = !!(r && r.nmQiYong);
-      nmBtn.disabled = !nmOn;
-      nmBtn.title = nmOn ? '在 nm 查看器中打开当前诊断日志' : 'nm 查看器未启用（设置→功能里安装/启用后可用）';
     } catch (e) { yuanWen = '读取失败：' + esc(e && e.message || e); yu.textContent = yuanWen; }
   }
 
@@ -95,11 +91,9 @@
     } catch (e) { zhuang.textContent = '切换失败：' + esc(e && e.message || e); }
   });
   nmBtn.addEventListener('click', async () => {
-    if (nmBtn.disabled) return;
     try {
-      const r = await window.warmy.diagNmKai();
-      zhuang.textContent = r && r.ok ? '已在 nm 查看器中打开。'
-        : (r && r.error === 'nm-disabled' ? 'nm 查看器未启用。' : '打开失败。');
+      const r = await window.warmy.diagOpenFolder();
+      zhuang.textContent = r && r.ok ? '已打开所在文件夹。' : '打开文件夹失败。';
     } catch (e) { zhuang.textContent = '打开失败：' + esc(e && e.message || e); }
   });
 

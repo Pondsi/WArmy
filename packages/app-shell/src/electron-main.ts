@@ -1721,7 +1721,7 @@ function qingChongXieJiLu(sid?: string): void {
  * 有上限（每会话 400 条消息 / 200 条操作、最多 40 个会话），超了丢最旧 —— 这是缓存不是档案，
  * 正文永远以 JSONL 为准，所以这份文件删了也只是丢掉重启前的思考/台账显示，不会丢对话。
  */
-type ChatMetaXiaoXi = { ts: number; role: string; id?: string; reasoning?: string; reasoningDuan?: Array<{ ts: number; text: string; moXing?: string }>; zhongJian?: Array<{ ts: number; text: string; moXing?: string }>; moXing?: string; moXingJiangJi?: string; promptTokens?: number; completionTokens?: number; cachedTokens?: number; turnCount?: number; artifacts?: unknown[]; zhengWen?: number; stopped?: boolean; system?: boolean; evolvePair?: { expId?: string; winner?: string; mode?: string; arms?: Record<string, { history?: unknown[] }> } };
+type ChatMetaXiaoXi = { ts: number; role: string; id?: string; reasoning?: string; reasoningDuan?: Array<{ ts: number; text: string; moXing?: string }>; zhongJian?: Array<{ ts: number; text: string; moXing?: string }>; moXing?: string; moXingJiangJi?: string; promptTokens?: number; completionTokens?: number; cachedTokens?: number; cacheReported?: boolean; turnCount?: number; artifacts?: unknown[]; zhengWen?: number; stopped?: boolean; system?: boolean; evolvePair?: { expId?: string; winner?: string; mode?: string; arms?: Record<string, { history?: unknown[] }> } };
 type ChatMetaXingDong = { hao: string; tool: string; detail?: string; phase: string; ok?: boolean; ms?: number; chars?: number; ts: number; stopped?: boolean; reason?: string };
 
 /**
@@ -1839,6 +1839,8 @@ function jiLuMeta(sid: string, e: LogEntry | undefined | null): void {
     completionTokens: Number((e as { completionTokens?: number }).completionTokens || 0),
     /* R292：缓存命中词元随旁路落盘（重启后悬停/使用量的命中率不丢） */
     cachedTokens: Number((e as { cachedTokens?: number }).cachedTokens || 0),
+    /* R314④：缓存是否被供应商回报随旁路落盘（重启后 MiMo 等仍显「未反馈」而非 0） */
+    cacheReported: (e as { cacheReported?: boolean }).cacheReported,
     turnCount: Number((e as { turnCount?: number }).turnCount || 0),
     artifacts: Array.isArray((e as { artifacts?: unknown[] }).artifacts) ? (e as { artifacts?: unknown[] }).artifacts : [],
     /* R274：进化并排块 payload 走旁路台账持久化（JSONL 只存正文），重启后合回 ⇒ 双栏与续发上下文不丢 */
@@ -19116,6 +19118,8 @@ async function zhenZhengFaSongBen(
         completionTokens: xiangYing.usage?.completionTokens || 0,
         /* R292：缓存命中词元（输入的子集）——悬停显示「输入(减缓存)/输出/缓存(命中率)」 */
         cachedTokens: xiangYing.usage?.cacheHitTokens || 0,
+        /* R314④：供应商未回报缓存明细（如 MiMo flash）⇒ cacheReported=false，界面显「未反馈」不把 0 当命中 */
+        cacheReported: xiangYing.usage?.cacheReported,
       });
       /**
        * 这一轮正文已经落账 ⇒ 清掉“当前这一段正文/本轮中间回复”的快照：
@@ -22851,6 +22855,8 @@ chuliIpc('warmy:liaoTianXiaoXiJi', (_e, payload?: { sessionId?: string; limit?: 
         completionTokens: (e as { completionTokens?: number }).completionTokens || 0,
         /* R292：缓存命中词元回给渲染层（悬停/使用量统计命中率用） */
         cachedTokens: (e as { cachedTokens?: number }).cachedTokens || 0,
+        /* R314④：缓存是否被供应商回报回给渲染层 */
+        cacheReported: (e as { cacheReported?: boolean }).cacheReported,
         /** 第 35 轮 项 8：这一轮跑了几轮（工具循环）—— 悬停词元时要显示 */
         turnCount: Number((e as { turnCount?: number }).turnCount || 0) || 0,
         /* R261 项6：进化双支线并排块（聊天记录的一部分）必须原样带回渲染层；R301 补互动状态。 */
@@ -22996,6 +23002,7 @@ chuliIpc('warmy:liaoTianRiZhiZhuiJia', async (_e, payload?: { sessionId?: string
       promptTokens: Number((payload as { promptTokens?: number })?.promptTokens || 0) || undefined,
       completionTokens: Number((payload as { completionTokens?: number })?.completionTokens || 0) || undefined,
       cachedTokens: Number((payload as { cachedTokens?: number })?.cachedTokens || 0) || undefined,
+      cacheReported: (payload as { cacheReported?: boolean })?.cacheReported,
     });
     return { ok: true, appended: true };
   } catch (e3) {
@@ -40021,8 +40028,12 @@ chuliIpc('warmy:daKaiBangZhuWenDang', async () => {
   try {
     const lu = path.join(__dirname, 'renderer', 'help.md');
     if (!fs.existsSync(lu)) return { ok: false, error: 'help-missing' };
-    if (nmKaiWenJianKai() && nmChaJianQiYong()) { try { nmShiTuKai({ luJing: lu, zhuTi: nmShiTuZhuTi() }); return { ok: true, via: 'nm' }; } catch { /* 回落系统 */ } }
-    await shell.openPath(lu);
+    /* R314⑤：帮助文档用 .nm 格式（内容仍 markdown），nm 查看器只读单列渲染；带 BOM 防 Windows 编码误判。 */
+    const md = fs.readFileSync(lu, 'utf8');
+    const nmLu = path.join(app.getPath('userData'), 'help.nm');
+    fs.writeFileSync(nmLu, '\uFEFF' + md.replace(/^\uFEFF/, ''), 'utf8');
+    if (nmKaiWenJianKai() && nmChaJianQiYong()) { try { nmShiTuKai({ luJing: nmLu, zhuTi: nmShiTuZhuTi(), zhiDuYuLan: 'md' }); return { ok: true, via: 'nm' }; } catch { /* 回落系统 */ } }
+    await shell.openPath(nmLu);
     return { ok: true, via: 'system' };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
@@ -40085,10 +40096,22 @@ chuliIpc('warmy:zhenDuanNmDaKai', () => {
       + '- 记录条数：' + bundle.entries.length + '\n'
       + '- 运行环境：' + JSON.stringify(bundle.manifest.huanJing || {}) + '\n\n'
       + '## 事件\n\n' + (hang.length ? hang.join('\n') : '（暂无记录）') + '\n';
-    const lu = path.join(path.dirname(zhenDuan.wenJianLu), 'diag-nm-view.md');
-    fs.writeFileSync(lu, md, 'utf8');
-    nmShiTuKai({ luJing: lu, zhuTi: nmShiTuZhuTi() });
+    const lu = path.join(path.dirname(zhenDuan.wenJianLu), 'diag-nm-view.nm');
+    /* R314⑥：.nm 格式（内容 markdown）＋UTF-8 BOM（防 Windows 按 ANSI 误读致乱码）＋只读单列渲染。 */
+    fs.writeFileSync(lu, '\uFEFF' + md, 'utf8');
+    nmShiTuKai({ luJing: lu, zhuTi: nmShiTuZhuTi(), zhiDuYuLan: 'md' });
     return { ok: true };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+}, ['diag.html']);
+/** R314⑥：诊断日志界面「打开所在文件夹」（取代原「用 nm 查看器打开」）。 */
+chuliIpc('warmy:zhenDuanWenJianJiaDaKai', async () => {
+  try {
+    if (!zhenDuan) return { ok: false, error: 'diag-unavailable' };
+    const dir = path.dirname(zhenDuan.wenJianLu);
+    fs.mkdirSync(dir, { recursive: true });
+    const err = await shell.openPath(dir);
+    if (err) return { ok: false, error: err };
+    return { ok: true, path: dir };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 }, ['diag.html']);
 

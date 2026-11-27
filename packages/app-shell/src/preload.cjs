@@ -906,6 +906,7 @@ contextBridge.exposeInMainWorld('warmy', {
   diagToggle: (on) => ipcRenderer.invoke('warmy:zhenDuanKaiGuan', on),
   diagExport: () => ipcRenderer.invoke('warmy:zhenDuanDaoChu'),
 diagNmKai: () => ipcRenderer.invoke('warmy:zhenDuanNmDaKai'), // R223 项2
+diagOpenFolder: () => ipcRenderer.invoke('warmy:zhenDuanWenJianJiaDaKai'), // R314⑥：打开所在文件夹
   joinRecords: () => ipcRenderer.invoke('warmy:jiaRuJiLuLieBiao'),
   systemMessages: () => ipcRenderer.invoke('warmy:xiTongXiaoXiLieBiao'),
   /* R286：未知模型标签勾选/授权联网 */

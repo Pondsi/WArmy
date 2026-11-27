@@ -1,13 +1,13 @@
 {
-  "version": "0.4.60",
-  "notes": "WArmy 0.4.60 — Reading and steering replies got smoother. Clicking the horse-head before a final reply opens it in the nm viewer as a clean read-only page (rendered Markdown, no editor column), saved as a .nm file the viewer recognizes automatically; click the horse-head again to close that viewer. Buttons inside generated interactive replies now work in the nm viewer instead of failing with a sender error. Regenerate text and regenerate interactive from the horse-head right-click menu now succeed reliably. In evolution mode your own messages show the same hover toolbar (time, read-aloud, quote, copy), boosted replies render their interactive content inline, and closing evolution while branches are still unselected prompts you to pick a branch first.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.60/WArmy-Setup-0.4.60.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.60/WArmy-Setup-0.4.60.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.60/WArmy-Setup-0.4.60.exe.warmyblocks",
-  "sha256": "876235d4f63486abd3f1fc9c8d70099ad4178a064d20e73f292e11124a67db7b",
-  "size": 344376650,
+  "version": "0.4.61",
+  "notes": "WArmy 0.4.61 — Smoother messages, viewing and sponsorship. System messages now keep 'Mark all read' on the header row beside the back arrow, and each notification shows only its title and time until you click to expand (click again to collapse). Ctrl+Space reliably opens the Markdown format picker in the chat box. Models that don't report cache details (such as MiMo flash) now show 'cache: not reported by provider' instead of a misleading 0. Help docs and diagnostic snapshots open as read-only single-column .nm files (Markdown rendered, no editor); the diagnostic window replaces 'open in nm viewer' with 'open containing folder', and snapshots carry a UTF-8 BOM so they no longer show garbled text. Sponsorship: PayPal always opens in your system browser with the paypal.me/pondsi URL shown under the icon; WeChat and Alipay QR codes enlarge on click and dismiss on a second click.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.61/WArmy-Setup-0.4.61.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.61/WArmy-Setup-0.4.61.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.61/WArmy-Setup-0.4.61.exe.warmyblocks",
+  "sha256": "9c25031dff0e3daeab15b470acf83418be5d02bcb49493cb55a36b59eb64a64c",
+  "size": 344377794,
   "mandatory": false,
-  "publishedAt": "2026-11-27T16:44:15.491Z",
+  "publishedAt": "2026-11-27T17:13:45.980Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.60"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.61"
 }

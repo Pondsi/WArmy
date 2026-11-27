@@ -2139,7 +2139,7 @@
     });
   }
   try { bindYouJianCaiDan(); } catch { /* noop */ }
-  // R128：data-nm-web（赞助页 PayPal 等）左键 → nm 查看器网页模式打开；nm 未启用时降级系统浏览器
+  // R128/R314⑦：data-nm-web（赞助页 PayPal）左键 → **总是用系统默认浏览器**打开（不再走 nm 查看器）
   try {
     document.addEventListener('click', (e) => {
       const a = e.target && e.target.closest ? e.target.closest('[data-nm-web]') : null;
@@ -2147,10 +2147,26 @@
       e.preventDefault();
       const url = String(a.getAttribute('data-nm-web') || '');
       if (!url) return;
-      let nmKai = false;
-      try { nmKai = nmChaJianKai(); } catch { nmKai = false; }
-      if (nmKai) { try { void window.warmy.nmWangYeXinKai?.({ url }); } catch { /* noop */ } }
-      else { try { void window.warmy.openExternal?.(url); } catch { /* noop */ } }
+      try { void window.warmy.openExternal?.(url); } catch { /* noop */ }
+    });
+  } catch { /* noop */ }
+  /* R314⑦：微信/支付宝收款码点击放大（全屏遮罩），再点任意处关闭。 */
+  try {
+    document.addEventListener('click', (e) => {
+      const qr = e.target && e.target.closest ? e.target.closest('[data-sponsor-qr]') : null;
+      if (!qr) return;
+      e.preventDefault();
+      const lay = document.createElement('div');
+      lay.className = 'sponsorQrZheZhao';
+      lay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+      const big = document.createElement('img');
+      big.src = qr.getAttribute('src') || '';
+      big.alt = qr.getAttribute('alt') || '';
+      big.style.cssText = 'max-width:80vmin;max-height:80vmin;width:auto;height:auto;border-radius:12px;background:#fff;padding:12px;box-shadow:0 8px 40px rgba(0,0,0,.5)';
+      lay.appendChild(big);
+      lay.addEventListener('click', () => lay.remove());
+      document.addEventListener('keydown', function esc(ev) { if (ev.key === 'Escape') { lay.remove(); document.removeEventListener('keydown', esc); } });
+      document.body.appendChild(lay);
     });
   } catch { /* noop */ }
   // N7/R128：顶部网络开关三态（all → lan → off → all），状态落盘 wangLuoMoShi；
@@ -4699,6 +4715,8 @@ async function langDuWenBen(text, btnEl) {
         completionTokens: Number(m.completionTokens || 0),
         /* R292：缓存命中词元随日志带回（重启后悬停命中率不丢） */
         cachedTokens: Number(m.cachedTokens || 0),
+        /* R314④：缓存是否被供应商回报随日志带回（重启后 MiMo 等仍显「未反馈」） */
+        cacheReported: m.cacheReported,
         /** 降级/换模型括号与**附件图标行**必须一起带过来 —— 以前这里只拷 moXing，
          *  本地刚挂上的图标行会被这次同步抹掉（真机：附件拖进来了、发送也成功，
          *  气泡下面却没有图标行，`m.artifacts` 变回 0）。 */
@@ -4793,6 +4811,7 @@ async function langDuWenBen(text, btnEl) {
             promptTokens: m.promptTokens || l.promptTokens || 0,
             completionTokens: m.completionTokens || l.completionTokens || 0,
             cachedTokens: m.cachedTokens || l.cachedTokens || 0,
+            cacheReported: m.cacheReported !== undefined ? m.cacheReported : l.cacheReported,
             id: m.id || l.id || '',
             a2ui: m.a2ui || l.a2ui || null,
           };
@@ -8870,7 +8889,7 @@ async function langDuWenBen(text, btnEl) {
      * `opts.noLog` 时不再补写 —— 否则会多出一条内容不同的“已停止”。
      */
     if (!(opts && opts.noLog)) {
-      try { void window.warmy.chatLogAppend?.({ sessionId: chatId, id: (opts && opts.id) || undefined, role, content: text, system: !!(opts && opts.system), stopped: !!(opts && opts.stopped), moXing: (opts && opts.moXing) || '', moXingJiangJi: (opts && opts.moXingJiangJi) || undefined, artifacts: Array.isArray(opts && opts.artifacts) ? opts.artifacts : undefined, promptTokens: (opts && opts.usage && opts.usage.promptTokens) || undefined, completionTokens: (opts && opts.usage && opts.usage.completionTokens) || undefined, cachedTokens: (opts && opts.usage && opts.usage.cacheHitTokens) || undefined, reasoningDuan: (role === 'them' && typeof yuanYou !== 'undefined' && yuanYou.length) ? (yuanYou[yuanYou.length - 1] && yuanYou[yuanYou.length - 1].reasoningDuan) || [] : undefined }); } catch { /* noop */ }
+      try { void window.warmy.chatLogAppend?.({ sessionId: chatId, id: (opts && opts.id) || undefined, role, content: text, system: !!(opts && opts.system), stopped: !!(opts && opts.stopped), moXing: (opts && opts.moXing) || '', moXingJiangJi: (opts && opts.moXingJiangJi) || undefined, artifacts: Array.isArray(opts && opts.artifacts) ? opts.artifacts : undefined, promptTokens: (opts && opts.usage && opts.usage.promptTokens) || undefined, completionTokens: (opts && opts.usage && opts.usage.completionTokens) || undefined, cachedTokens: (opts && opts.usage && opts.usage.cacheHitTokens) || undefined, cacheReported: (opts && opts.usage) ? opts.usage.cacheReported : undefined, reasoningDuan: (role === 'them' && typeof yuanYou !== 'undefined' && yuanYou.length) ? (yuanYou[yuanYou.length - 1] && yuanYou[yuanYou.length - 1].reasoningDuan) || [] : undefined }); } catch { /* noop */ }
     }
     /** 落地后这一段流就结束了：清掉临时思考段（下一条消息重新攒；停止现场已经取走副本） */
     if (role === 'them' && !(opts && opts.system)) { try { siKaoQing(chatId); } catch { /* noop */ } }
@@ -9701,6 +9720,7 @@ async function langDuWenBen(text, btnEl) {
     var x = bzEl('bzXiangQing'); x.classList.remove('yinCang');
     bzEl('bzFanHui').classList.remove('yinCang');
     bzEl('bzBiaoTi').textContent = title;
+    var ra = bzEl('bzReadAllTop'); if (ra) ra.style.display = 'none'; // R314②：默认藏，仅系统消息视图显示
     return x;
   }
   function bzShiJian(ts) { try { return new Date(Number(ts) || Date.now()).toLocaleString(); } catch (e) { return ''; } }
@@ -9763,7 +9783,8 @@ async function langDuWenBen(text, btnEl) {
     var r = await window.warmy.systemMessages().catch(function () { return null; });
     var items = (r && r.items) || [];
     var lei = { update: tOr('help.kindUpdate', '更新'), remote: tOr('help.kindRemote', '远程控制'), ssh: 'SSH', system: tOr('help.kindSystem', '系统'), briefing: tOr('help.kindBriefing', '简报'), 'governance-approval': tOr('help.kindSystem', '系统') };
-    var head = '<div class="bz-gongJuTiao"><button class="anNiuXiao" data-bz-readall>' + escapeHtml(tOr('help.readAll', '全部已读')) + '</button></div>';
+    var head = ''; /* R314②：「全部已读」移到顶栏箭头同行右侧（bzReadAllTop） */
+    var raTop = bzEl('bzReadAllTop'); if (raTop) raTop.style.display = '';
     /* R278 项3：ETA 夹区间扩展审批（合并单条；双输入＋确定，留空＝不变） */
     var sp = await window.warmy.etaClampShenPiQu().catch(function () { return null; });
     var spBlock = '';
@@ -9800,9 +9821,9 @@ async function langDuWenBen(text, btnEl) {
           + '<button class="anNiuXiao" data-bz-label-web="' + escapeHtml(mo) + '">' + escapeHtml(tOr('mimic.authorizeWeb', '授权联网标注')) + '</button>'
           + '</div>';
       }
-      return '<div class="bz-xiaoXi' + (m.read ? '' : ' weiDu') + '" data-bz-read="' + escapeHtml(m.id) + '">'
-        + '<div class="bz-xiaoXiTou"><span class="bz-leiBie">' + escapeHtml(lei[m.kind] || m.kind) + '</span><span class="bz-xiaoXiBiao">' + escapeHtml(m.title) + '</span><span class="bz-xiaoXiShi">' + escapeHtml(bzShiJian(m.ts)) + '</span></div>'
-        + '<div class="bz-xiaoXiShen">' + escapeHtml(m.body) + '</div>' + labelBlock + '</div>';
+      return '<div class="bz-xiaoXi' + (m.read ? '' : ' weiDu') + '" data-bz-item="' + escapeHtml(m.id) + '">'
+        + '<div class="bz-xiaoXiTou" data-bz-read="' + escapeHtml(m.id) + '" style="cursor:pointer" title="' + escapeHtml(tOr('help.clickExpand', '点击展开/收起')) + '"><span class="bz-leiBie">' + escapeHtml(lei[m.kind] || m.kind) + '</span><span class="bz-xiaoXiBiao">' + escapeHtml(m.title) + '</span><span class="bz-xiaoXiShi">' + escapeHtml(bzShiJian(m.ts)) + '</span><span class="bz-zhanKai" aria-hidden="true">▸</span></div>'
+        + '<div class="bz-xiaoXiNei" hidden><div class="bz-xiaoXiShen">' + escapeHtml(m.body) + '</div>' + labelBlock + '</div></div>';
     }).join('');
     if (r307Items.length) {
       const block = document.createElement('section'); block.className = 'bz-xiaoXi';
@@ -9857,7 +9878,18 @@ async function langDuWenBen(text, btnEl) {
     }
     if (mb.closest('[data-bz-readall]')) { try { await window.warmy.systemMessagesReadAll(); } catch (e) { /* noop */ } bzXuanRanSystem(); bzShuaXinHuiZhang(); return; }
     var rd = mb.closest('[data-bz-read]');
-    if (rd) { try { await window.warmy.systemMessageRead(rd.getAttribute('data-bz-read')); } catch (e) { /* noop */ } bzXuanRanSystem(); bzShuaXinHuiZhang(); return; }
+    if (rd) {
+      /* R314②：点标题展开/收起正文（不整表重绘，保留展开态）；同时静默标已读。 */
+      var item = rd.closest('.bz-xiaoXi');
+      if (item) {
+        var kai = item.classList.toggle('bz-kai');
+        var nei = item.querySelector('.bz-xiaoXiNei'); if (nei) nei.hidden = !kai;
+        var arrow = item.querySelector('.bz-zhanKai'); if (arrow) arrow.textContent = kai ? '▾' : '▸';
+        item.classList.remove('weiDu');
+      }
+      try { await window.warmy.systemMessageRead(rd.getAttribute('data-bz-read')); } catch (e) { /* noop */ }
+      bzShuaXinHuiZhang(); return;
+    }
     var xiang = mb.closest('[data-bz]');
     if (!xiang) return;
     var dong = xiang.getAttribute('data-bz');
@@ -18821,11 +18853,11 @@ async function renderDashboard(host) {
           <div style="margin-top:14px;display:flex;gap:18px;flex-wrap:wrap">
             <div style="text-align:center">
               <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('sponsor.wechat', '微信收款'))}</div>
-              <img src="./icons/sponsor/wxd.png" alt="${escapeHtml(tOr('sponsor.wechatAlt', '微信收款二维码'))}" style="width:168px;height:168px;object-fit:contain;border:1px solid var(--line);border-radius:8px"/>
+              <img src="./icons/sponsor/wxd.png" data-sponsor-qr="1" alt="${escapeHtml(tOr('sponsor.wechatAlt', '微信收款二维码'))}" title="${escapeHtml(tOr('sponsor.qrEnlarge', '点击放大，再点关闭'))}" style="width:168px;height:168px;object-fit:contain;border:1px solid var(--line);border-radius:8px;cursor:pointer"/>
             </div>
             <div style="text-align:center">
               <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('sponsor.alipay', '支付宝收款'))}</div>
-              <img src="./icons/sponsor/zfbd.png" alt="${escapeHtml(tOr('sponsor.alipayAlt', '支付宝收款二维码'))}" style="width:168px;height:168px;object-fit:contain;border:1px solid var(--line);border-radius:8px"/>
+              <img src="./icons/sponsor/zfbd.png" data-sponsor-qr="1" alt="${escapeHtml(tOr('sponsor.alipayAlt', '支付宝收款二维码'))}" title="${escapeHtml(tOr('sponsor.qrEnlarge', '点击放大，再点关闭'))}" style="width:168px;height:168px;object-fit:contain;border:1px solid var(--line);border-radius:8px;cursor:pointer"/>
             </div>
             <div style="text-align:center">
               <div class="jingYin" style="margin-bottom:6px">${escapeHtml(tOr('sponsor.paypal', 'PayPal 赞助'))}</div>
@@ -18835,6 +18867,7 @@ async function renderDashboard(host) {
                   <path fill="#009cde" d="M15.3 4.8c-.2 1.1-.9 2-1.9 2.6-1 .6-2.2.9-3.4.9H9.2l-.9 5.5-1.2 4.8 3.4.2 1-6.4h3.9c3.4 0 5.5-1.7 6.1-4.9.3-1.8-.1-3.2-1.2-4.2-1.2-1.3-3.1-2.1-5.6-1.7z"/>
                 </svg>
               </div>
+              <div class="jingYin" style="margin-top:6px;font-size:11px;word-break:break-all;max-width:168px">https://www.paypal.com/paypalme/pondsi</div>
             </div>
           </div>
           <div class="jingYin" style="margin-top:10px">${escapeHtml(tOr('sponsor.thanks', '谢谢每一位支持者 —— 是你们让这个项目一直走下去。'))}</div>
@@ -31214,6 +31247,19 @@ async function renderDashboard(host) {
   });
   // 启动后给有快捷键的按钮挂上 title（直接写键位，如 F3 / ctrl+a）
   try { setTimeout(() => guaKuaiJieJianTiShi(), 0); } catch { /* noop */ }
+  /* R314③：聊天输入框 Ctrl+空格 直接触发 Markdown 候选（capture 先于全局快捷键表）。
+   * 不依赖全局快捷键绑定（防误绑/被其它动作占用）；stopPropagation 避免与全局派发重复触发。
+   * 同时认 e.key===' ' / e.code==='Space' / keyCode===32，兼容输入法上报差异。 */
+  try {
+    document.addEventListener('keydown', (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (!(e.key === ' ' || e.code === 'Space' || e.keyCode === 32)) return;
+      const t = e.target;
+      if (!t || (t.id !== 'shuRu' && t.id !== 'shuRuB')) return;
+      e.preventDefault(); e.stopPropagation();
+      try { window.warmyMdFormat?.toggle(t); } catch { /* noop */ }
+    }, true);
+  } catch { /* noop */ }
 
   function renderShortcuts() {
     const ti = $('hkMiYaoJiTi');

@@ -71,6 +71,8 @@ export interface LogEntry {
   completionTokens?: number;
   /** R292：本轮输入里**缓存命中**的词元（promptTokens 的子集）——悬停/使用量显示命中率；不进模型上下文 */
   cachedTokens?: number;
+  /** R314④：供应商是否真的回报了缓存明细（false＝未反馈，界面显示「供应商未反馈」而非误导的 0） */
+  cacheReported?: boolean;
   /**
    * **工具循环轮数**（同一发模型请求里跑了几轮工具）。
    * 界面时间行显示「输入X，输出Y · N次」；每条回复各记各的，跨回复不再累加。
