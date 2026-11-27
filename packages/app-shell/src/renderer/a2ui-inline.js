@@ -66,7 +66,7 @@ function render(host, jsonl, opts = {}) {
       };
       if (typeof opts.onAction === 'function') {
         Promise.resolve(opts.onAction(payload)).then((r) => {
-          note(r && r.ok ? ('已生成存档：' + ((r.files || []).join('、') || '完成')) : ('按钮动作未执行：' + String((r && r.error) || label || 'unknown')));
+          note(r && r.ok ? (r.generic ? '按钮交互已执行' : ('已生成存档：' + ((r.files || []).join('、') || '完成'))) : ('按钮动作未执行：' + String((r && r.error) || label || 'unknown')));
         }).catch((e) => note('按钮动作回传失败：' + String((e && e.message) || e)));
       } else {
         note('宿主桥不可用，按钮动作无法执行。');

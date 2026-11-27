@@ -350,6 +350,21 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
       renWu.delete(k);
     }
   }
+  /** R311⑫：重新生成文字回复后丢弃旧互动产物（状态/manifest/index），马头回文字色。 */
+  function wangJi(sid: string, mid: string): void {
+    const k = keyOf(sid, mid);
+    renWu.get(k)?.abort();
+    renWu.delete(k);
+    zhuangTai.delete(k);
+    try {
+      const { dir, manifest } = luJing(sid, mid);
+      fs.rmSync(dir, { recursive: true, force: true });
+      const indexFile = path.join(yiLai.workspaceDir(sid), 'a2ui', 'index.json');
+      const index = JSON.parse(fs.readFileSync(indexFile, 'utf8')) as { items?: Record<string, unknown> };
+      if (index && index.items) { delete index.items[mid]; fs.writeFileSync(indexFile, JSON.stringify(index, null, 2)); }
+      void manifest;
+    } catch { /* 无产物也正常 */ }
+  }
 
   function duKuaiZhao(sid: string, mid: string): { ok: boolean; path?: string; nmAvailable?: boolean; error?: string; html?: Buffer; runtime?: Buffer; jsonl?: string } {
     const s = cha(sid, mid);
@@ -388,5 +403,5 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
     return [{ type: 'text', text: '互动内容已生成：' + s.entryPath }];
   }
 
-  return { kaiShi, cha, quXiao, daKai, duKuaiZhao, tuPian };
+  return { kaiShi, cha, quXiao, wangJi, daKai, duKuaiZhao, tuPian };
 }

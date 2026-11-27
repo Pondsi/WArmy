@@ -54,9 +54,9 @@ With **Reply boost** enabled, the interactive layer renders inside the conversat
 - **A team you can configure.** Separate roles, instructions and model chains for researchers, builders and reviewers. A duty agent can coordinate project work; project rooms show a dismissible reminder at the top of the chat (it stays put while you scroll) explaining when the duty agent responds and when you must @ it.
 - **A place for work in progress.** Conversations, plans, knowledge and output files stay linked to the session.
 - **Memory you can inspect.** Search earlier work, open source records, and edit the knowledge used by the team. Summaries are navigation aids, not proof that a fact is correct.
-- **A choice of models.** Connect local, self-hosted or cloud endpoints. You control which models are enabled and can select one explicitly.
+- **A choice of models.** Connect local, self-hosted or cloud endpoints. Input/output types cover text, image, audio (listening models take audio in; speaking models output audio), video and classification. You control which models are enabled and can select one explicitly.
 - **A desktop companion.** Customize its appearance and interaction. Camera, microphone, speaker and network controls are separate.
-- **Interactive replies.** When Reply boost succeeds, the interactive content replaces the plain text right in the chat; you can still select, copy, quote and translate it, open it in the nm viewer or your browser, and regenerate it from the horse head. Failed generation falls back to the readable text with a self-dismissing notice.
+- **Interactive replies.** When Reply boost succeeds, the interactive content replaces the plain text right in the chat; you can still select, copy, quote and translate it. Every final reply carries a horse head: left-click opens it in the nm viewer (interactive result, or a Markdown copy for plain text); right-click offers regenerate-text / regenerate-interactive / cancel, overwriting the old reply (history included) without re-running already-completed operations. Failed generation falls back to the readable text with a self-dismissing notice. Intermediate replies show expanded by default.
 - **A background that follows you.** Choose one of five built-in scenes or add your own images (the five most recent are kept for one-click switching). Set opacity and fit — fill, tile with adjustable size, stretch, or keep-ratio — and the same background applies to the main window, the nm viewer and every separate window.
 - **Markdown formatting within reach.** Press Ctrl+Space in the chat input, the text editor or the nm markdown editor to pick a format from a frequency-sorted list; nested formats can be cancelled one by one or all at once. The trigger and the two navigation key pairs are configurable in Settings → Shortcuts.
 - **Optional desktop control.** Connect an external Computer Use MCP server for window listing, screenshots, clicks, typing, dragging and scrolling. It is off by default; sensitive actions ask again each time.
@@ -114,7 +114,7 @@ The conventional local service port is **59599**. Network reachability and remot
 
 Install WArmy, then connect the model endpoint you want to use.
 
-1. Download `WArmy-Setup-0.4.57.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
+1. Download `WArmy-Setup-0.4.58.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
 2. Run the installer, choose a folder, launch **WArmy / 无限牛马**.
 3. First run: choose a language, create your self-custodied identity, save the 24-word mnemonic, set a PIN; add a model provider and create your first workhorse.
 

@@ -26,6 +26,10 @@ contextBridge.exposeInMainWorld('warmy', {
   onBeiJingTuBian: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:beiJingTuBian', h); return () => ipcRenderer.removeListener('warmy:beiJingTuBian', h); },
   a2uiBrowserKai: (p) => ipcRenderer.invoke('warmy:a2uiBrowserKai', p),
   a2uiChongShi: (p) => ipcRenderer.invoke('warmy:a2uiChongShi', p),
+  /** R311⑪：马头左键打开普通文字回复（md 副本进 nm）。 */
+  a2uiNmWenBen: (p) => ipcRenderer.invoke('warmy:a2uiNmWenBen', p),
+  /** R311⑫：马头右键重生成（text 覆盖历史 / a2ui 重跑互动层）。 */
+  chongShengHuiFu: (p) => ipcRenderer.invoke('warmy:chongShengHuiFu', p),
   a2uiQuXiao: (p) => ipcRenderer.invoke('warmy:a2uiQuXiao', p),
   jiYiGaiLan: (p) => ipcRenderer.invoke('warmy:jiYiGaiLan', p),
   jiYiMuLu: (p) => ipcRenderer.invoke('warmy:jiYiMuLu', p),

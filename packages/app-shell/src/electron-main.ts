@@ -18441,6 +18441,7 @@ async function zhenZhengFaSongBen(
                   '【纠正 · 上一条回答不成立】你说自己「没有权限 / 够不着 / 无法操作 / 无法计时」—— 这是事实错误。' +
                   '你手上有这些工具，并且**可以真的**做到：write_file（写任意文件，含桌面）、make_docx、make_pptx、' +
                   'open_path / open_file（用系统默认程序打开）、read_file、list_dir、make_dir、run_shell、' +
+                  'screen_view（看屏幕/桌面，会弹授权卡等用户同意）、desktop_file_op（桌面文件操作）、' +
                   'get_time（取当前时间）、wait_seconds（等待 N 秒）、ask_user。\n' +
                   '请**立即调用工具**，把用户的每一项要求真正落地：生成 txt 与 ppt → 写入内容 → 打开给用户看 → wait_seconds 等待 → 写出长文。' +
                   '全部做完后，再用文字如实汇报每一步做了什么、文件在哪。**禁止再说做不到**；只有工具调用真的失败时才报失败原因。'),
@@ -18464,6 +18465,33 @@ async function zhenZhengFaSongBen(
             audit?.log('chat.refusal-retry-failed', { sessionId, error: xiJingCuoWu(eJ).slice(0, 160) });
           }
         }
+        /**
+         * R311④：用户要求看桌面/屏幕，模型却回「没有权限/看不到」且本轮没调工具 ⇒
+         * 弹授权卡申请权限；同意后宿主真看屏幕并把内容交给模型继续回答（不直接拒答）。
+         */
+        try {
+          const yongHuWen = String(xiaoXi.content || '');
+          const houWen = neiRongWenBen(loop.xiangYingTi.choices[0]?.message?.content);
+          const yaoKan = /(看|查看|瞧瞧|观察|检查|瞅)/.test(yongHuWen) && /(桌面|屏幕|界面)/.test(yongHuWen);
+          const shuoKanBuDao = /(看不到|无法看到|不能看到|没有权限|无权限|无法查看|不能查看|无权查看)/.test(houWen);
+          if (yaoKan && shuoKanBuDao && !Number(loop.gongJuDiaoYongJi || 0) && gongJuKeJian('screen_view')) {
+            const quanOk = anQuanDangWei(sessionId).full || /同意/.test(await qingQiuGongJuShouQuan(
+              sessionId, 'AI 请求查看屏幕',
+              '用户要求查看桌面。看屏幕会采集桌面内容（隐私敏感），截屏存到本机 screenshots 目录。（拒绝 = 不查看）',
+              [{ id: 'yes', biaoQian: '同意' }, { id: 'no', biaoQian: '拒绝' }],
+            ));
+            if (quanOk) {
+              const ping = await zhiXingKanPingMu('auto', '', '');
+              const buQiu: LiaoTianXiaoXi[] = [
+                { role: 'system', content: '【查看屏幕已授权】用户要求查看桌面，已获用户同意。下面是宿主采集的屏幕内容，请据此回答用户；不要再回复「看不到/没有权限」。\n' + ping } as LiaoTianXiaoXi,
+                ...(xiaoXiJiZui as LiaoTianXiaoXi[]),
+              ];
+              const loop3 = await yunXingLiaoTianXunHuan(sessionId, provider, siKaoExtra ? { ...jiBenQiu, xiaoXiJi: buQiu, extra: siKaoExtra } : { ...jiBenQiu, xiaoXiJi: buQiu }, xiaoXi.xiaoDiShuLiang, gongJuZuiDuoShu);
+              const hou3 = neiRongWenBen(loop3.xiangYingTi.choices[0]?.message?.content);
+              if (youShiZhiWenBen(hou3)) { loop = loop3; try { audit?.log('chat.screen-view-rescued', { sessionId }); } catch { /* noop */ } }
+            }
+          }
+        } catch (eK) { try { audit?.log('chat.screen-view-rescue-failed', { sessionId, error: xiJingCuoWu(eK).slice(0, 160) }); } catch { /* noop */ } }
         /**
          * R218 拟态「看屏幕」：模型在回复里写了【看屏幕】⇒ 宿主截当前**全屏**，
          * 作为多模态图片放进下一轮输入再跑一轮（拟态由互动中理解意图来截图，能看到屏幕全部内容）。
@@ -23916,6 +23944,62 @@ chuliIpc('warmy:a2uiChongShi', async (_e, p0?: { sessionId?: string; messageId?:
     model: String(state?.model || (at >= 0 ? (records[at] as { moXing?: string })?.moXing : '') || current?.model || ''), provider: id, providerConfig: snapshot, force: true });
   return { ok: true, state: a2uiHuiFu.cha(sid, mid) };
 });
+/** R311⑪：马头左键打开普通文字回复＝写 md 副本进 nm 查看器。 */
+chuliIpc('warmy:a2uiNmWenBen', (_e, p0?: { sessionId?: string; messageId?: string }) => {
+  const sid = String(p0?.sessionId || ''), mid = String(p0?.messageId || '');
+  const rec = (chatLogs.get(sid) || []).find((x) => String(x.id || '') === mid);
+  if (!rec) return { ok: false, error: 'message-missing' };
+  try {
+    const base = workspaceDirOf(app.getPath('userData'), sid);
+    const dir = path.join(base, 'archive');
+    fs.mkdirSync(dir, { recursive: true });
+    const lu = path.join(dir, 'huifu-' + mid.replace(/[^A-Za-z0-9._-]/g, '_') + '.md');
+    fs.writeFileSync(lu, String(rec.content || ''), 'utf8');
+    return nmShiTuKai({ luJing: lu, tuBiao: warmyTaskbarIcon(), zhuTi: nmShiTuZhuTi(), huiHuaId: sid });
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
+/** R311⑫：马头右键重生成。text＝只换回复内容（操作已固定、不再调工具）并覆盖历史；a2ui＝重跑互动层。 */
+chuliIpc('warmy:chongShengHuiFu', async (_e, p0?: { sessionId?: string; messageId?: string; kind?: string }) => {
+  const sid = String(p0?.sessionId || ''), mid = String(p0?.messageId || '');
+  const kind = p0?.kind === 'a2ui' ? 'a2ui' : 'text';
+  const records = chatLogs.get(sid) || [];
+  const at = records.findIndex((x) => String(x.id || '') === mid);
+  if (at < 0) return { ok: false, error: 'message-missing' };
+  if (kind === 'a2ui') {
+    const r = await a2uiHuiFu.kaiShi({ sessionId: sid, messageId: mid, reply: String(records[at]?.content || ''),
+      userText: String(([...records.slice(0, at)].reverse().find((x) => x.role === 'user'))?.content || ''),
+      model: String((records[at] as { moXing?: string })?.moXing || providerCfg.model || ''), provider: String(providerCfg.presetId || ''),
+      providerConfig: { presetId: String(providerCfg.presetId || ''), apiKey: await jiexiGongyingshangMiyao(String(providerCfg.presetId || ''), providerCfg.apiKey), baseURL: String(providerCfg.baseURL || ''), protocol: providerCfg.protocol }, force: true });
+    return { ok: r.status !== 'cancelled', state: r };
+  }
+  /* text：不 redo 操作，只换回复内容；覆盖日志＋镜像＋广播。 */
+  try {
+    const proto = providerCfg.protocol;
+    const p = congYuSheChuangJian(String(providerCfg.presetId || ''), { apiKey: await jiexiGongyingshangMiyao(String(providerCfg.presetId || ''), providerCfg.apiKey), baseURL: String(providerCfg.baseURL || ''), protocol: proto } as never, proto);
+    const hist: LiaoTianXiaoXi[] = [];
+    for (const r of records.slice(0, at)) {
+      if (r.system) continue;
+      hist.push({ role: r.role === 'user' ? 'user' : 'assistant', content: String(r.content || '') } as LiaoTianXiaoXi);
+    }
+    const caoZuo = (zuiJinGongJu.get(sid) || []).map((c) => `${c.tool}(${c.ok ? '成功' : '失败'})`).join('、') || '（无记录）';
+    const jiuZheng = '【重新生成文字回复】本任务的操作已经执行完毕、结果固定（操作台账：' + caoZuo + '）。' +
+      '**不要再调用任何工具、不要重做操作**；基于同样的用户问题与已产生的结果，换一种表述重新写最终回复。' +
+      '如有必要可在回复中说明进行了什么操作、产生了什么结果。直接输出新的最终回复正文。';
+    const resp = await p.chat({ model: String((records[at] as { moXing?: string })?.moXing || providerCfg.model || ''), maxTokens: 4096,
+      xiaoXiJi: [...hist, { role: 'system', content: jiuZheng } as LiaoTianXiaoXi] }, undefined);
+    const xin = neiRongWenBen(resp.choices?.[0]?.message?.content);
+    if (!xin.trim()) return { ok: false, error: 'empty-regen' };
+    const old = String(records[at]?.content || '');
+    (records[at] as { content?: string }).content = xin;
+    try { jiLuMeta(sid, records[at]); } catch { /* noop */ }
+    const mir = chatHistories.get(sid) || [];
+    for (let i = mir.length - 1; i >= 0; i--) { const m = mir[i]; if (m && m.role === 'assistant' && String(m.content || '') === old) { mir[i] = { ...m, content: xin }; break; } }
+    a2uiHuiFu.wangJi(sid, mid);
+    broadcastToWindows('warmy:liaoTianUpdated', { sessionId: sid, seq: null, ts: Date.now() });
+    try { audit?.log('chat.regen-text', { sessionId: sid, messageId: mid }); } catch { /* noop */ }
+    return { ok: true, text: xin };
+  } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+});
 chuliIpc('warmy:a2uiQuXiao', (_e, p0?: { sessionId?: string }) => { a2uiHuiFu.quXiao(String(p0?.sessionId || '')); return { ok: true }; });
 /** R308⑨：A2UI 按钮动作回传——「整理成 Excel / PDF 存档」等由宿主真的生成文件（此前 noop 丢弃＝点了没反应）。 */
 chuliIpc('warmy:a2uiAction', async (_e, p0?: { sessionId?: string; messageId?: string; action?: unknown; label?: string; text?: string }) => {
@@ -23932,7 +24016,11 @@ chuliIpc('warmy:a2uiAction', async (_e, p0?: { sessionId?: string; messageId?: s
     if (!text.trim()) return { ok: false, error: 'empty-content' };
     const yaoExcel = /excel|xlsx|表格/i.test(label);
     const yaoPdf = /pdf/i.test(label);
-    if (!yaoExcel && !yaoPdf) return { ok: false, error: 'unsupported-action' };
+    /* R311⑤：非存档类按钮＝通用交互确认（本地状态已由运行时应用），不再报 unsupported-action。 */
+    if (!yaoExcel && !yaoPdf) {
+      try { audit?.log('a2ui.action-generic', { sessionId: sid, label: String(p0?.label || '') }); } catch { /* noop */ }
+      return { ok: true, files: [], generic: true };
+    }
     const base = workspaceDirOf(app.getPath('userData'), sid);
     fs.mkdirSync(path.join(base, 'archive'), { recursive: true });
     const stamp = Date.now();
