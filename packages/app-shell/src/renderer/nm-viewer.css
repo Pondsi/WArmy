@@ -876,6 +876,11 @@ img.quanPing { display: block !important; object-fit: contain !important; }
 /* R224 项7：预览全屏 —— 解除祖先 contain（否则 fixed 被关在内容区），铺满视口 */
 body.yuLanQuanPing #zhengWen { contain: none !important; overflow: visible !important; }
 body.yuLanQuanPing #neiRongHang { contain: none !important; overflow: visible !important; }
+/* R315：全屏变白修复——解除所有祖先 contain（含 #neiRongWai），保证 fixed 铺满视口且 iframe 可见；恢复按钮置顶。 */
+body.yuLanQuanPing #neiRongWai { contain: none !important; overflow: visible !important; }
+body.yuLanQuanPing #yuLanLie #yuLanBiao { z-index: 3 !important; background: var(--panel-bg) !important; }
+body.yuLanQuanPing #yuLanNei { position: relative !important; flex: none !important; width: 100% !important; height: calc(100vh - 44px) !important; min-height: 0 !important; }
+body.yuLanQuanPing #yuLanNei iframe { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; }
 body.yuLanQuanPing #yuLanLie {
   position: fixed !important; inset: 0 !important; z-index: 9999 !important;
   width: 100vw !important; height: 100vh !important; max-width: none !important;

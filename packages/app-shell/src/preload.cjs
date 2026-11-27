@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('warmy', {
   yuYanZhiLiShenHe: () => ipcRenderer.invoke('warmy:yuYanZhiLiShenHe'),
   yuYanZhiLiPiZhun: (p) => ipcRenderer.invoke('warmy:yuYanZhiLiPiZhun', p),
   onA2uiZhuangTai: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:a2uiZhuangTai', h); return () => ipcRenderer.removeListener('warmy:a2uiZhuangTai', h); },
+  onA2uiPaiHuo: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:a2uiPaiHuo', h); return () => ipcRenderer.removeListener('warmy:a2uiPaiHuo', h); },
   zhuoMianCaoZuo: (p) => ipcRenderer.invoke('warmy:zhuoMianCaoZuo', p),
   benDiShengChengChaXun: () => ipcRenderer.invoke('warmy:benDiShengChengChaXun'),
   benDiShengChengAnZhuang: () => ipcRenderer.invoke('warmy:benDiShengChengAnZhuang'),
@@ -893,6 +894,7 @@ contextBridge.exposeInMainWorld('warmy', {
   ziQuZhuangTai: (p) => ipcRenderer.invoke('warmy:ziQuZhuangTai', p),
   onHuiHuaChongSheng: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:huiHuaChongSheng', h); return () => ipcRenderer.removeListener('warmy:huiHuaChongSheng', h); },
   daKaiBangZhuWenDang: () => ipcRenderer.invoke('warmy:daKaiBangZhuWenDang'),
+  nmFanYi: (p) => ipcRenderer.invoke('warmy:nmFanYi', p),
   daKaiZhenDuanChuang: () => ipcRenderer.invoke('warmy:daKaiZhenDuanChuang'),
   // R185 中继站 TLS 信任（FWArmy 自签指纹固定 / CA 校验）
   zhongJiTlsTanZhen: (p) => ipcRenderer.invoke('warmy:zhongJiTlsTanZhen', p),

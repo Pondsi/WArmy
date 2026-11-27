@@ -12,6 +12,17 @@ try {
   const raw = String(document.getElementById('a2ui-data')?.textContent || '').trim();
   const messages = raw.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
   if (!messages.length) throw new Error('a2ui-empty');
+  /* R315：剔除 Icon 裸文本节点（无图标字体时会与卡片标题重叠）。 */
+  const qingIcon = (msgs) => msgs.map((m) => {
+    const key = m.createSurface ? 'createSurface' : m.updateComponents ? 'updateComponents' : null;
+    const body = key ? m[key] : null;
+    if (!body || !Array.isArray(body.components)) return m;
+    const iconIds = new Set(body.components.filter((c) => c && c.component === 'Icon').map((c) => c.id));
+    if (!iconIds.size) return m;
+    const comps = body.components.filter((c) => !(c && c.component === 'Icon')).map((c) => (c && Array.isArray(c.children) ? { ...c, children: c.children.filter((id) => !iconIds.has(id)) } : c));
+    return { ...m, [key]: { ...body, components: comps } };
+  });
+  const clean = qingIcon(messages);
   const created = messages.find((m) => m && m.createSurface)?.createSurface;
   const surfaceId = String(created?.surfaceId || '');
   if (!surfaceId) throw new Error('a2ui-surface-missing');
@@ -32,7 +43,14 @@ try {
       const payload = { action, label, surfaceId: surfaceId2, componentId, text: document.body.innerText || '', sessionId: document.getElementById('a2ui-data')?.getAttribute('data-session') || '', messageId: document.getElementById('a2ui-data')?.getAttribute('data-message') || '' };
       if (window.warmyA2ui && window.warmyA2ui.action) {
         Promise.resolve(window.warmyA2ui.action(payload)).then((r) => {
-          note(r && r.ok ? ('已生成存档：' + ((r.files || []).join('、') || '完成')) : ('按钮动作未执行：' + String((r && r.error) || label || 'unknown')));
+          if (r && r.ok) {
+            if (r.dispatched) { note('已派活：交互内容已发给牛马'); return; }
+            if (r.copied) { note('已复制到剪贴板'); return; }
+            if (r.opened) { note('已打开：' + r.opened); return; }
+            note(r.generic ? '按钮交互已执行' : ('已生成存档：' + ((r.files || []).join('、') || '完成')));
+            return;
+          }
+          note('按钮动作未执行：' + String((r && r.error) || label || 'unknown'));
         }).catch((e) => note('按钮动作回传失败：' + String(e && e.message || e)));
       } else {
         note('宿主桥不可用，按钮动作无法执行。');
@@ -43,7 +61,7 @@ try {
   }, {
     version: '1.0', validationConfig: STRICT_VALIDATION, reportErrorsOnly: false,
   });
-  processor.processMessages(messages);
+  processor.processMessages(clean);
   const surface = processor.getSurface(surfaceId);
   if (!surface || !surface.componentsModel.has(surface.rootId)) throw new Error('a2ui-root-missing');
   const view = document.createElement('a2ui-surface');

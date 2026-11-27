@@ -1,13 +1,13 @@
 {
-  "version": "0.4.61",
-  "notes": "WArmy 0.4.61 — Smoother messages, viewing and sponsorship. System messages now keep 'Mark all read' on the header row beside the back arrow, and each notification shows only its title and time until you click to expand (click again to collapse). Ctrl+Space reliably opens the Markdown format picker in the chat box. Models that don't report cache details (such as MiMo flash) now show 'cache: not reported by provider' instead of a misleading 0. Help docs and diagnostic snapshots open as read-only single-column .nm files (Markdown rendered, no editor); the diagnostic window replaces 'open in nm viewer' with 'open containing folder', and snapshots carry a UTF-8 BOM so they no longer show garbled text. Sponsorship: PayPal always opens in your system browser with the paypal.me/pondsi URL shown under the icon; WeChat and Alipay QR codes enlarge on click and dismiss on a second click.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.61/WArmy-Setup-0.4.61.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.61/WArmy-Setup-0.4.61.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.61/WArmy-Setup-0.4.61.exe.warmyblocks",
-  "sha256": "9c25031dff0e3daeab15b470acf83418be5d02bcb49493cb55a36b59eb64a64c",
-  "size": 344377794,
+  "version": "0.4.62",
+  "notes": "WArmy 0.4.62 — Diwen updated to 6.16.4. The nm viewer opened from a reply's horse-head now lets you select text and right-click for Copy / Select All / Translate / Translate Whole Page (translations replace the original with a light theme-tinted background); fullscreen no longer turns white and restore works. Evolution replies' horse-head no longer errors with message-missing. Generated interactive cards no longer show overlapping icon-name text, and their buttons now really work: Open Folder / Open File open the path, Copy Path / Copy put text on the clipboard, and Dispatch sends the content to the workhorse. The approval-feedback card is kept; the model now judges typical preference examples itself and only occasionally sends them as system messages for you to label afterwards, with a self-improving cadence file. The message icon badge now counts only join requests plus important system messages (faults / exceptions / urgent); briefings and updates badge only inside the System Messages menu. Insert-template in workhorse cognition now applies reliably.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.62/WArmy-Setup-0.4.62.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.62/WArmy-Setup-0.4.62.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.62/WArmy-Setup-0.4.62.exe.warmyblocks",
+  "sha256": "fb227b7078dcc972a955f28e18787218bbfb03c64c0bef1b5dee9e4fa53d3537",
+  "size": 353978442,
   "mandatory": false,
-  "publishedAt": "2026-11-27T17:13:45.980Z",
+  "publishedAt": "2026-11-27T18:04:42.785Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.61"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.62"
 }

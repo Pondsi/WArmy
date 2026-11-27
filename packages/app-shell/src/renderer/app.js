@@ -5644,6 +5644,11 @@ async function langDuWenBen(text, btnEl) {
     /* 状态事件到达时重新拉一次权威消息，兼容流式气泡尚无稳定 ID 的竞态。 */
     if (s.sessionId) void loadSessionMessages(s.sessionId);
   }); } catch { /* noop */ }
+  /* R315：交互面「派活」按钮⇒把交互内容作为新消息发给该会话牛马（主进程广播）。 */
+  try { window.warmy.onA2uiPaiHuo?.((d) => {
+    if (!d || !d.sessionId || !String(d.text || '').trim()) return;
+    try { void window.warmy.chatSend({ sessionId: String(d.sessionId), content: String(d.text) }); } catch { /* noop */ }
+  }); } catch { /* noop */ }
   /* R305④：值班待处理台账广播⇒消息行对侧等待图标。 */
   try { window.warmy.onDutyPending?.((d) => {
     state.dutyPending = state.dutyPending || {};
@@ -9729,8 +9734,12 @@ async function langDuWenBen(text, btnEl) {
       var jr = await window.warmy.joinRecords().catch(function () { return null; });
       var sm = await window.warmy.systemMessages().catch(function () { return null; });
       var reqN = ((jr && jr.items) || []).filter(function (i) { return i.status === 'pending'; }).length;
-      var sysN = ((sm && sm.items) || []).filter(function (i) { return !i.read; }).length;
-      var tot = reqN + sysN;
+      var sysWeiDu = ((sm && sm.items) || []).filter(function (i) { return !i.read; });
+      var sysN = sysWeiDu.length;
+      /* R315：消息图标圆圈数字只计申请＋重要系统消息（故障/异常/需马上处理）；简报/更新等只进菜单徽标。 */
+      var ZHONG_YAO = { system: 1, 'schedule-missed': 1, 'governance-approval': 1, remote: 1, ssh: 1, 'anti-sycophancy': 1 };
+      var sysImportantN = sysWeiDu.filter(function (i) { return ZHONG_YAO[i.kind]; }).length;
+      var tot = reqN + sysImportantN;
       var h = bzEl('bangZhuHuiZhang');
       if (h) { h.textContent = tot > 99 ? '99+' : String(tot); h.classList.toggle('yinCang', tot === 0); }
       var rd = bzEl('bzReqDian'); if (rd) { rd.textContent = String(reqN); rd.classList.toggle('yinCang', reqN === 0); }
@@ -16134,6 +16143,7 @@ async function renderDashboard(host) {
         }
         /** 有光标/选区 → 插入或替换选区；无光标（从未聚焦）→ 覆盖全文（产品要求） */
         const chaRuMoBan = (text) => {
+          const ta = $('iPersona'); /* R315：调用时再取 textarea（绑定时可能尚未渲染） */
           if (!ta) return;
           const s = String(text || '');
           if (!s) return;

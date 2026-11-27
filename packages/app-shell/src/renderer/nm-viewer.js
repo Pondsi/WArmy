@@ -2488,6 +2488,7 @@ hui();
     /** R138：每次重绘后重绑链接点击（Ctrl+开新窗） */
     f.onload = () => {
       bangDingYuLanLianJie(f);
+      try { bangYuLanJiaoHu(f); } catch { /* noop */ }
       /* R224 项7：滚轮手动滚动（同源可访问）——保证效果区滚轮一定滚得动 */
       try {
         const doc = f.contentDocument;
@@ -2500,6 +2501,69 @@ hui();
         }
       } catch { /* 跨源拿不到就不动 */ }
     };
+  }
+  /* R315：只读预览可选中＋右键菜单（复制/全选/翻译/翻译全文）。翻译替换原文＋淡主题色背景。 */
+  const FAN_YI_BG = 'rgba(168,118,84,0.14)';
+  let yuCaiDan = null;
+  function guanYuCaiDan() { if (yuCaiDan) { yuCaiDan.remove(); yuCaiDan = null; } }
+  function bangYuLanJiaoHu(f) {
+    let doc = null; try { doc = f.contentDocument; } catch { return; }
+    if (!doc || !doc.body) return;
+    doc.body.style.userSelect = 'text';
+    doc.body.style.webkitUserSelect = 'text';
+    doc.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      guanYuCaiDan();
+      const sel = String(doc.getSelection ? doc.getSelection().toString() : '');
+      const r = f.getBoundingClientRect();
+      const x = Math.min(r.left + e.clientX, window.innerWidth - 160);
+      const y = Math.min(r.top + e.clientY, window.innerHeight - 150);
+      yuCaiDan = document.createElement('div');
+      yuCaiDan.style.cssText = 'position:fixed;z-index:10000;left:' + x + 'px;top:' + y + 'px;min-width:140px;background:var(--card,#fff);border:1px solid var(--line,#ddd);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:4px;font-size:13px';
+      const mk = (label, fn, dis) => {
+        const b = document.createElement('div');
+        b.textContent = label;
+        b.style.cssText = 'padding:6px 10px;border-radius:5px;cursor:' + (dis ? 'default' : 'pointer') + ';color:' + (dis ? 'var(--muted,#999)' : 'var(--ink,#222)');
+        if (!dis) { b.onmouseenter = () => b.style.background = 'var(--hover,#eee)'; b.onmouseleave = () => b.style.background = ''; b.onclick = (ev) => { ev.stopPropagation(); guanYuCaiDan(); fn(); }; }
+        yuCaiDan.appendChild(b);
+      };
+      mk('复制', () => { try { navigator.clipboard.writeText(sel); } catch { /* noop */ } }, !sel);
+      mk('全选', () => { try { const s = doc.getSelection(); const rg = doc.createRange(); rg.selectNodeContents(doc.body); s.removeAllRanges(); s.addRange(rg); } catch { /* noop */ } });
+      mk('翻译', () => { void fanYiXuan(f, doc, sel); }, !sel);
+      mk('翻译全文', () => { void fanYiQuan(f, doc); });
+      document.body.appendChild(yuCaiDan);
+      setTimeout(() => document.addEventListener('click', guanYuCaiDan, { once: true }), 0);
+    });
+  }
+  async function fanYiXuan(f, doc, sel) {
+    if (!sel) return;
+    const r = await window.warmy.nmFanYi?.({ text: sel }).catch(() => null);
+    if (!r || !r.ok || !r.text) return;
+    try {
+      const s = doc.getSelection();
+      if (!s || !s.rangeCount) return;
+      const rg = s.getRangeAt(0);
+      rg.deleteContents();
+      const sp = doc.createElement('span');
+      sp.style.background = FAN_YI_BG;
+      sp.style.borderRadius = '3px';
+      sp.textContent = r.text;
+      rg.insertNode(sp);
+      s.removeAllRanges();
+    } catch { /* noop */ }
+  }
+  async function fanYiQuan(f, doc) {
+    const yuan = String(doc.body.innerText || '');
+    if (!yuan.trim()) return;
+    const r = await window.warmy.nmFanYi?.({ text: yuan }).catch(() => null);
+    if (!r || !r.ok || !r.text) return;
+    try {
+      doc.body.innerHTML = '';
+      const d = doc.createElement('div');
+      d.style.cssText = 'white-space:pre-wrap;word-break:break-word;background:' + FAN_YI_BG + ';border-radius:6px;padding:12px';
+      d.textContent = r.text;
+      doc.body.appendChild(d);
+    } catch { /* noop */ }
   }
   /* R224 项7：光标在预览容器（非 iframe）上时滚轮也转发进 iframe */
   el('yuLanNei').addEventListener('wheel', (e) => {
