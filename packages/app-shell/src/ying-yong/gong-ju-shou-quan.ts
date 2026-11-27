@@ -10,7 +10,7 @@
 import path from 'node:path';
 
 export type ShouQuanTiao = {
-  id: string; text: string; ts: number; path?: string;
+  id: string; text: string; ts: number; path?: string; expiresAt?: number;
   /** 项 10：用户附件带来的"只读"授权（精确路径） */
   du?: boolean;
   /** 第 36 轮【项 6】：权限类别 —— 'read' 只覆盖只读工具，'write' 覆盖读+写 */
@@ -18,6 +18,22 @@ export type ShouQuanTiao = {
   /** 这条授权是**对某个路径**的（按路径匹配，不按工具名） */
   luJingQuan?: boolean;
 };
+
+const CHANG_QI_QUAN_MS = 24 * 60 * 60_000;
+/** 附件和单次记录不属于可续用的长期授权。 */
+function changQiGrant(x: ShouQuanTiao): boolean {
+  return !x.du && !String(x.id).startsWith('once-');
+}
+function shouQuanDaoQiAt(x: ShouQuanTiao): number {
+  if (typeof x.ts !== 'number' || !Number.isFinite(x.ts) || x.ts <= 0) return NaN;
+  if (x.expiresAt != null && (typeof x.expiresAt !== 'number' || !Number.isFinite(x.expiresAt))) return NaN;
+  return Math.min(x.expiresAt ?? Infinity, x.ts + CHANG_QI_QUAN_MS);
+}
+export function shouQuanDaoQi(x: ShouQuanTiao, now: number): boolean {
+  if (!changQiGrant(x)) return false;
+  const daoQi = shouQuanDaoQiAt(x);
+  return !Number.isFinite(daoQi) || x.ts > now || now >= daoQi;
+}
 
 export interface GongJuShouQuanYiLai {
   /** 设置仓读（仓未就绪 ⇒ undefined，与旧 settingsStore?.load() 同语义） */
@@ -77,7 +93,8 @@ export function chuangJianGongJuShouQuan(yiLai: GongJuShouQuanYiLai) {
   }
   function shouQuanQu(sid: string): ShouQuanTiao[] {
     if (!shouQuanYiHuiFu) shouQuanHuiFu();
-    return shouQuanCang.get(String(sid)) || [];
+    const now = shiZhong();
+    return (shouQuanCang.get(String(sid)) || []).filter((x) => !shouQuanDaoQi(x, now)).map((x) => changQiGrant(x) ? { ...x, expiresAt: shouQuanDaoQiAt(x) } : x);
   }
   /** 授权按「路径＋读写类别」记：写覆盖读，读不覆盖写；同路径换任何工具都不再问。 */
   function gongJuQuanLei(gongJu: string): 'read' | 'write' {
@@ -90,6 +107,7 @@ export function chuangJianGongJuShouQuan(yiLai: GongJuShouQuanYiLai) {
     try { mu = path.resolve(String(abs || '')); } catch { return null; }
     if (!mu) return null;
     for (const x of shouQuanQu(sid)) {
+      if (typeof x.id !== 'string' || x.id.startsWith('once-')) continue;
       const px = String((x as { path?: string }).path || '');
       if (!px) continue;
       let pu = '';
@@ -140,6 +158,10 @@ export function chuangJianGongJuShouQuan(yiLai: GongJuShouQuanYiLai) {
   }
   function shouQuanCun(sid: string, list: ShouQuanTiao[]): void {
     if (!shouQuanYiHuiFu) shouQuanHuiFu();
+    list = list.map((x) => {
+      const expiresAt = shouQuanDaoQiAt(x);
+      return changQiGrant(x) && Number.isFinite(expiresAt) ? { ...x, expiresAt } : x;
+    });
     shouQuanCang.set(String(sid), list);
     try {
       const s = (yiLai.duSheZhi() as { authGrants?: Record<string, unknown> } | undefined) || {};

@@ -214,6 +214,23 @@ export class JianrongOpenAIGongYing extends JichuGongYing {
         throw new Error('auth-failed: ' + msg.slice(0, 160));
       }
       if (/ENOTFOUND|ECONNREFUSED|fetch failed|404|405/i.test(msg)) {
+        /* R303：网络类瞬时错误（fetch failed/ECONNRESET/socket hang up 等）一次有界重试；
+         * GET 幂等可安全重试；abort 不重试。重试仍败按 endpoint-failed 如实上报。 */
+        if (!signal?.aborted && /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang up|other side closed|terminated/i.test(msg)) {
+          await new Promise((r) => setTimeout(r, 800));
+          if (!signal?.aborted) {
+            try {
+              const json2 = await qingQiuJson<{ data?: Array<{ id: string }> }>(
+                pinJieUrl(this.baseURL, 'models'),
+                { method: 'GET', signal, headers: this.headers() },
+                this.auth
+              );
+              return (json2.data || []).map((m) => m.id);
+            } catch (e2) {
+              throw new Error('endpoint-failed: ' + String((e2 as Error)?.message || e2).slice(0, 160));
+            }
+          }
+        }
         throw new Error('endpoint-failed: ' + msg.slice(0, 160));
       }
       // 部分中转无 /models：仍回空，但上层可区分

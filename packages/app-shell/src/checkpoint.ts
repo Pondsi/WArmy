@@ -85,6 +85,8 @@ function kaoBeiMuLu(src: string, dest: string): 'cow' | 'shadow' {
 
 export class JianChaDianCang {
   private items: Jianchadian[] = [];
+  /** R304：meta 是否成功读回（加密层密钥未就绪时读会失败）——未读回前禁止 save 覆盖旧账。 */
+  private loadOk = false;
   /** R264 项5：最近一次回滚因占用跳过的条目（如实上报，不假装全恢复） */
   lastSkipped: string[] = [];
 
@@ -100,12 +102,20 @@ export class JianChaDianCang {
   private load() {
     try {
       this.items = JSON.parse(fs.readFileSync(this.meta, 'utf8'));
+      this.loadOk = true;
     } catch {
       this.items = [];
+      /* R304：meta 不存在＝合法空仓；存在但读失败（密钥未就绪/损坏）＝未读回，后续懒重试。 */
+      this.loadOk = !fs.existsSync(this.meta);
     }
   }
 
   private save() {
+    /* R304：旧账未读回时绝不覆盖（旧版启动早于密钥就绪⇒load 空⇒save 把旧回退点全抹掉）。 */
+    if (!this.loadOk) {
+      this.load();
+      if (!this.loadOk) return;
+    }
     fs.writeFileSync(this.meta, JSON.stringify(this.items, null, 2));
   }
 
@@ -232,6 +242,8 @@ export class JianChaDianCang {
   }
 
   LieBiao(): Jianchadian[] {
+    /* R304：启动时密钥未就绪读失败的，列表时懒重试（密钥就绪后旧回退点恢复可见）。 */
+    if (!this.loadOk) this.load();
     return [...this.items].reverse();
   }
 

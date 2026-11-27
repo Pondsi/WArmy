@@ -41,13 +41,13 @@ Choose a role, instructions and model chain for each workhorse. Use a project ro
 
 ### Keep models and finished work within reach
 
-Use a local model for work you want to keep on your machine. Add a cloud model when its capabilities suit a task. The file viewer handles drafts, documents and a tabbed browser; the console lets you run commands in the session workspace. Access outside that workspace depends on the permissions you grant.
+Use a local model for work you want to keep on your machine. Add a cloud model when its capabilities suit a task. The file viewer handles drafts, documents and a tabbed browser; the console lets you run commands in the session workspace. Access outside that workspace depends on the permissions you grant. When you create a workhorse or project, its workspace folder is shown up front: keep the default location or pick your own; the folder is only created once you confirm.
 
 ### Turn an answer into a checklist you can use
 
 "Give me a launch checklist I can tick off, with a place for notes."
 
-The normal reply appears first. When **Reply boost** is enabled in the chat's three-dot menu, WArmy adds an interactive layer after the text settles. Open it in the nm viewer, or in your system's default app when nm is not enabled. The interactive result stays with that conversation.
+The normal reply appears first. When **Reply boost** is enabled in the chat's three-dot menu, WArmy adds an interactive layer after the text settles. Click the reply's horse head to generate, retry or regenerate that layer; if generation fails, a brief notice disappears on its own and the plain reply stays readable. Open the interactive result in the nm viewer, or in your system's default app when nm is not enabled. The interactive result stays with that conversation, and its export buttons (for example Excel / PDF archive) produce real files in the session workspace.
 
 ## What you get
 
@@ -82,6 +82,7 @@ Workhorses can suggest a next step through self-drive, which is enabled per sess
 ## Control and safety
 
 - Choose permissions per session. Normal permission mode asks for approval where required; full permission mode permits more actions automatically. Use it only when you trust the task and its tools.
+- Decision cards can mark a recommended option. With auto-select enabled, the recommendation is chosen only after a visible 23-second countdown; clicking any option (or opening “Other”) cancels the automatic choice for that card.
 - A group conversation does not automatically gain access to private sessions or their files. Protected application and account paths have additional restrictions.
 - Choose a host or container workspace. Container use requires a working container environment.
 - Control device access separately. Active conversation use takes priority over the desktop companion.
@@ -111,7 +112,7 @@ The conventional local service port is **59599**. Network reachability and remot
 
 Install WArmy, then connect the model endpoint you want to use.
 
-1. Download `WArmy-Setup-0.4.54.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
+1. Download `WArmy-Setup-0.4.55.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
 2. Run the installer, choose a folder, launch **WArmy / 无限牛马**.
 3. First run: choose a language, create your self-custodied identity, save the 24-word mnemonic, set a PIN; add a model provider and create your first workhorse.
 

@@ -9,6 +9,14 @@
   const t = (k, fb) => { try { return (Q() && Q().t(k, fb)) || fb; } catch { return fb; } };
   let cur = null; // 当前会话的活跃实验
   let adminCache = {};
+  /* R303：进化在跑会话台账——续发（faSong）不走 queueRounds/streamBuf，
+   * 主刷新循环的「空闲残留清道」会把运行中的进化误判空闲⇒流光中途熄灭。广播/拉取时登记，供清道豁免。 */
+  const paoMap = new Map();
+  function jiLuPao(exp) {
+    const sid = String((exp && exp.sessionId) || '');
+    if (!sid) return;
+    if (exp && exp.status === 'running') paoMap.set(sid, Date.now()); else paoMap.delete(sid);
+  }
 
   function btn() { return document.getElementById('anNiuZiJinHua'); }
 
@@ -66,6 +74,7 @@
     const sid = Q().sid();
     if (!sid) { cur = null; return; }
     try { const r = await W().ziJinHuaZhuangTai(sid); cur = (r && r.exp) || null; } catch { cur = null; }
+    jiLuPao(cur);
     refreshToggle();
     try { window.__ziJinHuaChongHua && window.__ziJinHuaChongHua(); } catch { /* noop */ }
   }
@@ -83,6 +92,9 @@
     };
     W().onZiJinHua((d) => {
       cur = (d && d.exp) || null;
+      jiLuPao(cur);
+      /* R303：进化产出也刷新运行态更新时间（小字「更新」与真跑判据同口径）。 */
+      if (cur && cur.status === 'running') { try { window.__chuoYunXingZuiXin && window.__chuoYunXingZuiXin(String(cur.sessionId || '')); } catch { /* noop */ } }
       refreshToggle();
       /* R263：选支(staged)/合并(merged)后重画并自动滚底；其余状态保持滚动位 */
       const gun = !!(cur && (cur.status === 'staged' || cur.status === 'merged'));
@@ -97,5 +109,6 @@
   }
   /* R261：cur 暴露给 app.js（聊天记录内并排块 + 输入分栏） */
   window.__ziJinHuaCur = () => cur;
+  window.__ziJinHuaZaiPao = (sid) => paoMap.has(String(sid || ''));
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

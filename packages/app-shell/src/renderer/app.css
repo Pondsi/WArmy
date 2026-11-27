@@ -1602,7 +1602,7 @@ table.chaJianJi th, table.chaJianJi td { text-align: start; padding: 8px; border
 /* R163 #4：确认类弹窗（完全授权二次确认等）不该拉到接近满屏。
  * 旧口径 max-height: calc(100vh - 48px) ⇒ 文案稍长就变成一根很长的条。
  * 现在给确认框一个正常上限，超出由内容区滚动；数据范围/名片/头像这类内容型弹窗不受影响。 */
-.duiHuaKuangKa:has(.duiHuaKuangTi):not(:has(.daoChuShu)):not(:has(.woCardBody)):not(:has(.touXiangGrid)):not(:has(.tianJiaLianXiGrid)):not(:has(.erHeYiGrid)):not(.niuMaSheZhi *):not(:has(.shiLiHang)):not(:has(.xinXiKuangNei)):not(:has(.ssWrap)) { /* R176：排除设置窗/信息窗等多内容弹窗；R230 项4：信息窗(.xinXiKuangNei)不再被本条压回 360px */
+.duiHuaKuangKa:has(.duiHuaKuangTi):not(:has(.daoChuShu)):not(:has(.woCardBody)):not(:has(.touXiangGrid)):not(:has(.tianJiaLianXiGrid)):not(:has(.erHeYiGrid)):not(.niuMaSheZhi *):not(:has(.shiLiHang)):not(:has(.xinXiKuangNei)) { /* R176：排除设置窗/信息窗等多内容弹窗；R230 项4：信息窗(.xinXiKuangNei)不再被本条压回 360px */
   max-height: min(60vh, 460px);
   /* R170：确认加急这类确认窗左右收窄，不再 420 那么宽 */
   width: min(360px, calc(100vw - 48px));
@@ -3630,6 +3630,23 @@ body.liaoTianChuangKou #appTi {
   box-shadow: none; border: none;
 }
 .jianYiToast.out { opacity: 0; }
+#r307CardHost[hidden] { display: none; }
+#r307CardHost { max-height: 38vh; overflow: auto; }
+.r307Card { margin: 6px 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; }
+.r307Detail, .r307Card pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.r307Card pre { max-height: 12em; overflow: auto; }
+.r307CardActions { display: flex; flex-wrap: wrap; gap: 6px; margin-block-start: 6px; }
+.r307Field { display: block; margin-block: 4px; }
+.r307Field textarea, .r307Field input:not([type=checkbox]), .r307Field select { display: block; width: 100%; }
+.liaoTianSouSuo { display: inline-flex; align-items: center; position: relative; min-width: 0; }
+.liaoTianSouSuo [hidden] { display: none !important; }
+#liaoTianSouSuoNei { min-width: 0; }
+#liaoTianSouSuoShuRu { width: clamp(86px, 18vw, 240px); margin: 0 4px; }
+#liaoTianSouSuoJieGuo {
+  position: absolute; top: 100%; inset-inline-end: 0; z-index: 80;
+  width: min(480px, 45vw); max-height: min(420px, 60vh); overflow: auto;
+  background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+}
 
 /* ── 管理模型：三个子项 ── */
 .modelZiXiang { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
@@ -3704,6 +3721,25 @@ html { font-weight: var(--fw-ui, 400); }
 .jinJiCaiDan button .ico.chaRuIco { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; }
 /* 话筒图标：**中空描边**（真机反馈：要中空的） */
 .anNiuTuBiao .ico.hollowIco { fill: none !important; stroke: currentColor; }
+/* R308①：创建弹窗工作区目录字段——醒目标签＋输入＋文件夹选择横排。 */
+.gongZuoQuKuai { margin: 12px 0 4px; padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.gongZuoQuBiao { display: block; font-size: var(--fs-sm, 13px); font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.gongZuoQuHang { display: flex; align-items: center; gap: 6px; }
+.gongZuoQuShuRu { flex: 1; min-width: 0; font-family: var(--mono, monospace); font-size: var(--fs-xs, 12px); }
+.gongZuoQuXuan { flex-shrink: 0; }
+.gongZuoQuShuoMing { margin-top: 6px; font-size: var(--fs-xs, 11px); line-height: 1.5; }
+/* R308④：自动选择推荐项——主题色外圈光顺时针消失（--ziDongDeg 由渲染层 0→360 驱动）。 */
+.aiqZiDongGuang { position: relative; }
+.aiqZiDongGuang::after {
+  content: ''; position: absolute; inset: -4px; border-radius: 10px; padding: 2px;
+  background: conic-gradient(from 0deg, transparent 0 var(--ziDongDeg, 0deg), var(--accent) var(--ziDongDeg, 0deg) 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px var(--accent));
+}
 .siKaoBiaoQian { font-size: var(--fs-xs); opacity: .75; margin-left: 2px; }
 /* R264 项2：思考级别灯泡 —— 去右侧文字；主题色发光随级别自上而下（微觉=顶、参悟=全）；自然仅中线发光 */
 .siKaoBiaoQian { display: none; }
@@ -3992,6 +4028,9 @@ html { font-weight: var(--fw-ui, 400); }
    覆盖基础 .bubbleWrap 的 max-width:calc(100%-84px) 与 align-items:flex-start，让恢复行真正水平居中于整个聊天区。 */
 .huiFuRenWuHang .bubbleWrap { width: 100%; max-width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .huiFuRenWuHang .xiaoXiJiao { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+/* R308：恢复行独立居中，豁免 R263 头像留白（否则 96px margin 把中心挤偏 48px）。 */
+.xiaoXi.huiFuRenWuHang:not(.wo) .bubbleWrap { margin-right: 0; }
+.xiaoXi.huiFuRenWuHang.wo .bubbleWrap { margin-left: 0; }
 
 /**
  * **赞 / 踩**（对话内行右侧）：点了变强调色，再点取消。
@@ -5013,7 +5052,55 @@ html { font-weight: var(--fw-ui, 400); }
 @media (prefers-reduced-motion: reduce) {
   .banMaTou.a2ui-ma-tou[data-a2ui-status="generating"] { animation: none; background-size: 100% 55%, 100% 100%; }
 }
+/* R304：增强失败＝主题色圆＋马头镂空图案；点击弹窗询问是否重新生成。 */
+.banMaTou.a2ui-ma-tou.a2uiShiBai {
+  background: var(--accent); border-radius: 50%; opacity: 1;
+  -webkit-mask: none; mask: none; transform: none;
+}
+.banMaTou.a2ui-ma-tou.a2uiShiBai::before {
+  content: ''; position: absolute; inset: 18%;
+  background: var(--bg, #fff);
+  -webkit-mask: url('assets/zebra-head.svg') center / contain no-repeat;
+  mask: url('assets/zebra-head.svg') center / contain no-repeat;
+  transform: scaleX(-1);
+}
 .banMaTou.a2ui-ma-tou:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+/* R308⑥：浮光提示 FuGuang Toast——统一非阻滞、半透明、定时自消；不拦截任何点击。 */
+.fuGuangTiShi {
+  position: fixed; left: 50%; bottom: 34px; transform: translate(-50%, 12px);
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 10px 16px; border-radius: 12px;
+  background: color-mix(in srgb, var(--ink) 78%, transparent);
+  color: var(--bg, #fff); font-size: var(--fs-sm, 13px); line-height: 1.5;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--ink) 30%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  opacity: 0; pointer-events: none; z-index: 4000;
+  transition: opacity .22s ease, transform .22s ease;
+}
+.fuGuangTiShi.in { opacity: .92; transform: translate(-50%, 0); }
+.fuGuangTiShi.out { opacity: 0; transform: translate(-50%, 8px); }
+/* R305④：值班待处理等待图标（一排 logo 小牛马从左往右）＋项目教学横幅。 */
+.dutyDengDai { display: inline-flex; gap: 2px; margin-inline-end: 6px; vertical-align: middle; }
+.dutyDengDai img { width: 14px; height: 14px; animation: dutyMarch 1.4s linear infinite; }
+.dutyDengDai img:nth-child(2) { animation-delay: .18s; }
+.dutyDengDai img:nth-child(3) { animation-delay: .36s; }
+.dutyDengDai img:nth-child(4) { animation-delay: .54s; }
+@keyframes dutyMarch {
+  0% { transform: translateX(-4px); opacity: .35; }
+  50% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(4px); opacity: .35; }
+}
+.dutyRuleBanner {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 8px 12px; padding: 10px 12px;
+  border: 1px dashed var(--accent); border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-size: var(--fs-sm); line-height: 1.55;
+}
+.dutyRuleBanner .dutyBannerAv { width: 28px; height: 28px; border-radius: 50%; flex: none; }
+.dutyRuleBanner .dutyBannerWen { flex: 1; min-width: 0; }
+.dutyRuleBanner .dutyBannerGuan { flex: none; }
 
 /* 【项 5】行动行现在长在「思考/执行过程」块里面 —— 去掉左缩进，与思考正文对齐 */
 .siKaoKuai .xingDongZu { margin: 4px 0 3px; }
@@ -5324,8 +5411,6 @@ html { font-weight: var(--fw-ui, 400); }
 }
 
 /* ── 第 123 轮：统一本地搜索浮窗（分区 + 敏感内容悬停解密）；R250 加宽+关键词高亮+点击跳转 ───────── */
-/* R250：搜索窗加宽（至少与聊天框同宽）+ 加高 */
-.duiHuaKuangKa:has(.ssWrap) { width: min(960px, calc(100vw - 48px)); max-height: min(86vh, 860px); }
 .ssShuRu { width: 100%; padding: 9px 12px; border: 1px solid var(--line, #ddd); border-radius: 8px; background: var(--hover, #f5f5f5); color: var(--ink, #222); font-size: var(--fs-base); outline: none; box-sizing: border-box; }
 .ssShuRu:focus { border-color: var(--accent, #A87654); }
 .ssWrap { margin-top: 10px; max-height: min(62vh, 620px); overflow: auto; color: var(--ink, #222); scrollbar-width: thin; scrollbar-color: var(--accent, #A87654) transparent; }

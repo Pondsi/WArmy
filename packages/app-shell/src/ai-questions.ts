@@ -25,7 +25,9 @@ export interface AiWenTiXuanXiang {
 export interface AiWenTi {
   id: string;
   /** 由宿主创建入口指定，不能根据回复里的“允许”等字眼猜授权类型。 */
-  kind?: 'authorization' | 'choice';
+  kind?: 'authorization' | 'choice' | 'governance';
+  standingOptionId?: string;
+  pathGrant?: { abs: string; cls: 'read' | 'write' };
   /** R300：一次性授权卡不可去重、不可重放，回答必须携带 nonce。 */
   oneTime?: boolean;
   nonce?: string;
@@ -39,6 +41,8 @@ export interface AiWenTi {
   createdAt: number;
   status: 'pending' | 'answered' | 'cancelled';
   answer?: { optionId: string; biaoQian: string; customText?: string; answeredAt: number };
+  /** R308④：自动选择开着时，推荐项的倒计时自动作答（渲染层消光计时；用户点击即取消）。 */
+  autoSelect?: { optionId: string; deadlineAt: number };
 }
 
 export class AiWenTiZhongXin {
@@ -48,7 +52,9 @@ export class AiWenTiZhongXin {
   private tongZhi(): void { queueMicrotask(() => this.onChanged?.()); }
 
   daKai(shuRu: {
-    kind?: 'authorization' | 'choice';
+    kind?: 'authorization' | 'choice' | 'governance';
+    standingOptionId?: string;
+    pathGrant?: { abs: string; cls: 'read' | 'write' };
     groupId: string;
     sessionId?: string;
     biaoTi: string;
@@ -66,10 +72,10 @@ export class AiWenTiZhongXin {
     if (!oneTime && shuRu.dedupe !== false) {
       const shiShouQuan = (shuRu.kind || 'choice') === 'authorization';
       for (const q of this.items.values()) {
-        if (q.groupId !== groupId || q.status !== 'pending' || q.biaoTi !== biaoTi || q.oneTime) continue;
+        if (q.groupId !== groupId || q.status !== 'pending' || q.biaoTi !== biaoTi || q.oneTime || (q.kind || 'choice') !== (shuRu.kind || 'choice')) continue;
         if (!shiShouQuan) return q; // 选择卡：同标题未答只留一张（避免刷屏，产品原契约）
         /** 授权卡必须严格匹配：同标题不同操作对象/选项绝不能复用旧授权（R232 安全口径） */
-        if (q.kind === 'authorization' && q.ti === String(shuRu.ti || '')
+        if (q.kind === 'authorization' && q.standingOptionId === shuRu.standingOptionId && JSON.stringify(q.pathGrant) === JSON.stringify(shuRu.pathGrant) && q.ti === String(shuRu.ti || '')
                   && JSON.stringify(q.options.map((o) => [o.biaoQian, o.description || '']))
                     === JSON.stringify((shuRu.options || []).filter((o) => o && String(o.biaoQian || '').trim()).map((o) => [String(o.biaoQian).trim(), o.description || '']))) return q;
       }
@@ -88,6 +94,7 @@ export class AiWenTiZhongXin {
       id: 'q' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'),
       groupId,
       kind: shuRu.kind || 'choice',
+      ...(shuRu.kind === 'authorization' && !oneTime && shuRu.standingOptionId ? { standingOptionId: shuRu.standingOptionId, pathGrant: shuRu.pathGrant } : {}),
       ...(oneTime ? { oneTime: true, nonce } : {}),
       sessionId: shuRu.sessionId,
       biaoTi,
@@ -157,5 +164,20 @@ export class AiWenTiZhongXin {
     q.status = 'cancelled';
     this.tongZhi();
     return true;
+  }
+
+  /** R308④：登记推荐项倒计时自动作答；不立即作答，由渲染层消光结束后回 call answer。 */
+  setAutoSelect(id: string, optionId: string, ms: number): boolean {
+    const q = this.items.get(String(id || ''));
+    if (!q || q.status !== 'pending') return false;
+    if (!q.options.some((o) => o.id === optionId)) return false;
+    q.autoSelect = { optionId, deadlineAt: Date.now() + Math.max(1000, ms) };
+    this.tongZhi();
+    return true;
+  }
+
+  clearAutoSelect(id: string): void {
+    const q = this.items.get(String(id || ''));
+    if (q && q.autoSelect) { delete q.autoSelect; this.tongZhi(); }
   }
 }

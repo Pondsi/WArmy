@@ -2765,6 +2765,8 @@ export function nmA2uiKai(xuan: NmKaiXuanXiang): { ok: boolean; id?: number; yiC
         nodeIntegration: false,
         sandbox: true,
         webSecurity: true,
+        /* R308⑨：最小宿主桥——只回传按钮动作（存档等），不给文件/系统能力。 */
+        preload: path.join(__dirname, 'a2ui-preload.cjs'),
         session: nmA2uiSession(),
         spellcheck: false,
         backgroundThrottling: false,

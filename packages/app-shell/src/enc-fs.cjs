@@ -68,6 +68,8 @@ const CODE_META = /^(SKILL\.md|README(?:\.[^/]*)?\.md|LICENSE(?:\.[^/]*)?|packag
 function inCodeRoot(rel) {
   const parts = rel.split('/');
   const top = parts[0] ? parts[0].toLowerCase() : '';
+  // 宿主生成的 keepalive 运行入口必须由外部 Node 直接执行；只放这一精确路径，实例配置仍加密。
+  if (top === 'instances' && parts.length === 3 && /^[A-Za-z0-9._-]{1,80}$/.test(parts[1]) && parts[2] === 'agent.mjs') return true;
   if (top === 'skills' && parts.length >= 2) return true;
   if (top === 'scan-dirs' && parts.length >= 3) {
     const second = (parts[1] || '').toLowerCase();

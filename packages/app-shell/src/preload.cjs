@@ -411,6 +411,8 @@ contextBridge.exposeInMainWorld('warmy', {
   uiPromptMulti: (p) => ipcRenderer.invoke('warmy:uiPromptMulti', p),
   pickFileOrDir: () => ipcRenderer.invoke('warmy:pickFileOrDir'),
   pickDirectory: () => ipcRenderer.invoke('warmy:xuanZeMuLu'),
+  /* R308⑨：A2UI 按钮动作回传（存档等） */
+  a2uiAction: (p) => ipcRenderer.invoke('warmy:a2uiAction', p),
   scanMachine: (kind) => ipcRenderer.invoke('warmy:saoMiaoJiQi', kind),
   privacyConsentSet: (consent) => ipcRenderer.invoke('warmy:yinSiTongYiSheZhi', consent),
   appQuit: (reason) => ipcRenderer.invoke('warmy:yingYongTuiChu', reason),
@@ -551,6 +553,15 @@ contextBridge.exposeInMainWorld('warmy', {
   winClose: () => ipcRenderer.invoke('warmy:winGuanBi'),
   winReload: () => ipcRenderer.invoke('warmy:winChongXinJiaZai'),
   groupOrchestrate: (xiaoXi) => ipcRenderer.invoke('warmy:qunXieTiao', xiaoXi),
+  /* R305④：值班待处理台账广播；R305②：创建弹窗默认工作目录。 */
+  onDutyPending: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:qunDutyPending', h); return () => ipcRenderer.removeListener('warmy:qunDutyPending', h); },
+  moRenGongZuoQu: (id) => ipcRenderer.invoke('warmy:moRenGongZuoQu', id),
+  zhiBanXiangGuanDu: (gid) => ipcRenderer.invoke('warmy:zhiBanXiangGuanDu', gid),
+  dutyRelevanceFeedback: (p) => ipcRenderer.invoke('warmy:zhiBanXiangGuanFanKui', p),
+  resumeCardList: (p) => ipcRenderer.invoke('warmy:jieDianLieBiao', p),
+  resumeCardAnswer: (p) => ipcRenderer.invoke('warmy:jieDianHuiDa', p),
+  decisionPolicyState: (p) => ipcRenderer.invoke('warmy:jueCeFuZhuZhuangTai', p),
+  decisionPolicyFeedback: (p) => ipcRenderer.invoke('warmy:jueCeFuZhuFanKui', p),
   requestApproval: (Qiu) => ipcRenderer.invoke('warmy:qingQiuPiZhun', Qiu),
   approvalRespond: (id, allowed, scope) => ipcRenderer.invoke('warmy:piZhunHuiYing', id, allowed, scope),
   onApprovalRequest: (cb) => ipcRenderer.on('warmy:piZhunQingQiu', (_e, d) => cb(d)),
@@ -578,7 +589,7 @@ contextBridge.exposeInMainWorld('warmy', {
   kaiFaMoShiQieHuan: (p) => ipcRenderer.invoke('warmy:kaiFaMoShiQieHuan', p),
   kaiFaJianYi: (p) => ipcRenderer.invoke('warmy:kaiFaJianYi', p),
   kaiFaJuJue: (p) => ipcRenderer.invoke('warmy:kaiFaJuJue', p),
-    
+
   kaiFaRuanGuiZeCha: (p) => ipcRenderer.invoke('warmy:kaiFaRuanGuiZeCha', p),
   kaiFaChongGouJueDing: (p) => ipcRenderer.invoke('warmy:kaiFaChongGouJueDing', p),
   kaiFaChongGouBaoCun: (p) => ipcRenderer.invoke('warmy:kaiFaChongGouBaoCun', p),
@@ -1034,6 +1045,8 @@ diagNmKai: () => ipcRenderer.invoke('warmy:zhenDuanNmDaKai'), // R223 项2
     /** R298：kf 来源手动巡查接缝（主进程只在 WARMY_TEST_HOOKS=1 时执行） */
     testKfXunCha: (p) => ipcRenderer.invoke('warmy:testKfXunCha', p),
     testZongJieShouDong: (p) => ipcRenderer.invoke('warmy:testZongJieShouDong', p),
+    testR307DecisionState: (p) => ipcRenderer.invoke('warmy:testR307DecisionState', p),
+    testR307Action: (p) => ipcRenderer.invoke('warmy:testR307Action', p),
     testXingNengKuaiZhao: () => ipcRenderer.invoke('warmy:testXingNengKuaiZhao'),
     testXingNengBiaoJi: (p) => ipcRenderer.invoke('warmy:testXingNengBiaoJi', p),
     testXingNengDu: (p) => ipcRenderer.invoke('warmy:testXingNengDu', p),

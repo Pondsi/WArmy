@@ -83,6 +83,16 @@ export interface LogEntry {
   hidden?: boolean;
 }
 
+/** 保留用户输入与其已有回复组成的完整单元，裁剪时不留下孤立的助手续句。 */
+export function duiHuaDanYuan<T extends { role: string }>(entries: readonly T[]): T[][] {
+  const turns: T[][] = [];
+  for (const row of entries) {
+    if (row.role === 'user') turns.push([row]);
+    else if (row.role === 'assistant') turns.at(-1)?.push(row);
+  }
+  return turns;
+}
+
 export interface XuanranXuanxiang {
   /** 视图总预算（字符）。与日志总长无关，这是"有界"的落点 */
   budgetChars: number;

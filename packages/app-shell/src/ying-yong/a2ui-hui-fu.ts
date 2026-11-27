@@ -198,10 +198,14 @@ function xieYuanZi(file: string, text: string): void {
   fs.renameSync(tmp, file);
 }
 
-function htmlNeiRong(template: string, data: string): string {
+function htmlNeiRong(template: string, data: string, sid?: string, mid?: string): string {
   /* script[type=application/json] 里必须是原始 JSONL；再套 JSON.stringify 会变成字符串字面量。 */
   const safe = String(data || '').replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
-  return template.replace('__A2UI_DATA__', () => safe);
+  const attr = (v: string) => String(v || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  /* R308⑨：带上会话/消息标识，互动窗口按钮动作才能回传宿主定位存档落点。 */
+  const tagged = template.replace('<script id="a2ui-data" type="application/json">',
+    () => '<script id="a2ui-data" type="application/json" data-session="' + attr(sid || '') + '" data-message="' + attr(mid || '') + '">');
+  return tagged.replace('__A2UI_DATA__', () => safe);
 }
 
 export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
@@ -299,7 +303,7 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
       fs.mkdirSync(dir, { recursive: true });
       const jsonl = messages.map((m) => JSON.stringify(m)).join('\n') + '\n';
       const runtime = yiLai.duRuntime();
-      const entry = htmlNeiRong(yiLai.duMoBan(), jsonl);
+      const entry = htmlNeiRong(yiLai.duMoBan(), jsonl, sid, mid);
       xieYuanZi(path.join(dir, 'surface.jsonl'), jsonl);
       xieYuanZi(path.join(dir, 'a2ui-runtime.js'), runtime);
       xieYuanZi(path.join(dir, 'index.html'), entry);
@@ -367,7 +371,7 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
         || j.runtimeSha256 !== sha256(runtime)
         || j.runtimeSha256 !== sha256(yiLai.duRuntime())) return { ok: false, error: 'a2ui-integrity' };
       bianYiA2ui(surface.toString('utf8'), mid);
-      if (html.toString('utf8') !== htmlNeiRong(yiLai.duMoBan(), surface.toString('utf8'))) return { ok: false, error: 'a2ui-integrity' };
+      if (html.toString('utf8') !== htmlNeiRong(yiLai.duMoBan(), surface.toString('utf8'), sid, mid)) return { ok: false, error: 'a2ui-integrity' };
       return { ok: true, path: file, nmAvailable: yiLai.nmKeYong(), html, runtime };
     } catch { return { ok: false, error: 'a2ui-invalid' }; }
   }

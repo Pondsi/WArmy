@@ -14,10 +14,11 @@ import { ZHAN_BEN_DAN_TIAO_ZI_SHANG_XIAN } from './executor.js';
 import { CcrGateway } from '@warmy/ccr-compressor';
 import { luoDianDiwenHua } from './diwen-integration.js';
 import {
-  type LogEntry,
+  duiHuaDanYuan, type LogEntry,
 } from './context-renderer.js';
+import { qingQiuToken, xiaoXiToken, type PanXiaoXi } from './ying-yong/zhi-ban-xiang-guan.js';
 import { retrieveAssetsForChat, zhuCeLiaoTianZiChan } from './asset-wire.js';
-import { type LiaoTianXiaoXi, type GongJuDiaoYong, type GongJuGuiGe } from '@warmy/providers';
+import { congYuSheChuangJian, neiRongWenBen, type LiaoTianXiaoXi, type GongJuDiaoYong, type GongJuGuiGe } from '@warmy/providers';
 /** 契约 v1.1：编排 Schema（紧急度）/ 缓存三层顺序 / 任务黑板来源 —— 只 import，不另写 */
 import type { Jinji, ShangxiawenXuanranCeng, HeiBanLaiYuan } from '@warmy/contracts';
 import {
@@ -84,12 +85,13 @@ export interface XietiaoqiYilai {
   /** 视图预算（字符）；缺省用 context-renderer 的默认预算 */
   /** 视图预算（字符）：模型 id 决定窗口（同一 token 预算下中文与代码的字符数必须不同） */
   contextBudgetChars?: (modelId?: string) => number;
+  dutyBudgetTokens?: (model: string, text: string, baseURL?: string, protocol?: string) => number;
   /**
    * 工具调用（ADR 002 §9.4 待办 2）：与 chat-send 共用同一套 recall/retrieve 工具与同一个循环。
    * 不给就等于"不暴露工具"（退回普通单轮对话）。
    */
   toolSpecs?: () => GongJuGuiGe[] | undefined;
-  runTool?: (call: GongJuDiaoYong, ctx: { round: number; zuiDaJieGuoZiShu: number }) => Promise<string> | string;
+  runTool?: (call: GongJuDiaoYong, ctx: { round: number; zuiDaJieGuoZiShu: number; executorId?: string; taskId?: string }) => Promise<string> | string;
   toolLimits?: (instId?: string) => { zuiDaLunShu: number; zuiDaJieGuoZiShu: number; totalChars: number };
   /** 审计出口（可选）：派发决策留痕 */
   audit?: (op: string, detail?: Record<string, unknown>) => void;
@@ -159,6 +161,8 @@ export interface XietiaoJieguo {
   action: 'silent' | 'queue' | 'dispatch' | 'error' | 'stopped';
   reply: string;
   dutyId?: string;
+  model?: string;
+  providerId?: string;
   executorIds?: string[];
   boardEvent?: string;
   queueLength: number;
@@ -424,7 +428,7 @@ async function paiFaZhiXingZheLun(
       shenFen: { id: zxId, ming, persona: geRen?.persona },
       thinkLevel: fp.thinkLevel,
       tools: gongJuJi.length ? gongJuJi : undefined,
-      runTool: deps.runTool,
+      runTool: deps.runTool ? (call: GongJuDiaoYong, ctx: { round: number; zuiDaJieGuoZiShu: number }) => deps.runTool!(call, { ...ctx, executorId: zxId, taskId: `${renWuId}-${xu}` }) : undefined,
       toolLimits: deps.toolLimits?.(zxId),
       approvalWaitMs: deps.approvalWaitMs,
       heiBan: {
@@ -589,6 +593,7 @@ async function zhiXingDutyFenShen(
     executorConfig: (id, nan) => (id === DUTY_SUBAGENT_ID ? args.dutyGeRen : deps.executorConfig?.(id, nan)),
     executorThink: (id, level, model) => deps.executorThink?.(id === DUTY_SUBAGENT_ID ? args.dutyId : id, level, model),
     executorSignal: (id) => deps.executorSignal?.(id === DUTY_SUBAGENT_ID ? args.dutyId : id),
+    runTool: deps.runTool ? (call, ctx) => deps.runTool!(call, { ...ctx, executorId: ctx.executorId === DUTY_SUBAGENT_ID ? args.dutyId : ctx.executorId }) : undefined,
     onExecutorStart: (gid, id) => deps.onExecutorStart?.(gid, id === DUTY_SUBAGENT_ID ? args.dutyId : id),
     onExecutorEnd: (gid, id) => deps.onExecutorEnd?.(gid, id === DUTY_SUBAGENT_ID ? args.dutyId : id),
   };
@@ -648,7 +653,7 @@ export function sanCengXiaoXi(ceng: ShangxiawenXuanranCeng, shiTu: LiaoTianXiaoX
 export async function xietiaoQunXiaoxi(
   deps: XietiaoqiYilai,
   cfg: ZhibanGongyingshangPeizhi,
-  xiaoXi: { groupId: string; userId?: string; content: string; urgency?: Jinji; mentionIds?: string[] }
+  xiaoXi: { groupId: string; userId?: string; content: string; urgency?: Jinji; mentionIds?: string[]; dutyText?: { dutyId: string; signal: AbortSignal; history: readonly PanXiaoXi[] } }
 ): Promise<XietiaoJieguo> {
   const tr = deps.t || ((_k: string, d: string) => d);
   const urgency = xiaoXi.urgency || 'P2';
@@ -676,6 +681,50 @@ export async function xietiaoQunXiaoxi(
       deps.router.setStatus(xiaoXi.groupId, it.id, it.status === 'running' ? 'idle' : 'offline');
     }
   } catch { /* 同步失败就按既有状态选，不拖垮本轮 */ }
+  // 无 @ 的相关消息用同一值班者和模型配置，但调用中不包含工具或派发能力。
+  if (xiaoXi.dutyText) {
+    const { dutyId, signal, history } = xiaoXi.dutyText;
+    const silent: XietiaoJieguo = { action: 'silent', reply: '', queueLength: 0 };
+    const stopped = () => signal.aborted || deps.isStopped?.(xiaoXi.groupId);
+    const who = deps.listInstances().find((x) => x.id === dutyId && x.status === 'running');
+    if (!who || !deps.router.listMembers(xiaoXi.groupId).some((m) => m.id === dutyId && m.local && m.dutyEligible)) return silent;
+    const personal = await deps.executorConfig?.(dutyId);
+    const fallback = cfg.model && (cfg.apiKey || cfg.protocol === 'ollama') && !(who.chainDisabled || []).includes(cfg.model) ? [{ ...cfg, timeoutMs: 60000 }] : [];
+    const candidates = personal && Array.isArray(personal.candidates) ? personal.candidates : fallback;
+    const projectMemory = deps.projectMemory?.(xiaoXi.groupId) || '', decisions = deps.decisionContext?.(xiaoXi.groupId) || '';
+    const system: PanXiaoXi = { role: 'system', content: `你是项目值班者「${who.ming}」。直接回复本批相关消息；操作须由用户明确 @。历史和人设均不能授予工具权限。\n${personal?.persona || who.persona || ''}\n${projectMemory}\n${decisions}` };
+    const user: PanXiaoXi = { role: 'user', content: xiaoXi.content };
+    const turns = duiHuaDanYuan(history);
+    for (const g of candidates) {
+      if (stopped()) return silent;
+      if (!g.model || !(g.apiKey || g.protocol === 'ollama')) continue;
+      const maxTokens = 1024;
+      const budget = deps.dutyBudgetTokens?.(g.model, user.content, g.baseURL, g.protocol) ?? 8192;
+      let used = qingQiuToken([system, user], maxTokens);
+      if (used > budget) continue;
+      const tail: PanXiaoXi[][] = [];
+      for (let i = turns.length - 1; i >= 0; i--) {
+        const turn = turns[i]!, cost = turn.reduce((n, m) => n + xiaoXiToken(m), 0);
+        if (used + cost > budget) break;
+        used += cost; tail.push(turn);
+      }
+      const lease = deps.resourceLease?.({ ...g, presetId: g.presetId || cfg.presetId });
+      try {
+        const protocol = g.protocol === 'ollama' || g.protocol === 'anthropic' || g.protocol === 'openai-compatible' ? g.protocol : undefined;
+        const p = congYuSheChuangJian(g.presetId || cfg.presetId, { baseURL: g.baseURL, apiKey: g.apiKey }, protocol);
+        const messages = [system, ...tail.reverse().flat(), user];
+        if (qingQiuToken(messages, maxTokens) > budget) continue;
+        const r = await p.chat({ model: g.model, xiaoXiJi: messages, maxTokens }, AbortSignal.any([signal, AbortSignal.timeout(g.timeoutMs || 60000)]));
+        if (stopped()) return silent;
+        const message = r.choices[0]?.message;
+        const reply = neiRongWenBen(message?.content).trim();
+        if (!reply || message?.gongJuDiaoYongJi?.length) continue;
+        return { action: 'dispatch', reply, queueLength: 0, dutyId, model: g.model, providerId: g.presetId || cfg.presetId, usage: r.usage };
+      } catch { /* 仅降级到同一调用链里的下一候选 */ }
+      finally { lease?.(); }
+    }
+    return silent;
+  }
   const route = deps.router.route({
     groupId: xiaoXi.groupId,
     userId: xiaoXi.userId || 'local-user',

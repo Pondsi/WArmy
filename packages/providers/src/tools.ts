@@ -17,6 +17,7 @@
  *   4. 协议映射已在 openai.ts / anthropic.ts 里完成（tools / tool_calls / tool_result），本文件不碰 HTTP。
  */
 import { jieWeiAnQuan } from './util.js';
+import { qingLiLuanMa } from './base.js';
 import { neiRongWenBen } from './types.js';
 import type {
   LiaoTianXiaoXi,
@@ -614,6 +615,28 @@ export async function liaoTianDaiGongJu(
           } catch {
             /* 收尾失败就退回原响应，由宿主兜底 */
           }
+        }
+        /* R308⑩：单次输出上限截断（finish_reason=length）⇒ 宿主自动续写最多 2 次并拼接，
+           避免「4. 」这类半截回复；同时清理截断产生的替换符/孤立代理项。 */
+        {
+          let buChong = 0;
+          let leiJi = qingLiLuanMa(neiRongWenBen(xiaoXi?.content) || '');
+          let dangQian = xiangYing;
+          while (String(dangQian.choices[0]?.finishReason || '') === 'length' && buChong < 2 && /[\p{L}\p{N}]/u.test(leiJi)) {
+            buChong++;
+            xiaoXiJi.push({ role: 'assistant', content: leiJi });
+            xiaoXiJi.push({ role: 'user', content: '上一条回复因单次输出上限被截断。请从截断处接着写完剩余内容：不要重复已写部分，不要重新开头，不要解释截断。' });
+            try {
+              const xu = await diaoYongMoXing('none');
+              const xuWen = qingLiLuanMa(neiRongWenBen(xu.choices[0]?.message?.content) || '');
+              if (!xuWen) break;
+              leiJi += xuWen;
+              dangQian = xu; last = xu; xiaoXi = xu.choices[0]?.message;
+              emit({ kind: 'final', round: lunShu, detail: 'length-continue-' + buChong });
+            } catch { break; }
+          }
+          if (xiaoXi) xiaoXi.content = qingLiLuanMa(neiRongWenBen(xiaoXi.content) || '') || (buChong > 0 ? leiJi : xiaoXi.content);
+          if (buChong > 0 && xiaoXi) xiaoXi.content = leiJi;
         }
         break;
       }

@@ -29,6 +29,8 @@ for (const f of ['auth-core.mjs', 'auth-core.d.mts', 'auth-wordlist.mjs', 'auth-
   if (fsExists(path.join(src, f))) copyFileSync(path.join(src, f), path.join(dist, f));
 }
 if (fsExists(path.join(src, 'snip-preload.cjs'))) copyFileSync(path.join(src, 'snip-preload.cjs'), path.join(dist, 'snip-preload.cjs'));
+/* R308⑨：A2UI 互动窗口最小宿主桥（按钮动作回传） */
+if (fsExists(path.join(src, 'a2ui-preload.cjs'))) copyFileSync(path.join(src, 'a2ui-preload.cjs'), path.join(dist, 'a2ui-preload.cjs'));
 /* R219：拟态窗口 preload —— 缺它 warmyMimic 桥不存在，桌宠形象/交互全空白 */
 if (fsExists(path.join(src, 'mimic-preload.cjs'))) copyFileSync(path.join(src, 'mimic-preload.cjs'), path.join(dist, 'mimic-preload.cjs'));
 copyFileSync(path.join(src, 'mimic-menu-preload.cjs'), path.join(dist, 'mimic-menu-preload.cjs'));

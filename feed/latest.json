@@ -1,13 +1,13 @@
 {
-  "version": "0.4.54",
-  "notes": "Diwen integration is updated to 6.16.3. Private concepts retain their IDs and definitions in agent exchanges.\r\n\r\n## What changed since 0.4.53\r\n\r\n- Use Diwen's latest published open-data package and include its CC BY 4.0 LICENSE and attribution NOTICE, by Pondsi (https://github.com/Pondsi/Diwen).\r\n- Fix the in-app update path: load the actual npm entry, show the running package version, prevent an older update from replacing a newer bundled version, and check health before activating an update.\r\n- Keep private concept identities through mapping and deterministic rendering. Private package import, export and removal remain supported.\r\n- Bundle the segmentation and pinyin dependencies needed by the isolated Diwen worker.\r\n\r\n## Boundaries\r\n\r\nMechanical mapping is not semantic approval. Unsupported or uncertain input remains the original text; this update does not add cloud model calls or rewrite chat originals. Diwen updates are still installed only when you request them.\r\n\r\n## Install\r\n\r\nDownload WArmy-Setup-0.4.54.exe and run it. Existing WArmyData carries over. The installer is unsigned; Windows SmartScreen may ask for confirmation.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.54/WArmy-Setup-0.4.54.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.54/WArmy-Setup-0.4.54.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.54/WArmy-Setup-0.4.54.exe.warmyblocks",
-  "sha256": "b71b9528532b97c2e80fa79df5c90e932905d33f2933d6c0b88efb5c113aba77",
-  "size": 342151489,
+  "version": "0.4.55",
+  "notes": "WArmy 0.4.55 — release round.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.55/WArmy-Setup-0.4.55.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.55/WArmy-Setup-0.4.55.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.55/WArmy-Setup-0.4.55.exe.warmyblocks",
+  "sha256": "69e87331477d53cd0745a06de50826e6467e76af5cc16b71ae2b9d991ef6edd7",
+  "size": 342197978,
   "mandatory": false,
-  "publishedAt": "2026-11-26T05:49:56.315Z",
+  "publishedAt": "2026-11-27T07:16:33.226Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.54"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.55"
 }

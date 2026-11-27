@@ -81,6 +81,8 @@ export interface HuanCunYongLiang {
   cacheHitTokens: number;
   /** 未命中 token */
   cacheMissTokens: number;
+  /** R308⑤：供应商是否真的回报了缓存明细（false＝未反馈，界面不应把 0 当真实命中） */
+  cacheReported?: boolean;
   /** 指标来源：provider 原生字段 / 估算 / 无 */
   source: 'native' | 'estimated' | 'none';
 }

@@ -161,6 +161,15 @@
                 <!-- R222 项10：与主界面左下角设置按钮同款图标（mask id 独立避免冲突；尺寸随 .anNiuTuBiao .ico） -->
                 <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><defs><mask id="h2nt"><rect width="100" height="100" fill="white"/><polygon points="50,32 66,42 66,58 50,68 34,58 34,42" fill="black"/></mask></defs><g fill="currentColor" mask="url(#h2nt)"><circle cx="50" cy="50" r="30"/><g stroke="currentColor" stroke-width="14"><line x1="50" y1="20" x2="50" y2="6"/><line x1="50" y1="80" x2="50" y2="94"/><line x1="20" y1="50" x2="6" y2="50"/><line x1="80" y1="50" x2="94" y2="50"/><line x1="29" y1="29" x2="19" y2="19"/><line x1="71" y1="71" x2="81" y2="81"/><line x1="71" y1="29" x2="81" y2="19"/><line x1="29" y1="71" x2="19" y2="81"/></g></g></svg>
               </button>
+              <div id="liaoTianSouSuo" class="liaoTianSouSuo">
+                <button type="button" id="liaoTianSouSuoAn" class="anNiuTuBiao" data-i18n-title="list.search" aria-label="搜索" aria-controls="liaoTianSouSuoNei" aria-expanded="false">
+                  <svg class="ico hollowIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m14.5 14.5 5 5"/></svg>
+                </button>
+                <div id="liaoTianSouSuoNei" hidden>
+                  <input type="search" id="liaoTianSouSuoShuRu" class="ssShuRu" aria-label="搜索" data-i18n-ph="list.search" autocomplete="off"/>
+                  <div id="liaoTianSouSuoJieGuo" class="ssWrap" aria-live="polite" hidden></div>
+                </div>
+              </div>
               <button id="anNiuRongQiKongZhiTai" class="anNiuTuBiao" data-i18n-title="container.console.tip" aria-label="in-container shell console" disabled>
                 <svg class="ico" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="24" width="84" height="56" rx="6"/><line x1="22" y1="48" x2="46" y2="48"/><circle cx="60" cy="48" r="5" fill="currentColor" stroke="none"/><circle cx="76" cy="48" r="5" fill="currentColor" stroke="none"/></g></svg>
               </button>
@@ -206,7 +215,6 @@
                   <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
                 </button>
                 <div class="jinJiCaiDan gengDuoCaiDanMianBan yinCang" id="gengDuoCaiDan" role="menu">
-                  <button type="button" id="caiDanTuBiaoSouSuo" class="gengDuoCaiDanAnNiu"><span class="mark"></span><span data-i18n="list.search"></span></button>
                   <!-- 「仅@ai才发言」：只在项目/群聊出现；群聊默认勾选 -->
                   <button type="button" id="caiDanTuBiaoDingXiang" class="gengDuoCaiDanAnNiu"><span id="caiDanTuBiaoDingXiangMark" class="mark">✓</span><span data-i18n="group.directedOnly"></span></button>
                   <!-- 自动滚动聊天记录：默认不勾选 -->
@@ -228,6 +236,7 @@
           </header>
           <div id="xiaoXiJi" class="xiaoXiJi"></div>
           <div id="tongZhiQu" class="tongZhiQu">
+            <div id="r307CardHost" class="aiqHost" hidden></div>
             <div id="aiqHost" class="aiqHost"></div>
             <div id="piZhunHost" class="piZhunHost"></div>
           </div>

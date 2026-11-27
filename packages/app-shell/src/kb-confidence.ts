@@ -15,6 +15,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { danYiMingXian } from './fang-an-fen-qi.js';
 
 export type ZhiXinXinHao =
   | 'user-correct'      // 用户纠正 → 降
@@ -178,4 +179,158 @@ export class KbConfidenceModel {
   }
 
   lieBiao(): ZhiXinTiaoMu[] { return [...this.entries.values()].map((e) => ({ ...e, history: e.history.slice() })); }
+}
+
+/** 任务澄清的标签与知识转换置信账分开；只接受用户选择或宿主留出标签。 */
+export interface RenWuChengQingYangBen {
+  id: string; seq: number; model: string; scores: number[]; selected: number; source: 'user-choice' | 'host-label'; ts: number;
+}
+export interface RenWuChengQingGuJi { scores: number[]; samples: number; basis: 'labelled' | 'prior' }
+export interface JueCeRuanCeLue { clarify: boolean; edit: boolean; undo: boolean; confidence: number; margin: number }
+export const MO_REN_JUE_CE: JueCeRuanCeLue = { clarify: true, edit: true, undo: true, confidence: 0.7, margin: 0.2 };
+export function yanJueCeCeLue(v: unknown): JueCeRuanCeLue | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const p = v as Record<string, unknown>;
+  if (Object.keys(p).length !== 5 || !['clarify', 'edit', 'undo'].every((k) => typeof p[k] === 'boolean')
+    || typeof p.confidence !== 'number' || !Number.isFinite(p.confidence) || p.confidence < 0.55 || p.confidence > 0.9 || typeof p.margin !== 'number' || !Number.isFinite(p.margin) || p.margin < 0.1 || p.margin > 0.3) return null;
+  return { clarify: p.clarify as boolean, edit: p.edit as boolean, undo: p.undo as boolean, confidence: p.confidence, margin: p.margin };
+}
+export function heFaChengQingFen(v: unknown): v is number[] {
+  return Array.isArray(v) && v.length >= 2 && v.length <= 4 && v.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 1);
+}
+const fenTong = (v: number) => Math.min(4, Math.floor(v * 5));
+export function jiaoZhunRenWuFen(model: string, raw: readonly number[], observations: readonly RenWuChengQingYangBen[]): RenWuChengQingGuJi {
+  if (!heFaChengQingFen(raw)) throw new Error('invalid-clarification-scores');
+  let samples = Infinity;
+  const scores = raw.map((score) => {
+    let total = 0, correct = 0;
+    for (const row of observations) {
+      if (row.model !== model || row.scores.length !== raw.length || !['user-choice', 'host-label'].includes(row.source)) continue;
+      for (const [i, v] of row.scores.entries()) if (fenTong(v) === fenTong(score)) { total++; if (i === row.selected) correct++; }
+    }
+    samples = Math.min(samples, total);
+    // 没有标签时只用对称先验；模型自报 0.99 也不成为 99% 概率。
+    return total >= 6 ? clamp((correct + 1) / (total + raw.length)) : Math.min(MO_REN_ZHI_XIN, 1 / raw.length);
+  });
+  return { scores, samples: Number.isFinite(samples) ? samples : 0, basis: samples >= 6 ? 'labelled' : 'prior' };
+}
+export function xuYaoRenWuChengQing(policy: JueCeRuanCeLue, estimate: RenWuChengQingGuJi, diverges: boolean): boolean {
+  if (!diverges) return false;
+  const sorted = [...estimate.scores].sort((a, b) => b - a);
+  return sorted[0]! < policy.confidence || sorted[0]! - sorted[1]! < policy.margin;
+}
+export function yiJuMingXianXuanXiang(options: readonly string[], evidence: string): number | null {
+  const normal = (s: string) => s.replace(/[\s\p{P}\p{S}]/gu, '').toLowerCase();
+  const text = normal(evidence), matched = options.map((o) => normal(o).length >= 3 && text.includes(normal(o)));
+  if (matched.filter(Boolean).length !== 1) return null;
+  // 使用相同的单一明显信号，但这里的 1/0 来自宿主实际读到的明确选项，而非模型自评。
+  return danYiMingXian(matched.map((yes) => ({ confidence: yes ? 1 : 0 })));
+}
+export interface JueCeFuZhuFanKui { id: string; seq: number; feature: 'edit' | 'undo'; needed: boolean; generation: string; policyVersion: number; ts: number }
+export function chuangJianRenWuZhiXin(file: string) {
+  function du(): { version: number; seq: number; rows: RenWuChengQingYangBen[]; feedback: JueCeFuZhuFanKui[] } {
+    try {
+      const j = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (j.version !== 1 || !Number.isSafeInteger(j.seq) || j.seq < 0 || !Array.isArray(j.rows) || j.rows.length > 512 || j.rows.some((r: RenWuChengQingYangBen) => !r || !r.id || !r.model || !heFaChengQingFen(r.scores) || !Number.isSafeInteger(r.selected) || r.selected < 0 || r.selected >= r.scores.length || !['user-choice', 'host-label'].includes(r.source) || !Number.isSafeInteger(r.seq))) throw new Error('clarification-calibration-invalid');
+      const feedback = j.feedback || [];
+      if (!Array.isArray(feedback) || feedback.length > 512 || feedback.some((r: JueCeFuZhuFanKui) => !r || !r.id || !r.generation || !['edit', 'undo'].includes(r.feature) || typeof r.needed !== 'boolean' || !Number.isSafeInteger(r.seq) || !Number.isSafeInteger(r.policyVersion))) throw new Error('decision-feedback-invalid');
+      return { ...j, feedback };
+    } catch (e) { if ((e as NodeJS.ErrnoException)?.code === 'ENOENT') return { version: 1, seq: 0, rows: [], feedback: [] }; throw e; }
+  }
+  function jiLu(record: Omit<RenWuChengQingYangBen, 'seq' | 'ts'>): void {
+    const j = du();
+    if (!heFaChengQingFen(record.scores) || !Number.isSafeInteger(record.selected) || record.selected < 0 || record.selected >= record.scores.length || !record.id || !record.model || !['user-choice', 'host-label'].includes(record.source)) throw new Error('invalid-clarification-label');
+    if (j.rows.some((r) => r.id === record.id)) return;
+    const next = { ...j, seq: j.seq + 1, rows: [...j.rows.slice(-511), { ...record, seq: j.seq + 1, ts: Date.now() }] };
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file + '.tmp', JSON.stringify(next), { mode: 0o600, flush: true }); fs.renameSync(file + '.tmp', file);
+  }
+  function fanKui(record: Omit<JueCeFuZhuFanKui, 'seq' | 'ts'>): void {
+    const j = du();
+    if (!record.id || !record.generation || !['edit', 'undo'].includes(record.feature) || typeof record.needed !== 'boolean' || !Number.isSafeInteger(record.policyVersion)) throw new Error('invalid-decision-feedback');
+    if (j.feedback.some((r) => r.id === record.id)) return;
+    const next = { ...j, seq: j.seq + 1, feedback: [...j.feedback.slice(-511), { ...record, seq: j.seq + 1, ts: Date.now() }] };
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file + '.tmp', JSON.stringify(next), { mode: 0o600, flush: true }); fs.renameSync(file + '.tmp', file);
+  }
+  return { du, jiLu, fanKui, guJi: (model: string, scores: number[]) => jiaoZhunRenWuFen(model, scores, du().rows) };
+}
+
+export type JueCeLiuChuYangBen =
+  | { kind: 'clarify'; model: string; scores: number[]; selected: number; explicit: boolean }
+  | { kind: 'edit'; wantedEdit: boolean; approved: boolean; succeeded: boolean }
+  | { kind: 'undo'; wantedRollback: boolean; conflict: boolean; succeeded: boolean; persisted?: boolean }
+  | { kind: 'recover'; replayed: boolean; blocked: boolean; executed: boolean };
+export interface JueCeZhiBiao { unsafe: number; miss: number; wrongRollback: number; wrongRecovery: number; success: number; interruptions: number }
+export function jueCeLiuChuDuiZhao(policy: JueCeRuanCeLue, cases: readonly JueCeLiuChuYangBen[], train: readonly RenWuChengQingYangBen[]): JueCeZhiBiao {
+  const m: JueCeZhiBiao = { unsafe: 0, miss: 0, wrongRollback: 0, wrongRecovery: 0, success: 0, interruptions: 0 };
+  for (const sample of cases) {
+    if (sample.kind === 'clarify') {
+      const estimate = jiaoZhunRenWuFen(sample.model, sample.scores, train);
+      const ask = sample.explicit || (policy.clarify && xuYaoRenWuChengQing(policy, estimate, true));
+      const chosen = ask ? sample.selected : estimate.scores.indexOf(Math.max(...estimate.scores));
+      if (chosen === sample.selected) m.success++; else m.miss++;
+      if (ask) m.interruptions++;
+    } else if (sample.kind === 'edit') {
+      // 编辑入口关闭后仍有原始逐工具批准；原卡已落盘的继续可编辑，不参与开关回放。
+      if (sample.succeeded && !sample.approved) { m.unsafe++; continue; }
+      if (!sample.approved) m.success++;
+      else if (!sample.succeeded) m.miss++;
+      else if (!sample.wantedEdit || policy.edit) m.success++;
+      else m.miss++;
+      m.interruptions++;
+    } else if (sample.kind === 'recover') {
+      // 已执行重演、或停止/过期/越权后仍执行＝错误恢复；被门禁拦住不执行才是安全。
+      if (sample.executed && (sample.replayed || sample.blocked)) m.wrongRecovery++;
+      else if (!sample.executed && !sample.blocked) m.miss++;
+      else m.success++;
+    } else {
+      if (sample.conflict) {
+        // 冲突校验固定启用，候选不能删除它；冲突后仍回滚＝错误回滚。
+        if (sample.succeeded) m.wrongRollback++; else m.success++;
+        continue;
+      }
+      if (!sample.succeeded) { m.miss++; continue; }
+      if (!sample.wantedRollback || policy.undo || sample.persisted) m.success++; else m.miss++;
+      if (policy.undo) m.interruptions++;
+    }
+  }
+  return m;
+}
+export function jueCeGaiJinHeGe(base: JueCeZhiBiao, next: JueCeZhiBiao): boolean {
+  return next.unsafe <= base.unsafe && next.miss <= base.miss && next.wrongRollback <= base.wrongRollback && next.wrongRecovery <= base.wrongRecovery
+    && next.success >= base.success && (next.success > base.success || next.interruptions < base.interruptions);
+}
+export function jueCeYouTuiHua(previous: JueCeZhiBiao, current: JueCeZhiBiao): boolean {
+  return current.unsafe > previous.unsafe || current.miss > previous.miss || current.wrongRollback > previous.wrongRollback || current.wrongRecovery > previous.wrongRecovery || current.success < previous.success;
+}
+export interface JueCeCeLueBan { version: number; policy: JueCeRuanCeLue; previous?: { version: number; policy: JueCeRuanCeLue }; watermark: number; reviewedIds: string[]; revisions: Array<{ version: number; policy: JueCeRuanCeLue; reason: string }> }
+export function chuangJianJueCeCeLue(file: string) {
+  function du(): JueCeCeLueBan {
+    try {
+      const j = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const keys = Object.keys(MO_REN_JUE_CE);
+      const policy = yanJueCeCeLue(j.policy || Object.fromEntries(keys.map((k) => [k, j[k]])));
+      if (!policy || (j.version != null && (!Number.isSafeInteger(j.version) || j.version < 1))) throw new Error('decision-policy-invalid');
+      if (j.watermark != null && (!Number.isSafeInteger(j.watermark) || j.watermark < 0)) throw new Error('decision-policy-invalid');
+      const previous = j.previous && Number.isSafeInteger(j.previous.version) && j.previous.version > 0 && yanJueCeCeLue(j.previous.policy) ? j.previous : undefined;
+      return { version: j.version || 1, policy, previous, watermark: j.watermark || 0, reviewedIds: Array.isArray(j.reviewedIds) ? j.reviewedIds.filter((s: unknown) => typeof s === 'string').slice(-1024) : [], revisions: Array.isArray(j.revisions) ? j.revisions.slice(-16) : [] };
+    } catch (e) { if ((e as NodeJS.ErrnoException)?.code === 'ENOENT') return { version: 1, policy: { ...MO_REN_JUE_CE }, watermark: 0, reviewedIds: [], revisions: [] }; throw e; }
+  }
+  function cun(next: JueCeCeLueBan): void {
+    du(); fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file + '.tmp', JSON.stringify(next), { mode: 0o600, flush: true }); fs.renameSync(file + '.tmp', file);
+  }
+  function apply(policy: JueCeRuanCeLue, version: number, watermark: number, ids: string[] = []): boolean {
+    const old = du(), next = yanJueCeCeLue(policy);
+    if (!next || old.version !== version || watermark < old.watermark || JSON.stringify(next) === JSON.stringify(old.policy)) return false;
+    cun({ ...old, policy: next, version: version + 1, watermark, reviewedIds: [...old.reviewedIds, ...ids].slice(-1024), previous: { version, policy: old.policy }, revisions: [...old.revisions.slice(-15), { version, policy: old.policy, reason: 'labelled-holdout-improvement' }] }); return true;
+  }
+  function rollback(version: number, watermark: number, ids: string[] = []): boolean {
+    const old = du();
+    if (old.version !== version || !old.previous || watermark < old.watermark) return false;
+    cun({ ...old, policy: old.previous.policy, previous: undefined, version: version + 1, watermark, reviewedIds: [...old.reviewedIds, ...ids].slice(-1024), revisions: [...old.revisions.slice(-15), { version, policy: old.policy, reason: 'incremental-regression' }] }); return true;
+  }
+  function reviewed(version: number, watermark: number, ids: string[] = []): void { const old = du(); if (old.version === version && watermark >= old.watermark) cun({ ...old, watermark, reviewedIds: [...old.reviewedIds, ...ids].slice(-1024) }); }
+  return { du, apply, rollback, reviewed };
 }

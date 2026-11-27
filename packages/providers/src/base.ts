@@ -28,9 +28,12 @@ export function guiFanYongLiang(
   if (protocol === 'openai-compatible') {
     // DeepSeek: prompt_cache_hit_tokens / prompt_cache_miss_tokens
     // OpenAI: prompt_tokens_details.cached_tokens
+    // R308⑤：部分网关（如 MiMo flash）不回报任何缓存明细 ⇒ cacheReported=false，界面显示「未反馈」而非误导的 0。
     const xiangQing = raw?.prompt_tokens_details as { cached_tokens?: number } | undefined;
+    const youMingXi = raw?.prompt_cache_hit_tokens !== undefined || raw?.prompt_cache_miss_tokens !== undefined
+      || raw?.cache_hit_tokens !== undefined || raw?.cached_tokens !== undefined || xiangQing !== undefined;
     const mingZhong =
-      shuZhi(raw?.prompt_cache_hit_tokens) || shuZhi(xiangQing?.cached_tokens);
+      shuZhi(raw?.prompt_cache_hit_tokens) || shuZhi(raw?.cache_hit_tokens) || shuZhi(raw?.cached_tokens) || shuZhi(xiangQing?.cached_tokens);
     const weiMingZhong = shuZhi(raw?.prompt_cache_miss_tokens);
     const tiShiCi = shuZhi(raw?.prompt_tokens);
     const wancheng = shuZhi(raw?.completion_tokens);
@@ -40,6 +43,7 @@ export function guiFanYongLiang(
       totalTokens: shuZhi(raw?.total_tokens) || tiShiCi + wancheng,
       cacheHitTokens: mingZhong,
       cacheMissTokens: weiMingZhong || Math.max(0, tiShiCi - mingZhong),
+      cacheReported: youMingXi,
       /**
        * `source` 的口径（第 44 轮 token 真实化）：**端点报出来的数字就是原生**，不能标成 `estimated`。
        * 以前这里把"只有 prompt_tokens、没有缓存明细"标成估算 ⇒ 上层拿不到任何原生样本，
@@ -60,6 +64,7 @@ export function guiFanYongLiang(
       totalTokens: shuRu + huanCunChuangJian + huanCunDuQu + shuChu,
       cacheHitTokens: huanCunDuQu,
       cacheMissTokens: huanCunChuangJian + shuRu,
+      cacheReported: raw?.cache_read_input_tokens !== undefined || raw?.cache_creation_input_tokens !== undefined,
       source: shuRu || shuChu || huanCunDuQu || huanCunChuangJian ? 'native' : 'none',
     };
   }
@@ -73,6 +78,7 @@ export function guiFanYongLiang(
     totalTokens: tiShiCi + wancheng,
     cacheHitTokens: 0,
     cacheMissTokens: tiShiCi,
+    cacheReported: false,
     /** Ollama 的 `prompt_eval_count` 是它**自己分词器数出来的**，是原生测量而非估算 ⇒ `native` */
     source: tiShiCi || wancheng ? 'native' : 'none',
   };
@@ -85,8 +91,16 @@ export function kongYongLiang(): HuanCunYongLiang {
     totalTokens: 0,
     cacheHitTokens: 0,
     cacheMissTokens: 0,
+    cacheReported: false,
     source: 'none',
   };
+}
+
+/** R308⑩：清理供应商截断产生的替换符/孤立代理项（「4. 」乱码），不改动正常正文。 */
+export function qingLiLuanMa(s: string): string {
+  return String(s || '')
+    .replace(/\uFFFD/g, '')
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
 }
 
 /**

@@ -2654,22 +2654,35 @@ async function langDuWenBen(text, btnEl) {
   }
   window.__qingHuanCunYinXiao = () => { Object.keys(yinXiaoHuanCun).forEach((k) => delete yinXiaoHuanCun[k]); };
 
-  function showToast(text) {
+  /** R308⑥：统一非阻滞、定时自消的半透明提示窗——「浮光提示 FuGuang Toast」。
+   *  所有无需手动点确定、一定时间后自己消失的提示都走这里（含增强回复失败 5s）。 */
+  function fuGuangTiShi(text, ms = 5000) {
     try {
-      const old = document.getElementById('jianYiToast');
+      const old = document.getElementById('fuGuangTiShi') || document.getElementById('jianYiToast');
       if (old) old.remove();
       const el = document.createElement('div');
-      el.id = 'jianYiToast';
-      el.className = 'jianYiToast';
+      el.id = 'fuGuangTiShi';
+      el.className = 'fuGuangTiShi';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
       el.textContent = String(text || '');
       document.body.appendChild(el);
+      requestAnimationFrame(() => { try { el.classList.add('in'); } catch { /* noop */ } });
       setTimeout(() => {
         try { el.classList.add('out'); } catch { /* noop */ }
-        setTimeout(() => { try { el.remove(); } catch { /* noop */ } }, 220);
-      }, 2600);
+        setTimeout(() => { try { el.remove(); } catch { /* noop */ } }, 260);
+      }, Math.max(800, Number(ms) || 5000));
     } catch { /* noop */ }
   }
+  function showToast(text) { fuGuangTiShi(text, 2600); }
   window.__showToast = showToast;
+  window.__fuGuangTiShi = fuGuangTiShi;
+  /* R308 专项探针入口（仅驱动既有 UI 流程，不新增能力）。 */
+  window.__r308AddInstance = () => addInstanceFlow();
+  window.__r308OpenCreate = (ming, id) => openCreateInstanceDialog(ming, id);
+  window.__r308SetAutoSelect = (v) => { state.autoSelectRecommended = v === true; };
+  window.__r308OpenChat = (kind, id, ming) => openChat(kind, id, ming);
+  window.__r308CiYuan = (m) => ciYuanWenBen(m);
 
   /** 第 114 轮：我的页“全量加密”状态（只在渲染出元素后填，未登录如实显示登录后开启） */
   async function shuaXinJiaMiZhuangTai() {
@@ -4423,6 +4436,7 @@ async function langDuWenBen(text, btnEl) {
   }, 5000);
 
   function openChat(kind, id, ming) {
+    if (String(state.selectedChat?.id || '') !== String(id || '')) guanLiaoTianSouSuo(false);
     /**
      * **没有 id 就不许进入会话**（第 65 轮 项 26：所有聊天窗口显示同一份内容）。
      * 空 id 会让 `__msgs[undefined]` 成为所有这类会话的公共桶 —— 从一个坏条目进去，
@@ -4581,6 +4595,11 @@ async function langDuWenBen(text, btnEl) {
   function ciYuanWenBen(m) {
     const ru = Number(m.promptTokens || 0), chu = Number(m.completionTokens || 0);
     const huan = Math.max(0, Math.min(ru, Number(m.cachedTokens || 0)));
+    /* R308⑤：供应商未回报缓存明细（如 MiMo flash）⇒ 显示「未反馈」，不把 0 当真实命中。 */
+    if (m && m.cacheReported === false && ru > 0) {
+      return tOr('chat.tokensFmt', '输入{ru}，输出{chu}').replace('{ru}', String(ru)).replace('{chu}', String(chu))
+        + tOr('chat.tokensCacheUnreported', '，缓存：供应商未反馈');
+    }
     const lv = ru > 0 ? (huan / ru * 100).toFixed(1) + '%' : '0%';
     return tOr('chat.tokensFmt', '输入{ru}，输出{chu}').replace('{ru}', String(ru - huan)).replace('{chu}', String(chu))
       + tOr('chat.tokensCacheFmt', '，缓存{huan}（命中率{lv}）').replace('{huan}', String(huan)).replace('{lv}', lv);
@@ -5382,14 +5401,23 @@ async function langDuWenBen(text, btnEl) {
     return (state.a2uiStates && state.a2uiStates[id]) || (m && m.a2ui) || null;
   }
   function a2uiMaTouHtml(sid, m, extraClass = '') {
-    /* R301：未勾选回复增强时马头一律字体色、不可点；勾选后才按产物状态着色/波纹。 */
-    const s = state.a2uiReplyEnabled ? a2uiZhuangTaiOf(m) : null;
-    if (!s || !m || m.role === 'wo' || m.system) return '<span class="banMaTou ' + extraClass + '" aria-hidden="true"></span>';
-    const label = s.status === 'generating' ? tOr('chat.a2uiGenerating', '正在生成互动内容')
-      : s.status === 'ready' ? tOr('chat.a2uiReady', '点击查看互动内容') : tOr('common.retry', '重试');
+    /* R308⑦⑧：所有最终回复马头均可点（询问生成/重新生成互动回复）；
+       失败马头＝无增强样式（字体色马头、无圆）；未勾选增强时一律字体色。 */
+    const s = a2uiZhuangTaiOf(m);
+    const shiThem = !!m && m.role !== 'wo' && !m.system;
+    if (!shiThem) return '<span class="banMaTou ' + extraClass + '" aria-hidden="true"></span>';
+    const zt = state.a2uiReplyEnabled && s ? String(s.status || '') : 'none';
+    const shiBai = ['failed', 'cancelled', 'interrupted'].includes(zt);
+    const label = zt === 'generating' ? tOr('chat.a2uiGenerating', '正在生成互动内容')
+      : zt === 'ready' ? tOr('chat.a2uiReady', '点击查看互动内容')
+      : shiBai ? tOr('chat.a2uiRetryAsk', '上次生成失败，是否重新生成？')
+      : tOr('chat.a2uiAskGenerate', '是否生成可互动的回复？');
+    /* 失败/未增强不加 a2uiShiBai／ready 着色 ⇒ 字体色马头；仅 generating/ready(增强开) 有着色。 */
+    const zhuangSe = state.a2uiReplyEnabled && !shiBai && (zt === 'ready' || zt === 'generating');
     return '<span class="banMaTou a2ui-ma-tou ' + extraClass + '" role="button" tabindex="0"'
-      + ' data-a2ui-id="' + escapeHtml(s.messageId || m.id || '') + '" data-a2ui-session="' + escapeHtml(String(sid || ''))
-      + '" data-a2ui-status="' + escapeHtml(s.status) + '" aria-label="' + escapeHtml(label) + '" title="' + escapeHtml(label) + '"></span>';
+      + ' data-a2ui-id="' + escapeHtml((s && s.messageId) || m.id || '') + '" data-a2ui-session="' + escapeHtml(String(sid || ''))
+      + '" data-a2ui-status="' + escapeHtml(zhuangSe ? zt : (shiBai ? zt : 'none')) + '"'
+      + ' aria-label="' + escapeHtml(label) + '" title="' + escapeHtml(label) + '"></span>';
   }
   function a2uiGengXinDom(s) {
     if (!s || !s.messageId) return;
@@ -5409,11 +5437,79 @@ async function langDuWenBen(text, btnEl) {
     state.a2uiStates = state.a2uiStates || {};
     state.a2uiStates[s.messageId] = s;
     a2uiGengXinDom(s);
+    /* R308⑥：增强生成失败 ⇒ 5s 浮光提示（非阻滞、自消）。 */
+    if (['failed', 'cancelled', 'interrupted'].includes(String(s.status || ''))) {
+      fuGuangTiShi(tOr('chat.a2uiFailToast', '增强回复生成失败：点该回复的马头可重新生成。'), 5000);
+    }
     /* R301：进化并排块是独立重绘路径，状态到达时同步刷新双臂马头。 */
     try { window.__ziJinHuaChongHua?.(); } catch { /* noop */ }
     /* 状态事件到达时重新拉一次权威消息，兼容流式气泡尚无稳定 ID 的竞态。 */
     if (s.sessionId) void loadSessionMessages(s.sessionId);
   }); } catch { /* noop */ }
+  /* R305④：值班待处理台账广播⇒消息行对侧等待图标。 */
+  try { window.warmy.onDutyPending?.((d) => {
+    state.dutyPending = state.dutyPending || {};
+    state.dutyPending[String(d && d.groupId || '')] = (d && d.pending) || [];
+    window.__dutyPending = state.dutyPending;
+  }); } catch { /* noop */ }
+  /* R305④：项目教学横幅（手动关闭、新加入重显）＋等待图标装饰（1s 巡查）。 */
+  setInterval(() => { try {
+    const cur = state.selectedChat;
+    const he = document.getElementById('xiaoXiJi');
+    if (!cur || cur.kind !== 'internal' || !he) return;
+    const gid = String(cur.id);
+    let closed = {}; try { closed = JSON.parse(localStorage.getItem('warmyDutyBannerClosed') || '{}'); } catch { closed = {}; }
+    state.__yiJianQun = state.__yiJianQun || {};
+    if (!state.__yiJianQun[gid]) {
+      state.__yiJianQun[gid] = true;
+      if (closed[gid]) { delete closed[gid]; try { localStorage.setItem('warmyDutyBannerClosed', JSON.stringify(closed)); } catch { /* noop */ } }
+    }
+    let ban = document.getElementById('dutyRuleBanner');
+    if (!closed[gid]) {
+      if (!ban) {
+        ban = document.createElement('div'); ban.id = 'dutyRuleBanner'; ban.className = 'dutyRuleBanner';
+        const duty = (state.instances || []).find((x) => x && x.dutyEligible) || (state.instances || [])[0];
+        ban.innerHTML = '<img class="dutyBannerAv" src="' + escapeHtml(personAvatarSrc(duty || state.profile)) + '" alt=""/><div class="dutyBannerWen"><b>' + escapeHtml(mingOf(duty || {}) || tOr('group.duty', '值班者')) + '</b>：' + escapeHtml(tOr('group.dutyBannerDynamic', '请先 @ 唤醒值班者。唤醒后，相关消息照常回复，无关消息静默。要执行操作须明确 @。需处理消息会合批，处理结束后等待图标消失。项目消息即时发给成员。执行者是值班者派去干活的牛马。')) + '<div class="dutyBannerThreshold"></div></div><button type="button" class="anNiuXiao dutyBannerGuan">' + escapeHtml(tOr('common.close', '关闭')) + '</button>';
+        he.prepend(ban);
+        ban.querySelector('.dutyBannerGuan').onclick = () => { closed[gid] = true; try { localStorage.setItem('warmyDutyBannerClosed', JSON.stringify(closed)); } catch { /* noop */ } ban.remove(); };
+      }
+      if (ban && Date.now() - Number(ban.dataset.checkedAt || 0) >= 5000) {
+        ban.dataset.checkedAt = String(Date.now());
+        void window.warmy.zhiBanXiangGuanDu?.(gid).then((r) => {
+          const v = r?.cfg?.threshold;
+          const node = ban.querySelector('.dutyBannerThreshold');
+          if (!node || state.selectedChat?.id !== gid) return;
+          const text = v === 0 ? '当前：每次都须 @值班者。' : v === 'unlimited' ? '当前：首次 @ 后持续监听，不休眠。' : Number.isSafeInteger(v) ? `当前：连续 ${v} 条无关消息后休眠。` : '';
+          if (node.textContent !== text) node.textContent = text;
+        }).catch(() => {});
+      }
+    } else if (ban) ban.remove();
+    const pend = (state.dutyPending || {})[gid] || [];
+    const rows = [...he.querySelectorAll('.xiaoXi')];
+    const msgs = (window.__msgs || {})[gid] || [];
+    /* R307：等待图标按宿主 pendingId 挂/清；同前缀、同毫秒的不同消息不互相顶替。 */
+    const yiYong = new Set();
+    for (const p of pend) {
+      const wen = String(p.content || '');
+      let idx = -1;
+      for (let i = 0; i < msgs.length; i++) {
+        const m = msgs[i];
+        if (yiYong.has(i) || !m || m.role !== 'wo') continue;
+        if (String(m.text || m.content || '') === wen) { idx = i; break; }
+      }
+      if (idx >= 0) yiYong.add(idx);
+      const row = idx >= 0 ? rows[idx] : null;
+      const key = String(p.pendingId || p.ts);
+      if (row && !row.querySelector('.dutyDengDai[data-pending="' + key + '"]')) {
+        const tu = document.createElement('span'); tu.className = 'dutyDengDai'; tu.setAttribute('data-pending', key); tu.setAttribute('data-ts', String(p.ts));
+        tu.innerHTML = '<img src="assets/zebra-head.svg" alt=""/><img src="assets/zebra-head.svg" alt=""/><img src="assets/zebra-head.svg" alt=""/><img src="assets/zebra-head.svg" alt=""/>';
+        row.prepend(tu);
+      }
+    }
+    for (const tu of [...he.querySelectorAll('.dutyDengDai')]) {
+      if (!pend.some((p) => String(p.pendingId || p.ts) === tu.getAttribute('data-pending'))) tu.remove();
+    }
+  } catch { /* noop */ } }, 1000);
 
   /** 完整时间（24 小时制）：YYYY-MM-DD HH:mm:ss —— 悬停在气泡上显示；按用户选定时区换算 */
   const wanZhengShiJian = (ts) => TZ.full(ts);
@@ -6567,7 +6663,8 @@ async function langDuWenBen(text, btnEl) {
       const op = caoZuoWen(wen);
       // 完整绝对路径由主进程解析好（luQuan）；渲染层没有 `process`，在这里引用它会抛 ReferenceError、整张卡一条都画不出来
       const luQuan = String(x.luQuan || '') || lu || wen;
-      const tip = chang + '\n' + op + ' · ' + who + '\n' + luQuan;
+      const expiry = Number(x.expiresAt || 0);
+      const tip = chang + '\n' + op + ' · ' + who + '\n' + luQuan + (expiry ? '\n' + tOr('panel.auth.expiresAt', '到期：') + TZ.full(expiry) : '');
       return '<li class="assistHang shouQuanHang shouQuanHang2" title="' + escapeHtml(tip) + '">' +
         '<div class="shouQuanHang1"><span class="shouQuanShiJian">' + escapeHtml(duan) + '</span>' +
         '<span class="shouQuanCaoZuo">' + escapeHtml(op) + '</span>' +
@@ -6581,6 +6678,45 @@ async function langDuWenBen(text, btnEl) {
      * 常规授权本来就会自动放行“工作区内 + 白名单 + 低风险”的命令；文件读写删在工作区内无需授权。
      * 严格授权=命令与文件改动全部逐次询问；完全授权=除项目/其他会话外随处可改，涉项目/他人会话才问。
      */
+    let feedback = kuai.querySelector('.r307PolicyFeedback');
+    if (!feedback) {
+      feedback = document.createElement('details'); feedback.className = 'r307PolicyFeedback';
+      const summary = document.createElement('summary'); summary.textContent = '本任务的审批辅助反馈（不授予权限）'; feedback.append(summary);
+      for (const [feature, label] of [['edit', '批准时编辑正文'], ['undo', '受管文件回滚入口']]) {
+        const row = document.createElement('div'); row.textContent = label + '：';
+        for (const [needed, text] of [[true, '需要'], [false, '本任务不需要']]) {
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'anNiuXiao'; button.textContent = text;
+          button.onclick = async () => {
+            const current = String(state.selectedChat?.id || ''); button.disabled = true;
+            try {
+              const meta = await window.warmy.decisionPolicyState({ sid: current });
+              const r = meta?.ok && await window.warmy.decisionPolicyFeedback({ sid: current, generation: meta.generation, version: meta.version, feature, needed });
+              button.textContent = r?.ok ? '已记录' : '任务已变化';
+            } catch { button.textContent = '未记录'; }
+            finally { button.disabled = false; }
+          };
+          row.append(button);
+        }
+        feedback.append(row);
+      }
+      const dutyRow = document.createElement('div'); dutyRow.className = 'r307DutyLabel'; dutyRow.textContent = '项目最新一条用户消息：';
+      for (const [expectedReply, label] of [[true, '应由值班回复'], [false, '不需要值班回复']]) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'anNiuXiao'; b.textContent = label;
+        b.onclick = async () => {
+          b.disabled = true;
+          try {
+            const gid = String(state.selectedChat?.id || ''), meta = await window.warmy.zhiBanXiangGuanDu(gid);
+            const r = meta?.latestUserSeq && await window.warmy.dutyRelevanceFeedback({ gid, seq: meta.latestUserSeq, expectedReply });
+            b.textContent = r?.ok ? '已记录标签' : '没有可标注的项目消息';
+          } catch { b.textContent = '未记录'; }
+          finally { b.disabled = false; }
+        };
+        dutyRow.append(b);
+      }
+      feedback.append(dutyRow); kuai.append(feedback);
+    }
+    const dutyLabel = feedback.querySelector('.r307DutyLabel');
+    if (dutyLabel) dutyLabel.hidden = state.selectedChat?.kind !== 'internal';
     // 添加按钮
     let tianAdd = kuai.querySelector('#anNiuShouQuanTianJia');
     if (!tianAdd) {
@@ -8481,7 +8617,7 @@ async function langDuWenBen(text, btnEl) {
        */
       const duan = (Array.isArray(opts && opts.reasoningDuan) && opts.reasoningDuan.length)
         ? opts.reasoningDuan : siKaoQuDuan(chatId);
-      yuanYou.push({ id: (opts && opts.id) || '', a2ui: (opts && opts.a2ui) || null, role, text, ts: Number(opts && opts.ts) || Date.now(), reasoning: (opts && opts.reasoning) || '', reasoningDuan: duan, zhongJian: (opts && Array.isArray(opts.zhongJian)) ? opts.zhongJian : [], system: !!(opts && opts.system), stopped: !!(opts && opts.stopped), moXing: (opts && opts.moXing) || '', moXingJiangJi: (opts && opts.moXingJiangJi) || null, artifacts: (opts && opts.artifacts) || [], promptTokens: uYong && uYong.promptTokens || 0, completionTokens: uYong && uYong.completionTokens || 0, cachedTokens: uYong && uYong.cacheHitTokens || 0 });
+      yuanYou.push({ id: (opts && opts.id) || '', a2ui: (opts && opts.a2ui) || null, role, text, ts: Number(opts && opts.ts) || Date.now(), reasoning: (opts && opts.reasoning) || '', reasoningDuan: duan, zhongJian: (opts && Array.isArray(opts.zhongJian)) ? opts.zhongJian : [], system: !!(opts && opts.system), stopped: !!(opts && opts.stopped), moXing: (opts && opts.moXing) || '', moXingJiangJi: (opts && opts.moXingJiangJi) || null, artifacts: (opts && opts.artifacts) || [], promptTokens: uYong && uYong.promptTokens || 0, completionTokens: uYong && uYong.completionTokens || 0, cachedTokens: uYong && uYong.cacheHitTokens || 0, cacheReported: uYong ? uYong.cacheReported !== false : undefined });
       /** 多条回复按时间排；同一毫秒保持到达顺序（稳定排序） */
       yuanYou.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
       /**
@@ -9452,8 +9588,8 @@ async function langDuWenBen(text, btnEl) {
     var xianShiJiLu = items.filter(function (m) { return !(youPiZhun && m.kind === 'governance-approval'); });
     var jhBlock = youPiZhun ? '<div data-bz-jinhua-card="1" class="bz-xiaoXi' + (piZhunWeiDu ? ' weiDu' : '') + '" style="border:1px solid var(--accent)"><div class="bz-xiaoXiTou"><span class="bz-leiBie">' + escapeHtml(tOr('help.kindSystem', '系统')) + '</span><span class="bz-xiaoXiBiao">' + escapeHtml(tOr('chat.jinHuaShenPiTitle', '自我改进申请（需你批准）')) + '</span></div>'
       + pending.map(function (p) { var t = p.tiAn || {}; return '<div class="bz-jiLu" style="margin:6px 0"><div><b>' + escapeHtml(t.xiangMuId || '') + '</b> · ' + escapeHtml(t.leiXing || '') + '</div><div class="jingYin">' + escapeHtml(t.neiRong || '') + '</div><div class="jingYin">' + escapeHtml(tOr('chat.jinHuaRuanMen', '触及软门禁') + ': ' + (p.ruan || []).join(' / ')) + '</div><div style="display:flex;gap:6px;margin-top:4px"><button class="anNiuZhuYao" data-bz-jinhua-id="' + escapeHtml(p.id) + '" data-bz-jinhua-yes="1">' + escapeHtml(tOr('chat.jinHuaAgree', '同意')) + '</button><button class="anNiuXiao" data-bz-jinhua-id="' + escapeHtml(p.id) + '" data-bz-jinhua-yes="0">' + escapeHtml(tOr('chat.jinHuaDecline', '拒绝')) + '</button></div></div>'; }).join('') + '</div>' : '';
-    if (!xianShiJiLu.length) { x.innerHTML = head + spBlock + jhBlock + (youPiZhun ? '' : '<div class="bz-kong">' + escapeHtml(tOr('help.sysEmpty', '（暂无系统消息）')) + '</div>'); return; }
-    x.innerHTML = head + spBlock + jhBlock + xianShiJiLu.map(function (m) {
+    const r307Items = (await window.warmy.resumeCardList?.({ system: true }).catch(() => null))?.items || [];
+    x.innerHTML = head + spBlock + jhBlock + (!xianShiJiLu.length && !youPiZhun && !r307Items.length ? '<div class="bz-kong">' + escapeHtml(tOr('help.sysEmpty', '（暂无系统消息）')) + '</div>' : '') + xianShiJiLu.map(function (m) {
       /* R286：未知模型标签询问⇒勾选种类＋确定＋授权联网 */
       var labelBlock = '';
       if (String(m.title || '').indexOf('未知模型标签：') === 0) {
@@ -9469,6 +9605,11 @@ async function langDuWenBen(text, btnEl) {
         + '<div class="bz-xiaoXiTou"><span class="bz-leiBie">' + escapeHtml(lei[m.kind] || m.kind) + '</span><span class="bz-xiaoXiBiao">' + escapeHtml(m.title) + '</span><span class="bz-xiaoXiShi">' + escapeHtml(bzShiJian(m.ts)) + '</span></div>'
         + '<div class="bz-xiaoXiShen">' + escapeHtml(m.body) + '</div>' + labelBlock + '</div>';
     }).join('');
+    if (r307Items.length) {
+      const block = document.createElement('section'); block.className = 'bz-xiaoXi';
+      const label = document.createElement('strong'); label.textContent = '值班策略待审批';
+      block.append(label, ...r307Items.map((q) => r307HuaKa(q, bzXuanRanSystem))); x.append(block);
+    }
   }
   function bzDaKaiZhenDuan() {
     bzGuan();
@@ -12191,9 +12332,145 @@ window.__keYiLiaoTian = keYiLiaoTian;
   }
   // 门禁用：卡片音效的唯一入口（广播与轮询都走它）
   window.__xiangKaPianYin = xiangKaPianYin;
+  function r307HuaKa(q, done) {
+    const form = document.createElement('form');
+    form.className = 'r307Card';
+    const title = document.createElement('strong'); title.textContent = q.title;
+    const body = document.createElement('div'); body.className = 'r307Detail'; body.textContent = q.detail;
+    form.append(title, body);
+    if (q.status !== 'pending') {
+      const status = document.createElement('div');
+      status.textContent = q.status === 'uncertain' ? '执行状态待核实。没有自动重做。' : '已批准，等待当时的任务继续。';
+      form.append(status);
+      if (q.canResume) {
+        const resume = document.createElement('button'); resume.type = 'button'; resume.className = 'anNiuZhuYao'; resume.textContent = '继续暂停的任务';
+        resume.onclick = async () => {
+          resume.disabled = true;
+          try { const r = await window.warmy.resumeCardAnswer({ id: q.id, revision: q.revision, nonce: q.nonce, schemaVersion: q.schemaVersion, resume: true });
+            if (!r?.ok) { status.textContent = String(r?.error || '无法继续'); return; }
+            if (r.refresh && q.sid) void loadSessionMessages(q.sid);
+            form.remove(); done?.();
+          } catch { status.textContent = '无法继续，请核对任务状态。'; }
+          finally { resume.disabled = false; }
+        };
+        form.append(resume);
+      }
+      return form;
+    }
+    const fields = [];
+    for (const [name, spec] of Object.entries(q.response_schema?.properties || {})) {
+      const label = document.createElement('label'); label.className = 'r307Field'; label.textContent = spec.title;
+      let input;
+      if (Array.isArray(spec.enum)) {
+        input = document.createElement('select');
+        for (const value of spec.enum) { const opt = document.createElement('option'); opt.value = value; opt.textContent = ({ append: '追加', replace: '覆盖' })[value] || value; input.append(opt); }
+      } else if (spec.type === 'array' || spec.multiline) { input = document.createElement('textarea'); input.rows = 3; }
+      else { input = document.createElement('input'); input.type = spec.type === 'integer' ? 'number' : spec.type === 'boolean' ? 'checkbox' : 'text'; }
+      input.name = name;
+      input.required = q.response_schema.required?.includes(name) && spec.type !== 'boolean' && spec.minLength !== 0 && name !== 'content';
+      if (spec.maxLength) input.maxLength = spec.maxLength;
+      if (spec.type === 'integer') { input.step = '1'; input.min = String(spec.minimum); input.max = String(spec.maximum); }
+      if (spec.type === 'boolean') input.checked = q.initial[name] === true;
+      else input.value = q.kind === 'clarify' && name === 'detail' ? '' : Array.isArray(q.initial[name]) ? q.initial[name].join('\n') : String(q.initial[name] ?? '');
+      label.append(input); form.append(label); fields.push([name, spec, input, input.value, input.checked]);
+    }
+    if (q.kind === 'clarify') {
+      const field = fields[0]?.[2];
+      const suggestions = String(q.detail || '').split('\n').filter((s) => /^\d+\. /.test(s));
+      for (const item of suggestions) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'anNiuXiao'; b.textContent = item;
+        b.onclick = () => { if (field) { field.value = item; field.dispatchEvent(new Event('input', { bubbles: true })); field.focus(); } };
+        form.append(b);
+      }
+      const other = document.createElement('button'); other.type = 'button'; other.className = 'anNiuXiao'; other.textContent = '其他（请说明）';
+      other.onclick = () => { if (field) { field.value = ''; field.placeholder = '请填写会影响结果的明确要求；这不是操作授权'; field.focus(); } }; form.append(other);
+    }
+    const delta = document.createElement('details'); const deltaHead = document.createElement('summary'); deltaHead.textContent = '查看修改前后';
+    const diff = document.createElement('pre'); delta.append(deltaHead, diff); delta.hidden = true; form.append(delta);
+    form.addEventListener('input', () => {
+      const changed = fields.filter(([, , input, value, checked]) => input.value !== value || input.checked !== checked);
+      delta.hidden = !changed.length;
+      diff.textContent = changed.map(([, spec, input, value]) => spec.title + '：\n原值：' + value + '\n最终值：' + input.value).join('\n\n');
+    });
+    const error = document.createElement('div'); error.setAttribute('role', 'status'); form.append(error);
+    const buttons = document.createElement('div'); buttons.className = 'r307CardActions'; form.append(buttons);
+    const accept = document.createElement('button'); accept.type = 'submit'; accept.className = 'anNiuZhuYao';
+    accept.textContent = q.kind === 'undo' ? '一键回滚' : q.kind === 'clarify' ? '提交选择' : '批准';
+    const no = document.createElement('button'); no.type = 'button'; no.className = 'anNiuXiao';
+    no.textContent = q.kind === 'undo' ? '保留' : q.kind === 'plan' ? '退回重提' : q.kind === 'clarify' ? '暂不澄清' : '拒绝'; buttons.append(accept, no);
+    async function answer(yes) {
+      if (accept.disabled) return;
+      accept.disabled = no.disabled = true; error.textContent = '';
+      const response = Object.fromEntries(fields.map(([name, spec, input]) => [name, spec.type === 'boolean' ? input.checked : spec.type === 'integer' ? input.valueAsNumber : spec.type === 'array' ? input.value.split(/\r?\n/).filter((v) => v.trim()) : input.value]));
+      try {
+        const r = await window.warmy.resumeCardAnswer({ id: q.id, revision: q.revision, nonce: q.nonce, schemaVersion: q.schemaVersion, accept: yes, response });
+        if (!r?.ok) { error.textContent = String(r?.error || '该选择未生效'); return; }
+        form.remove(); done?.();
+      } catch { error.textContent = '提交失败，未执行。'; }
+      finally { accept.disabled = no.disabled = false; }
+    }
+    form.onsubmit = (e) => { e.preventDefault(); void answer(true); }; no.onclick = () => { void answer(false); };
+    return form;
+  }
+  let r307HuaCi = 0;
+  async function r307ShuaKa(sid) {
+    const host = $('r307CardHost'); if (!host || !window.warmy.resumeCardList) return;
+    const ci = ++r307HuaCi;
+    const r = sid ? await window.warmy.resumeCardList({ sid }).catch(() => null) : null;
+    if (ci !== r307HuaCi || String(state.selectedChat?.id || '') !== sid) return;
+    const items = r?.items || [], key = sid + ':' + items.map((q) => q.id + ':' + q.revision).join(',');
+    if (host.dataset.cards === key && host.childElementCount === items.length) return;
+    host.dataset.cards = key; host.hidden = !items.length; host.replaceChildren(...items.map((q) => r307HuaKa(q, () => r307ShuaKa(sid))));
+  }
+  /* R308④：自动选择推荐项 23s 顺时针消光倒计时（渲染层自持；用户点击即取消本次自动）。 */
+  const ziDongGuangJi = new Map();
+  const ziDongYiQuXiao = new Set();
+  function tingZiDongGuang(qid) {
+    const k = String(qid);
+    const rec = ziDongGuangJi.get(k);
+    if (rec) { clearInterval(rec.timer); ziDongGuangJi.delete(k); }
+    ziDongYiQuXiao.add(k);
+    try {
+      document.querySelectorAll('#aiqHost [data-aiq="' + CSS.escape(k) + '"]').forEach((b) => b.classList.remove('aiqZiDongGuang'));
+    } catch { /* noop */ }
+  }
+  function qiZiDongGuang(pending, host) {
+    const kai = state.autoSelectRecommended === true || (typeof shiNiTaiHuiHua === 'function' && shiNiTaiHuiHua() && state.mimicAutoSelect !== false);
+    const huo = new Set(pending.map((q) => String(q.id)));
+    for (const k of [...ziDongGuangJi.keys()]) if (!huo.has(k)) { clearInterval(ziDongGuangJi.get(k).timer); ziDongGuangJi.delete(k); }
+    if (!kai) return;
+    for (const q of pending) {
+      const k = String(q.id);
+      if (q.oneTime || (q.kind || 'choice') !== 'choice' || ziDongYiQuXiao.has(k) || ziDongGuangJi.has(k)) continue;
+      const tui = (q.options || []).find((o) => o && o.tuiJian);
+      if (!tui) continue;
+      const btn = host.querySelector('[data-aiq="' + CSS.escape(k) + '"][data-opt="' + CSS.escape(String(tui.id)) + '"]');
+      if (!btn) continue;
+      const deadline = Date.now() + 23000;
+      btn.classList.add('aiqZiDongGuang');
+      const timer = setInterval(() => {
+        const sheng = deadline - Date.now();
+        if (sheng <= 0) {
+          tingZiDongGuang(k);
+          void (async () => {
+            const r2 = await window.warmy.aiQuestionAnswer?.({ id: k, optionId: String(tui.id) });
+            if (r2 && r2.ok === false) { renderAiQuestions(); return; }
+            try { state.aiQuestions = (state.aiQuestions || []).map((x) => x.id === k ? { ...x, status: 'answered', answered: true } : x); } catch { /* noop */ }
+            renderAiQuestions();
+            try { renderList(); } catch { /* noop */ }
+            try { gengXinDiYiLieYuanDian(); } catch { /* noop */ }
+          })();
+          return;
+        }
+        btn.style.setProperty('--ziDongDeg', String(Math.round((1 - sheng / 23000) * 360)) + 'deg');
+      }, 100);
+      ziDongGuangJi.set(k, { timer, deadline });
+    }
+  }
   function renderAiQuestions() {
     const host = $('aiqHost');
     const qunId = state.selectedChat ? String(state.selectedChat.id || '') : '';
+    void r307ShuaKa(qunId);
     void (async () => {
       try {
         /**
@@ -12231,6 +12508,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
         if (!qunId) { if (host.innerHTML) host.innerHTML = ''; return; }
         if (!pending.length) {
           if (host.innerHTML) host.innerHTML = '';
+          try { qiZiDongGuang([], host); } catch { /* noop */ }
           // 卡片消失 ⇒ 第二列问号立刻跟着清
           try { renderList(); } catch { /* noop */ }
           return;
@@ -12261,7 +12539,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
           const mimicVoiceCard = String(q.sessionId || q.groupId || '') === 'mimic-pet';
           const rawOpts = (q.options || []).map((o, oi) => {
             let label = escapeHtml(o.biaoQian);
-            if (label === '同意' || label === 'Allow') label = escapeHtml(tOr('aiq.allowOnce', '允许一次'));
+            if (q.kind === 'authorization' && (label === '同意' || label === 'Allow')) label = escapeHtml(tOr('aiq.allowOnce', '允许一次'));
             if (mimicVoiceCard) label = (oi < 26 ? String.fromCharCode(65 + oi) + '/' : '') + (oi + 1) + ': ' + label;
             const tui = o.tuiJian
               ? '<span class="aiqTuiJian">' + escapeHtml(tOr('aiq.recommended', '推荐')) + '</span>'
@@ -12270,15 +12548,15 @@ window.__keYiLiaoTian = keYiLiaoTian;
             const sm = o.description ? ` title="${escapeHtml(String(o.description))}"` : '';
             const html = `<button class="${cls}" data-aiq="${escapeHtml(q.id)}" data-opt="${escapeHtml(o.id)}"${sm}>${label}${tui}</button>`;
             /* 分类：允许一次/同意类=1, 拒绝类=3, 其他模型选项=1.5 */
-            const isAllowOnce = /同意|允许一次|Allow|Approve|Yes/i.test(String(o.biaoQian || ''));
-            const isReject = /拒绝|Reject|Deny|No/i.test(String(o.biaoQian || ''));
+            const isAllowOnce = q.kind === 'authorization' && ['yes', 'allow', 'once'].includes(o.id);
+            const isReject = q.kind === 'authorization' && ['no', 'deny', 'reject'].includes(o.id);
             return { html, order: mimicVoiceCard ? oi : isAllowOnce ? 1 : isReject ? 3 : 1.5 };
           });
           /* 允许（长期）只在授权卡上出现（有拒绝+同意/允许配对）；决策卡/选择卡不加 */
-          const shiShouQuanKa = !q.oneTime && (q.kind === 'authorization' || (!mimicVoiceCard && rawOpts.some((x) => x.order === 3) && rawOpts.some((x) => x.order === 1)));
+          const shiShouQuanKa = q.kind === 'authorization' && !q.oneTime && !!q.standingOptionId;
           if (shiShouQuanKa) {
             rawOpts.push({
-              html: `<button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__allow__">${escapeHtml(tOr('aiq.allow', '允许'))}</button>`,
+              html: `<button class="anNiuXiao" data-aiq="${escapeHtml(q.id)}" data-opt="__allow__">${escapeHtml(tOr('aiq.allowStanding24h', '本会话长期允许（24 小时）'))}</button>`,
               order: mimicVoiceCard ? (q.options || []).length + 1 : 2,
             });
           }
@@ -12300,7 +12578,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
             .map((o) => escapeHtml(String(o.biaoQian)) + ' = ' + escapeHtml(String(o.description)))
             .join(' ｜ ');
           const wanHao = '<svg class="ico hollowIco" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.8.36-1.1.9-1.1 1.8v.4"/><path d="M12 17.2h.01"/></svg>';
-          const bangZhu = escapeHtml(tOr('aiq.helpTip', '点某个选项 = 只对这一次生效。「允许」= 长期授权，以后同类请求不再问你（可在右侧「授权」卡片里撤销）。「其他」= 你自己写一个答案。带「推荐」标记的是牛马自评最优的方案。'));
+          const bangZhu = escapeHtml(tOr('aiq.helpTipR307', '普通选择只影响当前任务。「本会话长期允许」默认 24 小时，作用域和读写匹配不变，可在授权卡撤销，到期重新询问。「其他」只填写补充说明，需要澄清，不能授予操作权限。计划、工具权限、澄清及治理卡都须由你决定。'));
           return `<div class="aiqKa" data-qid="${escapeHtml(q.id)}" data-qtitle="${escapeHtml(String(q.biaoTi || q.title || ''))}" data-qtip="${escapeHtml(String(q.ti || ''))}">
             <div class="aiqBiaoTi">${jiShu}${(q.biaoTi || q.title) ? escapeHtml(String(q.biaoTi || q.title)) : ''}
               <!-- 问号说明：用项目统一的 .ddWen + .ddDesc（悬停/聚焦/点击都能展开）。
@@ -12332,6 +12610,8 @@ window.__keYiLiaoTian = keYiLiaoTian;
           b.onclick = async () => {
             const id = b.getAttribute('data-aiq');
             const opt = b.getAttribute('data-opt');
+            /* R308④：用户点了任何选项（含「其他」，即使还没输入）⇒ 立即消光、本次不再自动。 */
+            tingZiDongGuang(id);
             const qCur = (state.aiQuestions || []).find((x) => String(x.id) === String(id));
             const noncePart = qCur?.oneTime ? { nonce: qCur.nonce } : {};
             if (opt === '__custom__') {
@@ -12341,27 +12621,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
             }
             // **长期允许**：写入授权卡，后续同类型授权自动通过
             if (opt === '__allow__') {
-              try {
-                const ka = host.querySelector(`[data-qid="${CSS.escape(id)}"]`);
-                /**
-                 * 真事故：原来是抓 `.aiqBiaoTi` 的 textContent，把「2/2」编号徽章和「?」按钮
-                 * 的文字一起抓走了 ⇒ 授权卡上出现「2/2ai」这种无意义内容。
-                 * 现在从 data 属性取**纯标题 + 请求详情**，既干净又足够详细。
-                 */
-                const key = shouQuanJian(ka?.getAttribute('data-qtitle'), ka?.getAttribute('data-qtip'));
-                if (key) void window.warmy.authGrant?.({ sessionId: qunId, key, granted: true });
-              } catch { /* noop */ }
-              /**
-               * 用**真实存在的选项 id** 回答（真事故：传 'allow' ⇒ option-not-found）。
-               * 优先找"同意/允许"类选项；找不到就用第一个选项。
-               */
-              const ka2 = host.querySelector(`[data-qid="${CSS.escape(id)}"]`);
-              const realBtn = [...(ka2?.querySelectorAll('[data-opt]') || [])]
-                .find((x) => !/__custom__|__allow__/.test(x.getAttribute('data-opt') || '') && /同意|允许|Allow|Approve|Yes/i.test(x.textContent || ''));
-              const firstBtn = [...(ka2?.querySelectorAll('[data-opt]') || [])]
-                .find((x) => !/__custom__|__allow__/.test(x.getAttribute('data-opt') || ''));
-              const useOpt = (realBtn || firstBtn)?.getAttribute('data-opt');
-              const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: useOpt || '__custom__', customText: useOpt ? undefined : '允许', ...noncePart });
+              const r2 = await window.warmy.aiQuestionAnswer?.({ id, scope: 'session' });
               if (r2 && r2.ok === false) { uiAlert(String(r2.error||'')); renderAiQuestions(); return; }
               // R211 b6：「长期允许」作答后同样标记已答+清兜底窗口+刷新角标（原来只 renderAiQuestions，问号不消）
               try { state.aiQuestions = (state.aiQuestions || []).map((q) => q.id === id ? { ...q, status: 'answered', answered: true } : q); } catch { /* noop */ }
@@ -12371,7 +12631,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
               try { gengXinDiYiLieYuanDian(); } catch { /* noop */ }
               return;
             }
-            const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: opt === '__allow__' ? 'allow' : opt, ...noncePart });
+            const r2 = await window.warmy.aiQuestionAnswer?.({ id, optionId: opt, ...noncePart });
             if (r2 && r2.ok === false) { uiAlert(String(r2.error||'')); renderAiQuestions(); return; }
             try { state.aiQuestions = (state.aiQuestions || []).map((q) => q.id === id ? { ...q, status: 'answered', answered: true } : q); } catch { /* noop */ }
             // R211 b6：作答后立即清「本轮出现过卡」兜底窗口并刷新角标（不必等滚动到聊天底部）
@@ -12384,6 +12644,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
         host.querySelectorAll('[data-aiq-submit]').forEach((b) => {
           b.onclick = async () => {
             const id = b.getAttribute('data-aiq-submit');
+            tingZiDongGuang(id);
             const ka = host.querySelector(`[data-qid="${CSS.escape(id)}"]`);
             const zhi = ka ? (ka.querySelector('.aiqShuRu')?.value || '') : '';
             const qCur = (state.aiQuestions || []).find((q) => String(q.id) === String(id));
@@ -12392,6 +12653,8 @@ window.__keYiLiaoTian = keYiLiaoTian;
             renderAiQuestions();
           };
         });
+        /* R308④：推荐项消光倒计时（无变化不重建 DOM 时也要保证计时器在跑）。 */
+        try { qiZiDongGuang(pending, host); } catch { /* noop */ }
         /* R149 项5：数字键 1-4 快捷选择选项（自定义输入框聚焦时不触发） */
         host.addEventListener('keydown', (e) => {
           if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
@@ -13473,13 +13736,12 @@ async function deliver(chatId, text, u, fuJian) {
               mentionIds = [...new Set(ids)];
             } catch { mentionIds = []; }
           }
-          const r = await window.warmy.groupOrchestrate({ groupId: chatId, content: text, urgency: u, mentionIds });
-          if (!benLunYouXiao()) return;
-          const reply = r?.reply || `[${u}] ${r?.action || 'ok'}`;
-          tuisongXiaoxi(chatId, 'them', reply);
+          const r = await window.warmy.groupOrchestrate({ groupId: chatId, content: text, urgency: u, mentionIds, ts: Date.now() });
+          /* 值班批次由宿主守住停止世代；新消息开始分类不作废上一批的已完成回复。 */
+          const replies = Array.isArray(r?.dutyReplies) ? r.dutyReplies : r?.reply ? [r] : [];
+          for (const item of replies) if (item.reply) tuisongXiaoxi(chatId, 'them', item.reply, { moXing: item.model, usage: item.usage });
           huiBao = true;
           try { window.__startGuideChatDone?.(); } catch { /* noop */ }
-          // （tuisongXiaoxi 内部已写主进程日志；这里再写一遍会双条，已去掉）
           if (r?.boardEvent) {
             state.board = state.board || { sessions: [], events: [], recent: [] };
             state.board.events = state.board.events || [];
@@ -14209,9 +14471,19 @@ async function deliver(chatId, text, u, fuJian) {
     // 发送前先摘下附件（随后清空输入区），随本轮一直传到 deliver
     const fuJianJi = (state.attachments || []).map((a) => ({ name: a.name || a.ming || '', path: a.path || '', dataUrl: a.dataUrl || '', bytes: Number(a.bytes) || 0 }));
 
-    // P2（适中）/ P3（较缓）/ P4（极缓）：进「待执行队列」，本轮结束后由冲刷**真的派发**出去
-    if (u === 'P2' || u === 'P3' || u === 'P4') {
-      queueOf(id).push({ id: 'q' + Date.now(), text: Quan, u, editing: false, ts: Date.now(), fuJian: fuJianJi });
+    // P2/P3/P4：进「待执行队列」；R305③ 待发送恒一条、多条合并；R305④ 项目直发不排队。
+    if ((u === 'P2' || u === 'P3' || u === 'P4') && state.selectedChat?.kind !== 'internal') {
+      const dui = queueOf(id);
+      if (dui.length) {
+        const yi = dui[0];
+        yi.text = String(yi.text || '') + '\n' + Quan;
+        yi.fuJian = [...(yi.fuJian || []), ...fuJianJi];
+        const jiXu = ['P0', 'P1', 'P2', 'P3', 'P4'];
+        if (jiXu.indexOf(u) < jiXu.indexOf(String(yi.u || 'P2'))) yi.u = u;
+        yi.editing = false;
+      } else {
+        dui.push({ id: 'q' + Date.now(), text: Quan, u, editing: false, ts: Date.now(), fuJian: fuJianJi });
+      }
       $('shuRu').value = '';
       state.attachments = [];
       xuanranFujian();
@@ -27672,12 +27944,17 @@ async function renderDashboard(host) {
       if (!muBiao || !muBiao.closest) return;
       /* R218 修正：只有真正点击**聊天内容区/输入框**（或处理决策卡/审批卡）才清未读；
          点列表行/标题栏/通知区等不算"看过新回复"（用户：还没点聊天界面不应取消标识）。 */
-      if (muBiao.closest('#xiaoXiJi, #shuRu, #aiqHost, #piZhunHost, #yongHuShiJianZhou')) qing();
+      if (muBiao.closest('#xiaoXiJi, #shuRu, #aiqHost, #piZhunHost, #yongHuShiJianZhou, .shuRuQuZhu, .liaoTianDongZuoJi, #mianBanLan')) qing();
     }, true);
     // 键盘输入也算（在输入框里打字 = 在看这个会话）
     document.addEventListener('keydown', (e) => {
       const muBiao = e.target;
       if (muBiao && (muBiao.id === 'shuRu' || (muBiao.closest && muBiao.closest('#shuRu')))) qing();
+    }, true);
+    /* R308②：聚焦输入框也算「在看这个会话」（点击已覆盖，这里补键盘 Tab 聚焦）。 */
+    document.addEventListener('focusin', (e) => {
+      const muBiao = e.target;
+      if (muBiao && muBiao.closest && muBiao.closest('#shuRu, .shuRuQuZhu')) qing();
     }, true);
     /**
      * **滚动上下文也算「看过」**（产品要求）：在聊天区上下滚动就会清掉第二列的
@@ -27918,9 +28195,12 @@ async function renderDashboard(host) {
     if (trigger && (trigger.contains(e.target) || caiDan.contains(e.target))) return;
     caiDan.classList.add('yinCang');
   });
-  $('caiDanTuBiaoSouSuo')?.addEventListener('click', () => {
-    $('gengDuoCaiDan')?.classList.add('yinCang');
-    showSearchPopup();
+  $('liaoTianSouSuoAn')?.addEventListener('click', () => {
+    if ($('liaoTianSouSuoNei').hidden) daKaiLiaoTianSouSuo();
+    else guanLiaoTianSouSuo(true);
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!$('liaoTianSouSuo')?.contains(e.target)) guanLiaoTianSouSuo(false);
   });
   let __directed = false;
   $('caiDanTuBiaoDingXiang')?.addEventListener('click', async () => {
@@ -29211,10 +29491,34 @@ async function renderDashboard(host) {
   async function daKaiA2uiLian(link, mode = 'auto') {
     const sid = String(link?.getAttribute('data-a2ui-session') || state.selectedChat?.id || '');
     const mid = String(link?.getAttribute('data-a2ui-id') || '');
-    if (!mid || link?.getAttribute('data-a2ui-status') === 'generating') return;
-    if (mode === 'auto' && ['failed', 'cancelled', 'interrupted'].includes(link?.getAttribute('data-a2ui-status'))) {
-      await window.warmy.a2uiChongShi?.({ sessionId: sid, messageId: mid }).catch(() => null);
+    const zt = String(link?.getAttribute('data-a2ui-status') || '');
+    if (!mid) return;
+    /* R304：生成中点击→半透明自动关闭提示（不阻塞、无需关闭）。 */
+    if (zt === 'generating') { fuGuangTiShi(tOr('chat.a2uiGeneratingWait', '正在生成页面，请稍等。'), 2600); return; }
+    /* R308⑧：未增强/无产物 ⇒ 询问是否生成互动回复。 */
+    if (mode === 'auto' && (zt === 'none' || zt === 'pending' || zt === '')) {
+      const yes = await uiConfirm(tOr('chat.a2uiAskGenerate', '是否生成可互动的回复？'));
+      if (!yes) return;
+      const r = await window.warmy.a2uiChongShi?.({ sessionId: sid, messageId: mid }).catch(() => null);
+      if (!r || !r.ok) fuGuangTiShi(String((r && r.error) || tOr('chat.a2uiRetryFail', '重新生成发起失败')), 5000);
       return;
+    }
+    if (mode === 'auto' && ['failed', 'cancelled', 'interrupted'].includes(zt)) {
+      /* R304/R308⑧：失败→弹窗询问是否重新生成；同意才重试，发起失败如实提示。 */
+      const yes = await uiConfirm(tOr('chat.a2uiRetryAsk', '上次生成失败，是否重新生成？'));
+      if (!yes) return;
+      const r = await window.warmy.a2uiChongShi?.({ sessionId: sid, messageId: mid }).catch(() => null);
+      if (!r || !r.ok) fuGuangTiShi(String((r && r.error) || tOr('chat.a2uiRetryFail', '重新生成发起失败')), 5000);
+      return;
+    }
+    /* R308⑧：已成功⇒左键询问是否重新生成；取消则打开现有互动内容（右键也可直接打开）。 */
+    if (mode === 'auto' && zt === 'ready') {
+      const yes = await uiConfirm(tOr('chat.a2uiAskRegen', '是否重新生成互动回复？取消则打开现有互动内容。'));
+      if (yes) {
+        const r = await window.warmy.a2uiChongShi?.({ sessionId: sid, messageId: mid }).catch(() => null);
+        if (!r || !r.ok) fuGuangTiShi(String((r && r.error) || tOr('chat.a2uiRetryFail', '重新生成发起失败')), 5000);
+        return;
+      }
     }
     const checked = await window.warmy.a2uiDaKai?.({ sessionId: sid, messageId: mid }).catch(() => null);
     if (!checked || !checked.ok) { showToast(String(checked?.error || t('common.error'))); return; }
@@ -29519,6 +29823,7 @@ async function renderDashboard(host) {
       ? '<div class="jingYin" style="margin:0 0 8px">' + escapeHtml(t('container.devEnv.required')) + '</div>' +
         '<label class="jingYin" for="erHeYiMing">' + escapeHtml(t('container.devEnv.nameLabel')) + '</label>' +
         '<input id="erHeYiMing" class="erHeYiInput" placeholder="' + escapeHtml(t('placeholder.groupName')) + '" autocomplete="off"/>' +
+        gongZuoQuZiDuanHtml('erHeYiGongZuoQu', 'erHeYiGongZuoQuXuan') +
         '<div class="jingYin" style="margin:10px 0 4px">' + escapeHtml(t('container.devEnv.biaoTi')) + '</div>' +
         '<select id="erHeYiDevEnv" class="erHeYiInput" title="' + escapeHtml(tOr('container.devEnv.pickHint', '默认本机。下拉里列出本机与所有可用容器；没有可用容器时请先在 设置 → 功能 → 容器 安装并启动。')) + '">' +
         rongQiXiaLaXuanXiang() +
@@ -29553,6 +29858,13 @@ async function renderDashboard(host) {
       ? free[Math.floor(Math.random() * free.length)]
       : (pool[Math.floor(Math.random() * pool.length)] || (isProject ? t('list.createProject') : t('list.createGroupChat'))) + '-' + suffix;
     const nameInput0 = $('erHeYiMing');
+    /* R308①：项目工作区目录默认自填（不创建文件夹）＋文件夹选择；字段已在名称与运行环境之间。 */
+    const pendingGid = 'g' + Date.now();
+    if (isProject) {
+      bangGongZuoQuXuanZe('erHeYiGongZuoQuXuan', 'erHeYiGongZuoQu');
+      const muLuInp = $('erHeYiGongZuoQu');
+      void window.warmy.moRenGongZuoQu?.(pendingGid).then((r) => { if (r && r.dir && muLuInp && !muLuInp.value) muLuInp.value = String(r.dir); }).catch(() => {});
+    }
     if (nameInput0) nameInput0.value = defaultName;
     /* R292-5：底部「关闭」按钮去掉，改右上角关闭叉（与牛马设置弹窗同一助手）。
        遮罩/Esc＝关闭（与原关闭按钮同语义）。叉只在 youGuanCha 类下显示，不会漏到其它通用弹窗。 */
@@ -29655,10 +29967,10 @@ async function renderDashboard(host) {
         if (!ming || (isProject && !devEnv)) return;
         createBtn.disabled = true;
         if (createMsg) createMsg.textContent = '';
-        const id = 'g' + Date.now();
+        const id = pendingGid;
         try {
           const jr = isProject
-            ? await window.warmy.groupCreate({ groupId: id, ming, type: 'internal', directedMode: false, devEnv })
+            ? await window.warmy.groupCreate({ groupId: id, ming, type: 'internal', directedMode: false, devEnv, directory: String(document.getElementById('erHeYiGongZuoQu')?.value || '').trim() || undefined })
             : await window.warmy.groupCreate({ groupId: id, ming, type: 'external', directedMode: true });
           if (jr && jr.ok === false) {
             if (createMsg) createMsg.textContent = String(jr.error || t('common.error'));
@@ -29788,7 +30100,29 @@ async function renderDashboard(host) {
    * 创建牛马：名称 + 运行环境（R226 项6：单下拉，默认本机，列出所有可用容器）。
    * 返回 { ming, devEnv, runtimeId } 或 null（取消）。
    */
-  async function openCreateInstanceDialog(defaultMing) {
+  /** R308①：工作区目录字段（醒目标签＋默认路径＋文件夹选择）；放在名称与运行环境之间。 */
+  function gongZuoQuZiDuanHtml(inputId, pickId) {
+    return '<div class="gongZuoQuKuai">' +
+      '<label class="gongZuoQuBiao" for="' + inputId + '">' + escapeHtml(tOr('workspace.dirLabel', '工作区目录')) + '</label>' +
+      '<div class="gongZuoQuHang">' +
+      '<input id="' + inputId + '" class="erHeYiInput gongZuoQuShuRu" autocomplete="off" spellcheck="false"/>' +
+      '<button type="button" class="anNiuTuBiao gongZuoQuXuan" id="' + pickId + '" title="' + escapeHtml(tOr('workspace.pickDir', '选择文件夹…')) + '" aria-label="' + escapeHtml(tOr('workspace.pickDir', '选择文件夹…')) + '">' +
+      '<svg class="ico hollowIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>' +
+      '</button></div>' +
+      '<div class="jingYin gongZuoQuShuoMing">' + escapeHtml(tOr('workspace.dirHint', '上方为默认位置。该文件夹不会提前创建，只有在你点击「确定」创建会话时才创建；可手动修改地址，或点右侧文件夹图标选择。')) + '</div>' +
+      '</div>';
+  }
+  function bangGongZuoQuXuanZe(pickId, inputId) {
+    const btn = $(pickId); const inp = $(inputId);
+    if (!btn || !inp) return;
+    btn.onclick = async () => {
+      try {
+        const r = await window.warmy.pickDirectory?.();
+        if (r && r.ok && r.path) inp.value = String(r.path);
+      } catch { /* 取消选择不改地址 */ }
+    };
+  }
+  async function openCreateInstanceDialog(defaultMing, pendingId) {
     try { await probeContainers(false); } catch { /* 探测失败也开弹窗（只有本机可选） */ }
     return new Promise((resolve) => {
       const root = $('duiHuaKuangGen');
@@ -29800,6 +30134,7 @@ async function renderDashboard(host) {
       wrap.innerHTML =
         '<label class="jingYin" for="nmMing">' + escapeHtml(t('instances.name')) + '</label>' +
         '<input id="nmMing" class="erHeYiInput" autocomplete="off"/>' +
+        gongZuoQuZiDuanHtml('nmGongZuoQu', 'nmGongZuoQuXuan') +
         '<div class="jingYin" style="margin:12px 0 4px">' + escapeHtml(tOr('instances.devEnv', '运行环境')) + '</div>' +
         '<select id="nmDevEnv" class="erHeYiInput" title="' + escapeHtml(tOr('container.devEnv.pickHint', '默认本机。下拉里列出本机与所有可用容器；没有可用容器时请先在 设置 → 功能 → 容器 安装并启动。')) + '">' +
         rongQiXiaLaXuanXiang() +
@@ -29809,6 +30144,10 @@ async function renderDashboard(host) {
       ti.appendChild(wrap);
       const inp = $('nmMing');
       inp.value = String(defaultMing || '');
+      /* R308①：工作区目录默认自填（不创建文件夹）＋文件夹选择。 */
+      const gongZuoQuInp = $('nmGongZuoQu');
+      bangGongZuoQuXuanZe('nmGongZuoQuXuan', 'nmGongZuoQu');
+      if (pendingId) { void window.warmy.moRenGongZuoQu?.(pendingId).then((r) => { if (r && r.dir && gongZuoQuInp && !gongZuoQuInp.value) gongZuoQuInp.value = String(r.dir); }).catch(() => {}); }
       let devEnv = 'host';
       let runtimeId = '';
       const envSel = $('nmDevEnv');
@@ -29846,7 +30185,7 @@ async function renderDashboard(host) {
       ok.onclick = () => {
         const ming = String(inp.value || '').trim();
         if (!ming || mingYiZhanYong(ming)) return;
-        finish({ ming, devEnv, runtimeId });
+        finish({ ming, devEnv, runtimeId, workspaceDir: String(gongZuoQuInp.value || '').trim() });
       };
       inp.addEventListener('input', sync);
       inp.addEventListener('keydown', (e) => {
@@ -29876,7 +30215,12 @@ async function renderDashboard(host) {
       while (used.has(hou)) { n += 1; hou = base + '-' + n; }
       return hou;
     };
-    openCreateInstanceDialog(suanMing()).then(async (pick) => {
+    // R305②：id 预生成供工作目录默认自填。
+    let id = 'inst-' + Date.now() + '-' + crypto.getRandomValues(new Uint32Array(2)).join('');
+    while ((state.instances || []).some((x) => x && x.id === id)) {
+      id = 'inst-' + Date.now() + '-' + crypto.getRandomValues(new Uint32Array(2)).join('');
+    }
+    openCreateInstanceDialog(suanMing(), id).then(async (pick) => {
       if (!pick) return;
       const ming = String(pick.ming || '').trim();
       if (!ming) return;
@@ -29886,11 +30230,6 @@ async function renderDashboard(host) {
         return;
       }
       const devEnv = pick.devEnv === 'container' ? 'container' : 'host';
-      // id 绝不与既有实例冲突（避免顶替）
-      let id = 'inst-' + Date.now() + '-' + crypto.getRandomValues(new Uint32Array(2)).join('');
-      while ((state.instances || []).some((x) => x && x.id === id)) {
-        id = 'inst-' + Date.now() + '-' + crypto.getRandomValues(new Uint32Array(2)).join('');
-      }
       // **随机使用专业模板**（产品要求：50 个模板随机分配）
       const moBanJi = (typeof window !== 'undefined' && Array.isArray(window.__NIU_MA_TEMPLATES)) ? window.__NIU_MA_TEMPLATES : [];
       const suiJiMoBan = moBanJi.length ? moBanJi[Math.floor(Math.random() * moBanJi.length)] : null;
@@ -29907,6 +30246,7 @@ async function renderDashboard(host) {
         persona: suiJiMoBan ? suiJiMoBan.content : t('instances.personaDefault'),
         avatarPreset: randomPreset(),
         avatarDataUrl: '',
+        workspaceDir: String(pick.workspaceDir || '').trim() || undefined,
       };
       state.instances.push(biaoZhunShiLi(inst));
       state.selectedInstance = state.instances[state.instances.length - 1];
@@ -29923,7 +30263,7 @@ async function renderDashboard(host) {
       void (async () => {
         const huiGunTanChu = () => { try { if (instanceDetailInDialog && state.selectedInstance && state.selectedInstance.id === id) closeNiuMaSettings(); } catch { /* noop */ } };
         try {
-          const r = await window.warmy.spawnInstance({ id, ming, dutyEligible: true, devEnv });
+          const r = await window.warmy.spawnInstance({ id, ming, dutyEligible: true, devEnv, workspaceDir: inst.workspaceDir });
           /* R226 项6：创建时选了容器 ⇒ 记住运行时（与设置里「选择容器…」同一通道） */
           if (r && r.ok !== false && devEnv === 'container' && pick.runtimeId) {
             try { await window.warmy.projectSetContainer?.({ sessionId: id, runtimeId: String(pick.runtimeId) }); } catch { /* noop */ }
@@ -30198,18 +30538,12 @@ async function renderDashboard(host) {
     { id: 'focusSearch', def: 'F3', alt: '{mod}+S', run: () => {
       /**
        * **搜索快捷键的落点**（产品要求）：
-       *   ① 在聊天界面（看得到三点菜单）⇒ 打开**三点菜单里的搜索**（`showSearchPopup`）；
+       *   ① 在聊天界面 ⇒ 展开聊天头搜索；
        *   ② 不在聊天界面但第二列在 ⇒ 聚焦**第二列的搜索框**；
        *   ③ 两者都没有 ⇒ 什么都不做。
        */
       try {
-        const gengDuo = $('gengDuoTrigger');
-        const zaiLiaoTian = !!state.selectedChat && ['singleAi', 'internalGroup', 'externalGroup', 'externalChat'].includes(state.nav);
-        if (zaiLiaoTian && gengDuo && !gengDuo.closest('.yinCang')) {
-          $('gengDuoCaiDan')?.classList.add('yinCang');
-          showSearchPopup();
-          return;
-        }
+        if (daKaiLiaoTianSouSuo()) return;
       } catch { /* 落到第二列搜索框 */ }
       const i = $('lieBiaoSouSuo');
       // 可见才算"在显示"（offsetParent 为 null = 隐藏/未布局）
@@ -30538,7 +30872,8 @@ async function renderDashboard(host) {
     // R149 项7：文本编辑器（F9）例外——聊天界面开着就该响应，即使光标在输入框里
     const c2 = c.combo;
     const isEditorKey = c2 === 'F9' || shortcutBinding('textEditor') === c2 || shortcutBinding('textEditor', true) === c2;
-    if (typing && !(e.ctrlKey || e.altKey || e.metaKey) && !isEditorKey) return;
+    const isSearchKey = shortcutBinding('focusSearch') === c2 || shortcutBinding('focusSearch', true) === c2;
+    if (typing && !(e.ctrlKey || e.altKey || e.metaKey) && !isEditorKey && !isSearchKey) return;
     for (const a of SHORTCUT_ACTIONS) {
       if (shortcutBinding(a.id) !== c.combo && shortcutBinding(a.id, true) !== c.combo) continue;
       e.preventDefault();
@@ -34953,24 +35288,31 @@ async function renderDashboard(host) {
     });
   }
 
-  // ── 统一搜索浮窗（当前会话 → 界面文案 → 其他会话 → 知识库 → 全盘） ──
-  function showSearchPopup() {
-    const root = $('duiHuaKuangGen');
-    $('duiHuaKuangBiaoTi').textContent = t('list.search');
-    $('duiHuaKuangTi').innerHTML = '<input id="souSuoPopupShuRu" class="ssShuRu" placeholder="' + escapeHtml(t('list.search')) + '"/><div id="souSuoPopupResults" class="ssWrap"></div>';
-    const dongZuoJi = $('duiHuaKuangDongZuoJi');
-    dongZuoJi.innerHTML = '';
-    const close = document.createElement('button');
-    close.className = 'anNiuXiao';
-    close.textContent = t('common.close');
-    close.onclick = () => { root.classList.add('yinCang'); };
-    dongZuoJi.appendChild(close);
-    root.classList.remove('yinCang');
-    const shuRu = $('souSuoPopupShuRu');
-    shuRu?.focus();
-    const jieGuo = $('souSuoPopupResults');
-    const curSid = String(state.selectedChat?.id || '');
-    const guanBi = () => { root.classList.add('yinCang'); };
+  function guanLiaoTianSouSuo(focus) {
+    const nei = $('liaoTianSouSuoNei');
+    if (!nei || nei.hidden) return;
+    const sr = $('liaoTianSouSuoShuRu');
+    if (sr) { sr.value = ''; sr.oninput?.(); sr.oninput = null; }
+    nei.hidden = true;
+    const an = $('liaoTianSouSuoAn');
+    an?.setAttribute('aria-expanded', 'false');
+    if (focus) an?.focus();
+  }
+  function daKaiLiaoTianSouSuo(keyword) {
+    const nei = $('liaoTianSouSuoNei');
+    const an = $('liaoTianSouSuoAn');
+    const shuRu = $('liaoTianSouSuoShuRu');
+    const jieGuo = $('liaoTianSouSuoJieGuo');
+    if (!state.selectedChat || !nei || !an?.offsetParent || !shuRu || !jieGuo) return false;
+    if (!nei.hidden) { if (keyword === undefined) { shuRu.focus(); shuRu.select(); return true; } guanLiaoTianSouSuo(false); }
+    nei.hidden = false;
+    an.setAttribute('aria-expanded', 'true');
+    shuRu.placeholder = t('list.search');
+    shuRu.setAttribute('aria-label', t('list.search'));
+    an.setAttribute('aria-label', t('list.search'));
+    shuRu.focus();
+    const curSid = String(state.selectedChat.id || '');
+    const guanBi = () => guanLiaoTianSouSuo(false);
 
     /* R250：关键词用主题色背景突出（先转义再包 mark，避免注入） */
     const tuLiang = (text, q) => {
@@ -35076,23 +35418,31 @@ async function renderDashboard(host) {
     };
     let jiShiQi = null;
     let daiHao = 0;
-    shuRu?.addEventListener('input', () => {
+    shuRu.oninput = () => {
       clearTimeout(jiShiQi);
+      const hao = ++daiHao;
       const q = shuRu.value.trim();
+      jieGuo.hidden = !q;
       if (!q) { jieGuo.innerHTML = ''; return; }
       jiShiQi = setTimeout(async () => {
-        const hao = ++daiHao;
         jieGuo.innerHTML = '<div class="jingYin" style="padding:8px">' + escapeHtml(tOr('localSearch.searching', '搜索中…')) + '</div>';
         try {
           const r = await window.warmy.tongYiSouSuo?.({ query: q, sessionId: curSid, contacts, sessionNames });
-          if (hao !== daiHao) return;
+          if (hao !== daiHao || nei.hidden || String(state.selectedChat?.id || '') !== curSid) return;
           if (!r || r.ok === false) { jieGuo.innerHTML = '<div class="jingYin" style="padding:8px">' + escapeHtml(String((r && r.error) || t('common.error'))) + '</div>'; return; }
           huaFenQu((r && r.sections) || [], q);
         } catch (e) {
-          if (hao === daiHao) jieGuo.innerHTML = '<div class="jingYin" style="padding:8px">' + escapeHtml(String((e && e.message) || t('common.error'))) + '</div>';
+          if (hao === daiHao && !nei.hidden && String(state.selectedChat?.id || '') === curSid) jieGuo.innerHTML = '<div class="jingYin" style="padding:8px">' + escapeHtml(String((e && e.message) || t('common.error'))) + '</div>';
         }
       }, 280);
-    });
+    };
+    shuRu.onkeydown = (ev) => {
+      if (ev.key !== 'Escape' || ev.isComposing) return;
+      ev.preventDefault(); ev.stopPropagation(); guanLiaoTianSouSuo(true);
+    };
+    shuRu.value = keyword || '';
+    shuRu.oninput();
+    return true;
   }
 
   // ── 导出/导入的数据范围（第 111 轮）──
@@ -35913,7 +36263,11 @@ try {
         const sid = state.selectedChat ? String(state.selectedChat.id) : '';
         const rb = await window.warmy.checkpointRollback(b.dataset.load, { stopFirst: true, sessionId: sid });
         if (!rb || !rb.ok) {
-          await uiAlert(String((rb && rb.error) || 'failed'), tOr('checkpoints.huiDang', '回档'));
+          /* R304：旧首回退点无文件快照⇒如实告知，不假成功。 */
+          const cuoWen = rb && rb.error === 'checkpoint-no-workspace-snapshot'
+            ? tOr('checkpoints.noWsSnap', '该回退点没有文件快照（旧版在工作区建立前打的点），无法还原文件；请用其后的回退点。')
+            : String((rb && rb.error) || 'failed');
+          await uiAlert(cuoWen, tOr('checkpoints.huiDang', '回档'));
           return;
         }
         const j = rb.journal || {};
@@ -38521,13 +38875,10 @@ try {
     out.querySelectorAll('.zhiShiKuLink').forEach((b) => {
       b.onclick = () => {
         const kw = b.textContent || '';
-        showSearchPopup();
-        setTimeout(() => {
-          const input = $('souSuoPopupShuRu');
-          if (!input) return;
-          input.value = kw;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-        }, 80);
+        if (!daKaiLiaoTianSouSuo(kw)) {
+          const sr = $('lieBiaoSouSuo');
+          if (sr?.offsetParent) { sr.value = kw; sr.dispatchEvent(new Event('input', { bubbles: true })); sr.focus(); }
+        }
       };
     });
     // 第 82 轮：搜索结果直接可重写（原条目移出活跃视图，新描述进待整理区，下次总结写回）
@@ -39957,8 +40308,9 @@ try {
     if (__loopTick % 3 === 0) raf(refreshCost);
     if (__loopTick % 4 === 0) raf(shuaxinZhixingqiji);
     if (__loopTick % 5 === 0) raf(() => { refreshSessionBoard(); refreshMembers(); });
-    /* R272 项8：清理“空闲却亮运行圆点”的残留态（后台总结/续派收尾漏清时兑底） */
-    if (__loopTick % 5 === 0) raf(() => { try { const now = Date.now(); let changed = false; for (const [sid, run] of Object.entries(state.sessionRuns || {})) { if (run && run.running && !queueRounds[sid] && !(state.streamBuf && state.streamBuf[sid]) && now - (run.updatedAt || run.since || 0) > 20000) { run.running = false; changed = true; } } if (changed) renderList(); } catch { /* noop */ } });
+    /* R272 项8：清理“空闲却亮运行圆点”的残留态（后台总结/续派收尾漏清时兑底）
+     * R303：进化在跑会话豁免——faSong 续发不走 queueRounds/streamBuf，旧判据 20s 后误清⇒流光中途熄灭。 */
+    if (__loopTick % 5 === 0) raf(() => { try { const now = Date.now(); let changed = false; for (const [sid, run] of Object.entries(state.sessionRuns || {})) { if (run && run.running && !queueRounds[sid] && !(window.__ziJinHuaZaiPao && window.__ziJinHuaZaiPao(sid)) && !(state.streamBuf && state.streamBuf[sid]) && now - (run.updatedAt || run.since || 0) > 20000) { run.running = false; changed = true; } } if (changed) renderList(); } catch { /* noop */ } });
     if (__loopTick % 6 === 0) raf(checkLastError);
     // 决策卡：**不走 raf**（窗口被遮挡时 rAF 会停发，卡片就"既不显示也不响"）。
     // 专用定时器 + 真实计时器（主窗口 backgroundThrottling=false）⇒ 后台也能发现新卡并响铃。
