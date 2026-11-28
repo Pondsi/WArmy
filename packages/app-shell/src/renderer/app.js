@@ -5248,6 +5248,7 @@ async function langDuWenBen(text, btnEl) {
         .replace(/`([^`\n]+)`/g, '<code class="mdCi">$1</code>')
         .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
         .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+        .replace(/\*([^*\n]+)\*\*/g, '<em>$1</em>')
         .replace(/\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
       if (MX) v = MX.inlineKuoZhan(v, zhuDefs);
       return bh ? bh.huan(v) : v;
@@ -7948,7 +7949,11 @@ async function langDuWenBen(text, btnEl) {
       // 我方头像 = 「我的」页设的头像（自定义图 > 人物头像 > 默认），不再用「主」字占位
       const woTou = personAvatarSrc(state.profile);
       const av = `<img class="touXiangTuPian" src="${woTou}" alt=""/>`;
-      const themAv = `<img class="touXiangTuPian" src="${themAvatar}" alt=""/>`;
+      /* R317：群/项目里每条回复用该牛马自己的头像（我的牛马），而非群/项目头像。 */
+      const senderInst = (cur.kind === 'internal' || cur.kind === 'extgroup')
+        ? (state.instances || []).find((x) => x && String(x.id) === String(m.instId || m.from || m.senderId || m.by || ''))
+        : null;
+      const themAv = `<img class="touXiangTuPian" src="${senderInst ? instanceAvatarSrc(senderInst) : themAvatar}" alt=""/>`;
       // 群聊/项目：气泡上方显示名称（微信样式）；一对一不显示
       const showName = m.role !== 'wo' && !!themName
         && (cur.kind === 'internal' || cur.kind === 'extgroup' || cur.kind === 'extdm');
@@ -12399,9 +12404,28 @@ window.__keYiLiaoTian = keYiLiaoTian;
       hu.classList.remove('yinCang');
       const r = hid.getBoundingClientRect();
       const h = Math.min(240, 30 * st.items.length + 8);
-      hu.style.left = Math.round(r.left) + 'px';
-      hu.style.top = Math.max(8, Math.round(r.top - h - 6)) + 'px';
-      hu.style.width = Math.max(180, Math.min(360, Math.round(r.width * 0.7))) + 'px';
+      /* R317：@ 选择框放在 @ 光标右侧（镜像测量光标坐标），不再固定在隐藏框上方。 */
+      let cx = 0, cy = 0;
+      try {
+        const ir = input.getBoundingClientRect();
+        const pos = Math.max(0, st.start);
+        const mir = document.createElement('div');
+        const cs = getComputedStyle(input);
+        mir.style.cssText = 'position:absolute;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;overflow:hidden;' +
+          'width:' + ir.width + 'px;font:' + cs.font + ';padding:' + cs.padding + ';border:' + cs.border + ';line-height:' + cs.lineHeight + ';letter-spacing:' + cs.letterSpacing;
+        mir.textContent = input.value.slice(0, pos);
+        const span = document.createElement('span'); span.textContent = '@'; mir.appendChild(span);
+        document.body.appendChild(mir);
+        const sr = span.getBoundingClientRect(); const mr = mir.getBoundingClientRect();
+        cx = ir.left + (sr.left - mr.left); cy = ir.top + (sr.top - mr.top);
+        mir.remove();
+      } catch { /* 度量失败回退隐藏框 */ }
+      const w = Math.max(180, Math.min(360, Math.round((input.getBoundingClientRect().width) * 0.7)));
+      let left = Math.round(cx + 10);
+      if (left + w > window.innerWidth - 8) left = Math.max(8, Math.round(cx - w - 10));
+      hu.style.left = left + 'px';
+      hu.style.top = Math.max(8, Math.min(Math.round(cy), window.innerHeight - h - 8)) + 'px';
+      hu.style.width = w + 'px';
     };
     const guan = (huiJiao) => {
       st.open = false; st.start = -1; st.query = ''; st.composing = false; st.frozen = false; st.newSearch = true;

@@ -1,13 +1,13 @@
 {
-  "version": "0.4.65",
-  "notes": "WArmy 0.4.65 — Confirmed & fixed: MiMo flash empty prompt_tokens_details no longer mis-reported as cache 0 (shows 'not reported by provider'); regenerate (text & interactive) uses the active provider (no stale 401 / provider-missing) and rewrites from the original reply as base; boost reply reload preserves scroll position; Ctrl+Space picker gains a search box, fullwidth ，。 page keys, Space-to-select, re-press to close, and cancel-options only when the format marker still exists.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.65/WArmy-Setup-0.4.65.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.65/WArmy-Setup-0.4.65.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.65/WArmy-Setup-0.4.65.exe.warmyblocks",
-  "sha256": "58c1eab12e7aa3cd8c251ecf77d2156f9b84691e5dc8beb65173e8cb7fc65fb6",
-  "size": 353981995,
+  "version": "0.4.66",
+  "notes": "WArmy 0.4.66 — @ mention picker now opens to the right of the @ caret; group/project replies show each workhorse's own avatar; tolerant rendering for mismatched bold/italic markdown in chat and nm viewer; plus prior fixes (cache not-reported, regenerate with active provider + original base, boost scroll preserve, Ctrl+Space search/fullwidth-page/space-select/toggle-close/cancel-existence).",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.66/WArmy-Setup-0.4.66.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.66/WArmy-Setup-0.4.66.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.66/WArmy-Setup-0.4.66.exe.warmyblocks",
+  "sha256": "4084dbca4d701c7155b185f38ecee19d84a431df01f001cfc478fe17b5ff4c82",
+  "size": 353982184,
   "mandatory": false,
-  "publishedAt": "2026-11-27T21:40:00.445Z",
+  "publishedAt": "2026-11-28T08:07:15.748Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.65"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.66"
 }
