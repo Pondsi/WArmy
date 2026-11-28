@@ -44,6 +44,8 @@ export interface ZhixingqiRenwu extends GongzuozheRenwuShuru {
    * 既没有各自的人格，也没有各自的模型。现在把身份带进来，系统提示里如实注入。
    */
   shenFen?: { id: string; ming: string; persona?: string };
+  /** R319：本机操作者真实用户名（「我」指用户，不是值班者/执行者）。 */
+  yongHuMing?: string;
   /**
    * 值班者为本次任务指定的思考级别（auto = 跟随牛马自己的设置）。
    * 只影响本任务的思考强度，**不影响模型**（模型由各牛马自己的设置决定）。
@@ -147,6 +149,7 @@ export async function yunxingDuanCunhuoZhixingqi(
    */
   const xiTong = [
     sf ? `你是 WArmy 项目里的牛马「${sf.ming}」，这次被值班者派来执行一项任务。` : '你是 WArmy 的短命执行者。',
+    renwu.yongHuMing ? `本机操作者（提出问题的人）叫「${renwu.yongHuMing}」。用户原话里的“我”指这位用户本人，不是你、不是值班者，也不是任何执行者。` : '',
     sf?.persona ? `你的人设：${String(sf.persona).slice(0, 600)}` : '',
     '只根据给定任务与上下文完成工作，不继承值班者的完整历史。',
     youGongJu

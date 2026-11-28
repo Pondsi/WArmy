@@ -5084,6 +5084,8 @@ html { font-weight: var(--fw-ui, 400); }
 /* R305④/R318：值班待处理等待图标＝单个马头 logo（挂值班回复应在的一侧）＋项目教学横幅。 */
 .dutyDengDai { display: inline-flex; gap: 2px; margin-inline-end: 6px; vertical-align: middle; flex: none; }
 .dutyDengDai img { width: 18px; height: 18px; animation: dutyMarch 1.4s linear infinite; }
+.dutyDengDai img.dutyNiuMaLogo { width: 22px; height: 22px; animation: dutyJump var(--dutyJumpDur, .9s) ease-in-out var(--dutyJumpDelay, 0s) infinite alternate; }
+@keyframes dutyJump { from { transform: translateY(-5px); } to { transform: translateY(5px); }
 .dutyDengDai img:nth-child(2) { animation-delay: .18s; }
 .dutyDengDai img:nth-child(3) { animation-delay: .36s; }
 .dutyDengDai img:nth-child(4) { animation-delay: .54s; }

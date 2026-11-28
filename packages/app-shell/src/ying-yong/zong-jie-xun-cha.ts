@@ -23,6 +23,7 @@ export function chuangJianZongJieXunCha(yiLai: ZongJieXunChaYiLai) {
     }
   } catch { /* 损坏账本不冒充已总结，来源启动核实后重建 */ }
   let active: { id: string; c: AbortController } | undefined;
+  const activeHas = (id: string) => !!active && (active.id === id || active.id.split('|').includes(id));
   let stopped = false;
   let dirty = false;
   const queue = new Set(Object.keys(state));
@@ -31,42 +32,51 @@ export function chuangJianZongJieXunCha(yiLai: ZongJieXunChaYiLai) {
     const old = state[id] || { version: 0, changedAt: 0, doneVersion: 0, watermark: yiLai.initialWatermark?.(id) };
     state[id] = { ...old, ...(id.startsWith('knowledge:') ? { watermark: { seq: 0, offset: 0 } } : {}), version: old.version + 1, changedAt: yiLai.now(), retryAt: 0 };
     queue.add(id); dirty = true;
-    if (active?.id === id) active.c.abort(new Error('summary-source-changed'));
+    if (activeHas(id)) active!.c.abort(new Error('summary-source-changed'));
   }
   function huoDong(id: string): void {
     if (state[id]) { state[id]!.changedAt = yiLai.now(); dirty = true; }
-    if (active?.id === id) active.c.abort(new Error('summary-foreground'));
+    if (activeHas(id)) active!.c.abort(new Error('summary-foreground'));
   }
   async function xunCha(): Promise<void> {
     if (dirty) { yiLai.cun(state); dirty = false; }
     if (stopped || active) return;
-    let checked = 0;
-    const ids: string[] = [];
-    for (const id of queue) { ids.push(id); if (ids.length === 16) break; }
-    for (const id of ids) {
-      if (++checked > 16) break;
+    /* R319：同族任务一次最多并发 4 个；generate 层再合并为一次模型请求，水位/版本仍逐项独立。 */
+    const familyOf = (id: string) => id.startsWith('session:') || id.startsWith('knowledge:') || id.startsWith('short-memory:') ? 'facts'
+      : id.startsWith('duty:') || id.startsWith('decision:') ? 'duty' : 'improve';
+    const ready: Array<{ id: string; s: ZongJieYuan; version: number }> = [];
+    let family = '';
+    for (const id of queue) {
+      if (ready.length >= 4) break;
       queue.delete(id); queue.add(id);
       const s = state[id];
       if (!s || s.version <= s.doneVersion) { queue.delete(id); continue; }
       if (!yiLai.enabled(id) || yiLai.now() - s.changedAt < ZONG_JIE_JING_MO_MS || (s.retryAt || 0) > yiLai.now()) continue;
-      const version = s.version; const c = new AbortController();
-      let revision = yiLai.targetRevision?.(id);
-      active = { id, c };
-      const valid = () => !stopped && !c.signal.aborted && yiLai.enabled(id) && state[id]?.version === version
-        && yiLai.now() - state[id]!.changedAt >= ZONG_JIE_JING_MO_MS && yiLai.targetRevision?.(id) === revision;
-      try {
-        const r = await yiLai.run(id, { signal: c.signal, version, watermark: s.watermark, valid, fail: () => c.abort(new Error('summary-models-unavailable')), afterCommit: () => { revision = yiLai.targetRevision?.(id); } });
-        if (r.ok && valid()) {
-          if (r.watermark) s.watermark = r.watermark;
-          if (!r.more) { s.doneVersion = version; queue.delete(id); }
-        } else s.retryAt = yiLai.now() + 60000;
-      } catch { s.retryAt = yiLai.now() + 60000; yiLai.audit?.('summary-retry'); }
-      finally {
-        active = undefined;
-        // 提交后立即落水位：崩溃重启不重复总结同一段；写失败留待下次巡查重写。
-        try { yiLai.cun(state); dirty = false; } catch { dirty = true; }
-      }
-      break;
+      const f = familyOf(id);
+      if (family && f !== family) continue;
+      family = family || f;
+      ready.push({ id, s, version: s.version });
+    }
+    if (!ready.length) return;
+    const c = new AbortController();
+    active = { id: ready.map((x) => x.id).join('|'), c };
+    try {
+      await Promise.all(ready.map(async ({ id, s, version }) => {
+        let revision = yiLai.targetRevision?.(id);
+        const valid = () => !stopped && !c.signal.aborted && yiLai.enabled(id) && state[id]?.version === version
+          && yiLai.now() - state[id]!.changedAt >= ZONG_JIE_JING_MO_MS && yiLai.targetRevision?.(id) === revision;
+        try {
+          const r = await yiLai.run(id, { signal: c.signal, version, watermark: s.watermark, valid, fail: () => c.abort(new Error('summary-models-unavailable')), afterCommit: () => { revision = yiLai.targetRevision?.(id); } });
+          if (r.ok && valid()) {
+            if (r.watermark) s.watermark = r.watermark;
+            if (!r.more) { s.doneVersion = version; queue.delete(id); }
+          } else s.retryAt = yiLai.now() + 60000;
+        } catch { s.retryAt = yiLai.now() + 60000; yiLai.audit?.('summary-retry'); }
+      }));
+    } finally {
+      active = undefined;
+      // 提交后立即落水位：崩溃重启不重复总结同一段；写失败留待下次巡查重写。
+      try { yiLai.cun(state); dirty = false; } catch { dirty = true; }
     }
   }
   async function shouDong(id: string, quanLiang = false, models?: string[]): Promise<{ ok: boolean; skipped?: string }> {
@@ -93,7 +103,7 @@ export function chuangJianZongJieXunCha(yiLai: ZongJieXunChaYiLai) {
   function qingLing(id?: string): void {
     const ids = id ? [id] : Object.keys(state).filter((key) => key.startsWith('session:'));
     for (const key of ids) {
-      if (active?.id === key) active.c.abort(new Error('summary-cursor-reset'));
+      if (activeHas(key)) active!.c.abort(new Error('summary-cursor-reset'));
       const old = state[key];
       state[key] = { version: (old?.version || 0) + 1, changedAt: yiLai.now(), doneVersion: 0, watermark: { seq: 0, offset: 0 }, retryAt: 0 };
       queue.add(key);

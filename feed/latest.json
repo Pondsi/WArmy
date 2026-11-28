@@ -1,13 +1,13 @@
 {
-  "version": "0.4.67",
-  "notes": "WArmy 0.4.67 — speaker volume slider now needs 1.3s hover; My-page line shows scheduled-export state (encryption always on); scheduled tasks get enable/pause/stop (stop double-confirm) and closed tasks hidden; dashboard counts exclude mimic & closed tasks; approval-feedback card removed; duty unanswered logo single horse-head on correct side; project 4th-column cards refresh live; duty replies use own avatar/name/model; boost checkbox no longer alters existing replies; boost scroll re-stabilized after inline mount; markdown bold in A2UI fixed; chat buttons match nm blue; input/rewrite & question buttons dispatch real work; regenerate uses active provider; model-capability periodic auto-audit with feedback memo; RCI P1-P5 self-improvement gated by holdout test; editor/nm Ctrl+Space intercepted.",
-  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.67/WArmy-Setup-0.4.67.exe",
-  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.67/WArmy-Setup-0.4.67.exe",
-  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.67/WArmy-Setup-0.4.67.exe.warmyblocks",
-  "sha256": "322b53e784c99d60814fcec0d0ddb1d30a40642f2420d645c0eb913ce75d817b",
-  "size": 353992887,
+  "version": "0.4.68",
+  "notes": "WArmy 0.4.68 — summaries now batch/dedupe/order related tasks with bounded prior-conclusion carry-over and per-item fallback; project/group/contact right-click adds Docking; reply-boost & evolution scroll fixed (unread-top vs bottom, down-arrow restored); Stop button greys when idle and stops all session work; evolution duplicate intermediate replies fixed with full hover model/time/votes; duty waiting uses one bouncing WArmy logo; project horse-head message-missing fixed; duty replies use own avatar/name/model and duty answers text itself (subagents only for tool work, with user identity preserved); all three-dot menu options are per-session; README checked.",
+  "url": "https://github.com/Pondsi/WArmy/releases/download/v0.4.68/WArmy-Setup-0.4.68.exe",
+  "downloadUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.68/WArmy-Setup-0.4.68.exe",
+  "blockmapUrl": "https://github.com/Pondsi/WArmy/releases/download/v0.4.68/WArmy-Setup-0.4.68.exe.warmyblocks",
+  "sha256": "d9c93aee6e14ce3ea972549a864b87bab424e05a963c9a9b7dc0eb94edbe1331",
+  "size": 353997322,
   "mandatory": false,
-  "publishedAt": "2026-11-28T10:02:38.470Z",
+  "publishedAt": "2026-11-28T12:36:53.719Z",
   "repo": "https://github.com/Pondsi/WArmy",
-  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.67"
+  "releasePage": "https://github.com/Pondsi/WArmy/releases/tag/v0.4.68"
 }

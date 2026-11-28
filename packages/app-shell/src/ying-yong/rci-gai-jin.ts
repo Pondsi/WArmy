@@ -80,7 +80,7 @@ export function kuaDaiMenKong(diffs: number[], alpha: number, minN: number): { p
 }
 
 export interface RciShiJian { ts: number; kind: string; ok: boolean; detail?: string; score?: number }
-export interface RciZhuangTai { params: RciCanShu; ledger: RciShiJian[]; decisions: Array<{ ts: number; note: string; applied: boolean }> }
+export interface RciZhuangTai { params: RciCanShu; ledger: RciShiJian[]; decisions: Array<{ ts: number; note: string; applied: boolean }>; lastProposalHash?: string }
 
 export function chuangJianRciGaiJin(yiLai: { wenJianLu: string; audit?: (op: string, d: unknown) => void; now?: () => number }) {
   const now = yiLai.now || (() => Date.now());
@@ -91,7 +91,7 @@ export function chuangJianRciGaiJin(yiLai: { wenJianLu: string; audit?: (op: str
       const p = { ...RCI_CHU_SHI, ...(j.params || {}) } as RciCanShu;
       p.p1 = { ...RCI_CHU_SHI.p1, ...(p.p1 || {}) }; p.p3 = { ...RCI_CHU_SHI.p3, ...(p.p3 || {}) };
       p.p4 = { ...RCI_CHU_SHI.p4, ...(p.p4 || {}) }; p.p5 = { ...RCI_CHU_SHI.p5, ...(p.p5 || {}) };
-      return { params: p, ledger: Array.isArray(j.ledger) ? j.ledger.slice(-400) : [], decisions: Array.isArray(j.decisions) ? j.decisions.slice(-100) : [] };
+      return { params: p, ledger: Array.isArray(j.ledger) ? j.ledger.slice(-400) : [], decisions: Array.isArray(j.decisions) ? j.decisions.slice(-100) : [], lastProposalHash: typeof j.lastProposalHash === 'string' ? j.lastProposalHash : '' };
     } catch { return { params: JSON.parse(JSON.stringify(RCI_CHU_SHI)), ledger: [], decisions: [] }; }
   }
   function cun(st: RciZhuangTai): void {
@@ -111,6 +111,9 @@ export function chuangJianRciGaiJin(yiLai: { wenJianLu: string; audit?: (op: str
   function zongJieTiaoCan(proposal: Partial<RciCanShu> & { note?: string; intervalMs?: number }): { applied: boolean; gate?: ReturnType<typeof kuaDaiMenKong> } {
     const st = du();
     const note = String(proposal.note || '总结提议调整 RCI 参数');
+    /* R319：同一参数提案只评一次，避免每次总结重复加 k/放大采样造成振荡与无效任务。 */
+    const proposalHash = JSON.stringify({ p1: proposal.p1, p2: proposal.p2, p3: proposal.p3, p4: proposal.p4, p5: proposal.p5 });
+    if (proposalHash === st.lastProposalHash) return { applied: false, gate: undefined };
     /* holdout：台账按时间对半分，比较「后半 ok 率 − 前半 ok 率」的逐会话配对差 */
     const bySid = new Map<string, { a: number[]; b: number[] }>();
     const half = st.ledger.length >> 1;
@@ -147,6 +150,7 @@ export function chuangJianRciGaiJin(yiLai: { wenJianLu: string; audit?: (op: str
       st.params.p5.minN = Math.min(50, Math.max(3, st.params.p5.minN));
     }
     st.decisions = st.decisions.concat([{ ts: now(), note: note.slice(0, 200), applied }]).slice(-100);
+    if (applied) st.lastProposalHash = proposalHash;
     cun(st);
     try { yiLai.audit?.('rci.summary-tune', { applied, gate, note }); } catch { /* noop */ }
     return { applied, gate };

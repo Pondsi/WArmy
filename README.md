@@ -1,4 +1,4 @@
-# WArmy 路 鏃犻檺鐗涢┈
+# WArmy · 无限牛马
 
 **WArmy = Workhorse Army.** *An army that's yours.*
 
@@ -114,7 +114,7 @@ The conventional local service port is **59599**. Network reachability and remot
 
 Install WArmy, then connect the model endpoint you want to use.
 
-1. Download `WArmy-Setup-0.4.67.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
+1. Download `WArmy-Setup-0.4.68.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
 2. Run the installer, choose a folder, launch **WArmy / 鏃犻檺鐗涢┈**.
 3. First run: choose a language, create your self-custodied identity, save the 24-word mnemonic, set a PIN; add a model provider and create your first workhorse.
 
@@ -139,7 +139,7 @@ WArmy stands on open-source work. Resolved dependency versions are listed in `pn
 - **DeepSeek Harness (dsh)** 鈥?MIT 鈥?<https://github.com/deepseek-ai/deepseek-harness> 鈥?the agent harness WArmy builds on: bundled runtime + plugin-first compatibility. Companions: **@nanmicoder/dsh-agent-teams** 鈥?<https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams>; **node-pty** 鈥?MIT 鈥?<https://github.com/microsoft/node-pty>; **koffi** 鈥?MIT 鈥?<https://github.com/Koromix/koffi>; **protobufjs** 鈥?BSD-3-Clause 鈥?<https://github.com/protobufjs/protobuf.js>; **@google/genai** 鈥?Apache-2.0 鈥?<https://github.com/googleapis/js-genai>.
 - **Electron** 鈥?MIT 鈥?<https://github.com/electron/electron>; **Chromium** 鈥?BSD-3-Clause 鈥?<https://github.com/chromium/chromium>; **Node.js** 鈥?MIT 鈥?<https://github.com/nodejs/node> 鈥?the desktop shell and runtime (a bundled `node.exe` runs the memory service in its own process).
 - **SQLite** 鈥?Public Domain 鈥?<https://www.sqlite.org/>; **better-sqlite3** 鈥?MIT 鈥?<https://github.com/WiseLibs/better-sqlite3>; **better-sqlite3-multiple-ciphers** 鈥?MIT 鈥?<https://github.com/m4heshd/better-sqlite3-multiple-ciphers>; **SQLCipher** 鈥?BSD-style 鈥?<https://github.com/sqlcipher/sqlcipher>; **bindings** 鈥?MIT 鈥?<https://github.com/TooTallNate/node-bindings>; **file-uri-to-path** 鈥?MIT 鈥?<https://github.com/TooTallNate/file-uri-to-path> 鈥?the memory store (FTS5 + optional encryption, subprocess only).
-- **Diwen** 鈥?[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 鈥?by **Pondsi**, <https://github.com/Pondsi/Diwen> 鈥?concept-coordinate layer, integrated as pinned npm `diwen@6.16.3`. The upstream LICENSE and NOTICE are included unchanged. Mechanical mapping is not semantic approval; uncertain content stays as the original text.
+- **Diwen** 鈥?[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 鈥?by **Pondsi**, <https://github.com/Pondsi/Diwen> 鈥?concept-coordinate layer, integrated as pinned npm `diwen@6.16.4`. The upstream LICENSE and NOTICE are included unchanged. Mechanical mapping is not semantic approval; uncertain content stays as the original text.
 - **hash-wasm** 鈥?MIT 鈥?<https://github.com/Daninet/hash-wasm> 鈥?argon2id/hashing in pure WASM (identity & keys).
 - **franc-all** 鈥?MIT 鈥?<https://github.com/wooorm/franc> 鈥?language detection for the AI output-language guard (with **trigram-utils**, **collapse-white-space**, **n-gram**, all MIT).
 - **three.js** 鈥?MIT 鈥?<https://github.com/mrdoob/three.js>; **@pixiv/three-vrm** 鈥?MIT 鈥?<https://github.com/pixiv/three-vrm> 鈥?3D/VRM rendering for the mimic (license text bundled beside the vendor bundle).

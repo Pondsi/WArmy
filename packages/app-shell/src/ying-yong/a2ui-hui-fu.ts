@@ -55,7 +55,7 @@ export interface A2uiShengCheng {
 
 export interface A2uiYiLai {
   workspaceDir: (sid: string) => string;
-  peizhi: () => { a2uiReplyEnabled?: boolean; nmKaiWenJian?: boolean };
+  peizhi: (sid?: string) => { a2uiReplyEnabled?: boolean; nmKaiWenJian?: boolean };
   shengCheng: (p: A2uiShengCheng) => Promise<string | { text: string; finishReason?: string }>;
   yanZhengYuYan?: (messages: AgentToRendererMessage[]) => Promise<boolean>;
   guangBo: (channel: string, data: unknown) => void;
@@ -276,7 +276,7 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
     force?: boolean;
   }): Promise<A2uiZhuangTai> {
     const sid = String(input.sessionId || ''), mid = String(input.messageId || '');
-    if ((!yiLai.peizhi().a2uiReplyEnabled && !input.force) || !sid || !mid || !String(input.reply || '').trim()) {
+    if ((!yiLai.peizhi(sid).a2uiReplyEnabled && !input.force) || !sid || !mid || !String(input.reply || '').trim()) {
       return { sessionId: sid, messageId: mid, artifactId: mid, status: 'cancelled', ts: now() };
     }
     const old = cha(sid, mid);

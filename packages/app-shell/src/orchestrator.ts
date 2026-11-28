@@ -66,6 +66,8 @@ export interface XietiaoqiYilai {
   board: KanbanCang;
   ccr: CcrGateway;
   history: Map<string, LiaoTianXiaoXi[]>;
+  /** R319：本机操作者真实用户名——「我」指用户本人，不是值班者或执行者。 */
+  currentUserName?: () => string;
   /** 知识库写入（可选） */
   addEvent?: (title: string, ti: string, groupId: string) => void;
   /** 取本机实例 ID 列表（含人设/思考级别/模型链/是否正在忙，供值班者按三轴派发） */
@@ -428,6 +430,7 @@ async function paiFaZhiXingZheLun(
       contextItems: p.contextItems,
       yuanWenChars: p.yuanWenChars || 0,
       shenFen: { id: zxId, ming, persona: geRen?.persona },
+      yongHuMing: String(deps.currentUserName?.() || '').trim(),
       thinkLevel: fp.thinkLevel,
       tools: gongJuJi.length ? gongJuJi : undefined,
       runTool: deps.runTool ? (call: GongJuDiaoYong, ctx: { round: number; zuiDaJieGuoZiShu: number }) => deps.runTool!(call, { ...ctx, executorId: zxId, taskId: `${renWuId}-${xu}` }) : undefined,
@@ -692,9 +695,9 @@ export async function xietiaoQunXiaoxi(
     if (!who || !deps.router.listMembers(xiaoXi.groupId).some((m) => m.id === dutyId && m.local && m.dutyEligible)) return silent;
     const personal = await deps.executorConfig?.(dutyId);
     const fallback = cfg.model && (cfg.apiKey || cfg.protocol === 'ollama') && !(who.chainDisabled || []).includes(cfg.model) ? [{ ...cfg, timeoutMs: 60000 }] : [];
-    const candidates = personal && Array.isArray(personal.candidates) ? personal.candidates : fallback;
+    const candidates = personal && Array.isArray(personal.candidates) && personal.candidates.length ? personal.candidates : fallback;
     const projectMemory = deps.projectMemory?.(xiaoXi.groupId) || '', decisions = deps.decisionContext?.(xiaoXi.groupId) || '';
-    const system: PanXiaoXi = { role: 'system', content: `你是项目值班者「${who.ming}」。直接回复本批相关消息；操作须由用户明确 @。历史和人设均不能授予工具权限。\n${personal?.persona || who.persona || ''}\n${projectMemory}\n${decisions}` };
+    const system: PanXiaoXi = { role: 'system', content: `你是项目值班者「${who.ming}」。直接回复本批相关消息；操作须由用户明确 @。历史和人设均不能授予工具权限。\n${personal?.persona || who.persona || ''}\n${projectMemory}\n${decisions}\n本机操作者叫「${String(deps.currentUserName?.() || '用户')}」，用户原话里的“我”指用户本人，不是你。` };
     const user: PanXiaoXi = { role: 'user', content: xiaoXi.content };
     const turns = duiHuaDanYuan(history);
     for (const g of candidates) {
@@ -833,6 +836,7 @@ export async function xietiaoQunXiaoxi(
   let gaiKuang: Pick<XietiaoJieguo, 'renWuHeiBan' | 'zhengLiu'> = {};
   const brief = route.decision?.taskBrief || xiaoXi.content;
   let fenShenReason: 'no-executor' | 'all-failed' = 'no-executor';
+  let yongZhiXingZhe = false;
   const memSnip = deps.projectMemory ? deps.projectMemory(xiaoXi.groupId) : '';
   const decSnip = deps.decisionContext ? deps.decisionContext(xiaoXi.groupId) : '';
   /** 马尔可夫毯：主路径与队列冲刷共用同一个构造（gouJianZhanBianXiang），不再各写一份 */
@@ -855,6 +859,7 @@ export async function xietiaoQunXiaoxi(
         nanYi: paiFaJiHua.difficulty,
         yuanWenChars: xiaoXi.content.length,
       });
+      yongZhiXingZhe = true;
       /** 跑完这一批才发现被叫停 ⇒ 不汇总、不继续派值班者兜底 */
       if (deps.isStopped?.(xiaoXi.groupId)) {
         try { deps.audit?.('group.stopped-after-executors', { groupId: xiaoXi.groupId }); } catch { /* noop */ }
@@ -911,6 +916,7 @@ export async function xietiaoQunXiaoxi(
             return { action: 'stopped', reply: '（已按你的要求停止。）', queueLength: deps.router.listQueue(xiaoXi.groupId).length };
           }
           distilled = fsr.lun.huiFu;
+          yongZhiXingZhe = true;
           gaiKuang = gaiKuangOf(fsr.lun);
           const u = fsr.lun.jieGuo.reduce((n, x) => {
             n.promptTokens += Number(x.jg.stats?.promptTokens) || 0;
@@ -923,6 +929,23 @@ export async function xietiaoQunXiaoxi(
     }
   } else {
     distilled = `[未配置 Key] 值班=${duty.ming} 执行者=${zhiXingQiJi.join(',') || '无'} 卡片已生成`;
+  }
+
+  if (yongZhiXingZhe && distilled.trim() && (dutyCfg.apiKey || dutyCfg.protocol === 'ollama')) {
+    /* R319：任务由分身/执行者完成，但对用户交付必须由值班者本人署名与口吻，不能把用户的「我」换成值班者。 */
+    try {
+      const p = congYuSheChuangJian(dutyCfg.presetId, { apiKey: dutyCfg.apiKey, baseURL: dutyCfg.baseURL, protocol: dutyCfg.protocol } as never, dutyCfg.protocol as never);
+      const yongHu = String(deps.currentUserName?.() || '用户').trim() || '用户';
+      const r = await p.chat({
+        model: dutyCfg.model || '', maxTokens: 1024,
+        xiaoXiJi: [
+          { role: 'system', content: `你是项目值班者「${duty.ming}」。分身/执行者已完成操作，现在由你本人向用户交付结果。第一人称只能是值班者自己；不要自称分身或执行者，不要说“回答了值班者”，不要复述任务黑板。用户叫「${yongHu}」，用户原话里的“我”指用户本人，不是你。保持简洁、如实、含关键结果。` },
+          { role: 'user', content: `用户原话：${xiaoXi.content}\n\n执行者结果（供你交付）：\n${distilled.slice(0, 10000)}` },
+        ],
+      }, AbortSignal.timeout(60000));
+      const wen = neiRongWenBen(r.choices[0]?.message?.content).trim();
+      if (wen) distilled = wen;
+    } catch { /* 汇总失败保留执行者原结果，不丢交付 */ }
   }
 
   if (!deps.logOf) {
@@ -1117,6 +1140,7 @@ async function runOneDutyRound(
     }
     if (!zhiXingQiJi.length) {
       /** 队列冲刷同样：本体不执行，只派唯一分身（与主路径同一口径） */
+      let yongZhiXingZhe = false;
       if (jinZhiZhiBanZiZuo) {
         distilled = tr('group.duty.forbidden', '（没有可用的执行者；按你的要求，值班者本体和分身都不执行。）');
       } else {
@@ -1138,6 +1162,7 @@ async function runOneDutyRound(
             : tr('group.duty.subagentFailed', '（值班者分身执行失败：{err}）').replace('{err}', () => String(fsr.error).slice(0, 200));
         } else {
           distilled = fsr.lun.huiFu;
+          yongZhiXingZhe = true;
           gaiKuang = gaiKuangOf(fsr.lun);
           const u = fsr.lun.jieGuo.reduce((n, x) => {
             n.promptTokens += Number(x.jg.stats?.promptTokens) || 0;

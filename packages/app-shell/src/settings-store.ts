@@ -318,6 +318,8 @@ export interface YingYongPeizhi {
   nmFileRemoved?: boolean;
   /** R300：原生 A2UI 互动回复（默认关）；普通正文不变，稳定后附加互动层。 */
   a2uiReplyEnabled?: boolean;
+  /** R319：三点菜单勾选项按会话独立（sid → 各开关）；旧全局字段仅作默认。 */
+  sessionMenuPrefs?: Record<string, { autoScroll?: boolean; autoRead?: boolean; a2uiReplyEnabled?: boolean; jianJieShuChu?: boolean }>;
   /**
    * **简洁输出**（R295，默认关）：勾选后长回复显示抽取式简洁视图（原文完整保留可展开）。
    * ① 纯工程压缩零模型成本默认；② 结构化简洁对支持结构化模型可选；分句器参数与守卫由 harness 自我改进裁决。

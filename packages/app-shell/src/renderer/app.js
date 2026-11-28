@@ -3652,8 +3652,8 @@ async function langDuWenBen(text, btnEl) {
   };
   /** R260：当前会话是否拟态本体（授权跟随全局/自动选择默认勾/阅读回复默认勾 都按它分流） */
   const shiNiTaiHuiHua = () => String((state.selectedChat && state.selectedChat.id) || '') === 'mimic-pet';
-  /** R260：本会话「阅读回复」生效值——拟态用 mimicAutoRead（默认开），其余会话用全局 autoRead */
-  const autoReadOf = (sid) => (String(sid || '') === 'mimic-pet' ? state.mimicAutoRead !== false : !!state.autoRead);
+  /** R260/R319：本会话「阅读回复」生效值——拟态用 mimicAutoRead，其余按会话独立设置 */
+  const autoReadOf = (sid) => (String(sid || '') === 'mimic-pet' ? state.mimicAutoRead !== false : huiHuaMenuPref(sid, 'autoRead'));
 
   function singleChatItems() {
     const chats = state.chats.filter((c) => c.kind === 'single').filter((c) => !shiNiTaiBenTi(c));
@@ -4511,6 +4511,8 @@ async function langDuWenBen(text, btnEl) {
     const sidKai = String(id == null ? '' : id).trim();
     if (!sidKai) { try { showToast(tOr('chat.badSession', '这条会话缺少标识，暂时打不开')); } catch { /* noop */ } return; }
     state.selectedChat = { kind, id: sidKai, ming };
+    /* R319：切会话立即套用该会话自己的三点菜单设置，互不影响 */
+    syncHuiHuaMenuPrefs(sidKai);
     /* R310④：切会话即时刷值班横幅（不等 1s 巡查，打开项目立刻可见） */
     try { shuaDutyBanner(); } catch { /* noop */ }
     /* R263：切会话即查同步（主进程判 >10min 才查、只查该会话） */
@@ -4518,6 +4520,7 @@ async function langDuWenBen(text, btnEl) {
     state.membersGeneration = (state.membersGeneration || 0) + 1;
     state.filesGeneration = (state.filesGeneration || 0) + 1;
     yunXingZhuangTaiHuiFu();
+    void shuaTingZhiAnNiuZhuangTai();
     hideMain();
     $('pageBuJu')?.classList.remove('peiZhiMoShi');
     $('liaoTianBuJu').classList.remove('yinCang');
@@ -4894,6 +4897,43 @@ async function langDuWenBen(text, btnEl) {
   const chatViewVisible = {};
   /** 自动滚动（默认关）：由三点菜单勾选；持久化到 settings */
   let autoScrollChat = false;
+  /** R319：三点菜单的勾选项全部按会话独立；旧全局设置只作为未单独设置时的默认。 */
+  const huiHuaMenuDefaults = { autoScroll: false, autoRead: false, a2uiReplyEnabled: false, jianJieShuChu: false };
+  function huiHuaMenuPref(sid0, key) {
+    const g = (state.sessionMenuPrefs && state.sessionMenuPrefs[String(sid0 || '')]) || {};
+    return g[key] !== undefined ? !!g[key] : !!huiHuaMenuDefaults[key];
+  }
+  function syncHuiHuaMenuPrefs(sid0) {
+    const sid = String(sid0 || '');
+    autoScrollChat = huiHuaMenuPref(sid, 'autoScroll');
+    state.autoRead = huiHuaMenuPref(sid, 'autoRead');
+    state.a2uiReplyEnabled = huiHuaMenuPref(sid, 'a2uiReplyEnabled');
+    state.jianJieShuChu = huiHuaMenuPref(sid, 'jianJieShuChu');
+    try { window.__syncAuto?.(); } catch { /* noop */ }
+    try { window.__syncDu?.(); } catch { /* noop */ }
+    try { window.__syncJia?.(); } catch { /* noop */ }
+    try { window.__syncJian?.(); } catch { /* noop */ }
+  }
+  async function sheZhiHuiHuaMenuPref(key, val) {
+    const sid = String(state.selectedChat?.id || '');
+    if (!sid) return;
+    state.sessionMenuPrefs = state.sessionMenuPrefs || {};
+    state.sessionMenuPrefs[sid] = { ...(state.sessionMenuPrefs[sid] || {}), [key]: !!val };
+    syncHuiHuaMenuPrefs(sid);
+    try { await window.warmy.settingsSave({ sessionMenuPrefs: state.sessionMenuPrefs }); } catch { /* noop */ }
+  }
+  void (async () => {
+    try {
+      const s = await window.warmy.settingsGet();
+      const cfg = (s && s.settings) || {};
+      huiHuaMenuDefaults.autoScroll = !!cfg.autoScrollChat;
+      huiHuaMenuDefaults.autoRead = !!cfg.autoRead;
+      huiHuaMenuDefaults.a2uiReplyEnabled = !!cfg.a2uiReplyEnabled;
+      huiHuaMenuDefaults.jianJieShuChu = !!cfg.jianJieShuChu;
+      state.sessionMenuPrefs = (cfg.sessionMenuPrefs && typeof cfg.sessionMenuPrefs === 'object') ? cfg.sessionMenuPrefs : {};
+      syncHuiHuaMenuPrefs(state.selectedChat && state.selectedChat.id);
+    } catch { /* 读不到就用默认 */ }
+  })();
   /** 当前要显示在「新回复」摘要气泡里的内容；**只有未查看的新回复**才有值 */
   let pendingNewest = null; // { text, role }
   /**
@@ -5012,6 +5052,11 @@ async function langDuWenBen(text, btnEl) {
     }
     return st;
   }
+  /** 只读滚动状态（排障/探针用；不新增产品行为） */
+  window.__chatGunState = (sid0) => {
+    const st = chatGunOf(sid0);
+    return { following: st.following, userControl: st.userControl, pause: st.pause, autoScroll: autoScrollChat, target: chatZiGunTop, intentAt: chatGunYiTuShi };
+  };
   /** 本会话是否跟随底部（唯一事实） */
   function chatGenDi(sid0) {
     const sid = String(sid0 || '');
@@ -5773,7 +5818,10 @@ async function langDuWenBen(text, btnEl) {
         const tu = document.createElement('span'); tu.className = 'dutyDengDai'; tu.setAttribute('data-pending', key); tu.setAttribute('data-ts', String(p.ts));
         /* R318：单个马头 logo，挂在值班回复应在的一侧（用户行 row-reverse⇒append 在左），不再 4 马头 prepend 错侧。 */
         tu.title = tOr('group.dutyWaiting', '值班者未接·等待回复');
-        tu.innerHTML = '<img src="assets/zebra-head.svg" alt=""/>';
+        /* R319：改用牛马 logo 单个上下跳跃（随机相位/频率），不再用斑马马头横走 */
+        tu.innerHTML = '<img class="dutyNiuMaLogo" src="icons/logo-tight.png" alt=""/>';
+        tu.style.setProperty('--dutyJumpDur', (0.72 + Math.random() * 0.9).toFixed(2) + 's');
+        tu.style.setProperty('--dutyJumpDelay', (-Math.random() * 1.2).toFixed(2) + 's');
         row.appendChild(tu);
       }
     }
@@ -5867,6 +5915,9 @@ async function langDuWenBen(text, btnEl) {
      * 只有用户再次滚离底部才会退出跟随。
      */
     if (sid) {
+      /* R319：显式恢复跟随前清掉此前滚轮/拖动意图窗口，防止下箭头后第一次布局变化立刻再被误判接管。 */
+      chatGunYiTuShi = 0;
+      chatGunTuoZhong = false;
       sheZhiGenDi(sid, true);
       const st = chatGunOf(sid);
       /** R239：下箭头/新回复气泡是用户明确「恢复跟随」动作 ⇒ 收回接管权，之后按勾选态滚动 */
@@ -8391,7 +8442,11 @@ async function langDuWenBen(text, btnEl) {
       window.addEventListener('pointercancel', () => { chatGunTuoZhong = false; });
       /** R239：点击聊天记录 = 用户接管（与滚动同权），停止程序滚动直到发新消息。
        *  下箭头/新回复气泡浮层不在 heZi 内，不会误触；它们自己的处理器会收回接管权。 */
-      heZi.addEventListener('click', () => { if (!chatRebuilding) markUserScrolled(); });
+      heZi.addEventListener('click', (e) => {
+        /* R319：下箭头/新回复气泡是「恢复跟随」按钮，不能被自己的点击冒泡重新锁成 userControl。 */
+        if (e.target && e.target.closest && e.target.closest('#scrollDiAnNiu, #newXiaoXiBubble')) return;
+        if (!chatRebuilding) markUserScrolled();
+      });
       /**
        * 滚动处理**合并到每帧一次**（passive）。不再监听 pointerdown/mousedown/wheel：
        * 点击不等于滚动，过早置“不跟随”正是旧实现反复把视口拉走的根因之一。
@@ -11835,12 +11890,11 @@ window.__keYiLiaoTian = keYiLiaoTian;
       if (markAuto) markAuto.style.visibility = autoScrollChat ? 'visible' : 'hidden';
       if (miAuto) miAuto.setAttribute('aria-checked', autoScrollChat ? 'true' : 'false');
     };
+    window.__syncAuto = syncAuto;
     if (miAuto && !miAuto.dataset.bound) {
       miAuto.dataset.bound = '1';
       miAuto.addEventListener('click', async () => {
-        autoScrollChat = !autoScrollChat;
-        syncAuto();
-        try { await window.warmy.settingsSave({ autoScrollChat }); } catch { /* noop */ }
+        await sheZhiHuiHuaMenuPref('autoScroll', !autoScrollChat);
         if (autoScrollChat) scrollToBottom(false);
         else {
           /** 取消自动滚动后：按当前位置决定是否继续跟随（在底部就继续跟，滚上去就不跟） */
@@ -11878,12 +11932,12 @@ window.__keYiLiaoTian = keYiLiaoTian;
           }, 300);
           return;
         }
-        state.autoRead = !state.autoRead;
-        syncDu();
-        /* R154 项14: 防抖保存，避免频繁重渲染时状态闪烁 */
+        const nextRead = !autoReadOf(state.selectedChat && state.selectedChat.id);
+        await sheZhiHuiHuaMenuPref('autoRead', nextRead);
+        /* R319：按会话保存，不写全局共享开关 */
         clearTimeout(miDu._saveTimer);
         miDu._saveTimer = setTimeout(async () => {
-          try { await window.warmy.settingsSave({ autoRead: state.autoRead }); } catch { /* noop */ }
+          await sheZhiHuiHuaMenuPref('autoRead', state.autoRead);
         }, 300);
       });
     }
@@ -11901,14 +11955,11 @@ window.__keYiLiaoTian = keYiLiaoTian;
         miJia.title = tOr('chat.a2uiReplyTip', '普通回复保持不变，稳定后附加可交互内容；互动产物保存在当前会话工作区。');
       }
     };
+    window.__syncJia = syncJia;
     if (miJia && !miJia.dataset.bound) {
       miJia.dataset.bound = '1';
       miJia.addEventListener('click', async () => {
-        state.a2uiReplyEnabled = !state.a2uiReplyEnabled;
-        syncJia();
-        /* R318：勾选只控制「之后的对话是否生成交互内容」，不改变界面上已有回复的显示样式；
-           不再 a2uiQuXiao/整聊重绘（旧实现取消勾选会把已有交互面变回文字）。 */
-        try { await window.warmy.settingsSave({ a2uiReplyEnabled: state.a2uiReplyEnabled }); } catch { /* noop */ }
+        await sheZhiHuiHuaMenuPref('a2uiReplyEnabled', !state.a2uiReplyEnabled);
       });
     }
     syncJia();
@@ -11926,9 +11977,7 @@ window.__keYiLiaoTian = keYiLiaoTian;
     if (miJian && !miJian.dataset.bound) {
       miJian.dataset.bound = '1';
       miJian.addEventListener('click', async () => {
-        state.jianJieShuChu = !state.jianJieShuChu;
-        syncJian();
-        try { await window.warmy.settingsSave({ jianJieShuChu: state.jianJieShuChu }); } catch { /* noop */ }
+        await sheZhiHuiHuaMenuPref('jianJieShuChu', !state.jianJieShuChu);
         /* 切换后重画聊天：开＝应用简洁视图，关＝恢复原文（原文一直在数据模型里） */
         try { renderChat({ keepScroll: true }); } catch { /* noop */ }
       });
@@ -13368,6 +13417,22 @@ window.__keYiLiaoTian = keYiLiaoTian;
     });
   }
 
+  async function shuaTingZhiAnNiuZhuangTai() {
+    const b = $('anNiuTingZhiAll');
+    if (!b) return;
+    const sid = String(state.selectedChat?.id || '');
+    let active = false;
+    if (sid) {
+      try {
+        const r = await window.warmy.huiHuaRenWuZhuangTai?.({ sessionId: sid });
+        active = !!(r && r.active);
+      } catch { active = !!(state.sessionRuns && state.sessionRuns[sid] && state.sessionRuns[sid].running); }
+    }
+    b.disabled = !active;
+    b.title = active ? tOr('chat.stopAll', '停止本会话全部任务') : tOr('chat.stopIdle', '当前没有正在执行的任务');
+    b.setAttribute('aria-disabled', active ? 'false' : 'true');
+  }
+  setInterval(() => { void shuaTingZhiAnNiuZhuangTai(); }, 1000);
   function stopAllAi() {
     /**
      * **只停当前会话的 AI**（产品要求：不影响其他会话中的 AI）。
@@ -14494,7 +14559,10 @@ async function deliver(chatId, text, u, fuJian) {
       if (kind === 'sikao') return '<details class="siKaoKuai"' + (notDone ? ' open' : '') + '><summary>' + escapeHtml(tOr('evolve.think', '思考')) + '</summary><pre>' + escapeHtml(wen) + '</pre></details>';
       if (kind === 'tool') return '<details class="siKaoKuai"><summary>' + escapeHtml(tOr('evolve.tool', '执行')) + '</summary><pre>' + escapeHtml(wen) + '</pre></details>';
       /* R311⑬：中间回复合并后同样式（md 渲染＋中间回复卡标记），不再裸文本。 */
-      if (kind === 'zhongjian') return '<div class="zuiZhongHang"><div class="bubble md zhongJianBiao">' + mdHtml(wen) + '</div></div>';
+      if (kind === 'zhongjian') {
+        const midJiao = themHuiFuJiaoHtml({ ...h, promptTokens: h.usage?.promptTokens || 0, completionTokens: h.usage?.completionTokens || 0, totalTokens: h.usage?.totalTokens || 0, cacheHitTokens: h.usage?.cacheHitTokens || 0 }, { key: msgKey, text: wen });
+        return '<div class="zjhHuiFu"><div class="zuiZhongHang"><div class="bubble md zhongJianBiao">' + mdHtml(wen) + '</div></div>' + midJiao.model + midJiao.jiao + '</div>';
+      }
       if (kind === 'system') return '<div class="jingYin">' + escapeHtml(wen) + '</div>';
       /* R311③⑭：进化最终回复马头恒显且带真实消息 ID（点击/右键与主线同功能）。 */
       const sidMt = String(curE?.sessionId || state.selectedChat?.id || '');
@@ -14668,8 +14736,8 @@ async function deliver(chatId, text, u, fuJian) {
             if (jieGuan) {
               /* 接管/暂停中：保持原位，绝不抢视口（同正常流式） */
               sheZhiChatGunDong(he, Math.min(prevTop, maxG), false);
-            } else if (autoScrollChat) {
-              /* 勾选「滚动记录」⇒始终贴底 */
+            } else if (autoScrollChat || st.following !== false) {
+              /* 勾选「滚动记录」或用户刚点下箭头恢复跟随⇒始终贴底（live 路径不能只看 autoScrollChat） */
               sheZhiChatGunDong(he, maxG, false);
             } else {
               /* R274 项2：未勾选⇒同正常聊天钉「本轮最新内容」顶部（旧实现只保持原位，与正常聊天不一致）。
@@ -14691,7 +14759,13 @@ async function deliver(chatId, text, u, fuJian) {
     } else {
       renderChat({ keepScroll: !gunDaoDi });
     }
-  } catch { /* noop */ } };
+    /* R319：连续广播/HTML 未变时也按勾选态跟随；未勾选不在此钉顶（交给原路径锚点）。 */
+    if (autoScrollChat && c) {
+      const he = document.getElementById('xiaoXiJi');
+      const st = chatGunOf(c.sessionId);
+      if (he && !st.userControl && !st.pause) sheZhiChatGunDong(he, Math.max(0, he.scrollHeight - he.clientHeight), false);
+    }
+  } catch (err) { window.__ziJinHuaLastError = String((err && err.stack) || err); } };
 
   /**
    * 发送总闸：**任何异常都必须看得见**。
@@ -32685,6 +32759,11 @@ async function renderDashboard(host) {
         checked: shiZhiDing(g.id),
         onClick: () => sheZhiDing(g.id, !shiZhiDing(g.id)),
       },
+      /* R263：群/项目右键恢复「对接」（与其他设备同步同一功能，不是只留自动同步） */
+      {
+        biaoQian: tOr('ctx.duijie', '对接') + (shiDuiJieGou(g.type === 'internal' ? 'internalGroup' : 'externalGroup', g.id) ? ' ✓' : ''),
+        onClick: () => void qieDuiJie(g.type === 'internal' ? 'internalGroup' : 'externalGroup', g.id, g.name || g.ming || g.id),
+      },
       g.legacy ? {
         biaoQian: tOr('ctx.rebuildLegacy', '重建并重新邀请（旧群无指纹）'),
         onClick: async () => {
@@ -32887,7 +32966,11 @@ async function renderDashboard(host) {
         checked: shiZhiDing(c.id),
         onClick: () => sheZhiDing(c.id, !shiZhiDing(c.id)),
       },
-      /* R263：联系人去掉「对接」「同步」——默认自动同步 */
+      /* R263：联系人恢复「对接」（与其他设备同步同一功能） */
+      {
+        biaoQian: tOr('ctx.duijie', '对接') + (shiDuiJieGou('externalChat', c.id) ? ' ✓' : ''),
+        onClick: () => void qieDuiJie('externalChat', c.id, c.name || c.ming || c.id),
+      },
       /* R218：联系人远程控制（只有对方在线才可用） */
       {
         biaoQian: tOr('ctx.remoteControl', '远程控制'),
@@ -40876,16 +40959,11 @@ try {
         /* R260：拟态「阅读回复/自动选择」默认勾（只有显式存过 false 才关） */
         state.mimicAutoRead = s.settings.mimicAutoRead !== false;
         state.mimicAutoSelect = s.settings.mimicAutoSelect !== false;
-        /** R300：A2UI 互动回复默认关，不继承旧回复增强开关，避免升级后意外产生费用。 */
-        const a2uiKaiQian = state.a2uiReplyEnabled;
-        state.a2uiReplyEnabled = s.settings.a2uiReplyEnabled === true;
-        if (a2uiKaiQian !== state.a2uiReplyEnabled) {
-          try { renderChat({ keepScroll: true }); } catch { /* noop */ }
-          try { window.__ziJinHuaChongHua?.(); } catch { /* noop */ }
-        }
-        /** R295 简洁输出：默认关（只有显式存过 true 才开） */
-        state.jianJieShuChu = s.settings.jianJieShuChu === true;
-        try { window.__syncJian?.(); } catch { /* noop */ }
+        /** R319：A2UI/简洁输出按会话独立；旧全局字段只更新未单独设置时的默认，不覆盖本会话选择。 */
+        state.sessionMenuPrefs = (s.settings.sessionMenuPrefs && typeof s.settings.sessionMenuPrefs === 'object') ? s.settings.sessionMenuPrefs : {};
+        huiHuaMenuDefaults.a2uiReplyEnabled = s.settings.a2uiReplyEnabled === true;
+        huiHuaMenuDefaults.jianJieShuChu = s.settings.jianJieShuChu === true;
+        syncHuiHuaMenuPrefs(state.selectedChat && state.selectedChat.id);
         state.emailOnRequest = !!s.settings.emailOnRequest;
         state.globalSecurity = s.settings.globalSecurity || 'normal';
         /* R251：加载每会话授权档位（顶部授权选项按会话独立） */

@@ -289,6 +289,7 @@ import { BeiKongSanJianTao } from './rc-overlay.js';
 import { jueCeMoXing, jieMoXingMing, qiYongLian, sheZhiLuYouYuCe, type MoXingJueCeShuRu } from './model-pick.js';
 import { sheZhiPaiFaYuCe } from './zhi-ban-pai-fa.js';
 import { chuangJianAnQuanGuiDang } from './ying-yong/zong-jie-an-quan-gui-dang.js';
+import { chuangJianZongJiePiFa, type ZongJiePiFaQingQiu } from './ying-yong/zong-jie-pi-fa.js';
 import { taoTtsChatBody, jieXiTtsChatResponse, taoAsrChatBody, jieXiAsrChatResponse, yingGaiHuanChatShi, guiFanAsrGeShi, jieShouGeShi, yanShouGeShi, jianBieGeShi } from '@warmy/providers';
 import { daKaiZhiNengPeiZhi } from './smart-config.js';
 import { luoDianDiwenHua, yongHuKeJianLuoDian, DIWEN_LUO_DIAN, luoDianTongJi, moXingShuRuWenBen } from './diwen-integration.js';
@@ -12954,6 +12955,15 @@ async function tingZhiHuiHuaNeiHe(sid: string, stopTs: number): Promise<{ ok: bo
         ren.clear();
       }
     } catch { /* 执行者中止失败也要继续停编排 */ }
+    /** R319：停止本会话全部任务——值班者/执行者/进化支线/分身都要真停（不能只停主流） */
+    try {
+      for (const lu of xiaoDiBu().listHuiHua(sid).filter((x) => x.status === 'running')) {
+        try { xiaoDiKongZhi.get(lu.id)?.abort(); } catch { /* noop */ }
+        try { xiaoDiKongZhi.delete(lu.id); } catch { /* noop */ }
+        try { xiaoDiBu().gengXin(lu.id, { status: 'stopped', endedAt: stopTs }); } catch { /* noop */ }
+        try { broadcastToWindows('warmy:xiaoDiBianGeng', { sessionId: sid, id: lu.id, status: 'stopped' }); } catch { /* noop */ }
+      }
+    } catch { /* 分身中止失败也继续停其余路径 */ }
     /** 只在这一轮真的在跑时落“停止现场”；空闲时点停止不该凭空多一条消息 */
     if (zaiPao) await luoPanTingZhi(sid, xian);
     /** 现场已经落盘 ⇒ 会话级缓冲清空，防止下一个新用户轮把旧半截当成本轮内容 */
@@ -12978,6 +12988,15 @@ chuliIpc('warmy:tingZhiDuiHua', async (_e, payload?: string | { sessionId?: stri
     ? Number((payload as { stopTs?: number }).stopTs)
     : Date.now();
   return tingZhiHuiHuaNeiHe(sid, stopTs);
+});
+/** R319：本会话是否有正在执行的任务（停止键灰态判据；值班/执行者/进化/分身全算） */
+chuliIpc('warmy:huiHuaRenWuZhuangTai', (_e, p0?: { sessionId?: string }) => {
+  const sid = String(p0?.sessionId || '');
+  const duty = qunDutyTing.get(sid);
+  const fenshen = xiaoDiBu().listHuiHua(sid).some((x) => x.status === 'running');
+  const active = !!sid && (zaiTuLiao.has(sid) || yanXuZhuangTai.has(sid) || XING_DONG_ZAI_PAO.has(sid)
+    || ((qunZhiXingZhe.get(sid)?.size || 0) > 0) || !!duty?.busy || !!ziJinHuaHuoQu(sid) || fenshen);
+  return { ok: true, active, duty: !!duty?.busy, executors: qunZhiXingZhe.get(sid)?.size || 0, fenshen, evolve: !!ziJinHuaHuoQu(sid) };
 });
 
 /**
@@ -19239,7 +19258,7 @@ async function zhenZhengFaSongBen(
         void ziDongGuiDangRuGuoXuYao(sessionId);
       }
       let a2ui: { messageId: string; status: string } | undefined;
-      if (!shiNeiBu && !planPending && a2uiMessageId && String(reply || '').trim() && (settingsStore?.load() as { a2uiReplyEnabled?: boolean } | undefined)?.a2uiReplyEnabled === true) {
+      if (!shiNeiBu && !planPending && a2uiMessageId && String(reply || '').trim() && a2uiHuiFuQiYong(sessionId)) {
         void a2uiHuiFu.kaiShi({
           sessionId, messageId: a2uiMessageId, userText: String(xiaoXi.content || ''), reply,
           model: modelId, provider: zhu.presetId,
@@ -23816,7 +23835,11 @@ chuliIpc('warmy:yuYanZhiLiPiZhun', (_e, p0?: { id?: string; agreed?: boolean }) 
 });
 const a2uiHuiFu = chuangJianA2uiHuiFu({
   workspaceDir: (sid) => workspaceDirOf(app.getPath('userData'), sid),
-  peizhi: () => (settingsStore?.load() as { a2uiReplyEnabled?: boolean; nmKaiWenJian?: boolean } | undefined) || {},
+  peizhi: (sid?: string) => {
+      const s = settingsStore?.load() as { a2uiReplyEnabled?: boolean; nmKaiWenJian?: boolean; sessionMenuPrefs?: Record<string, { a2uiReplyEnabled?: boolean }> } | undefined;
+      const v = sid && s?.sessionMenuPrefs?.[String(sid)]?.a2uiReplyEnabled;
+      return { a2uiReplyEnabled: v !== undefined ? !!v : s?.a2uiReplyEnabled === true, nmKaiWenJian: s?.nmKaiWenJian };
+    },
   shengCheng: async ({ model, provider, providerConfig, system, user, signal }) => {
     /* 二次调用只允许使用主回复这一次的供应商快照；找不到/不一致就失败关闭，绝不按模型名猜供应商。 */
     const cfg = providerConfig;
@@ -23859,6 +23882,11 @@ const a2uiHuiFu = chuangJianA2uiHuiFu({
 chuliIpc('warmy:a2uiZhuangTaiCha', (_e, p0?: { sessionId?: string; messageId?: string }) => ({ ok: true, state: a2uiHuiFu.cha(String(p0?.sessionId || ''), String(p0?.messageId || '')) }));
 chuliIpc('warmy:a2uiDaKai', (_e, p0?: { sessionId?: string; messageId?: string }) => a2uiHuiFu.daKai(String(p0?.sessionId || ''), String(p0?.messageId || '')));
 /** R310①：内联互动面只取完整性校验后的 surface.jsonl 快照（不暴露裸路径）。 */
+function a2uiHuiFuQiYong(sid: string): boolean {
+  const s = settingsStore?.load() as { a2uiReplyEnabled?: boolean; sessionMenuPrefs?: Record<string, { a2uiReplyEnabled?: boolean }> } | undefined;
+  const v = sid && s?.sessionMenuPrefs?.[String(sid)]?.a2uiReplyEnabled;
+  return v !== undefined ? !!v : s?.a2uiReplyEnabled === true;
+}
 chuliIpc('warmy:a2uiNeiQian', (_e, p0?: { sessionId?: string; messageId?: string }) => {
   const r = a2uiHuiFu.duKuaiZhao(String(p0?.sessionId || ''), String(p0?.messageId || ''));
   if (!r.ok || !r.jsonl) return { ok: false, error: r.error || 'a2ui-invalid' };
@@ -23919,7 +23947,7 @@ chuliIpc('warmy:a2uiBrowserKai', async (_e, p0?: { sessionId?: string; messageId
 /** R301：进化并排块历史最终回复的互动状态随消息回读；浅拷贝附加，不改原文/实验存储。 */
 function a2uiPairZhuangTai(sid: string, pair: unknown): unknown {
   if (!pair || typeof pair !== 'object') return pair || null;
-  if ((settingsStore?.load() as { a2uiReplyEnabled?: boolean } | undefined)?.a2uiReplyEnabled !== true) return pair;
+  if (!a2uiHuiFuQiYong(sid)) return pair;
   const p = pair as { arms?: Record<string, { history?: Array<Record<string, unknown>> }> };
   const arms: Record<string, unknown> = {};
   for (const [k, arm] of Object.entries(p.arms || {})) {
@@ -24012,7 +24040,7 @@ async function maybeSendPreferenceExample(sid: string, userText: string, reply: 
 }
 /** R315：进化支线最终回复不在 chatLogs 主表而在 evolvePair 臂历史——马头打开文字需跨两者查找，否则 message-missing。 */
 function zhaoHuiFuJiLu(sid: string, mid: string): { content?: string } | undefined {
-  const direct = (chatLogs.get(sid) || []).find((x) => String(x.id || '') === mid);
+  const direct = (chatLogs.get(sid) || []).find((x) => String(x.id || '') === mid || String(x.recordId || '') === mid);
   if (direct) return direct as { content?: string };
   for (const r of chatLogs.get(sid) || []) {
     const pair = (r as { evolvePair?: { arms?: Record<string, { history?: Array<{ id?: string; content?: string }> }> } }).evolvePair;
@@ -34009,7 +34037,7 @@ async function qunXieTiao(_e: unknown, xiaoXi: DutyInput, resume?: XuPaoDian): P
       if (!pan.relevant) return { ok: true, action: 'silent', reply: '', queueLength: 0, dutyIrrelevant: true };
     }
     const mentionIds = mentionedT ? memberIds.filter(explicit) : [];
-    stT.pending.push({ ...xiaoXi, content: neiRongT, ts: tsT, pendingId: crypto.randomUUID(), mentionIds, textOnly: !mentionedT, dutyId: dutyIdT, signal: signalT, history });
+    stT.pending.push({ ...xiaoXi, content: neiRongT, ts: tsT, pendingId: crypto.randomUUID(), mentionIds, textOnly: !mentionedT || shiZhiYaoWenZiHuiDa(neiRongT), dutyId: dutyIdT, signal: signalT, history });
     guangBoDutyPending(gidT);
     if (stT.busy) return { ok: true, action: 'batch-wait', reply: '', queueLength: 0 };
     stT.busy = true;
@@ -34052,6 +34080,7 @@ async function qunXieTiao(_e: unknown, xiaoXi: DutyInput, resume?: XuPaoDian): P
       board: board!,
       ccr,
       history: chatHistories,
+      currentUserName: () => dangQianYongHuMing(),
       // 值班者输入与 chat-send 共享同一份日志 + 同一个渲染器（不变量 #2）
       logOf: (key: string) => chatLogs.get(key) || [],
       dutyBudgetTokens,
@@ -34385,7 +34414,7 @@ async function qunXieTiao(_e: unknown, xiaoXi: DutyInput, resume?: XuPaoDian): P
                  值班者自己回复（非分身），仅 @ 派活任务才走执行者。 */
               const rid = xinLiaoTianJiLuId('a');
               try {
-                zhuiJiaLiaoTianRiZhi(gidT, { seq: xiaYiLiaoTianXuLie(), role: 'assistant', content: result.reply, recordId: rid, ts: Date.now(), instId: String((result as { dutyId?: string }).dutyId || ''), moXing: String((result as { model?: string }).model || '') } as never);
+                zhuiJiaLiaoTianRiZhi(gidT, { seq: xiaYiLiaoTianXuLie(), id: rid, role: 'assistant', content: result.reply, recordId: rid, ts: Date.now(), instId: String((result as { dutyId?: string }).dutyId || ''), moXing: String((result as { model?: string }).model || '') } as never);
               } catch { /* noop */ }
               (result as { messageId?: string }).messageId = rid;
               try { rciGaiJin.jiLu({ kind: 'duty', ok: true, detail: gidT }); zongJieXunCha?.bianHua('rci'); } catch { /* noop */ }
@@ -34432,6 +34461,13 @@ async function qunXieTiao(_e: unknown, xiaoXi: DutyInput, resume?: XuPaoDian): P
   } catch { /* noop */ }
 
   return { ok: result.action !== 'error', ...result, ...(stT ? { dutyReplies: replies.filter((r) => !r.signal.aborted).map((r) => r.result) } : {}) };
+}
+/** R319：是否只需值班者本人文字回复（@ 值班者提问也算）；涉及文件/工具/执行动作才派分身。 */
+function shiZhiYaoWenZiHuiDa(wen: string): boolean {
+  const s = String(wen || '').trim();
+  if (!s) return true;
+  const dongZuo = /文件|txt|excel|pdf|docx|pptx|代码|脚本|命令|桌面|截图|目录|文件夹|运行|执行|安装|修改|读取|写入|删除|移动|重命名|创建|生成|写一|做个|做一个|制作|导出|打开|检查|修复|测试/i.test(s);
+  return !dongZuo;
 }
 chuliIpc('warmy:qunXieTiao', (_e, xiaoXi: DutyInput) => qunXieTiao(_e, xiaoXi));
 
@@ -40598,6 +40634,21 @@ chuliIpc('warmy:huiHuaZhaiYao', async (_e, payload?: { sessionId?: string; auto?
    长对话自动总结（产品要求）：关「自动摘要」不触发；每攒够一轮新日志才归一次；只在真收尾后触发，失败只记审计不影响对话。
    归档管线 guiDangYiGeHuiHua/系统消息/设置/日志/seq/错误净化仍主进程持有（窄注入）；构造无副作用（闭包懒引用）。 */
 const zongJieSuoYinDaiXie = new Map<string, { id: string; sid: string; ti: string; end: { seq: number; offset: number } }>();
+/* R319：同族总结任务合并生成；逐项水位仍独立；前序结论反刍后续总结与自改进。 */
+async function zongJieZhiJieGenerate(mo: string, tasks: ZongJiePiFaQingQiu[], signal: AbortSignal): Promise<string> {
+  const an = await jieMoXingGongYingShang(mo);
+  if (!an || (!an.apiKey && an.protocol !== 'ollama')) throw new Error('summary-unavailable');
+  const p = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL, protocol: an.protocol } as never, an.protocol);
+  const body = tasks.length === 1
+    ? tasks[0]!.prompt
+    : '你一次完成多个总结任务。逐项输出严格 JSON 对象：键为任务 id，值为该任务总结；不同会话的事实不得混合，不虚构，不执行操作。\n'
+      + zongJiePiFa.digest('', 900)
+      + tasks.map((t) => '\n===任务 ' + t.id + '===\n' + t.prompt).join('\n');
+  const r = await p.chat({ model: jieMoXingMing(mo), maxTokens: tasks.length === 1 ? 1500 : Math.min(4000, tasks.length * 1000), xiaoXiJi: [{ role: 'user', content: tuoMinQi.redact(body) }] }, signal);
+  if (r.choices[0]?.finishReason === 'length') throw new Error('summary-truncated');
+  return neiRongWenBen(r.choices[0]?.message?.content) || '';
+}
+const zongJiePiFa = chuangJianZongJiePiFa({ generate: zongJieZhiJieGenerate, flushMs: 60 });
 const zongJieJianBaoZhai = chuangJianAnQuanGuiDang({
   records: (sid, from) => {
     const logs = chatLogs.get(sid) || [];
@@ -40641,17 +40692,18 @@ const zongJieJianBaoZhai = chuangJianAnQuanGuiDang({
     if (need.cloud) return 12000;
     return Math.floor((need.context || 0) * 0.9) - 1500 - zongJieTokenGuSuan([{ content: header }]) - 64;
   },
-  generate: async (mo, prompt, signal) => {
-    const an = await jieMoXingGongYingShang(mo);
-    if (!an || (!an.apiKey && an.protocol !== 'ollama')) throw new Error('summary-unavailable');
-    const p = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL, protocol: an.protocol } as never, an.protocol);
-    const r = await p.chat({ model: jieMoXingMing(mo), maxTokens: 1500, xiaoXiJi: [{ role: 'user', content: tuoMinQi.redact(prompt) }] }, signal);
-    if (r.choices[0]?.finishReason === 'length') throw new Error('summary-truncated');
-    return neiRongWenBen(r.choices[0]?.message?.content) || '';
+  generate: async (mo, prompt, signal, meta) => {
+    const sid = String(meta?.sid || '');
+    const id = mo + '|' + sid + '|' + crypto.createHash('sha256').update(prompt).digest('hex').slice(0, 24);
+    const r = await zongJiePiFa.add({ id, model: mo, prompt, signal, sid, family: String(meta?.family || 'facts'), sourceTs: Number(meta?.sourceTs || 0) });
+    if (r.text.trim()) return r.text;
+    /* 合并结果缺项/解析失败：只回退当前这一项，不丢任何任务。 */
+    return zongJieZhiJieGenerate(mo, [{ id, model: mo, prompt, signal, sid, family: String(meta?.family || 'facts'), sourceTs: Number(meta?.sourceTs || 0) }], signal);
   },
   committed: async (id) => { await archiver?.prepareIndex(); return duJsonWenJian<{ committed?: boolean }>(path.join(app.getPath('userData'), 'summary-journal', id + '.json'), {}).committed === true; },
   pending: (id) => duJsonWenJian<{ summary?: string }>(path.join(app.getPath('userData'), 'summary-journal', id + '.json'), {}).summary,
   commit: ({ id, sid, summary, sourceText, userFragments, end, sourceTs, anchors }) => {
+    zongJiePiFa.note(sid, summary);
     if (!archiver || !knowledge) throw new Error('summary-store-unavailable');
     const file = path.join(app.getPath('userData'), 'summary-journal', id + '.json');
     const journal = duJsonWenJian<{ coreCommitted?: boolean; learned?: boolean }>(file, {});
@@ -41081,7 +41133,8 @@ zongJieXunCha = chuangJianZongJieXunCha({
       try {
         const an = await jieMoXingGongYingShang(mo); if (!an) continue;
         const p = congYuSheChuangJian(an.presetId, { apiKey: an.apiKey, baseURL: an.baseURL, protocol: an.protocol } as never, an.protocol);
-        const prompt = id === 'routing' ? luYouYuCe.zongJieDuan() : id === 'self-drive' ? ziQuZhiLiangMo.zongJieDuan() : harnessZiJinHua.zongJieDuan();
+        const prompt = (id === 'routing' ? luYouYuCe.zongJieDuan() : id === 'self-drive' ? ziQuZhiLiangMo.zongJieDuan() : harnessZiJinHua.zongJieDuan())
+          + '\n【前序已提交总结结论（供裁决参考，非新证据）】\n' + zongJiePiFa.digest('', 1000);
         if (!prompt.trim()) return { ok: true };
         const r = await p.chat({ model: jieMoXingMing(mo), maxTokens: 1500, xiaoXiJi: [{ role: 'user', content: '分析以下预测反馈，保持硬边界，只输出有依据的裁决。\n' + prompt }] }, ctx.signal);
         if (!ctx.valid()) return { ok: false };
@@ -42124,7 +42177,9 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
     if (siKaoWen.trim() && !zt.history.some((h) => h.kind === 'sikao')) zt.history.push(jiLuYong('sikao', siKaoWen.slice(0, 8000), { ts: siKaoStartTs || wan, startedAt: siKaoStartTs || wan, endedAt: wan, status: 'complete', usage: { ...yongLiang } }));
     for (const z of (loop.zhongJianHuiFu || [])) {
       const zw = String(z.text || '').slice(0, 8000), zts = Number(z.ts) || wan;
-      if (zt.history.some((h) => h.kind === 'zhongjian' && h.content === zw && Math.abs(Number(h.ts || 0) - zts) < 1500)) continue;
+      /* R319：同一轮同一中间回复只留一次（live 转换与工具循环回报可能相差数秒，不能按 ts 去重） */
+      const zwGui = zw.replace(/\s+/g, ' ').trim();
+      if (zt.history.some((h) => h.kind === 'zhongjian' && String(h.content || '').replace(/\s+/g, ' ').trim() === zwGui)) continue;
       zt.history.push(jiLuYong('zhongjian', zw, { ts: zts, startedAt: zts, endedAt: wan, status: 'complete', usage: { ...yongLiang } }));
     }
     let finalH: ZhiXianLiShi | undefined;
@@ -42134,7 +42189,7 @@ async function paoZiJinHuaZhiXian(e: ZiJinHuaShiYan, arm: ZhiXian, content: stri
       else { finalH = jiLuYong('final', zt.reply, { ts: finalStartTs || wan, startedAt: finalStartTs || wan, endedAt: wan, status: 'complete', usage: { ...yongLiang } }); zt.history.push(finalH); }
     }
     /* R301：进化双臂最终回复与普通回复同口径生成互动层；停止/超时不触发，供应商用本臂实际快照。 */
-    if (finalH && kongRec.yuanYin === '' && (settingsStore?.load() as { a2uiReplyEnabled?: boolean } | undefined)?.a2uiReplyEnabled === true) {
+    if (finalH && kongRec.yuanYin === '' && a2uiHuiFuQiYong(e.sessionId)) {
       void a2uiHuiFu.kaiShi({
         sessionId: e.sessionId, messageId: String(finalH.id || ''), userText: String(content || ''), reply: zt.reply,
         model: moXing, provider: an.presetId,

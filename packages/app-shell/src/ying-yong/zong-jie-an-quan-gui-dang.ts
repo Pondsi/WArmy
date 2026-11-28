@@ -6,7 +6,7 @@ export interface AnQuanGuiDangYiLai {
   records: (sid: string, from?: ZongJieShuiWei) => Array<{ seq: number; role: string; content: string; hidden?: boolean; recordId?: string; ts?: number }>;
   candidates: () => string[];
   prompt: (sid: string) => string;
-  generate: (model: string, prompt: string, signal: AbortSignal) => Promise<string>;
+  generate: (model: string, prompt: string, signal: AbortSignal, meta?: { sid: string; sourceTs: number; family?: string }) => Promise<string>;
   /** 候选能容纳的原文字符数（按其真实上下文扣除指令与输出预留）；null=未知，跳过该候选，不截断。 */
   capFor?: (model: string, header: string) => Promise<number | null>;
   committed: (id: string) => boolean | Promise<boolean>;
@@ -36,7 +36,7 @@ export function chuangJianAnQuanGuiDang(d: AnQuanGuiDangYiLai) {
       const sourceTs = records.find((r) => Number(r.seq) === chunk.end.seq)?.ts;
       let result = d.pending?.(id) || '';
       if (!result) {
-        try { result = await d.generate(model, header + chunk.text, ctx.signal); } catch { ctx.signal.throwIfAborted(); continue; }
+        try { result = await d.generate(model, header + chunk.text, ctx.signal, { sid, sourceTs: Number(sourceTs || 0), family: 'facts' }); } catch { ctx.signal.throwIfAborted(); continue; }
       }
       if (!result.trim()) continue;
       if (!ctx.valid()) return { ok: false };
