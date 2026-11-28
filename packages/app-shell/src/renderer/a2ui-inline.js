@@ -18,8 +18,7 @@ function zhuTiYingShe(host) {
   she('--a2ui-color-on-background', 'var(--ink, #333)');
   she('--a2ui-color-surface', 'var(--card, var(--bg, #fff))');
   she('--a2ui-color-on-surface', 'var(--ink, #333)');
-  she('--a2ui-color-primary', 'var(--accent, #17e)');
-  she('--a2ui-color-on-primary', 'var(--accent-ink, #fff)');
+  /* R318：primary/on-primary 不再映射主题色——与 nm 查看器同一安全目录默认蓝底白字按钮（用户报障：聊天内按钮不像按钮）。 */
   she('--a2ui-color-secondary', 'var(--hover, #ddd)');
   she('--a2ui-color-on-secondary', 'var(--ink, #333)');
   try {
@@ -74,6 +73,10 @@ function render(host, jsonl, opts = {}) {
         text: host.innerText || '',
         sessionId: host.getAttribute('data-session') || '',
         messageId: host.getAttribute('data-message') || '',
+        /* R318：带上数据模型快照与输入框当前值——「输入主题+重写」类按钮才能真正拿到用户输入。 */
+        data: shuJuKuaiZhao(processor, surfaceId2),
+        inputs: shuRuZhi(host),
+        buttonText: anNiuWenBen(processor, surfaceId2, componentId),
       };
       if (typeof opts.onAction === 'function') {
         Promise.resolve(opts.onAction(payload)).then((r) => {
@@ -102,7 +105,8 @@ function render(host, jsonl, opts = {}) {
   const view = document.createElement('a2ui-surface');
   view.surface = surface;
   host.appendChild(view);
-  try { mdEmphSurface(view); } catch { /* noop */ }
+  /* R318：Lit 异步渲染——同步跑 mdEmph 拿不到文本节点（星号裸显真因）；等 updateComplete＋观察子树补转。 */
+  mdEmphDangJiuXu(view);
   return {
     dispose() {
       try { processor.dispose(); } catch { /* noop */ }
@@ -112,12 +116,62 @@ function render(host, jsonl, opts = {}) {
 }
 
 window.warmyA2uiInline = { render };
-/* R316：A2UI Text 为纯文本，星号强调会裸显，渲染后转成 strong/em。 */
+/* R318：按钮可见文本（child Text/label），供宿主按语义派活（事件名仅为安全标识）。 */
+function anNiuWenBen(processor, sid2, cid) {
+  try {
+    const s = processor.getSurface(sid2);
+    const cm = s && s.componentsModel.get(cid);
+    const p = cm && cm.properties || {};
+    const child = p.child && s.componentsModel.get(String(p.child));
+    return String((child && child.properties && child.properties.text) || p.label || '');
+  } catch { return ''; }
+}
+/* R318：数据模型快照（TextField/CheckBox 的当前值都在里面）。 */
+function shuJuKuaiZhao(processor, sid2) {
+  try {
+    const s = processor.getSurface(sid2);
+    const d = s && s.dataModel && s.dataModel.get('/');
+    return d && typeof d === 'object' ? d : undefined;
+  } catch { return undefined; }
+}
+/* R318：输入框当前值（shadow DOM 里的 input/textarea），label 取 shadow 内 label 或 placeholder。 */
+function shuRuZhi(root) {
+  const out = [];
+  try {
+    root.querySelectorAll('*').forEach((el) => {
+      const sr = el.shadowRoot; if (!sr) return;
+      sr.querySelectorAll('input, textarea').forEach((inp) => {
+        const v = String(inp.value || ''); if (!v.trim()) return;
+        const lab = String((sr.querySelector('label') || {}).textContent || inp.placeholder || '').trim();
+        out.push({ label: lab, value: v });
+      });
+    });
+  } catch { /* noop */ }
+  return out;
+}
+/* R318：等 Lit 渲染完再转星号强调，并观察子树（数据绑定更新后补转）。 */
+function mdEmphDangJiuXu(root) {
+  const run = () => { try { mdEmphSurface(root); } catch { /* noop */ } };
+  run();
+  try { Promise.resolve(root.updateComplete).then(run, run); } catch { run(); }
+  try {
+    const mo = new MutationObserver(() => run());
+    mo.observe(root, { childList: true, subtree: true, characterData: true });
+    setTimeout(() => { try { mo.disconnect(); } catch { /* noop */ } }, 15000);
+  } catch { /* noop */ }
+}
+/* R316/R318：A2UI Text 为纯文本，星号强调会裸显；文本在嵌套 shadow DOM 里，需穿透 shadowRoot 收集再转 strong/em。 */
 function mdEmphSurface(root) {
   const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const fmt = (s) => esc(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+  const nodes = [];
+  const walk = (n) => {
+    if (!n) return;
+    if (n.nodeType === 3) { nodes.push(n); return; }
+    if (n.shadowRoot) walk(n.shadowRoot);
+    for (const c of n.childNodes || []) walk(c);
+  };
+  walk(root);
   for (const n of nodes) {
     const v = n.nodeValue || '';
     if (!/\*\*[^*]+\*\*|\*[^*]+\*/.test(v)) continue;

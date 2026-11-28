@@ -81,6 +81,16 @@
     e.stopPropagation();
     window.warmyMdFormat?.toggle(tb);
   }, true);
+  /* R318：OS 级抢注 Ctrl+Space 后键事件被系统热键吃掉、只发 IPC——nm/编辑器必须监听同一 IPC，
+     否则「和聊天框一样抢占快捷键」在编辑态失效（用户 #10 报障）。 */
+  try {
+    window.warmy.onMdFormatToggle?.(() => {
+      const tb = el('wenBen');
+      if (!tb || tb.offsetParent === null) return;
+      if (!chatEditor && !zt.keBianJi) return;
+      window.warmyMdFormat?.toggle(tb);
+    });
+  } catch { /* noop */ }
 
   /* ── 主题 / 强调色 / 字体颜色 ─────────────────────────────
    * 参数优先；缺 theme 时用系统深浅色；再取不到用 CSS 默认值。

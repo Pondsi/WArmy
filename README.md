@@ -1,4 +1,4 @@
-# WArmy · 无限牛马
+# WArmy 路 鏃犻檺鐗涢┈
 
 **WArmy = Workhorse Army.** *An army that's yours.*
 
@@ -10,7 +10,7 @@ WArmy is a local-first desktop workspace for people carrying a project from brie
 
 ![First run: choose your interface language (27 locales)](docs/screenshots/readme-hero.png)
 
-[Download for Windows](https://github.com/Pondsi/WArmy/releases) · [Chinese manual](./说明.md) · [Acknowledgments](#acknowledgments) · [License](#documentation-and-license)
+[Download for Windows](https://github.com/Pondsi/WArmy/releases) 路 [Chinese manual](./璇存槑.md) 路 [Acknowledgments](#acknowledgments) 路 [License](#documentation-and-license)
 
 [![Release](https://img.shields.io/github/v/release/Pondsi/WArmy)](https://github.com/Pondsi/WArmy/releases)
 [![License](https://img.shields.io/badge/license-Pondsi%20Attribution-blue)](./LICENSE)
@@ -57,8 +57,8 @@ With **Reply boost** enabled, the interactive layer renders inside the conversat
 - **A choice of models.** Connect local, self-hosted or cloud endpoints. Input/output types cover text, image, audio (listening models take audio in; speaking models output audio), video and classification. You control which models are enabled and can select one explicitly.
 - **A desktop companion.** Customize its appearance and interaction. Camera, microphone, speaker and network controls are separate.
 - **Interactive replies.** When Reply boost succeeds, the interactive content replaces the plain text right in the chat; you can still select, copy, quote and translate it. Every final reply carries a horse head: left-click opens it in the nm viewer (interactive result, or a Markdown copy for plain text); right-click offers regenerate-text / regenerate-interactive / cancel, overwriting the old reply (history included) without re-running already-completed operations. Failed generation falls back to the readable text with a self-dismissing notice. Intermediate replies show expanded by default.
-- **A background that follows you.** Choose one of five built-in scenes or add your own images (the five most recent are kept for one-click switching). Set opacity and fit — fill, tile with adjustable size, stretch, or keep-ratio — and the same background applies to the main window, the nm viewer and every separate window.
-- **Markdown formatting within reach.** Press Ctrl+Space in the chat input, the text editor or the nm markdown editor to pick a format from a frequency-sorted list; nested formats can be cancelled one by one or all at once. The trigger and the two navigation key pairs are configurable in Settings → Shortcuts.
+- **A background that follows you.** Choose one of five built-in scenes or add your own images (the five most recent are kept for one-click switching). Set opacity and fit 鈥?fill, tile with adjustable size, stretch, or keep-ratio 鈥?and the same background applies to the main window, the nm viewer and every separate window.
+- **Markdown formatting within reach.** Press Ctrl+Space in the chat input, the text editor or the nm markdown editor to pick a format from a frequency-sorted list; nested formats can be cancelled one by one or all at once. The trigger and the two navigation key pairs are configurable in Settings 鈫?Shortcuts.
 - **Optional desktop control.** Connect an external Computer Use MCP server for window listing, screenshots, clicks, typing, dragging and scrolling. It is off by default; sensitive actions ask again each time.
 
 Model output still needs review. Different models and services support different tools, document formats and media capabilities.
@@ -84,7 +84,7 @@ Workhorses can suggest a next step through self-drive, which is enabled per sess
 ## Control and safety
 
 - Choose permissions per session. Normal permission mode asks for approval where required; full permission mode permits more actions automatically. Use it only when you trust the task and its tools.
-- Decision cards can mark a recommended option. With auto-select enabled, the recommendation is chosen only after a visible 23-second countdown; clicking any option (or opening “Other”) cancels the automatic choice for that card.
+- Decision cards can mark a recommended option. With auto-select enabled, the recommendation is chosen only after a visible 23-second countdown; clicking any option (or opening 鈥淥ther鈥? cancels the automatic choice for that card.
 - A group conversation does not automatically gain access to private sessions or their files. Protected application and account paths have additional restrictions.
 - Choose a host or container workspace. Container use requires a working container environment.
 - Control device access separately. Active conversation use takes priority over the desktop companion.
@@ -98,13 +98,13 @@ Review generated files before sharing them. Output checks can catch specific pro
 
 Describe the result you need and attach the relevant material. Select a workhorse or use a project room to divide the work. Follow the plan, respond to approval requests, then open and review the output files.
 
-Keep instructions in the session's requirements and use source records to check a disputed fact. The [Chinese manual](./说明.md) covers setup, permissions, tools and recovery.
+Keep instructions in the session's requirements and use source records to check a disputed fact. The [Chinese manual](./璇存槑.md) covers setup, permissions, tools and recovery.
 
 ## The system and your data
 
 WArmy stores its workspace locally and uses the model endpoints you configure. Connecting a cloud endpoint sends selected conversation context, instructions and attachments to that provider. Interactive replies make an additional call to the provider used for the normal reply, sending the question and reply text. Web search, social adapters and remote operations also contact their configured services.
 
-DHT discovery is enabled by default and can be switched off in Settings → Network & Host. It publishes address, port, identity fingerprint and online-time metadata, not chat content. LAN and relay networking are optional. Review these settings before using WArmy for confidential work.
+DHT discovery is enabled by default and can be switched off in Settings 鈫?Network & Host. It publishes address, port, identity fingerprint and online-time metadata, not chat content. LAN and relay networking are optional. Review these settings before using WArmy for confidential work.
 
 ## Small details and technical notes
 
@@ -114,15 +114,15 @@ The conventional local service port is **59599**. Network reachability and remot
 
 Install WArmy, then connect the model endpoint you want to use.
 
-1. Download `WArmy-Setup-0.4.66.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
-2. Run the installer, choose a folder, launch **WArmy / 无限牛马**.
+1. Download `WArmy-Setup-0.4.67.exe` from the [latest release](https://github.com/Pondsi/WArmy/releases).
+2. Run the installer, choose a folder, launch **WArmy / 鏃犻檺鐗涢┈**.
 3. First run: choose a language, create your self-custodied identity, save the 24-word mnemonic, set a PIN; add a model provider and create your first workhorse.
 
 Data lives in `WArmyData` inside the install folder and survives upgrades/uninstall. The installer is unsigned (SmartScreen may warn); the release page lists SHA-256 for verification.
 
 **Environment:** Windows 10/11 x64 and a compatible model endpoint (Ollama, OpenAI-compatible, or Anthropic). Add the endpoint address and any credentials it requires. Running a local model requires suitable hardware; WArmy does not include a general-purpose language model.
 
-**Languages / 语言 — 27 UI languages:** 简体中文 · 繁體中文 · English · 日本語 · 한국어 · Русский · Español · Français · Português · Esperanto · Deutsch · Italiano · Nederlands · Polski · Svenska · Čeština · Magyar · Dansk · Norsk bokmål · Türkçe · Українська · Bahasa Indonesia · Tiếng Việt · ไทย · हिन्दी · العربية · فارسی.
+**Languages / 璇█ 鈥?27 UI languages:** 绠€浣撲腑鏂?路 绻侀珨涓枃 路 English 路 鏃ユ湰瑾?路 頃滉淡鞏?路 袪褍褋褋泻懈泄 路 Espa帽ol 路 Fran莽ais 路 Portugu锚s 路 Esperanto 路 Deutsch 路 Italiano 路 Nederlands 路 Polski 路 Svenska 路 膶e拧tina 路 Magyar 路 Dansk 路 Norsk bokm氓l 路 T眉rk莽e 路 校泻褉邪褩薪褋褜泻邪 路 Bahasa Indonesia 路 Ti岷縩g Vi峄噒 路 喙勦笚喔?路 啶灌た啶ㄠ啶︵ 路 丕賱毓乇亘賷丞 路 賮丕乇爻蹖.
 
 ## Status and honesty
 
@@ -136,41 +136,41 @@ WArmy stands on open-source work. Resolved dependency versions are listed in `pn
 
 **Bundled runtime & UI** (ordered by share of use)
 
-- **DeepSeek Harness (dsh)** — MIT — <https://github.com/deepseek-ai/deepseek-harness> — the agent harness WArmy builds on: bundled runtime + plugin-first compatibility. Companions: **@nanmicoder/dsh-agent-teams** — <https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams>; **node-pty** — MIT — <https://github.com/microsoft/node-pty>; **koffi** — MIT — <https://github.com/Koromix/koffi>; **protobufjs** — BSD-3-Clause — <https://github.com/protobufjs/protobuf.js>; **@google/genai** — Apache-2.0 — <https://github.com/googleapis/js-genai>.
-- **Electron** — MIT — <https://github.com/electron/electron>; **Chromium** — BSD-3-Clause — <https://github.com/chromium/chromium>; **Node.js** — MIT — <https://github.com/nodejs/node> — the desktop shell and runtime (a bundled `node.exe` runs the memory service in its own process).
-- **SQLite** — Public Domain — <https://www.sqlite.org/>; **better-sqlite3** — MIT — <https://github.com/WiseLibs/better-sqlite3>; **better-sqlite3-multiple-ciphers** — MIT — <https://github.com/m4heshd/better-sqlite3-multiple-ciphers>; **SQLCipher** — BSD-style — <https://github.com/sqlcipher/sqlcipher>; **bindings** — MIT — <https://github.com/TooTallNate/node-bindings>; **file-uri-to-path** — MIT — <https://github.com/TooTallNate/file-uri-to-path> — the memory store (FTS5 + optional encryption, subprocess only).
-- **Diwen** — [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — by **Pondsi**, <https://github.com/Pondsi/Diwen> — concept-coordinate layer, integrated as pinned npm `diwen@6.16.3`. The upstream LICENSE and NOTICE are included unchanged. Mechanical mapping is not semantic approval; uncertain content stays as the original text.
-- **hash-wasm** — MIT — <https://github.com/Daninet/hash-wasm> — argon2id/hashing in pure WASM (identity & keys).
-- **franc-all** — MIT — <https://github.com/wooorm/franc> — language detection for the AI output-language guard (with **trigram-utils**, **collapse-white-space**, **n-gram**, all MIT).
-- **three.js** — MIT — <https://github.com/mrdoob/three.js>; **@pixiv/three-vrm** — MIT — <https://github.com/pixiv/three-vrm> — 3D/VRM rendering for the mimic (license text bundled beside the vendor bundle).
-- **ONNX Runtime Web** — MIT — <https://github.com/microsoft/onnxruntime> — local embeddings via WASM SIMD/WebGPU.
-- **sherpa-onnx / sherpa-onnx-node** — Apache-2.0 — <https://github.com/k2-fsa/sherpa-onnx> — local speech (subprocess only).
-- **DuckDB** — MIT — <https://github.com/duckdb/duckdb> + **@duckdb/node-api** — MIT — <https://github.com/duckdb/duckdb-node-neo> — local analytics (subprocess only).
-- **qrcode-generator** — MIT — © Kazuhiko Arase — <https://github.com/kazuhikoarase/qrcode-generator>; **jsQR** — Apache-2.0 — <https://github.com/cozmo/jsQR> — QR encode/decode.
+- **DeepSeek Harness (dsh)** 鈥?MIT 鈥?<https://github.com/deepseek-ai/deepseek-harness> 鈥?the agent harness WArmy builds on: bundled runtime + plugin-first compatibility. Companions: **@nanmicoder/dsh-agent-teams** 鈥?<https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams>; **node-pty** 鈥?MIT 鈥?<https://github.com/microsoft/node-pty>; **koffi** 鈥?MIT 鈥?<https://github.com/Koromix/koffi>; **protobufjs** 鈥?BSD-3-Clause 鈥?<https://github.com/protobufjs/protobuf.js>; **@google/genai** 鈥?Apache-2.0 鈥?<https://github.com/googleapis/js-genai>.
+- **Electron** 鈥?MIT 鈥?<https://github.com/electron/electron>; **Chromium** 鈥?BSD-3-Clause 鈥?<https://github.com/chromium/chromium>; **Node.js** 鈥?MIT 鈥?<https://github.com/nodejs/node> 鈥?the desktop shell and runtime (a bundled `node.exe` runs the memory service in its own process).
+- **SQLite** 鈥?Public Domain 鈥?<https://www.sqlite.org/>; **better-sqlite3** 鈥?MIT 鈥?<https://github.com/WiseLibs/better-sqlite3>; **better-sqlite3-multiple-ciphers** 鈥?MIT 鈥?<https://github.com/m4heshd/better-sqlite3-multiple-ciphers>; **SQLCipher** 鈥?BSD-style 鈥?<https://github.com/sqlcipher/sqlcipher>; **bindings** 鈥?MIT 鈥?<https://github.com/TooTallNate/node-bindings>; **file-uri-to-path** 鈥?MIT 鈥?<https://github.com/TooTallNate/file-uri-to-path> 鈥?the memory store (FTS5 + optional encryption, subprocess only).
+- **Diwen** 鈥?[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 鈥?by **Pondsi**, <https://github.com/Pondsi/Diwen> 鈥?concept-coordinate layer, integrated as pinned npm `diwen@6.16.3`. The upstream LICENSE and NOTICE are included unchanged. Mechanical mapping is not semantic approval; uncertain content stays as the original text.
+- **hash-wasm** 鈥?MIT 鈥?<https://github.com/Daninet/hash-wasm> 鈥?argon2id/hashing in pure WASM (identity & keys).
+- **franc-all** 鈥?MIT 鈥?<https://github.com/wooorm/franc> 鈥?language detection for the AI output-language guard (with **trigram-utils**, **collapse-white-space**, **n-gram**, all MIT).
+- **three.js** 鈥?MIT 鈥?<https://github.com/mrdoob/three.js>; **@pixiv/three-vrm** 鈥?MIT 鈥?<https://github.com/pixiv/three-vrm> 鈥?3D/VRM rendering for the mimic (license text bundled beside the vendor bundle).
+- **ONNX Runtime Web** 鈥?MIT 鈥?<https://github.com/microsoft/onnxruntime> 鈥?local embeddings via WASM SIMD/WebGPU.
+- **sherpa-onnx / sherpa-onnx-node** 鈥?Apache-2.0 鈥?<https://github.com/k2-fsa/sherpa-onnx> 鈥?local speech (subprocess only).
+- **DuckDB** 鈥?MIT 鈥?<https://github.com/duckdb/duckdb> + **@duckdb/node-api** 鈥?MIT 鈥?<https://github.com/duckdb/duckdb-node-neo> 鈥?local analytics (subprocess only).
+- **qrcode-generator** 鈥?MIT 鈥?漏 Kazuhiko Arase 鈥?<https://github.com/kazuhikoarase/qrcode-generator>; **jsQR** 鈥?Apache-2.0 鈥?<https://github.com/cozmo/jsQR> 鈥?QR encode/decode.
 
 **Companion projects**
 
-- **FWArmy** — <https://github.com/Pondsi/FWArmy> — the companion **relay service station** for WArmy: deploy a voluntary public relay site for the community, or run a private one for your own team. It pairs with WArmy's optional relay networking when direct connections aren't possible.
+- **FWArmy** 鈥?<https://github.com/Pondsi/FWArmy> 鈥?the companion **relay service station** for WArmy: deploy a voluntary public relay site for the community, or run a private one for your own team. It pairs with WArmy's optional relay networking when direct connections aren't possible.
 
 **Build & installer**
 
-- **TypeScript** — Apache-2.0 — <https://github.com/microsoft/TypeScript>; **pnpm** — MIT — <https://github.com/pnpm/pnpm>; **electron-builder** — MIT — <https://github.com/electron-userland/electron-builder>; **esbuild** — MIT — <https://github.com/evanw/esbuild>; **NSIS** — zlib/libpng-style — <https://nsis.sourceforge.io/>.
+- **TypeScript** 鈥?Apache-2.0 鈥?<https://github.com/microsoft/TypeScript>; **pnpm** 鈥?MIT 鈥?<https://github.com/pnpm/pnpm>; **electron-builder** 鈥?MIT 鈥?<https://github.com/electron-userland/electron-builder>; **esbuild** 鈥?MIT 鈥?<https://github.com/evanw/esbuild>; **NSIS** 鈥?zlib/libpng-style 鈥?<https://nsis.sourceforge.io/>.
 
 **On-demand subprocess tools** (downloaded/installed only with consent, hash-pinned)
 
-- **whisper.cpp** — MIT — <https://github.com/ggml-org/whisper.cpp>; **TripoSR** — MIT — <https://github.com/VAST-AI-Research/TripoSR> on **PyTorch** — BSD-3-Clause — <https://github.com/pytorch/pytorch> under **Python** — PSF — <https://www.python.org/>, weights from **Hugging Face** — <https://huggingface.co/>; **Docling** — MIT — <https://github.com/docling-project/docling>; **Tree-sitter / web-tree-sitter** — MIT — <https://github.com/tree-sitter/tree-sitter>.
+- **whisper.cpp** 鈥?MIT 鈥?<https://github.com/ggml-org/whisper.cpp>; **TripoSR** 鈥?MIT 鈥?<https://github.com/VAST-AI-Research/TripoSR> on **PyTorch** 鈥?BSD-3-Clause 鈥?<https://github.com/pytorch/pytorch> under **Python** 鈥?PSF 鈥?<https://www.python.org/>, weights from **Hugging Face** 鈥?<https://huggingface.co/>; **Docling** 鈥?MIT 鈥?<https://github.com/docling-project/docling>; **Tree-sitter / web-tree-sitter** 鈥?MIT 鈥?<https://github.com/tree-sitter/tree-sitter>.
 
 **Protocols & optional external services** (own licenses/terms)
 
-- **A2UI** — Apache-2.0 — <https://github.com/a2ui-project/a2ui> — official `@a2ui/agent`, `@a2ui/lit` and `@a2ui/web_core` packages power the optional interactive reply layer.
-- **Model Context Protocol** — <https://modelcontextprotocol.io/> (bundled mcp-bridge implements the stdio JSON-RPC contract); **Ollama** — MIT — <https://github.com/ollama/ollama>; **ComfyUI** — GPL-3.0 — <https://github.com/comfyanonymous/ComfyUI>; **LibreOffice** — MPL-2.0 — <https://www.libreoffice.org/>; **WPS / Office** — proprietary — <https://www.wps.com/>.
+- **A2UI** 鈥?Apache-2.0 鈥?<https://github.com/a2ui-project/a2ui> 鈥?official `@a2ui/agent`, `@a2ui/lit` and `@a2ui/web_core` packages power the optional interactive reply layer.
+- **Model Context Protocol** 鈥?<https://modelcontextprotocol.io/> (bundled mcp-bridge implements the stdio JSON-RPC contract); **Ollama** 鈥?MIT 鈥?<https://github.com/ollama/ollama>; **ComfyUI** 鈥?GPL-3.0 鈥?<https://github.com/comfyanonymous/ComfyUI>; **LibreOffice** 鈥?MPL-2.0 鈥?<https://www.libreoffice.org/>; **WPS / Office** 鈥?proprietary 鈥?<https://www.wps.com/>.
 - Every other dependency retains its own copyright/license; keep upstream notices when redistributing.
 
-**无限牛马** is the Chinese name. The pixel ox is the mascot. The work is the point.
+**鏃犻檺鐗涢┈** is the Chinese name. The pixel ox is the mascot. The work is the point.
 
 ## Documentation and license
 
-- [说明.md](./说明.md): full Chinese manual.
-- [LICENSE](./LICENSE): Pondsi Attribution License — any use (original, modified, snippets, personal or distributed) is allowed with a single condition: credit **Pondsi**. No repository link or full-license retention is required. Third-party dependencies, model weights and assets keep their own licenses.
+- [璇存槑.md](./璇存槑.md): full Chinese manual.
+- [LICENSE](./LICENSE): Pondsi Attribution License 鈥?any use (original, modified, snippets, personal or distributed) is allowed with a single condition: credit **Pondsi**. No repository link or full-license retention is required. Third-party dependencies, model weights and assets keep their own licenses.
 - [SPONSORS.md](./SPONSORS.md): support the project.
 - [Issues](https://github.com/Pondsi/WArmy/issues): bug reports and feature requests.

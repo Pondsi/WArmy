@@ -163,6 +163,8 @@ export interface XietiaoJieguo {
   dutyId?: string;
   model?: string;
   providerId?: string;
+  /** R318：值班自答的思考链（与我的牛马同口径渲染） */
+  reasoning?: string;
   executorIds?: string[];
   boardEvent?: string;
   queueLength: number;
@@ -719,7 +721,7 @@ export async function xietiaoQunXiaoxi(
         const message = r.choices[0]?.message;
         const reply = neiRongWenBen(message?.content).trim();
         if (!reply || message?.gongJuDiaoYongJi?.length) continue;
-        return { action: 'dispatch', reply, queueLength: 0, dutyId, model: g.model, providerId: g.presetId || cfg.presetId, usage: r.usage };
+        return { action: 'dispatch', reply, queueLength: 0, dutyId, model: g.model, providerId: g.presetId || cfg.presetId, usage: r.usage, reasoning: String((message as { reasoning?: string })?.reasoning || '') };
       } catch { /* 仅降级到同一调用链里的下一候选 */ }
       finally { lease?.(); }
     }

@@ -11,7 +11,7 @@ import { qingLiGuoQiXiaoXi } from '../fan-chan-mei.js';
 export interface XiTongXiaoXi {
   id: string;
   ts: number;
-  kind: 'update' | 'remote' | 'ssh' | 'system' | 'anti-sycophancy' | 'briefing' | 'schedule-missed' | 'governance-approval';
+  kind: 'update' | 'remote' | 'ssh' | 'system' | 'anti-sycophancy' | 'briefing' | 'schedule-missed' | 'governance-approval' | 'capability-audit';
   title: string;
   body: string;
   read: boolean;
@@ -35,8 +35,8 @@ export function chuangJianXiTongXiaoXi(yiLai: XiTongXiaoXiYiLai) {
       xiTongXiaoXiJi = (Array.isArray(j?.items) ? j.items : [])
         .filter((x: Partial<XiTongXiaoXi>) => x && typeof x.id === 'string' && typeof x.ts === 'number')
         .map((x: Partial<XiTongXiaoXi>) => ({
-          id: String(x.id), ts: Number(x.ts), kind: (x.kind === 'update' || x.kind === 'remote' || x.kind === 'ssh' || x.kind === 'anti-sycophancy' || x.kind === 'briefing' || x.kind === 'schedule-missed' || x.kind === 'governance-approval' ? x.kind : 'system'),
-          title: String(x.title || '').slice(0, 120), body: String(x.body || '').slice(0, x.kind === 'briefing' || x.kind === 'schedule-missed' || x.kind === 'governance-approval' ? 4000 : 400), read: !!x.read,
+          id: String(x.id), ts: Number(x.ts), kind: (x.kind === 'update' || x.kind === 'remote' || x.kind === 'ssh' || x.kind === 'anti-sycophancy' || x.kind === 'briefing' || x.kind === 'schedule-missed' || x.kind === 'governance-approval' || x.kind === 'capability-audit' ? x.kind : 'system'),
+          title: String(x.title || '').slice(0, 120), body: String(x.body || '').slice(0, x.kind === 'briefing' || x.kind === 'schedule-missed' || x.kind === 'governance-approval' || x.kind === 'capability-audit' ? 4000 : 400), read: !!x.read,
         }))
         .slice(-200);
       /* R260 项30：反谄媚系统消息时效清理——早于最新 10 条且超 30 天的删除（按模型观点处理）。 */

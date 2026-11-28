@@ -924,6 +924,11 @@ diagOpenFolder: () => ipcRenderer.invoke('warmy:zhenDuanWenJianJiaDaKai'), // R3
   systemMessageAdd: (p) => ipcRenderer.invoke('warmy:xiTongXiaoXiTianJia', p),
   systemMessageRead: (id) => ipcRenderer.invoke('warmy:xiTongXiaoXiYiDu', id),
   systemMessagesReadAll: () => ipcRenderer.invoke('warmy:xiTongXiaoXiQuanBuYiDu'),
+  /* R318：模型能力定期核验（反馈⇒备忘录）＋RCI 自我改进状态 */
+  moXingNengLiShenJiGet: () => ipcRenderer.invoke('warmy:moXingNengLiShenJiGet'),
+  moXingNengLiFanKui: (p) => ipcRenderer.invoke('warmy:moXingNengLiFanKui', p),
+  moXingNengLiShenJiPao: () => ipcRenderer.invoke('warmy:moXingNengLiShenJiPao'),
+  rciGaiJinGet: () => ipcRenderer.invoke('warmy:rciGaiJinGet'),
   onSystemMessage: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('warmy:xiTongXiaoXiXin', h); return () => ipcRenderer.removeListener('warmy:xiTongXiaoXiXin', h); },
   secureKeySave: (payload) => ipcRenderer.invoke('warmy:anQuanMiYaoBaoCun', payload),
   secureKeyLoad: (id) => ipcRenderer.invoke('warmy:anQuanMiYaoJiaZai', id),

@@ -184,6 +184,29 @@ export function bianYiA2ui(text: string, surfaceId: string): AgentToRendererMess
   return messages;
 }
 
+/** R318：生成期交互组件校验/修复——Button 必须有 action，否则点击无任何反应（用户报障「无意义按钮」）。
+ *  无 action 的按钮补一个派活动作（name＝按钮文字），点击后由宿主派给会话牛马执行/回答，保证每个按钮都有意义。 */
+export function xiuFuJiaoHuZuJian(messages: AgentToRendererMessage[]): void {
+  for (const m of messages) {
+    const o = m as unknown as Record<string, unknown>;
+    const body = (o.createSurface || o.updateComponents) as { components?: Array<Record<string, unknown>> } | undefined;
+    const comps = body?.components;
+    if (!Array.isArray(comps)) continue;
+    const byId = new Map(comps.map((c) => [String(c?.id || ''), c]));
+    for (const c of comps) {
+      if (c?.component !== 'Button') continue;
+      const act = c.action as Record<string, unknown> | undefined;
+      /* v1.0 action＝{event:{name}}|{functionCall:{call}}；无动作的按钮补派活 event，保证每个按钮都有意义。 */
+      if (act && typeof act === 'object' && (act.event || act.functionCall)) continue;
+      const child = byId.get(String(c.child || ''));
+      const label = String(child?.text || c.label || '派活').slice(0, 60);
+      /* 事件名用安全标识（含「？」等字符的原文作事件名会破坏运行时渲染）；语义由宿主按按钮可见文本派活。 */
+      void label;
+      c.action = { event: { name: 'dispatch' } };
+    }
+  }
+}
+
 function anQuanLuJing(root: string, target: string): string {
   const base = path.resolve(root);
   const out = path.resolve(target);
@@ -290,6 +313,7 @@ export function chuangJianA2uiHuiFu(yiLai: A2uiYiLai) {
         try {
           if (finishReason === 'length') throw new Error('a2ui-truncated');
           messages = bianYiA2ui(text, mid);
+          xiuFuJiaoHuZuJian(messages);
           if (yiLai.yanZhengYuYan && !await yiLai.yanZhengYuYan(messages)) throw new Error('a2ui-language');
           break;
         } catch (e) {

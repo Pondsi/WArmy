@@ -2731,19 +2731,21 @@ async function langDuWenBen(text, btnEl) {
     chats: (state.chats || []).map((c) => ({ id: c.id, kind: c.kind, name: c.name })),
   });
 
-  /** 第 114 轮：我的页“全量加密”状态（只在渲染出元素后填，未登录如实显示登录后开启） */
+  /** 第 114 轮起：我的页数据行状态。R318：全量加密恒开启（无关闭选项）不再显示；改为显示「定时导出」是否开启。 */
   async function shuaXinJiaMiZhuangTai() {
     const el = document.getElementById('woJiaMiZhuangTai');
     if (!el) return;
     try {
-      const s = await window.warmy.quanLiangJiaMiZhuangTai?.();
-      if (!s || !s.ok) { el.textContent = ''; return; }
-      el.textContent = s.enabled
-        ? tOr('security.fullEncryptionOn', '全量加密：已开启') + ' · ' + tOr('security.encryptedFiles', '已加密 {n} 个文件').replace('{n}', String(s.encrypted || 0))
-          + (s.plain ? ' · ' + tOr('security.pendingFiles', '{n} 个待迁移').replace('{n}', String(s.plain)) : '')
-        : tOr('security.fullEncryptionLocked', '全量加密：登录后开启');
-      el.title = tOr('security.encryptionBoundary', '工作区、外部项目目录、截图与账号密钥不在这一层（外部编辑走显式授权）。');
-    } catch { /* 状态读不到不影响导出 */ }
+      const got = await window.warmy.dingShiDaoChuGet?.();
+      const cfg = (got && got.ok && got.config) || null;
+      const on = !!(cfg && cfg.enabled);
+      el.textContent = on
+        ? tOr('security.scheduledExportOn', '定时导出：已开启') + (Number(cfg.nextAt) > 0 ? ' · ' + tOr('security.scheduledExportNext', '下次 {t}').replace('{t}', yueRiShiFen(Number(cfg.nextAt))) : '')
+        : tOr('security.scheduledExportOff', '定时导出：未开启');
+      el.title = tOr('security.scheduledExportTip', '加密始终默认开启；这里只显示定时导出开关状态，点上方「定时导出…」配置。');
+    } catch {
+      el.textContent = tOr('security.scheduledExportOff', '定时导出：未开启');
+    }
   }
 
   /**
@@ -3848,6 +3850,12 @@ async function langDuWenBen(text, btnEl) {
     try { d = await window.warmy.groupDuty?.(String(cur.id)); } catch { /* noop */ }
     if (!d || !d.ok) { he.textContent = '—'; return; }
     const keXuan = (d.members || []).filter((m) => m.local && m.dutyEligible);
+    /* R318：刚添加尚未入群的牛马也可选为值班（选中时自动先入群再设置），修「添加牛马后值班者仍空」。 */
+    const yiYou = new Set(keXuan.map((m) => m.id));
+    for (const i of (state.instances || [])) {
+      if (!i || shiNiTaiBenTi(i) || yiYou.has(i.id) || i.dutyEligible === false) continue;
+      keXuan.push({ id: i.id, ming: mingOf(i), status: i.status || 'idle', local: true, dutyEligible: true, fixedDuty: false });
+    }
     const dangQian = d.dutyMing
       ? escapeHtml(d.dutyMing) + (d.fixed ? '（' + escapeHtml(tOr('panel.dutyFixed', '固定')) + '）' : '')
       : escapeHtml(tOr('panel.dutyNone', '暂无空闲值班者'));
@@ -3871,7 +3879,13 @@ async function langDuWenBen(text, btnEl) {
       xuan.dataset.bound = '1';
       xuan.addEventListener('change', async () => {
         try {
-          await window.warmy.groupSetDuty?.({ groupId: String(cur.id), instanceId: xuan.value || '' });
+          const gid = String(cur.id);
+          const zhi = xuan.value || '';
+          /* R318：候选含未入群牛马⇒先入群再设值班。 */
+          if (zhi && !(d.members || []).some((m) => m.id === zhi)) {
+            try { await window.warmy.groupJoinInstance(gid, zhi); } catch { /* noop */ }
+          }
+          await window.warmy.groupSetDuty?.({ groupId: gid, instanceId: zhi });
           showToast(tOr('panel.dutySaved', '已更新值班设置'));
         } catch { /* noop */ }
         try { void shuaXinZhiBan(); } catch { /* noop */ }
@@ -4704,7 +4718,7 @@ async function langDuWenBen(text, btnEl) {
        */
       const fromMain = r.xiaoXiJi.map((m) => ({
         role: (m.role === 'user' || m.role === 'wo') ? 'wo' : 'them',
-        id: m.id || '', a2ui: m.a2ui || null,
+        id: m.id || '', instId: m.instId || '', a2ui: m.a2ui || null,
         text: m.text, ts: m.ts || Date.now(),
         reasoning: m.reasoning || '',
         /** 第 38 轮 项 2：分段思考也从主进程带回（重启后"思考/操作交替"的排布要一样） */
@@ -4818,6 +4832,7 @@ async function langDuWenBen(text, btnEl) {
             cachedTokens: m.cachedTokens || l.cachedTokens || 0,
             cacheReported: m.cacheReported !== undefined ? m.cacheReported : l.cacheReported,
             id: m.id || l.id || '',
+            instId: m.instId || l.instId || '',
             a2ui: m.a2ui || l.a2ui || null,
           };
         }),
@@ -5601,11 +5616,31 @@ async function langDuWenBen(text, btnEl) {
       if (!window.warmyA2uiInline || typeof window.warmyA2uiInline.render !== 'function') throw new Error('a2ui-inline-missing');
       const rd = window.warmyA2uiInline.render(host, r.jsonl, { onAction: (p) => window.warmy.a2uiAction?.(p) });
       entry.dispose = rd && rd.dispose;
+      /* R318：异步挂载后气泡高度变化⇒按滚动权威再稳定（修「勾选增强后第二条起滚动错乱」） */
+      a2uiGuaZaiHouGunDong(sid);
+      setTimeout(() => a2uiGuaZaiHouGunDong(sid), 120);
+      setTimeout(() => a2uiGuaZaiHouGunDong(sid), 360);
     }).catch(() => {
       /* 内联渲染不了 ⇒ 如实回退文本回复，不留空气泡 */
       a2uiNeiLianCun.delete(k);
       if (pao.isConnected) pao.outerHTML = '<div class="bubble md">' + mdHtml(boLiFuJianWenZi(m.text)) + '</div>';
+      a2uiGuaZaiHouGunDong(sid);
     });
+  }
+  /** R318：内联互动面异步挂载/回退后高度变化，按权威补一次滚动：
+   *  接管/暂停⇒原样；跟随底部/勾选滚动记录⇒贴底；未勾选钉顶⇒重钉锚点。 */
+  function a2uiGuaZaiHouGunDong(sid0) {
+    try {
+      const sid = String(sid0 || '');
+      const he = $('xiaoXiJi');
+      if (!sid || !he || String(he.dataset.chatSid || '') !== sid) return;
+      if (String((state.selectedChat && state.selectedChat.id) || '') !== sid) return;
+      const st = chatGunOf(sid);
+      if (st.userControl || st.pause) return;
+      const maxG = Math.max(0, he.scrollHeight - he.clientHeight);
+      if (autoScrollChat || st.following !== false) { sheZhiChatGunDong(he, maxG, false); return; }
+      if (st.anchorEl && st.anchorEl.isConnected) sheZhiChatGunDong(he, chatAnchorTop(he, st), false);
+    } catch { /* noop */ }
   }
   /** R310①「打开」/双击的 nm 勾选判定（插件启用＋设置勾选）。 */
   function a2uiNmGouXuan() { try { return nmChaJianKai() && state.nmKaiWenJian === true; } catch { return false; } }
@@ -5736,8 +5771,10 @@ async function langDuWenBen(text, btnEl) {
       const key = String(p.pendingId || p.ts);
       if (row && !row.querySelector('.dutyDengDai[data-pending="' + key + '"]')) {
         const tu = document.createElement('span'); tu.className = 'dutyDengDai'; tu.setAttribute('data-pending', key); tu.setAttribute('data-ts', String(p.ts));
-        tu.innerHTML = '<img src="assets/zebra-head.svg" alt=""/><img src="assets/zebra-head.svg" alt=""/><img src="assets/zebra-head.svg" alt=""/><img src="assets/zebra-head.svg" alt=""/>';
-        row.prepend(tu);
+        /* R318：单个马头 logo，挂在值班回复应在的一侧（用户行 row-reverse⇒append 在左），不再 4 马头 prepend 错侧。 */
+        tu.title = tOr('group.dutyWaiting', '值班者未接·等待回复');
+        tu.innerHTML = '<img src="assets/zebra-head.svg" alt=""/>';
+        row.appendChild(tu);
       }
     }
     for (const tu of [...he.querySelectorAll('.dutyDengDai')]) {
@@ -5990,11 +6027,26 @@ async function langDuWenBen(text, btnEl) {
     });
     heZi.addEventListener('mouseover', (e) => {
       const b = e.target.closest && e.target.closest('.zjhHuiFu .xiaoXiLangDu[data-read]'); if (!b) return;
-      try { const old = document.querySelector('.yinLiangHuaKuai'); if (old && old._cancelClose) old._cancelClose(); if (window.__yinLiangFor === b && old) return; window.__yinLiangFor = b; const r = b.getBoundingClientRect(); shouYinLiangHuaKuai(b, Math.max(8, r.left - 70), r.bottom + 6); } catch { /* noop */ }
+      try {
+        const old = document.querySelector('.yinLiangHuaKuai'); if (old && old._cancelClose) old._cancelClose();
+        if (window.__yinLiangFor === b && old) return;
+        /* R318：与主聊天同口径——持续悬停 1.3s 才出音量滑块 */
+        if (b._ylDwell) return;
+        b._ylDwell = setTimeout(() => {
+          b._ylDwell = null;
+          try { if (!document.contains(b)) return; window.__yinLiangFor = b; const r = b.getBoundingClientRect(); shouYinLiangHuaKuai(b, Math.max(8, r.left - 70), r.bottom + 6); } catch { /* noop */ }
+        }, 1300);
+      } catch { /* noop */ }
     });
     heZi.addEventListener('mouseout', (e) => {
       const b = e.target.closest && e.target.closest('.zjhHuiFu .xiaoXiLangDu[data-read]'); if (!b) return;
-      try { if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.yinLiangHuaKuai')) return; window.__yinLiangFor = null; const old = document.querySelector('.yinLiangHuaKuai'); if (old && old._scheduleClose) old._scheduleClose(); else if (old) old.remove(); } catch { /* noop */ }
+      try {
+        const to = e.relatedTarget;
+        if (to && b.contains(to)) return;
+        if (b._ylDwell) { clearTimeout(b._ylDwell); b._ylDwell = null; }
+        if (to && to.closest && to.closest('.yinLiangHuaKuai')) return;
+        window.__yinLiangFor = null; const old = document.querySelector('.yinLiangHuaKuai'); if (old && old._scheduleClose) old._scheduleClose(); else if (old) old.remove();
+      } catch { /* noop */ }
     });
     heZi.addEventListener('contextmenu', (e) => {
       const b = e.target.closest && e.target.closest('.zjhHuiFu .xiaoXiLangDu[data-read]'); if (!b) return;
@@ -6912,45 +6964,8 @@ async function langDuWenBen(text, btnEl) {
      * 常规授权本来就会自动放行“工作区内 + 白名单 + 低风险”的命令；文件读写删在工作区内无需授权。
      * 严格授权=命令与文件改动全部逐次询问；完全授权=除项目/其他会话外随处可改，涉项目/他人会话才问。
      */
-    let feedback = kuai.querySelector('.r307PolicyFeedback');
-    if (!feedback) {
-      feedback = document.createElement('details'); feedback.className = 'r307PolicyFeedback';
-      const summary = document.createElement('summary'); summary.textContent = '本任务的审批辅助反馈（不授予权限）'; feedback.append(summary);
-      for (const [feature, label] of [['edit', '批准时编辑正文'], ['undo', '受管文件回滚入口']]) {
-        const row = document.createElement('div'); row.textContent = label + '：';
-        for (const [needed, text] of [[true, '需要'], [false, '本任务不需要']]) {
-          const button = document.createElement('button'); button.type = 'button'; button.className = 'anNiuXiao'; button.textContent = text;
-          button.onclick = async () => {
-            const current = String(state.selectedChat?.id || ''); button.disabled = true;
-            try {
-              const meta = await window.warmy.decisionPolicyState({ sid: current });
-              const r = meta?.ok && await window.warmy.decisionPolicyFeedback({ sid: current, generation: meta.generation, version: meta.version, feature, needed });
-              button.textContent = r?.ok ? '已记录' : '任务已变化';
-            } catch { button.textContent = '未记录'; }
-            finally { button.disabled = false; }
-          };
-          row.append(button);
-        }
-        feedback.append(row);
-      }
-      const dutyRow = document.createElement('div'); dutyRow.className = 'r307DutyLabel'; dutyRow.textContent = '项目最新一条用户消息：';
-      for (const [expectedReply, label] of [[true, '应由值班回复'], [false, '不需要值班回复']]) {
-        const b = document.createElement('button'); b.type = 'button'; b.className = 'anNiuXiao'; b.textContent = label;
-        b.onclick = async () => {
-          b.disabled = true;
-          try {
-            const gid = String(state.selectedChat?.id || ''), meta = await window.warmy.zhiBanXiangGuanDu(gid);
-            const r = meta?.latestUserSeq && await window.warmy.dutyRelevanceFeedback({ gid, seq: meta.latestUserSeq, expectedReply });
-            b.textContent = r?.ok ? '已记录标签' : '没有可标注的项目消息';
-          } catch { b.textContent = '未记录'; }
-          finally { b.disabled = false; }
-        };
-        dutyRow.append(b);
-      }
-      feedback.append(dutyRow); kuai.append(feedback);
-    }
-    const dutyLabel = feedback.querySelector('.r307DutyLabel');
-    if (dutyLabel) dutyLabel.hidden = state.selectedChat?.kind !== 'internal';
+    /* R318：删除「本任务的审批辅助反馈（不授予权限）」卡——用户明确不需要；
+       偏好改由模型在实际例子中自判＋值得的典型例子经系统消息事后选择（频率自改进）。 */
     // 添加按钮
     let tianAdd = kuai.querySelector('#anNiuShouQuanTianJia');
     if (!tianAdd) {
@@ -8019,7 +8034,7 @@ async function langDuWenBen(text, btnEl) {
       const themZuo = '<div class="xiaoXiZuoLan">' + themAv + zuoXiaRow + '</div>';
       div.innerHTML = (m.role === 'wo' ? av : themZuo)
         + '<div class="bubbleWrap">'
-        + (showName ? '<div class="xiaoXiMing">' + escapeHtml(themName) + '</div>' : '')
+        + (showName ? '<div class="xiaoXiMing">' + escapeHtml(senderInst ? mingOf(senderInst) : themName) + '</div>' : '')
         + siKao
         + (m.role === 'wo'
             // 我方消息是**纯文本**：原样显示（pre-wrap），复制才不会丢换行
@@ -8119,10 +8134,18 @@ async function langDuWenBen(text, btnEl) {
             const yiYou = document.querySelector('.yinLiangHuaKuai');
             if (yiYou && yiYou._cancelClose) yiYou._cancelClose();
             if (window.__yinLiangFor === b && yiYou) return;
-            window.__yinLiangFor = b;
-            const r = b.getBoundingClientRect();
-            /* R263：音量浮条下移到喇叭下方（不遮喇叭图标） */
-            shouYinLiangHuaKuai(b, Math.max(8, r.left - 70), r.bottom + 6);
+            /* R318：持续悬停 1.3s 才出音量滑块（以前一悬停立即弹出）；内部子节点间移动不重置计时 */
+            if (b._ylDwell) return;
+            b._ylDwell = setTimeout(() => {
+              b._ylDwell = null;
+              try {
+                if (!document.contains(b)) return;
+                window.__yinLiangFor = b;
+                const r = b.getBoundingClientRect();
+                /* R263：音量浮条下移到喇叭下方（不遮喇叭图标） */
+                shouYinLiangHuaKuai(b, Math.max(8, r.left - 70), r.bottom + 6);
+              } catch { /* noop */ }
+            }, 1300);
           } catch { /* noop */ }
         });
         heZi.addEventListener('mouseout', (e) => {
@@ -8130,6 +8153,9 @@ async function langDuWenBen(text, btnEl) {
             const b = e.target && e.target.closest && e.target.closest('.xiaoXiLangDu[data-read]');
             if (!b) return;
             const to = e.relatedTarget;
+            /* R318：仍在喇叭内部（子节点间移动）⇒ 不重置 dwell、不收起 */
+            if (to && b.contains(to)) return;
+            if (b._ylDwell) { clearTimeout(b._ylDwell); b._ylDwell = null; }
             if (to && (to.closest && to.closest('.yinLiangHuaKuai'))) return; // 移到浮条上不关
             window.__yinLiangFor = null;
             /* R260 项31：不再立即 remove——走宽限收起，鼠标移到浮条上时 mouseenter 会取消 */
@@ -8852,7 +8878,7 @@ async function langDuWenBen(text, btnEl) {
        */
       const duan = (Array.isArray(opts && opts.reasoningDuan) && opts.reasoningDuan.length)
         ? opts.reasoningDuan : siKaoQuDuan(chatId);
-      yuanYou.push({ id: (opts && opts.id) || '', a2ui: (opts && opts.a2ui) || null, role, text, ts: Number(opts && opts.ts) || Date.now(), reasoning: (opts && opts.reasoning) || '', reasoningDuan: duan, zhongJian: (opts && Array.isArray(opts.zhongJian)) ? opts.zhongJian : [], system: !!(opts && opts.system), stopped: !!(opts && opts.stopped), moXing: (opts && opts.moXing) || '', moXingJiangJi: (opts && opts.moXingJiangJi) || null, artifacts: (opts && opts.artifacts) || [], promptTokens: uYong && uYong.promptTokens || 0, completionTokens: uYong && uYong.completionTokens || 0, cachedTokens: uYong && uYong.cacheHitTokens || 0, cacheReported: uYong ? uYong.cacheReported !== false : undefined });
+      yuanYou.push({ id: (opts && opts.id) || '', instId: (opts && opts.instId) || '', a2ui: (opts && opts.a2ui) || null, role, text, ts: Number(opts && opts.ts) || Date.now(), reasoning: (opts && opts.reasoning) || '', reasoningDuan: duan, zhongJian: (opts && Array.isArray(opts.zhongJian)) ? opts.zhongJian : [], system: !!(opts && opts.system), stopped: !!(opts && opts.stopped), moXing: (opts && opts.moXing) || '', moXingJiangJi: (opts && opts.moXingJiangJi) || null, artifacts: (opts && opts.artifacts) || [], promptTokens: uYong && uYong.promptTokens || 0, completionTokens: uYong && uYong.completionTokens || 0, cachedTokens: uYong && uYong.cacheHitTokens || 0, cacheReported: uYong ? uYong.cacheReported !== false : undefined });
       /** 多条回复按时间排；同一毫秒保持到达顺序（稳定排序） */
       yuanYou.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
       /**
@@ -9803,7 +9829,7 @@ async function langDuWenBen(text, btnEl) {
     x.innerHTML = '<div class="bz-jiaZai">…</div>';
     var r = await window.warmy.systemMessages().catch(function () { return null; });
     var items = (r && r.items) || [];
-    var lei = { update: tOr('help.kindUpdate', '更新'), remote: tOr('help.kindRemote', '远程控制'), ssh: 'SSH', system: tOr('help.kindSystem', '系统'), briefing: tOr('help.kindBriefing', '简报'), 'governance-approval': tOr('help.kindSystem', '系统') };
+    var lei = { update: tOr('help.kindUpdate', '更新'), remote: tOr('help.kindRemote', '远程控制'), ssh: 'SSH', system: tOr('help.kindSystem', '系统'), briefing: tOr('help.kindBriefing', '简报'), 'governance-approval': tOr('help.kindSystem', '系统'), 'capability-audit': tOr('capability.kind', '能力核验') };
     var head = ''; /* R314②：「全部已读」移到顶栏箭头同行右侧（bzReadAllTop） */
     var raTop = bzEl('bzReadAllTop'); if (raTop) raTop.style.display = '';
     /* R278 项3：ETA 夹区间扩展审批（合并单条；双输入＋确定，留空＝不变） */
@@ -9842,9 +9868,17 @@ async function langDuWenBen(text, btnEl) {
           + '<button class="anNiuXiao" data-bz-label-web="' + escapeHtml(mo) + '">' + escapeHtml(tOr('mimic.authorizeWeb', '授权联网标注')) + '</button>'
           + '</div>';
       }
+      /* R318：能力核验系统消息带反馈输入框（非重要）；反馈⇒备忘录＋立即纠偏。 */
+      var capBlock = '';
+      if (m.kind === 'capability-audit') {
+        capBlock = '<div style="display:flex;gap:6px;align-items:center;margin-top:6px" data-bz-cap-wrap="' + escapeHtml(m.id) + '">'
+          + '<input data-bz-cap-input placeholder="' + escapeHtml(tOr('capability.feedbackPlaceholder', '如有改错请输入反馈（写入备忘录并立即纠正）')) + '" style="flex:1;padding:4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)"/>'
+          + '<button class="anNiuZhuYao" data-bz-cap-ok="' + escapeHtml(m.id) + '">' + escapeHtml(tOr('capability.feedbackSend', '发送反馈')) + '</button>'
+          + '</div>';
+      }
       return '<div class="bz-xiaoXi' + (m.read ? '' : ' weiDu') + '" data-bz-item="' + escapeHtml(m.id) + '">'
         + '<div class="bz-xiaoXiTou" data-bz-read="' + escapeHtml(m.id) + '" style="cursor:pointer" title="' + escapeHtml(tOr('help.clickExpand', '点击展开/收起')) + '"><span class="bz-leiBie">' + escapeHtml(lei[m.kind] || m.kind) + '</span><span class="bz-xiaoXiBiao">' + escapeHtml(m.title) + '</span><span class="bz-xiaoXiShi">' + escapeHtml(bzShiJian(m.ts)) + '</span><span class="bz-zhanKai" aria-hidden="true">▸</span></div>'
-        + '<div class="bz-xiaoXiNei" hidden><div class="bz-xiaoXiShen">' + escapeHtml(m.body) + '</div>' + labelBlock + '</div></div>';
+        + '<div class="bz-xiaoXiNei" hidden><div class="bz-xiaoXiShen">' + escapeHtml(m.body) + '</div>' + labelBlock + capBlock + '</div></div>';
     }).join('');
     if (r307Items.length) {
       const block = document.createElement('section'); block.className = 'bz-xiaoXi';
@@ -9895,6 +9929,13 @@ async function langDuWenBen(text, btnEl) {
       var moW = mb.closest('[data-bz-label-web]').getAttribute('data-bz-label-web');
       var rW = await window.warmy.moXingBiaoQianLianWang({ model: moW }).catch(function () { return null; });
       showToast(rW && rW.ok ? ('已联网标注：' + rW.kind) : ('联网标注失败：' + String((rW && rW.error) || '') + '；可勾选种类或保持未知'));
+      bzXuanRanSystem(); bzShuaXinHuiZhang(); return;
+    }
+    if (mb.closest('[data-bz-cap-ok]')) {
+      var wrapC = mb.closest('[data-bz-cap-wrap]');
+      var inC = wrapC && wrapC.querySelector('[data-bz-cap-input]');
+      var txtC = inC ? String(inC.value || '').trim() : '';
+      if (txtC) { try { await window.warmy.moXingNengLiFanKui({ text: txtC }); showToast(tOr('capability.feedbackSaved', '已写入备忘录并纠正')); } catch (e) { /* noop */ } }
       bzXuanRanSystem(); bzShuaXinHuiZhang(); return;
     }
     if (mb.closest('[data-bz-readall]')) { try { await window.warmy.systemMessagesReadAll(); } catch (e) { /* noop */ } bzXuanRanSystem(); bzShuaXinHuiZhang(); return; }
@@ -10334,26 +10375,21 @@ async function langDuWenBen(text, btnEl) {
    *   门禁靠它们证明"心跳仍在跳"（dev/gates/verify-round40-heartbeat-live.mjs 的无界面档）。
    */
 
-  /** 定时任务卡片 */
+  /** 定时任务卡片。R318：已关闭/已删除任务不再显示（含关闭的定时导出关联任务）；暂停的保留可恢复；
+   *  三按钮：启用（运行中禁点）/暂停（暂停后灰）/停止（恒可点，双确认后删除并移出列表）。 */
   function renderDingShiKa() {
     const he = $('dingShiLieBiao');
     if (!he) return;
-    const LieBiao = state.dingShiRenWu || [];
+    const LieBiao = (state.dingShiRenWu || []).filter((r) => (r.enabled !== false && (r.status ?? 'active') !== 'stopped') || String(r.stoppedReason || '') === 'user-pause');
     if (!LieBiao.length) {
       he.innerHTML = '<div class="jingYin">' + escapeHtml(tOr('panel.schedule.empty', '暂无定时任务')) + '</div>';
     } else {
     he.innerHTML = LieBiao.map((r) => {
       const qiYong = r.enabled !== false && (r.status ?? 'active') !== 'stopped';
-      const yiTing = !qiYong;
-      const tingYuan = String(r.stoppedReason || '');
-      const tingWen = tingYuan === 'replaced-by-new' ? tOr('panel.schedule.replaced', '已被新任务替换')
-        : tingYuan === 'user-delete' ? tOr('panel.schedule.softDeleted', '已删除（留档）')
-        : tingYuan === 'repeat-exhausted' ? tOr('panel.schedule.exhausted', '次数用尽')
-        : tingYuan === 'user-pause' ? tOr('panel.schedule.userPause', '已暂停')
-        : tOr('panel.schedule.stopped', '已停止');
-      return '<div class="dingShiHang"' + (yiTing ? ' style="opacity:.72"' : '') + '>' +
-        '<div class="dingShiMing"' + (yiTing ? ' style="text-decoration:line-through"' : '') + '>' + escapeHtml(r.name || '') +
-          (yiTing ? ' <span class="jingYin" style="text-decoration:none;font-size:11px">· ' + escapeHtml(tingWen) + '</span>' : '') +
+      const zanTing = !qiYong;
+      return '<div class="dingShiHang"' + (zanTing ? ' style="opacity:.8"' : '') + '>' +
+        '<div class="dingShiMing">' + escapeHtml(r.name || '') +
+          (zanTing ? ' <span class="jingYin" style="font-size:11px">· ' + escapeHtml(tOr('panel.schedule.userPause', '已暂停')) + '</span>' : '') +
         '</div>' +
         '<div class="jingYin" style="font-size:11px">' +
           escapeHtml(tOr('panel.schedule.created', '创建')) + ' ' + escapeHtml(r.createdAt ? yueRiShiFen(r.createdAt) : '—') +
@@ -10373,8 +10409,8 @@ async function langDuWenBen(text, btnEl) {
         ) + '</div>' : '') +
         '<div class="shiLiHang" style="margin-top:4px">' +
           '<button class="anNiuXiao" data-sch-on="' + escapeHtml(r.id) + '"' + (qiYong ? ' disabled' : '') + '>' + escapeHtml(tOr('panel.schedule.enable', '启用')) + '</button>' +
-          '<button class="anNiuXiao" data-sch-off="' + escapeHtml(r.id) + '"' + (qiYong ? '' : ' disabled') + '>' + escapeHtml(tOr('panel.schedule.stop', '停止')) + '</button>' +
-          '<button class="anNiuDanger" data-sch-del="' + escapeHtml(r.id) + '">' + escapeHtml(t('chat.queueDelete')) + '</button>' +
+          '<button class="anNiuXiao" data-sch-pause="' + escapeHtml(r.id) + '"' + (qiYong ? '' : ' disabled') + '>' + escapeHtml(tOr('panel.schedule.pause', '暂停')) + '</button>' +
+          '<button class="anNiuDanger" data-sch-stop="' + escapeHtml(r.id) + '">' + escapeHtml(tOr('panel.schedule.stop', '停止')) + '</button>' +
         '</div>' +
         '</div>';
     }).join('');
@@ -10383,25 +10419,20 @@ async function langDuWenBen(text, btnEl) {
       if (!it) return;
       it.enabled = on;
       it.status = on ? 'active' : 'stopped';
+      if (!on) it.stoppedReason = 'user-pause';
       try { await window.warmy.dingShiRenWuGengXin?.({ id, enabled: on }); } catch { /* noop */ }
       renderDingShiKa();
     };
     he.querySelectorAll('[data-sch-on]').forEach((b) => { b.onclick = () => void sheZhi(b.getAttribute('data-sch-on'), true); });
-    he.querySelectorAll('[data-sch-off]').forEach((b) => { b.onclick = () => void sheZhi(b.getAttribute('data-sch-off'), false); });
-    he.querySelectorAll('[data-sch-del]').forEach((b) => {
+    he.querySelectorAll('[data-sch-pause]').forEach((b) => { b.onclick = () => void sheZhi(b.getAttribute('data-sch-pause'), false); });
+    he.querySelectorAll('[data-sch-stop]').forEach((b) => {
       b.onclick = async () => {
-        try {
-          const r = await window.warmy.dingShiRenWuShanChu?.({ id: b.getAttribute('data-sch-del') });
-          /** 软删留档：不从列表抹掉，改状态后重绘（主进程也不会 splice） */
-          const id = b.getAttribute('data-sch-del');
-          const it = (state.dingShiRenWu || []).find((x) => x.id === id);
-          if (it) {
-            it.enabled = false;
-            it.status = 'stopped';
-            it.stoppedReason = it.stoppedReason || 'user-delete';
-          }
-          if (r && r.ok === false) showToast(String(r.error || tOr('panel.schedule.delFail', '删除失败')));
-        } catch { /* noop */ }
+        const id = b.getAttribute('data-sch-stop');
+        /* R318：停止＝不可恢复删除，两次确认 */
+        if (!(await uiConfirm(tOr('panel.schedule.stopConfirm1', '停止后该定时任务将被删除，无法恢复。确定停止？')))) return;
+        if (!(await uiConfirm(tOr('panel.schedule.stopConfirm2', '再次确认：删除后不可恢复，并会从定时任务列表移除。仍要停止并删除？')))) return;
+        try { await window.warmy.dingShiRenWuShanChu?.({ id }); } catch { /* noop */ }
+        state.dingShiRenWu = (state.dingShiRenWu || []).filter((x) => x.id !== id);
         renderDingShiKa();
       };
     });
@@ -11875,13 +11906,9 @@ window.__keYiLiaoTian = keYiLiaoTian;
       miJia.addEventListener('click', async () => {
         state.a2uiReplyEnabled = !state.a2uiReplyEnabled;
         syncJia();
-        if (!state.a2uiReplyEnabled && state.selectedChat?.id) {
-          try { await window.warmy.a2uiQuXiao?.({ sessionId: state.selectedChat.id }); } catch { /* noop */ }
-        }
+        /* R318：勾选只控制「之后的对话是否生成交互内容」，不改变界面上已有回复的显示样式；
+           不再 a2uiQuXiao/整聊重绘（旧实现取消勾选会把已有交互面变回文字）。 */
         try { await window.warmy.settingsSave({ a2uiReplyEnabled: state.a2uiReplyEnabled }); } catch { /* noop */ }
-        /* R301：开关切换立即重绘马头三态，主聊天与进化并排块同口径。 */
-        try { renderChat({ keepScroll: true }); } catch { /* noop */ }
-        try { window.__ziJinHuaChongHua?.(); } catch { /* noop */ }
       });
     }
     syncJia();
@@ -14010,7 +14037,8 @@ async function deliver(chatId, text, u, fuJian) {
           const r = await window.warmy.groupOrchestrate({ groupId: chatId, content: text, urgency: u, mentionIds, ts: Date.now() });
           /* 值班批次由宿主守住停止世代；新消息开始分类不作废上一批的已完成回复。 */
           const replies = Array.isArray(r?.dutyReplies) ? r.dutyReplies : r?.reply ? [r] : [];
-          for (const item of replies) if (item.reply) tuisongXiaoxi(chatId, 'them', item.reply, { moXing: item.model, usage: item.usage });
+          /* R318：值班回复＝值班者自己（非分身）：带 instId⇒自身头像/名称；带 id⇒马头功能与我的牛马同；带 reasoning⇒思考链同口径。 */
+          for (const item of replies) if (item.reply) tuisongXiaoxi(chatId, 'them', item.reply, { id: item.messageId || '', instId: item.dutyId || '', moXing: item.model, usage: item.usage, reasoning: item.reasoning || '' });
           huiBao = true;
           try { window.__startGuideChatDone?.(); } catch { /* noop */ }
           if (r?.boardEvent) {
@@ -14475,9 +14503,9 @@ async function deliver(chatId, text, u, fuJian) {
       const haoShi = Math.max(0, Number(h.endedAt || h.ts || 0) - Number(h.startedAt || h.ts || 0));
       const haoWen = haoShi ? Math.max(1, Math.round(haoShi / 1000)) + tOr('chat.secShort', '秒') : '';
       const jiao = themHuiFuJiaoHtml(jiShi, { key: msgKey, text: wen, haoWen });
-      /* R313⑥：勾选增强且互动就绪⇒进化最终回复也内联渲染交互面（与主线同口径），不再只显文字。 */
+      /* R313⑥/R318：互动就绪⇒进化最终回复也内联渲染交互面（与主线同口径）；显示只看产物状态，不受全局勾选影响。 */
       const a2uiS = a2uiZhuangTaiOf({ ...h, id: h.id });
-      const inlineReady = state.a2uiReplyEnabled && a2uiS && String(a2uiS.status || '') === 'ready' && String(h.id || '');
+      const inlineReady = a2uiS && String(a2uiS.status || '') === 'ready' && String(h.id || '');
       const paoHtml = inlineReady
         ? '<div class="bubble md a2uiNeiLianPao" data-a2ui-inline="1" data-a2ui-session="' + escapeHtml(sidMt) + '" data-a2ui-id="' + escapeHtml(String(h.id)) + '" data-wen="' + escapeHtml(wen) + '"><div class="a2uiNeiLianHost"></div></div>'
         : '<div class="bubble md">' + mdHtml(wen) + '</div>';
@@ -14953,7 +14981,8 @@ async function renderDashboard(host) {
     } catch { assistAll = []; }
     const pendingCount = assistAll.filter((x) => x.status === 'daKai').length;
 
-    const running = (state.instances || []).filter((i) => i.status === 'running').length;
+    /* R318：运行中实例不算拟态本体（桌宠不是牛马）；定时任务只算未关闭的（暂停算，关闭/删除不算） */
+    const running = (state.instances || []).filter((i) => i.status === 'running' && !shiNiTaiBenTi(i)).length;
     const inProgressProjects = groups.filter((g) => g.type === 'internal').length;
 
     // 会话元数据
@@ -15033,7 +15062,7 @@ async function renderDashboard(host) {
           }));
       }
     } catch { /* noop */ }
-    const dingShi = state.dingShiRenWu || [];
+    const dingShi = (state.dingShiRenWu || []).filter((r) => (r.enabled !== false && (r.status ?? 'active') !== 'stopped') || String(r.stoppedReason || '') === 'user-pause');
     host.innerHTML = `
       <h1>${escapeHtml(t('dashboard.biaoTi'))}</h1>
       <div class="dashStats">
@@ -15129,16 +15158,10 @@ async function renderDashboard(host) {
       }
       list.innerHTML = dingShi.map((r) => {
         const qiYong = r.enabled !== false && (r.status ?? 'active') !== 'stopped';
-        const yiTing = !qiYong;
-        const tingYuan = String(r.stoppedReason || '');
-        const tingWen = tingYuan === 'replaced-by-new' ? tOr('panel.schedule.replaced', '已被新任务替换')
-          : tingYuan === 'user-delete' ? tOr('panel.schedule.softDeleted', '已删除（留档）')
-          : tingYuan === 'repeat-exhausted' ? tOr('panel.schedule.exhausted', '次数用尽')
-          : tingYuan === 'user-pause' ? tOr('panel.schedule.userPause', '已暂停')
-          : tOr('panel.schedule.stopped', '已停止');
-        return '<div class="dingShiHang"' + (yiTing ? ' style="opacity:.72"' : '') + '>' +
-          '<div class="dingShiMing"' + (yiTing ? ' style="text-decoration:line-through"' : '') + '>' + escapeHtml(r.name || '') +
-            (yiTing ? ' <span class="jingYin" style="text-decoration:none;font-size:11px">· ' + escapeHtml(tingWen) + '</span>' : '') +
+        const zanTing = !qiYong;
+        return '<div class="dingShiHang"' + (zanTing ? ' style="opacity:.8"' : '') + '>' +
+          '<div class="dingShiMing">' + escapeHtml(r.name || '') +
+            (zanTing ? ' <span class="jingYin" style="font-size:11px">· ' + escapeHtml(tOr('panel.schedule.userPause', '已暂停')) + '</span>' : '') +
           '</div>' +
           '<div class="jingYin" style="font-size:11px">' +
             escapeHtml(tOr('panel.schedule.inSession', '会话')) + ' ' + escapeHtml(mingBiaoQing(r.sessionId || '')) +
@@ -15150,8 +15173,8 @@ async function renderDashboard(host) {
           '<div class="jingYin" style="font-size:11px;white-space:pre-wrap;word-break:break-word">' + escapeHtml(String(r.prompt || '')) + '</div>' +
           '<div class="shiLiHang" style="margin-top:4px">' +
             '<button class="anNiuXiao" data-dsch-on="' + escapeHtml(r.id) + '"' + (qiYong ? ' disabled' : '') + '>' + escapeHtml(tOr('panel.schedule.enable', '启用')) + '</button>' +
-            '<button class="anNiuXiao" data-dsch-off="' + escapeHtml(r.id) + '"' + (qiYong ? '' : ' disabled') + '>' + escapeHtml(tOr('panel.schedule.stop', '停止')) + '</button>' +
-            '<button class="anNiuDanger" data-dsch-del="' + escapeHtml(r.id) + '">' + escapeHtml(t('chat.queueDelete')) + '</button>' +
+            '<button class="anNiuXiao" data-dsch-pause="' + escapeHtml(r.id) + '"' + (qiYong ? '' : ' disabled') + '>' + escapeHtml(tOr('panel.schedule.pause', '暂停')) + '</button>' +
+            '<button class="anNiuDanger" data-dsch-stop="' + escapeHtml(r.id) + '">' + escapeHtml(tOr('panel.schedule.stop', '停止')) + '</button>' +
           '</div>' +
           '</div>';
       }).join('');
@@ -15160,23 +15183,19 @@ async function renderDashboard(host) {
         if (!it) return;
         it.enabled = on;
         it.status = on ? 'active' : 'stopped';
+        if (!on) it.stoppedReason = 'user-pause';
         try { await window.warmy.dingShiRenWuGengXin?.({ id, enabled: on }); } catch { /* noop */ }
         renderDashboard(host);
       };
       list.querySelectorAll('[data-dsch-on]').forEach((b) => { b.onclick = () => void sheZhi2(b.getAttribute('data-dsch-on'), true); });
-      list.querySelectorAll('[data-dsch-off]').forEach((b) => { b.onclick = () => void sheZhi2(b.getAttribute('data-dsch-off'), false); });
-      list.querySelectorAll('[data-dsch-del]').forEach((b) => {
+      list.querySelectorAll('[data-dsch-pause]').forEach((b) => { b.onclick = () => void sheZhi2(b.getAttribute('data-dsch-pause'), false); });
+      list.querySelectorAll('[data-dsch-stop]').forEach((b) => {
         b.onclick = async () => {
-          try {
-            await window.warmy.dingShiRenWuShanChu?.({ id: b.getAttribute('data-dsch-del') });
-            const id = b.getAttribute('data-dsch-del');
-            const it = (state.dingShiRenWu || []).find((x) => x.id === id);
-            if (it) {
-              it.enabled = false;
-              it.status = 'stopped';
-              it.stoppedReason = it.stoppedReason || 'user-delete';
-            }
-          } catch { /* noop */ }
+          const id = b.getAttribute('data-dsch-stop');
+          if (!(await uiConfirm(tOr('panel.schedule.stopConfirm1', '停止后该定时任务将被删除，无法恢复。确定停止？')))) return;
+          if (!(await uiConfirm(tOr('panel.schedule.stopConfirm2', '再次确认：删除后不可恢复，并会从定时任务列表移除。仍要停止并删除？')))) return;
+          try { await window.warmy.dingShiRenWuShanChu?.({ id }); } catch { /* noop */ }
+          state.dingShiRenWu = (state.dingShiRenWu || []).filter((x) => x.id !== id);
           renderDashboard(host);
         };
       });
@@ -17316,7 +17335,7 @@ async function renderDashboard(host) {
                 <button class="anNiuXiao woDataBtn" id="anNiuDaoChuWo" type="button">${escapeHtml(tOr('settings.exportVault', '导出数据'))}</button>
                 <button class="anNiuXiao woDataBtn" id="anNiuDingShiDaoChuWo" type="button">${escapeHtml(tOr('settings.scheduledExport', '定时导出…'))}</button>
               </div>
-              <div class="woJiaMiHang"><span id="woJiaMiZhuangTai" class="jingYin" style="font-size:11px">${escapeHtml(tOr('security.fullEncryptionLocked', '全量加密：登录后开启'))}</span></div>
+              <div class="woJiaMiHang"><span id="woJiaMiZhuangTai" class="jingYin" style="font-size:11px">${escapeHtml(tOr('security.scheduledExportOff', '定时导出：未开启'))}</span></div>
             </div>
             <!-- 右侧账号列：邮箱在助记词上方；邮箱/助记词/自动登录/PIN+退出整体下移并与左侧 logo 上下居中 -->
             <div class="woR68Account">
@@ -30456,6 +30475,13 @@ async function renderDashboard(host) {
       Suoyin.set(n.id, biaoZhunShiLi({ ...old, ...n, id: n.id }));
     }
     state.instances = [...Suoyin.values()];
+    /* R318：实例增删/状态变化⇒第四列值班者/成员卡即时刷新（不再等整页刷新）。 */
+    try {
+      const cur = state.selectedChat;
+      if (cur && (cur.kind === 'internal' || cur.kind === 'extgroup')) {
+        setTimeout(() => { try { void shuaXinZhiBan(); void refreshMembers(); } catch { /* noop */ } }, 0);
+      }
+    } catch { /* noop */ }
   }
 
   /* R226 项6：创建时运行时下拉选项 = 本机 + 所有可用容器（用户选项 B：单下拉，默认本机）。
@@ -40765,7 +40791,7 @@ try {
     if (__loopTick % 2 === 0) raf(refreshMetrics);
     if (__loopTick % 3 === 0) raf(refreshCost);
     if (__loopTick % 4 === 0) raf(shuaxinZhixingqiji);
-    if (__loopTick % 5 === 0) raf(() => { refreshSessionBoard(); refreshMembers(); });
+    if (__loopTick % 5 === 0) raf(() => { refreshSessionBoard(); refreshMembers(); try { void shuaXinZhiBan(); } catch { /* noop */ } });
     /* R272 项8：清理“空闲却亮运行圆点”的残留态（后台总结/续派收尾漏清时兑底）
      * R303：进化在跑会话豁免——faSong 续发不走 queueRounds/streamBuf，旧判据 20s 后误清⇒流光中途熄灭。 */
     if (__loopTick % 5 === 0) raf(() => { try { const now = Date.now(); let changed = false; for (const [sid, run] of Object.entries(state.sessionRuns || {})) { if (run && run.running && !queueRounds[sid] && !(window.__ziJinHuaZaiPao && window.__ziJinHuaZaiPao(sid)) && !(state.streamBuf && state.streamBuf[sid]) && now - (run.updatedAt || run.since || 0) > 20000) { run.running = false; changed = true; } } if (changed) renderList(); } catch { /* noop */ } });

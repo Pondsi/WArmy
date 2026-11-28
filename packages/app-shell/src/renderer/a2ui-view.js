@@ -40,7 +40,12 @@ try {
     try {
       const raw = (() => { try { return JSON.stringify(action || {}); } catch { return ''; } })();
       const label = String((action && (action.label || action.name)) || (raw.match(/"label"\s*:\s*"([^"]+)"/) || [])[1] || '');
-      const payload = { action, label, surfaceId: surfaceId2, componentId, text: document.body.innerText || '', sessionId: document.getElementById('a2ui-data')?.getAttribute('data-session') || '', messageId: document.getElementById('a2ui-data')?.getAttribute('data-message') || '' };
+      const payload = { action, label, surfaceId: surfaceId2, componentId, text: document.body.innerText || '', sessionId: document.getElementById('a2ui-data')?.getAttribute('data-session') || '', messageId: document.getElementById('a2ui-data')?.getAttribute('data-message') || '',
+        /* R318：数据模型快照＋输入框当前值，与内联面同口径。 */
+        data: (() => { try { const s = processor.getSurface(surfaceId2); const d = s && s.dataModel && s.dataModel.get('/'); return d && typeof d === 'object' ? d : undefined; } catch { return undefined; } })(),
+        inputs: (() => { const out = []; try { document.querySelectorAll('a2ui-surface *').forEach((el) => { const sr = el.shadowRoot; if (!sr) return; sr.querySelectorAll('input, textarea').forEach((inp) => { const v = String(inp.value || ''); if (!v.trim()) return; out.push({ label: String((sr.querySelector('label') || {}).textContent || inp.placeholder || '').trim(), value: v }); }); }); } catch { /* noop */ } return out; })(),
+        buttonText: (() => { try { const s = processor.getSurface(surfaceId2); const cm = s && s.componentsModel.get(componentId); const p = (cm && cm.properties) || {}; const child = p.child && s.componentsModel.get(String(p.child)); return String((child && child.properties && child.properties.text) || p.label || ''); } catch { return ''; } })(),
+      };
       if (window.warmyA2ui && window.warmyA2ui.action) {
         Promise.resolve(window.warmyA2ui.action(payload)).then((r) => {
           if (r && r.ok) {
@@ -67,19 +72,35 @@ try {
   const view = document.createElement('a2ui-surface');
   view.surface = surface;
   document.body.appendChild(view);
-  try { mdEmphSurface(view); } catch { /* noop */ }
+  /* R318：Lit 异步渲染——等 updateComplete＋观察子树再转星号强调（同步跑拿不到文本节点）。 */
+  (() => {
+    const run = () => { try { mdEmphSurface(view); } catch { /* noop */ } };
+    run();
+    try { Promise.resolve(view.updateComplete).then(run, run); } catch { run(); }
+    try {
+      const mo = new MutationObserver(() => run());
+      mo.observe(view, { childList: true, subtree: true, characterData: true });
+      setTimeout(() => { try { mo.disconnect(); } catch { /* noop */ } }, 15000);
+    } catch { /* noop */ }
+  })();
 } catch (error) {
   const box = document.createElement('div');
   box.className = 'a2ui-error';
   box.textContent = '互动内容无法显示：' + String(error?.message || error);
   document.body.appendChild(box);
 }
-/* R316：A2UI Text 纯文本中的星号强调转成 strong/em。 */
+/* R316/R318：A2UI Text 纯文本中的星号强调转 strong/em；穿透嵌套 shadowRoot 收集文本节点。 */
 function mdEmphSurface(root) {
   const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const fmt = (s) => esc(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+  const nodes = [];
+  const walk = (n) => {
+    if (!n) return;
+    if (n.nodeType === 3) { nodes.push(n); return; }
+    if (n.shadowRoot) walk(n.shadowRoot);
+    for (const c of n.childNodes || []) walk(c);
+  };
+  walk(root);
   for (const n of nodes) {
     const v = n.nodeValue || '';
     if (!/\*\*[^*]+\*\*|\*[^*]+\*/.test(v)) continue;

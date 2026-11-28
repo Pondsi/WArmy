@@ -151,6 +151,8 @@ import { jianYanZiQuZhengWen } from './ji-chu/zi-qu-ying-yue-shu.js';
 import { chuangJianZongJieZiYuan, tanCeZongJieZiYuan, ollamaZongJieXuQiu, zongJieTokenGuSuan } from './ying-yong/zong-jie-zi-yuan.js';
 import { baoZhuangZongJieProvider, zongJieYuJing } from './ying-yong/zong-jie-qing-qiu.js';
 import { chuangJianZongJieXunCha, zongJieKuai, type ZongJieRenWu } from './ying-yong/zong-jie-xun-cha.js';
+import { chuangJianRciGaiJin } from './ying-yong/rci-gai-jin.js';
+import { chuangJianMoXingNengLiShenJi, type MoXingNengLiTanCeJieGuo } from './ying-yong/mo-xing-neng-li-shen-ji.js';
 import { chuangJianLuYouYuCe } from './ying-yong/lu-you-yu-ce.js';
 import { chuangJianHarnessZiJinHua } from './ying-yong/harness-zi-jin-hua.js';
 import { chuangJianHuiHuaXieRu } from './ying-yong/hui-hua-xie-ru.js';
@@ -23958,17 +23960,27 @@ chuliIpc('warmy:a2uiChongShi', async (_e, p0?: { sessionId?: string; messageId?:
     }
     if (!reply) return { ok: false, error: 'a2ui-message-missing' };
   }
+  /* R318：重生成一律用「当前生效供应商」（与 chongShengHuiFu 同口径）——旧产物里的供应商可能已删/过期（provider-missing 真因）；
+     仅当当前缺失且旧供应商仍配置时才回落旧供应商。 */
   const settings = settingsStore?.load();
-  const id = String(state?.provider || providerCfg.presetId || '');
-  const configured = settings?.providers?.find((x) => x.id === id);
-  const current = id && providerCfg.presetId === id ? providerCfg : undefined;
-  if (!id || (!configured && !current)) return { ok: false, error: 'a2ui-provider-missing' };
-  const protocol = configured?.protocol || current!.protocol;
-  const snapshot = { presetId: id, baseURL: configured?.baseURL || current?.baseURL || '', protocol,
-    apiKey: protocol === 'ollama' ? '' : await jiexiGongyingshangMiyao(id, current?.apiKey) };
-  if (protocol !== 'ollama' && !snapshot.apiKey) return { ok: false, error: 'a2ui-provider-missing' };
+  let id = String(providerCfg.presetId || '');
+  let protocol = providerCfg.protocol as 'openai-compatible' | 'anthropic' | 'ollama';
+  let baseURL = String(providerCfg.baseURL || '');
+  let apiKey = protocol === 'ollama' ? '' : await jiexiGongyingshangMiyao(id, providerCfg.apiKey);
+  let model = jieMoXingMing(String(providerCfg.model || ''));
+  if (!id || (protocol !== 'ollama' && !apiKey)) {
+    const jiuId = String(state?.provider || '');
+    const jiu = settings?.providers?.find((x) => x.id === jiuId);
+    if (jiu) {
+      id = jiuId; protocol = jiu.protocol as typeof protocol; baseURL = String(jiu.baseURL || '');
+      apiKey = protocol === 'ollama' ? '' : await jiexiGongyingshangMiyao(id, undefined);
+      model = String(state?.model || '');
+    }
+  }
+  if (!id || (protocol !== 'ollama' && !apiKey)) return { ok: false, error: 'a2ui-provider-missing' };
+  const snapshot = { presetId: id, baseURL, protocol, apiKey };
   void a2uiHuiFu.kaiShi({ sessionId: sid, messageId: mid, reply, userText,
-    model: String(state?.model || (at >= 0 ? (records[at] as { moXing?: string })?.moXing : '') || current?.model || ''), provider: id, providerConfig: snapshot, force: true });
+    model: model || String(state?.model || (at >= 0 ? (records[at] as { moXing?: string })?.moXing : '') || ''), provider: id, providerConfig: snapshot, force: true });
   return { ok: true, state: a2uiHuiFu.cha(sid, mid) };
 });
 /** R315：审批偏好典型例子——模型自判是否值得事后询问；值得且频率允许才发系统消息；频率存专门判断文件自改进。 */
@@ -24120,13 +24132,15 @@ chuliIpc('warmy:acceptanceObserve', (_e, p0?: { sessionId?: string; text?: strin
     try { led = JSON.parse(fs.readFileSync(acceptanceLedgerLu(), 'utf8')); } catch { /* 新 */ }
     led.items = (led.items || []).concat([{ ts: Date.now(), sid, ok: ren && !fu, note: wen.slice(0, 120) }]).slice(-200);
     fs.writeFileSync(acceptanceLedgerLu(), JSON.stringify(led, null, 2), 'utf8');
+    /* R318：行为验收入 RCI 台账⇒总结自调 P1–P5 有真实对照。 */
+    try { rciGaiJin.jiLu({ kind: 'acceptance', ok: ren && !fu, detail: sid }); zongJieXunCha?.bianHua('rci'); } catch { /* noop */ }
     try { audit?.log('acceptance.behavior', { sessionId: sid, ok: ren && !fu }); } catch { /* noop */ }
     return { ok: true };
   } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
 });
 chuliIpc('warmy:a2uiQuXiao', (_e, p0?: { sessionId?: string }) => { a2uiHuiFu.quXiao(String(p0?.sessionId || '')); return { ok: true }; });
 /** R308⑨：A2UI 按钮动作回传——「整理成 Excel / PDF 存档」等由宿主真的生成文件（此前 noop 丢弃＝点了没反应）。 */
-chuliIpc('warmy:a2uiAction', async (_e, p0?: { sessionId?: string; messageId?: string; action?: unknown; label?: string; text?: string }) => {
+chuliIpc('warmy:a2uiAction', async (_e, p0?: { sessionId?: string; messageId?: string; action?: unknown; label?: string; text?: string; buttonText?: string; inputs?: unknown; data?: unknown }) => {
   try {
     const sid = String(p0?.sessionId || '');
     if (!sid) return { ok: false, error: 'session-required' };
@@ -24168,6 +24182,30 @@ chuliIpc('warmy:a2uiAction', async (_e, p0?: { sessionId?: string; messageId?: s
         if (err) return { ok: false, error: err };
         return { ok: true, opened: mu, files: [] };
       } catch (e) { return { ok: false, error: xiJingCuoWu(e) }; }
+    }
+    /* R318：未识别按钮的有意义兄底——有用户输入、或标签是动作动词/问句⇒派活给会话牛马真的执行/回答
+       （修「输入主题点重写却只回空确认、没有任何效果」；「有什么要办的事吗？」类问句按钮点击后牛马会回答）。 */
+    if (!yaoExcel && !yaoPdf) {
+      const inputs = Array.isArray((p0 as { inputs?: unknown }).inputs) ? ((p0 as { inputs?: Array<{ label?: string; value?: string }> }).inputs || []) : [];
+      const inputWen = inputs.map((x) => ((String(x?.label || '').trim() ? String(x?.label || '').trim() + '：' : '') + String(x?.value || '').trim())).filter((s) => s.trim()).join('\n');
+      const ye: string[] = [];
+      const shouYe = (v: unknown, depth: number): void => {
+        if (depth > 4 || ye.length > 12) return;
+        if (typeof v === 'string') { if (v.trim()) ye.push(v.trim()); return; }
+        if (Array.isArray(v)) { for (const x of v) shouYe(x, depth + 1); return; }
+        if (v && typeof v === 'object') { for (const x of Object.values(v as Record<string, unknown>)) shouYe(x, depth + 1); }
+      };
+      shouYe((p0 as { data?: unknown }).data, 0);
+      const dataWen = ye.join('\n');
+      const dongZuo = /重写|重新生成|再生成|提交|发送|应用|确认|执行|开始|生成|创建|写一|rewrite|regenerate|submit|send|apply|confirm|run|start|generate|create|write|dispatch/i.test(biao + ' ' + String(p0?.buttonText || ''));
+      const wenTi = /[?？]$/.test((biao + ' ' + String(p0?.buttonText || '')).trim()) || /^(有什么|是否|要不要|需要|怎么|如何|哪些)/.test(String(p0?.buttonText || biao).trim());
+      if (inputWen || dataWen || dongZuo || wenTi) {
+        const yu = String(p0?.buttonText || biao || '请求');
+        const pai = '【交互按钮】' + yu + (inputWen || dataWen ? '\n用户输入：\n' + (inputWen || dataWen) : '') + '\n（来自上一条回复的交互组件，请据此执行或回答。）';
+        try { broadcastToWindows('warmy:a2uiPaiHuo', { sessionId: sid, text: pai }); } catch { /* noop */ }
+        try { audit?.log('a2ui.action-dispatch-fallback', { sessionId: sid, label: biao }); } catch { /* noop */ }
+        return { ok: true, dispatched: true, files: [] };
+      }
     }
     /* R311⑤：非存档类按钮＝通用交互确认（本地状态已由运行时应用），不再报 unsupported-action。 */
     if (!yaoExcel && !yaoPdf) {
@@ -34342,7 +34380,17 @@ async function qunXieTiao(_e: unknown, xiaoXi: DutyInput, resume?: XuPaoDian): P
         try {
           if (!batch[0]!.signal.aborted) {
             result = await dispatch(batch);
-            if (result.reply) replies.push({ result, signal: batch[0]!.signal });
+            if (result.reply) {
+              /* R318：值班回复落账带 instId/moXing/messageId——重启后头像/模型/马头与我的牛马同口径；
+                 值班者自己回复（非分身），仅 @ 派活任务才走执行者。 */
+              const rid = xinLiaoTianJiLuId('a');
+              try {
+                zhuiJiaLiaoTianRiZhi(gidT, { seq: xiaYiLiaoTianXuLie(), role: 'assistant', content: result.reply, recordId: rid, ts: Date.now(), instId: String((result as { dutyId?: string }).dutyId || ''), moXing: String((result as { model?: string }).model || '') } as never);
+              } catch { /* noop */ }
+              (result as { messageId?: string }).messageId = rid;
+              try { rciGaiJin.jiLu({ kind: 'duty', ok: true, detail: gidT }); zongJieXunCha?.bianHua('rci'); } catch { /* noop */ }
+              replies.push({ result, signal: batch[0]!.signal });
+            }
           }
         } catch (e) {
           try { audit?.log('duty.batch-failed', { groupId: gidT, reason: xiJingCuoWu(e) }); } catch { /* noop */ }
@@ -40910,6 +40958,8 @@ async function r307DecisionZongJie(sid: string, ctx: ZongJieRenWu) {
   audit?.log('decision.policy-evaluation', { sid, version: active.version, held: held.length, accepted, current, candidate, changed });
   return { ok: ctx.valid(), watermark: { seq: watermark, offset: 0 } };
 }
+/* R318：RCI P1–P5 落地＋纳入自我改进（参数/启停调整须过 P5 门控）。 */
+const rciGaiJin = chuangJianRciGaiJin({ wenJianLu: path.join(app.getPath('userData'), 'rci-params.json'), audit: (op, d) => { try { audit?.log(op, d as Record<string, unknown>); } catch { /* noop */ } } });
 zongJieXunCha = chuangJianZongJieXunCha({
   now: () => Date.now(),
   du: () => duJsonWenJian(path.join(app.getPath('userData'), 'summary-progress.json'), {}),
@@ -40930,6 +40980,10 @@ zongJieXunCha = chuangJianZongJieXunCha({
       return r307Hash(JSON.stringify([r307DecisionStore(sid).du().version, r307TaskConfidence(sid).du().seq, cards]));
     }
     if (id.startsWith('duty:')) { const p = xiangGuan().du(id.slice(5)); return p.version + ':' + r307Hash(JSON.stringify(p.labels || [])); }
+    if (id === 'rci') {
+      const files = ['rci-params.json', 'model-capability-audit.json'];
+      return files.map((f) => { try { const stF = fs.statSync(path.join(app.getPath('userData'), f)); return stF.mtimeMs + ':' + stF.size; } catch { return 'missing'; } }).join('|');
+    }
     if (id.startsWith('kf:')) {
       /** R298：开发反馈来源——台账文件修订 + 模式版本（规则生效/回滚后旧候选作废） */
       let fanKuiRev = 'missing';
@@ -40988,6 +41042,26 @@ zongJieXunCha = chuangJianZongJieXunCha({
     }
     if (id === 'voice') { await youHuaYuYinZiGai(); return { ok: ctx.valid() }; }
     if (id === 'tags') { await ziGaiMoXingBiaoQian(); return { ok: ctx.valid() }; }
+    if (id === 'rci') {
+      /* R318：总结中可调 P1–P5 参数/机制/启停；P5 holdout 配对检验过才采纳⇒总是正向。 */
+      const stR = rciGaiJin.du();
+      const recent = stR.ledger.slice(-60);
+      const okLv = recent.length ? recent.filter((x) => x.ok).length / recent.length : 0.5;
+      const proposal: Parameters<typeof rciGaiJin.zongJieTiaoCan>[0] = { note: '总结自调 RCI（ok 率 ' + okLv.toFixed(2) + '）' };
+      if (okLv > 0.7) proposal.p1 = { enabled: stR.params.p1.enabled, k: stR.params.p1.k + 1, c1: stR.params.p1.c1 };
+      else if (okLv < 0.4) proposal.p1 = { enabled: stR.params.p1.enabled, k: Math.max(1, stR.params.p1.k - 1), c1: stR.params.p1.c1 };
+      proposal.p4 = { enabled: stR.params.p4.enabled, samples: recent.length > 200 ? stR.params.p4.samples * 2 : stR.params.p4.samples };
+      rciGaiJin.zongJieTiaoCan(proposal);
+      /* 能力核验频率自调：有用户反馈⇒向 1 天收紧；长期无变化⇒向 1 月放宽（夹取在模块内）。 */
+      try {
+        const sh = moXingNengLiShenJi.du();
+        const fanKuiShu = sh.memo.filter((m) => m.ts > sh.lastCheckAt).length;
+        if (fanKuiShu > 0) moXingNengLiShenJi.tiaoZhengJianGe(Math.max(24 * 3600000, sh.intervalMs / 2));
+        else if (sh.lastCheckAt && Date.now() - sh.lastCheckAt > sh.intervalMs * 2) moXingNengLiShenJi.tiaoZhengJianGe(Math.min(30 * 24 * 3600000, sh.intervalMs * 2));
+      } catch { /* noop */ }
+      ctx.afterCommit?.();
+      return { ok: ctx.valid() };
+    }
     if (id.startsWith('eta:')) { await youHuaEtaClampYuChaiFen(id.slice(4)); return { ok: ctx.valid() }; }
     if (id === 'tokens') { if (!ctx.valid()) return { ok: false }; tokenGuiDangChongSuan(); return { ok: true }; }
     if (id === 'mimic') {
@@ -41741,6 +41815,59 @@ const jiZongJieJianBao = (title: string, body: string): void => {
 };
 xiTongXiaoXiMoKuai.duXiTongXiaoXi();
 xiTongXiaoXiMoKuai.zhuCeIpc(chuliIpc);
+/* R318：模型能力定期自动核验——实测缓存命中/余额/语言等接口参数；变化经系统消息（带反馈框）告知；备忘录纠偏。 */
+async function tanCeMoXingNengLi(providerId: string, model: string): Promise<MoXingNengLiTanCeJieGuo> {
+  const out: MoXingNengLiTanCeJieGuo = {};
+  const s = settingsStore?.load() as { providers?: Array<{ id?: string; protocol?: string; baseURL?: string; apiKey?: string }> } | undefined;
+  const prov = (s?.providers || []).find((x) => x.id === providerId)
+    || (String(providerCfg.presetId || '') === providerId ? { protocol: providerCfg.protocol, baseURL: providerCfg.baseURL, apiKey: providerCfg.apiKey } : undefined);
+  if (!prov) return out;
+  const protocol = String(prov.protocol || 'openai-compatible');
+  const base = String(prov.baseURL || '').replace(/\/+$/, '');
+  const key = await jiexiGongyingshangMiyao(providerId, prov.apiKey);
+  if (protocol !== 'ollama' && !key) return out;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (key) headers.Authorization = 'Bearer ' + key;
+  /* 1) 小请求实测：缓存命中（usage.prompt_tokens_details.cached_tokens 为数字）／语言字段 */
+  try {
+    const url = protocol === 'anthropic' ? base + '/v1/messages' : base + '/chat/completions';
+    const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ model, max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }), signal: AbortSignal.timeout(15000) });
+    if (r.ok) {
+      const j = await r.json() as { usage?: { prompt_tokens_details?: { cached_tokens?: unknown }; language?: unknown }; language?: unknown; lang?: unknown; choices?: Array<{ language?: unknown; message?: { language?: unknown } }> };
+      out.cacheHit = typeof j?.usage?.prompt_tokens_details?.cached_tokens === 'number';
+      const lang = j?.language ?? j?.lang ?? j?.usage?.language ?? j?.choices?.[0]?.language ?? j?.choices?.[0]?.message?.language;
+      if (typeof lang === 'string' && lang) out.language = true;
+    }
+  } catch { /* 探不到＝不置位，维持原值 */ }
+  /* 2) 余额端点真探（各家常见路径，命中才算「有余额」） */
+  for (const e of ['/dashboard/billing/credit_grants', '/v1/dashboard/billing/subscription', '/user/balance', '/v1/users/me/balance']) {
+    try {
+      const r = await fetch(base + e, { headers, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const j = await r.json() as Record<string, unknown>;
+      if (j && (j.total_grants !== undefined || j.balance !== undefined || j.total_balance !== undefined || j.hard_limit_usd !== undefined)) { out.balance = true; out.balanceEndpoint = e; break; }
+    } catch { /* noop */ }
+  }
+  return out;
+}
+const moXingNengLiShenJi = chuangJianMoXingNengLiShenJi({
+  wenJianLu: path.join(app.getPath('userData'), 'model-capability-audit.json'),
+  peiZhi: () => {
+    const list = ((settingsStore?.load() as { providers?: Array<{ id?: string; models?: Array<Record<string, unknown>> }> } | undefined)?.providers || []).map((p) => ({ id: String(p.id || ''), models: (p.models && p.models.length) ? p.models : (String(p.id || '') === String(providerCfg.presetId || '') && providerCfg.model ? [{ id: String(providerCfg.model) }] : []) }));
+    if (providerCfg.presetId && !list.some((p) => p.id === String(providerCfg.presetId))) list.push({ id: String(providerCfg.presetId), models: providerCfg.model ? [{ id: String(providerCfg.model) }] : [] });
+    return list;
+  },
+  tanCe: tanCeMoXingNengLi,
+  jiXiTong: (title, body) => xiTongXiaoXiMoKuai.jiXiTongXiaoXi('capability-audit', title, body),
+  audit: (op, d) => { try { audit?.log(op, d as Record<string, unknown>); } catch { /* noop */ } },
+});
+chuliIpc('warmy:moXingNengLiShenJiGet', () => ({ ok: true, state: moXingNengLiShenJi.du() }));
+chuliIpc('warmy:moXingNengLiFanKui', (_e, p0?: { text?: string }) => moXingNengLiShenJi.fanKui(String(p0?.text || '')));
+chuliIpc('warmy:moXingNengLiShenJiPao', async () => ({ ok: true, ...(await moXingNengLiShenJi.maybePao(true)) }));
+chuliIpc('warmy:rciGaiJinGet', () => ({ ok: true, state: rciGaiJin.du() }));
+/* 每小时看一次到点没；启动 20s 后首跑（初次每周 1 次，之后总结自调 [1天,1月]）。 */
+setInterval(() => { void moXingNengLiShenJi.maybePao().catch(() => undefined); }, 3600000);
+setTimeout(() => { void moXingNengLiShenJi.maybePao().catch(() => undefined); }, 20000);
 /** 加入记录全量：只回展示所需字段，剔除 token/公钥/主机/端口/指纹 */
 chuliIpc('warmy:jiaRuJiLuLieBiao', () => {
   try {
@@ -42479,6 +42606,13 @@ chuliIpc('warmy:ziJinHuaXuanZe', async (_e, p0?: { sessionId?: string; arm?: str
   if (e.projectId && !benJiShiGuanLiZhe(e.projectId)) return { ok: false, error: 'role-denied' };
   const arm: ZhiXian = p0?.arm === 'B' ? 'B' : 'A';
   e.status = 'staged'; e.stagedAt = Date.now(); e.winner = arm;
+  /* R318 P1：等预算阶梯记录（n_B=k/c1）＋选支事件入 RCI 台账，供 P5 跨代门控。 */
+  try {
+    const rc = rciGaiJin.du().params;
+    if (rc.p1.enabled) audit?.log('rci.p1-ladder', { sid, nB: Math.max(1, Math.floor(rc.p1.k / Math.max(0.25, rc.p1.c1))), arm });
+    rciGaiJin.jiLu({ kind: 'evolve', ok: true, detail: sid });
+    zongJieXunCha?.bianHua('rci');
+  } catch { /* noop */ }
   ziJinHuaGuangBo(e);
   /* R263：选支后立即合并（不再等 5s）；回退点已在合并前创建，撤销走回退点 */
   void ziJinHuaHeBing(e, arm, 'human', false);
